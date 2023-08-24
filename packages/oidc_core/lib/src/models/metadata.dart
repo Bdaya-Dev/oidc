@@ -1,7 +1,8 @@
+// NOTICE: This file was mostly copied and edited from:
+// https://github.com/appsup-dart/openid_client/blob/92a9a055c62c3b302d70a401ef872b5b9dba6f21/lib/src/model/metadata.dart
+
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/src/helpers/converters.dart';
-
-// ignore_for_file: unused_element
 
 part 'metadata.g.dart';
 
