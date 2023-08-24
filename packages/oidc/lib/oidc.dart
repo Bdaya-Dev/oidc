@@ -8,3 +8,4 @@ Future<String> getPlatformName() async {
   if (platformName == null) throw Exception('Unable to get platform name.');
   return platformName;
 }
+

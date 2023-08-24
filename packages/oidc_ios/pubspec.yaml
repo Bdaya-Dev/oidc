@@ -1,8 +1,7 @@
 name: oidc_ios
 description: iOS implementation of the oidc plugin
 version: 0.1.0+1
-
-
+repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_ios
 environment:
   sdk: ">=3.0.0 <4.0.0"
 
