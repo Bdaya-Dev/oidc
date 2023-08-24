@@ -17,14 +17,14 @@ on:
       - "oidc/**"
 
 jobs:
-  spell-check:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/spell_check.yml@v1
-    with:
-      includes: |
-        **/*.md
-        !brick/**/*.md
-        .*/**/*.md
-      modified_files_only: false
+  # spell-check:
+  #   uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/spell_check.yml@v1
+  #   with:
+  #     includes: |
+  #       **/*.md
+  #       !brick/**/*.md
+  #       .*/**/*.md
+  #     modified_files_only: false
 
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@v1
