@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
 

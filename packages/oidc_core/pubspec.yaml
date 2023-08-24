@@ -8,7 +8,6 @@ environment:
 
 dependencies:
   http: ^1.1.0
-  jose: ^0.3.4
   json_annotation: ^4.8.1
 
 dev_dependencies:
