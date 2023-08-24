@@ -16,5 +16,4 @@ class OidcUtils {
     final decoded = jsonDecode(resp.body);
     return OidcProviderMetadata.fromJson(decoded);
   }
-  
 }
