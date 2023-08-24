@@ -27,6 +27,8 @@ dependencies:
     sdk: flutter
   oidc_android:
     path: ../oidc_android
+  oidc_core:
+    path: ../oidc_core
   oidc_ios:
     path: ../oidc_ios
   oidc_linux:
@@ -39,6 +41,7 @@ dependencies:
     path: ../oidc_web
   oidc_windows:
     path: ../oidc_windows
+    
 
 dev_dependencies:
   flutter_test:
