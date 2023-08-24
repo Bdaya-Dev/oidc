@@ -46,3 +46,4 @@ build/
 .project
 .classpath
 .settings
+pubspec_overrides.yaml
