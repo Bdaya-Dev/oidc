@@ -1,0 +1,30 @@
+name: oidc_platform_interface
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/oidc_core.yaml"
+      - "packages/oidc_core/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/oidc_core.yaml"
+      - "packages/oidc_core/**"
+
+jobs:
+  build:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1
+    with:
+      dart_sdk: 3.1.0
+      working_directory: packages/oidc_core
+
+  pana:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
+    with:
+      min_score: 100
+
