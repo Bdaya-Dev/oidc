@@ -1,3 +1,7 @@
 name: oidc
 packages:
   - packages/*
+scripts:
+  generate:dart:
+    run: melos exec -c 1 --depends-on="build_runner" --no-flutter -- "dart run build_runner build --delete-conflicting-outputs"
+    description: Build all generated files for Dart packages in this project.

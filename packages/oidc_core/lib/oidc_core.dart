@@ -5,4 +5,4 @@ library;
 
 export 'src/oidc_core_base.dart';
 
-// TODO: Export any libraries intended for clients of this package.
+export 'src/models/_exports.dart';
