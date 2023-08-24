@@ -22,6 +22,7 @@ jobs:
     with:
       dart_sdk: 3.1.0
       working_directory: packages/oidc_core
+      min_coverage: 20
 
   pana:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
