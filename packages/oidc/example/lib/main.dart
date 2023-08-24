@@ -44,12 +44,14 @@ class _HomePageState extends State<HomePage> {
                   final result = await getPlatformName();
                   setState(() => _platformName = result);
                 } catch (error) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: Theme.of(context).primaryColor,
-                      content: Text('$error'),
-                    ),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        content: Text('$error'),
+                      ),
+                    );
+                  }
                 }
               },
               child: const Text('Get Platform Name'),
