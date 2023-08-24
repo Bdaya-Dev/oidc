@@ -6,38 +6,38 @@ updates:
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
-    directory: "/oidc"
+    directory: "/packages/oidc"
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
-    directory: "/oidc/example"
+    directory: "/packages/oidc/example"
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
-    directory: "/oidc_platform_interface"
+    directory: "/packages/oidc_platform_interface"
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
-    directory: "/oidc_android"
+    directory: "/packages/oidc_android"
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
-    directory: "/oidc_ios"
+    directory: "/packages/oidc_ios"
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
-    directory: "/oidc_linux"
+    directory: "/packages/oidc_linux"
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
-    directory: "/oidc_macos"
+    directory: "/packages/oidc_macos"
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
-    directory: "/oidc_web"
+    directory: "/packages/oidc_web"
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
-    directory: "/oidc_windows"
+    directory: "/packages/oidc_windows"
     schedule:
       interval: "daily"

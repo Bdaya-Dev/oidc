@@ -8,13 +8,13 @@ on:
   pull_request:
     paths:
       - ".github/workflows/oidc_macos.yaml"
-      - "oidc_macos/**"
+      - "packages/oidc_macos/**"
   push:
     branches:
       - main
     paths:
       - ".github/workflows/oidc_macos.yaml"
-      - "oidc_macos/**"
+      - "packages/oidc_macos/**"
 
 jobs:
   build:
@@ -22,7 +22,7 @@ jobs:
     with:
       flutter_channel: stable
       flutter_version: 3.13.1
-      working_directory: oidc_macos
+      working_directory: packages/oidc_macos
 
   pana:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1

@@ -8,13 +8,13 @@ on:
   pull_request:
     paths:
       - ".github/workflows/oidc.yaml"
-      - "oidc/**"
+      - "packages/oidc/**"
   push:
     branches:
       - main
     paths:
       - ".github/workflows/oidc.yaml"
-      - "oidc/**"
+      - "packages/oidc/**"
 
 jobs:
   # spell-check:
@@ -31,7 +31,7 @@ jobs:
     with:
       flutter_channel: stable
       flutter_version: 3.13.1
-      working_directory: oidc
+      working_directory: packages/oidc
 
   pana:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
@@ -43,7 +43,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: oidc/example
+        working-directory: packages/oidc/example
 
     steps:
       - uses: actions/checkout@v3
@@ -81,14 +81,14 @@ jobs:
         with:
           api-level: 29
           script: flutter test integration_test
-          working-directory: oidc/example
+          working-directory: packages/oidc/example
 
   ios:
     runs-on: macos-latest
 
     defaults:
       run:
-        working-directory: oidc/example
+        working-directory: packages/oidc/example
 
     steps:
       - uses: actions/checkout@v3
@@ -114,7 +114,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: oidc/example
+        working-directory: packages/oidc/example
 
     steps:
       - uses: actions/checkout@v3
@@ -141,7 +141,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: oidc/example
+        working-directory: packages/oidc/example
 
     steps:
       - uses: actions/checkout@v3
@@ -162,7 +162,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: oidc/example
+        working-directory: packages/oidc/example
 
     steps:
       - uses: actions/checkout@v3
@@ -188,7 +188,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: oidc/example
+        working-directory: packages/oidc/example
 
     steps:
       - uses: actions/checkout@v3
