@@ -1,0 +1,48 @@
+name: oidc
+description: A comprehensive OpenIdConnect package
+version: 0.1.0+1
+
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        default_package: oidc_android
+      ios:
+        default_package: oidc_ios
+      linux:
+        default_package: oidc_linux
+      macos:
+        default_package: oidc_macos
+      web:
+        default_package: oidc_web
+      windows:
+        default_package: oidc_windows
+
+dependencies:
+  flutter:
+    sdk: flutter
+  oidc_android:
+    path: ../oidc_android
+  oidc_ios:
+    path: ../oidc_ios
+  oidc_linux:
+    path: ../oidc_linux
+  oidc_macos:
+    path: ../oidc_macos
+  oidc_platform_interface:
+    path: ../oidc_platform_interface
+  oidc_web:
+    path: ../oidc_web
+  oidc_windows:
+    path: ../oidc_windows
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mocktail: ^0.3.0
+  plugin_platform_interface: ^2.0.0
+  very_good_analysis: ^5.0.0

@@ -1,0 +1,43 @@
+version: 2
+enable-beta-ecosystems: true
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/oidc"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/oidc/example"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/oidc_platform_interface"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/oidc_android"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/oidc_ios"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/oidc_linux"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/oidc_macos"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/oidc_web"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/oidc_windows"
+    schedule:
+      interval: "daily"

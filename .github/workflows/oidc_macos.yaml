@@ -1,0 +1,29 @@
+name: oidc_macos
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/oidc_macos.yaml"
+      - "oidc_macos/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/oidc_macos.yaml"
+      - "oidc_macos/**"
+
+jobs:
+  build:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@v1
+    with:
+      flutter_channel: stable
+      flutter_version: 3.10.0
+      working_directory: oidc_macos
+
+  pana:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
+

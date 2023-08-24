@@ -1,0 +1,26 @@
+name: oidc_windows
+description: Windows implementation of the oidc plugin
+version: 0.1.0+1
+
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+flutter:
+  plugin:
+    implements: oidc
+    platforms:
+      windows:
+        pluginClass: OidcWindows
+        dartPluginClass: OidcWindows
+
+dependencies:
+  flutter:
+    sdk: flutter
+  oidc_platform_interface:
+    path: ../oidc_platform_interface
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^5.0.0

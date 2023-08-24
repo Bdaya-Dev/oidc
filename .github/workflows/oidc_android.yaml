@@ -1,0 +1,29 @@
+name: oidc_android
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/oidc_android.yaml"
+      - "oidc_android/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/oidc_android.yaml"
+      - "oidc_android/**"
+
+jobs:
+  build:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@v1
+    with:
+      flutter_channel: stable
+      flutter_version: 3.10.0
+      working_directory: oidc_android
+
+  pana:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
+
