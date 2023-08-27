@@ -1,4 +1,4 @@
-package com.bdayadev
+package com.bdayadev.oidc_android
 
 import android.content.Context
 import androidx.annotation.NonNull
@@ -21,7 +21,7 @@ class OidcPlugin : FlutterPlugin, MethodCallHandler {
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
         if (call.method == "getPlatformName") {
-            result.success("Android")            
+            result.success("Android")
         } else {
             result.notImplemented()
         }
