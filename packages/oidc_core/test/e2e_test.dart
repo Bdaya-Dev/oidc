@@ -11,9 +11,7 @@ void main() async {
     expect(config.issuer.toString(), serverUri.toString());
   } on ClientException {
     print("Skipping e2e tests since server isn't up");
-    test('dummy', () {
-      
-    });
+    test('dummy', () {});
     return;
   }
 
