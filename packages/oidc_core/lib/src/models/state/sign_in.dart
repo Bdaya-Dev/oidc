@@ -76,7 +76,7 @@ class OidcSignInState extends OidcState {
       scope: scope,
       clientSecret: clientSecret,
       extraTokenParams: extraTokenParams,
-      responseMode: responseMode,      
+      responseMode: responseMode,
     );
   }
 
