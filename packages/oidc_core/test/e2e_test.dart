@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:http/http.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
 
@@ -12,7 +13,7 @@ void main() {
         final config = await OidcUtils.getConfiguration(url);
         // print(config);
         expect(config.issuer.toString(), 'http://localhost:4011');
-      } on TimeoutException {
+      } on ClientException {
         print("Skipping test since server isn't up");
       }
     });
