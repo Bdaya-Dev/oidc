@@ -47,6 +47,7 @@ class OidcExchangeCredentialsRequest {
 
     username: string;
     password: string; */
+  Map<String, dynamic> toJson() => _$OidcExchangeCredentialsRequestToJson(this);
 }
 
 @JsonSerializable(
@@ -62,6 +63,8 @@ class OidcExchangeRefreshTokenRequest {
     resource?: string | string[];
 
     timeoutInSeconds?: number; */
+  Map<String, dynamic> toJson() =>
+      _$OidcExchangeRefreshTokenRequestToJson(this);
 }
 
 @JsonSerializable(
@@ -70,4 +73,5 @@ class OidcExchangeRefreshTokenRequest {
 class OidcRevokeTokenRequest {
   /* token: string;
     token_type_hint?: "access_token" | "refresh_token"; */
+  Map<String, dynamic> toJson() => _$OidcRevokeTokenRequestToJson(this);
 }
