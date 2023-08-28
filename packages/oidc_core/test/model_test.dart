@@ -4,6 +4,26 @@ import 'package:test/test.dart';
 void main() {
   group('Models', () {
     setUp(() {});
+    group('OidcUtils.getWellKnownUriFromBase', () {
+      test('keycloak', () {
+        final base = Uri.parse('http://keycloakhost:5030/auth/realms/my-realm');
+
+        final res = OidcUtils.getWellKnownUriFromBase(base);
+        expect(
+          res.toString(),
+          'http://keycloakhost:5030/auth/realms/my-realm/.well-known/openid-configuration',
+        );
+      });
+      test('google', () {
+        //
+        final base = Uri.parse('https://accounts.google.com/');
+        final res = OidcUtils.getWellKnownUriFromBase(base);
+        expect(
+          res.toString(),
+          'https://accounts.google.com/.well-known/openid-configuration',
+        );
+      });
+    });
 
     group('OidcProviderMetadata', () {
       // From https://accounts.google.com/.well-known/openid-configuration

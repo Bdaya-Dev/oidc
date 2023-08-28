@@ -24,6 +24,9 @@ class OidcProviderMetadata {
   )
   final Map<String, dynamic> src;
 
+  @override
+  String toString() => src.toString();
+  
   factory OidcProviderMetadata.fromJson(Map<String, dynamic> json) =>
       _$OidcProviderMetadataFromJson({
         ...json,

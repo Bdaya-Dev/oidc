@@ -3,6 +3,6 @@
 /// More dartdocs go here.
 library;
 
-export 'src/oidc_core_base.dart';
+export 'src/oidc_utils.dart';
 
 export 'src/models/_exports.dart';
