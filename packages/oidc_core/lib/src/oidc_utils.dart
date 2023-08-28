@@ -1,8 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-
-import 'models/resp/metadata.dart';
+import 'package:oidc_core/oidc_core.dart';
 
 class OidcUtils {
   static Uri getWellKnownUriFromBase(Uri base) {
@@ -22,6 +22,14 @@ class OidcUtils {
       wellKnownUri,
       headers: headers,
     );
+    if (resp.statusCode != 200) {
+      throw OidcException(
+        "Server responded with a non-200 statusCode",
+        extra: {
+          'statusCode': resp.statusCode,
+        },
+      );
+    }
     final decoded = jsonDecode(resp.body);
     return OidcProviderMetadata.fromJson(decoded);
   }
