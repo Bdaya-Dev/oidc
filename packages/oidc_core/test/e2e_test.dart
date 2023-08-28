@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:http/http.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
