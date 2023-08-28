@@ -17,8 +17,19 @@ on:
       - "packages/oidc_core/**"
 
 jobs:
+  docker:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v1
+
+    - name: Start containers
+      run: pushd e2e-tests && docker-compose up -d --build && popd
+
   build:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1
+    needs: docker
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1    
     with:
       dart_sdk: 3.1.0
       working_directory: packages/oidc_core

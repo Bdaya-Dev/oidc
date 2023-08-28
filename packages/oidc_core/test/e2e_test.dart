@@ -1,5 +1,5 @@
 import 'package:oidc_core/oidc_core.dart';
-import 'package:test/scaffolding.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('E2E', () {
@@ -7,7 +7,8 @@ void main() {
       final url =
           Uri.parse('http://localhost:4011/.well-known/openid-configuration');
       final config = await OidcUtils.getConfiguration(url);
-      print(config);
+      // print(config);
+      expect(config.issuer.toString(), 'http://localhost:4011');
     });
   });
 }
