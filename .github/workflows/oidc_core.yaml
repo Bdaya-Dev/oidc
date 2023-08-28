@@ -17,19 +17,21 @@ on:
       - "packages/oidc_core/**"
 
 jobs:
-  build:    
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v1
-      - name: Start containers
-        run: pushd e2e-tests && docker-compose up -d --build && popd
-      - name: build and test
-        uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1    
-        with:
-          dart_sdk: 3.1.0
-          working_directory: packages/oidc_core
-          min_coverage: 20
+  build:   
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1    
+    with:
+      dart_sdk: 3.1.0
+      working_directory: packages/oidc_core
+      min_coverage: 20
+    # runs-on: ubuntu-latest
+    # steps:
+    #   - name: Checkout
+    #     uses: actions/checkout@v1
+    #   - name: Start containers
+    #     run: pushd e2e-tests && docker-compose up -d --build && popd
+    #   - name: build and test
+        
+      
 
   pana:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
