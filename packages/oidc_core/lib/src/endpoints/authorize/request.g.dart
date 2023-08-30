@@ -1,12 +1,13 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'auth.dart';
+part of 'request.dart';
 
 // **************************************************************************
 // JsonSerializableGenerator
 // **************************************************************************
 
-Map<String, dynamic> _$OidcAuthRequestArgsToJson(OidcAuthRequestArgs instance) {
+Map<String, dynamic> _$OidcAuthorizeRequestToJson(
+    OidcAuthorizeRequest instance) {
   final val = <String, dynamic>{};
 
   void writeNotNull(String key, dynamic value) {
@@ -15,37 +16,27 @@ Map<String, dynamic> _$OidcAuthRequestArgsToJson(OidcAuthRequestArgs instance) {
     }
   }
 
-  writeNotNull('scope', spaceDelimitedToJson(instance.scope));
-  writeNotNull('response_type', spaceDelimitedToJson(instance.responseType));
+  writeNotNull('scope', joinSpaceDelimitedList(instance.scope));
+  writeNotNull('response_type', joinSpaceDelimitedList(instance.responseType));
   val['client_id'] = instance.clientId;
   val['redirect_uri'] = const UriJsonConverter().toJson(instance.redirectUri);
-  val['state'] = _stateToJson(instance.state);
-  writeNotNull(
-      'response_mode', _$OidcResponseModeEnumMap[instance.responseMode]);
+  writeNotNull('state', instance.state);
+  writeNotNull('response_mode', instance.responseMode);
   writeNotNull('nonce', instance.nonce);
   writeNotNull('display', instance.display);
-  writeNotNull('prompt', spaceDelimitedToJson(instance.prompt));
+  writeNotNull('prompt', joinSpaceDelimitedList(instance.prompt));
   writeNotNull(
       'max_age',
       _$JsonConverterToJson<int, Duration>(
           instance.maxAge, const DurationSecondsConverter().toJson));
-  writeNotNull('ui_locales', spaceDelimitedToJson(instance.uiLocales));
+  writeNotNull('ui_locales', joinSpaceDelimitedList(instance.uiLocales));
   writeNotNull('id_token_hint', instance.idTokenHint);
   writeNotNull('login_hint', instance.loginHint);
-  writeNotNull('acr_values', spaceDelimitedToJson(instance.acrValues));
-  val['resource'] = instance.resource;
-  writeNotNull('request', instance.request);
-  writeNotNull(
-      'request_uri',
-      _$JsonConverterToJson<String, Uri>(
-          instance.requestUri, const UriJsonConverter().toJson));
+  writeNotNull('acr_values', joinSpaceDelimitedList(instance.acrValues));
+  writeNotNull('code_challenge', instance.codeChallenge);
+  writeNotNull('code_challenge_method', instance.codeChallengeMethod);
   return val;
 }
-
-const _$OidcResponseModeEnumMap = {
-  OidcResponseMode.query: 'query',
-  OidcResponseMode.fragment: 'fragment',
-};
 
 Json? _$JsonConverterToJson<Json, Value>(
   Value? value,

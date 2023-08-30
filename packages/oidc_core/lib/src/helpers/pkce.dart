@@ -1,6 +1,4 @@
 //Source: https://github.com/nrubin29/pkce_dart/blob/master/lib/pkce.dart
-library pkce;
-
 import 'dart:convert';
 import 'dart:math';
 
@@ -9,13 +7,6 @@ import 'package:crypto/crypto.dart';
 /// A pair of ([codeVerifier], [codeChallenge]) that can be used with PKCE
 /// (Proof Key for Code Exchange).
 class PkcePair {
-  /// The code verifier.
-  final String codeVerifier;
-
-  /// The code challenge, computed as base64Url(sha256([codeVerifier])) with
-  /// padding removed as per the spec.
-  final String codeChallenge;
-
   const PkcePair._(this.codeVerifier, this.codeChallenge);
 
   /// Generates a [PkcePair].
@@ -28,6 +19,13 @@ class PkcePair {
     final challenge = generateChallenge(verifier);
     return PkcePair._(verifier, challenge);
   }
+
+  /// The code verifier.
+  final String codeVerifier;
+
+  /// The code challenge, computed as base64Url(sha256([codeVerifier])) with
+  /// padding removed as per the spec.
+  final String codeChallenge;
 
   static String generateVerifier({int length = 32}) {
     if (length < 32 || length > 96) {

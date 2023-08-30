@@ -9,6 +9,7 @@ part of 'error.dart';
 OidcErrorAuthResponse _$OidcErrorAuthResponseFromJson(
         Map<String, dynamic> json) =>
     OidcErrorAuthResponse(
+      src: readSrcMap(json, '') as Map<String, dynamic>,
       error: json['error'] as String,
       errorDescription: json['error_description'] as String?,
       errorUri: json['error_uri'] as String?,

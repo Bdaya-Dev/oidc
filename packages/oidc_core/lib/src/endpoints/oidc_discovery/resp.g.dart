@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'metadata.dart';
+part of 'resp.dart';
 
 // **************************************************************************
 // JsonSerializableGenerator
@@ -8,8 +8,8 @@ part of 'metadata.dart';
 
 OidcProviderMetadata _$OidcProviderMetadataFromJson(
         Map<String, dynamic> json) =>
-    OidcProviderMetadata._(
-      src: json[r'$src'] as Map<String, dynamic>,
+    OidcProviderMetadata(
+      src: readSrcMap(json, '') as Map<String, dynamic>,
       issuer: const UriJsonConverter().fromJson(json['issuer'] as String),
       authorizationEndpoint: const UriJsonConverter()
           .fromJson(json['authorization_endpoint'] as String),
@@ -38,11 +38,11 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
           (json['response_modes_supported'] as List<dynamic>?)
                   ?.map((e) => e as String)
                   .toList() ??
-              const ["query", "fragment"],
+              const ['query', 'fragment'],
       grantTypesSupported: (json['grant_types_supported'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
-          const ["authorization_code", "implicit"],
+          const ['authorization_code', 'implicit'],
       acrValuesSupported: (json['acr_values_supported'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
@@ -94,6 +94,9 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
       uiLocalesSupported: (json['ui_locales_supported'] as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
+      pushedAuthorizationRequestEndpoint: _$JsonConverterFromJson<String, Uri>(
+          json['pushed_authorization_request_endpoint'],
+          const UriJsonConverter().fromJson),
       claimsParameterSupported:
           json['claims_parameter_supported'] as bool? ?? false,
       requestParameterSupported:
@@ -102,6 +105,8 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
           json['require_request_uri_registration'] as bool? ?? false,
       requestUriParameterSupported:
           json['request_uri_parameter_supported'] as bool? ?? true,
+      requirePushedAuthorizationRequests:
+          json['require_pushed_authorization_requests'] as bool? ?? false,
       opPolicyUri: _$JsonConverterFromJson<String, Uri>(
           json['op_policy_uri'], const UriJsonConverter().fromJson),
       opTosUri: _$JsonConverterFromJson<String, Uri>(

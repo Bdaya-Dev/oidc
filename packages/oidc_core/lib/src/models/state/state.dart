@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:json_annotation/json_annotation.dart';
+import 'package:oidc_core/src/helpers/converters.dart';
 import 'package:oidc_core/src/models/managers/state_store.dart';
 import 'package:uuid/uuid.dart';
-
-import '../../helpers/converters.dart';
 
 part 'state.g.dart';
 
@@ -17,23 +17,7 @@ part 'state.g.dart';
   ],
 )
 class OidcState {
-  @JsonKey(name: 'id')
-  final String id;
-
-  @JsonKey(name: 'created_at')
-  final DateTime createdAt;
-
-  /// Descripes the request that lead to the generation of this state
-  /// E.g.:  "si:r" => signIn:redirect, "si:p" => signIn:popup
-  @JsonKey(name: 'request_type')
-  final String? requestType;
-
-  /// custom "state", which can be used by a caller to have "data" round tripped
   ///
-  /// it MUST be json encodable.
-  @JsonKey(name: 'data')
-  final dynamic data;
-
   const OidcState({
     required this.id,
     required this.createdAt,
@@ -60,25 +44,49 @@ class OidcState {
     );
   }
 
-  Map<String, dynamic> toJson() => _$OidcStateToJson(this);
-
+  ///
   factory OidcState.fromJson(Map<String, dynamic> src) =>
       _$OidcStateFromJson(src);
 
+  ///
+  factory OidcState.fromStorageString(String storageString) =>
+      OidcState.fromJson(jsonDecode(storageString) as Map<String, dynamic>);
+
+  ///
+  @JsonKey(name: 'id')
+  final String id;
+
+  ///
+  @JsonKey(name: 'created_at')
+  final DateTime createdAt;
+
+  /// Descripes the request that lead to the generation of this state
+  /// E.g.:  "si:r" => signIn:redirect, "si:p" => signIn:popup
+  @JsonKey(name: 'request_type')
+  final String? requestType;
+
+  /// custom "state", which can be used by a caller to have "data" round tripped
+  ///
+  /// it MUST be json encodable.
+  @JsonKey(name: 'data')
+  final dynamic data;
+
+  ///
+  Map<String, dynamic> toJson() => _$OidcStateToJson(this);
+
+  ///
   String toStorageString() => jsonEncode(toJson());
 
-  factory OidcState.fromStorageString(String storageString) =>
-      OidcState.fromJson(jsonDecode(storageString));
-
+  ///
   static Future<void> clearStaleState(
     OidcStateStore store,
     Duration age,
   ) async {
     final cutoff = DateTime.now().toUtc().subtract(age);
     final keys = await store.getAllKeys();
-    for (var key in keys) {
+    for (final key in keys) {
       final item = await store.get(key);
-      bool remove = false;
+      var remove = false;
 
       if (item != null) {
         try {
@@ -95,7 +103,7 @@ class OidcState {
 
       if (remove) {
         //no need to await
-        store.remove(key);
+        unawaited(store.remove(key));
       }
     }
   }

@@ -1,13 +1,13 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'sign_in.dart';
+part of 'state.dart';
 
 // **************************************************************************
 // JsonSerializableGenerator
 // **************************************************************************
 
-OidcSignInState _$OidcSignInStateFromJson(Map<String, dynamic> json) =>
-    OidcSignInState(
+OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
+    OidcAuthorizeState(
       skipUserInfo: json['skipUserInfo'] as bool?,
       id: json['id'] as String,
       createdAt:
@@ -23,11 +23,10 @@ OidcSignInState _$OidcSignInStateFromJson(Map<String, dynamic> json) =>
       scope: json['scope'] as String,
       clientSecret: json['client_secret'] as String?,
       extraTokenParams: json['extraTokenParams'] as Map<String, dynamic>?,
-      responseMode:
-          $enumDecodeNullable(_$OidcResponseModeEnumMap, json['response_mode']),
+      responseMode: json['response_mode'] as String?,
     );
 
-Map<String, dynamic> _$OidcSignInStateToJson(OidcSignInState instance) =>
+Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
     <String, dynamic>{
       'id': instance.id,
       'created_at': const DateTimeEpochConverter().toJson(instance.createdAt),
@@ -41,11 +40,6 @@ Map<String, dynamic> _$OidcSignInStateToJson(OidcSignInState instance) =>
       'scope': instance.scope,
       'client_secret': instance.clientSecret,
       'extraTokenParams': instance.extraTokenParams,
-      'response_mode': _$OidcResponseModeEnumMap[instance.responseMode],
+      'response_mode': instance.responseMode,
       'skipUserInfo': instance.skipUserInfo,
     };
-
-const _$OidcResponseModeEnumMap = {
-  OidcResponseMode.query: 'query',
-  OidcResponseMode.fragment: 'fragment',
-};

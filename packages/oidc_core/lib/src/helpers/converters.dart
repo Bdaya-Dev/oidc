@@ -1,13 +1,24 @@
 import 'package:json_annotation/json_annotation.dart';
 
-String? spaceDelimitedToJson(List<String> value) {
+/// Converts a list of strings into a space-delimited string
+String? joinSpaceDelimitedList(List<String> value) {
   if (value.isEmpty) {
     return null;
   }
   return value.join(' ');
 }
 
+/// Converts a space-delimited string into a list of strings
+List<String> splitSpaceDelimitedString(String? value) {
+  if (value == null || value.isEmpty) {
+    return [];
+  }
+  return value.split(' ');
+}
+
+///
 class UriJsonConverter extends JsonConverter<Uri, String> {
+  /// Creates a UriJsonConverter
   const UriJsonConverter();
 
   @override
@@ -21,7 +32,9 @@ class UriJsonConverter extends JsonConverter<Uri, String> {
   }
 }
 
+///
 class DateTimeEpochConverter extends JsonConverter<DateTime, int> {
+  ///
   const DateTimeEpochConverter();
 
   @override
@@ -38,7 +51,9 @@ class DateTimeEpochConverter extends JsonConverter<DateTime, int> {
   }
 }
 
+///
 class DurationSecondsConverter extends JsonConverter<Duration, int> {
+  ///
   const DurationSecondsConverter();
 
   @override

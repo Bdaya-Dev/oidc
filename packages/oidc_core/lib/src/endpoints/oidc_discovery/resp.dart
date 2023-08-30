@@ -3,8 +3,9 @@
 
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/src/helpers/converters.dart';
+import 'package:oidc_core/src/models/json_based_object.dart';
 
-part 'metadata.g.dart';
+part 'resp.g.dart';
 
 /// The "OpenID Provider Metadata" as standaraized by the spec https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 /// This also includes some metadata that are defined by other extensions
@@ -13,30 +14,10 @@ part 'metadata.g.dart';
   converters: [
     UriJsonConverter(),
   ],
-  constructor: '_',
 )
-class OidcProviderMetadata {
-  /// The source json object
-  @JsonKey(
-    name: r'$src',
-    includeFromJson: true,
-    includeToJson: false,
-  )
-  final Map<String, dynamic> src;
-
-  @override
-  String toString() => src.toString();
-
-  factory OidcProviderMetadata.fromJson(Map<String, dynamic> json) =>
-      _$OidcProviderMetadataFromJson({
-        ...json,
-        r'$src': json,
-      });
-
-  dynamic operator [](String key) => src[key];
-
-  const OidcProviderMetadata._({
-    required this.src,
+class OidcProviderMetadata extends JsonBasedResponse {
+  const OidcProviderMetadata({
+    required super.src,
     required this.issuer,
     required this.authorizationEndpoint,
     required this.jwksUri,
@@ -47,8 +28,8 @@ class OidcProviderMetadata {
     this.userinfoEndpoint,
     this.registrationEndpoint,
     this.scopesSupported,
-    this.responseModesSupported = const ["query", "fragment"],
-    this.grantTypesSupported = const ["authorization_code", "implicit"],
+    this.responseModesSupported = const ['query', 'fragment'],
+    this.grantTypesSupported = const ['authorization_code', 'implicit'],
     this.acrValuesSupported,
     this.idTokenEncryptionAlgValuesSupported,
     this.requestObjectSigningAlgValuesSupported,
@@ -62,10 +43,12 @@ class OidcProviderMetadata {
     this.serviceDocumentation,
     this.claimsLocalesSupported,
     this.uiLocalesSupported,
+    this.pushedAuthorizationRequestEndpoint,
     this.claimsParameterSupported = false,
     this.requestParameterSupported = false,
     this.requireRequestUriRegistration = false,
     this.requestUriParameterSupported = true,
+    this.requirePushedAuthorizationRequests = false,
     this.opPolicyUri,
     this.opTosUri,
     this.checkSessionIframe,
@@ -82,6 +65,10 @@ class OidcProviderMetadata {
     this.userinfoEncryptionAlgValuesSupported,
     this.userinfoEncryptionEncValuesSupported,
   });
+
+  ///
+  factory OidcProviderMetadata.fromJson(Map<String, dynamic> json) =>
+      _$OidcProviderMetadataFromJson(json);
 
   /// URL that the OP asserts as its OpenIdProviderMetadata Identifier.
   @JsonKey(name: 'issuer')
@@ -101,7 +88,8 @@ class OidcProviderMetadata {
 
   /// URL of the OP's JSON Web Key Set document.
   ///
-  /// This contains the signing key(s) the RP uses to validate signatures from the OP.
+  /// This contains the signing key(s) the RP uses to validate signatures
+  /// from the OP.
   @JsonKey(name: 'jwks_uri')
   final Uri jwksUri;
 
@@ -129,7 +117,8 @@ class OidcProviderMetadata {
   )
   final List<String> grantTypesSupported;
 
-  /// A list of the Authentication Context Class References that this OP supports.
+  /// A list of the Authentication Context Class References that this
+  /// OP supports.
   @JsonKey(name: 'acr_values_supported')
   final List<String>? acrValuesSupported;
 
@@ -139,8 +128,8 @@ class OidcProviderMetadata {
   @JsonKey(name: 'subject_types_supported')
   final List<String> subjectTypesSupported;
 
-  /// A list of the JWS signing algorithms (`alg` values) supported by the OP for
-  /// the ID Token to encode the Claims in a JWT.
+  /// A list of the JWS signing algorithms (`alg` values) supported by the OP
+  /// for the ID Token to encode the Claims in a JWT.
   ///
   /// The algorithm `RS256` MUST be included. The value `none` MAY be supported,
   /// but MUST NOT be used unless the Response Type used returns no ID Token
@@ -224,7 +213,8 @@ class OidcProviderMetadata {
   /// A list of the Claim Types that the OpenID Provider supports.
   ///
   /// Values defined by the specification are `normal`, `aggregated`, and
-  /// `distributed`. If omitted, the implementation supports only `normal` Claims.
+  /// `distributed`. If omitted, the implementation supports only `normal`
+  /// Claims.
   @JsonKey(name: 'claim_types_supported')
   final List<String>? claimTypesSupported;
 
@@ -243,7 +233,8 @@ class OidcProviderMetadata {
 
   /// Languages and scripts supported for values in Claims being returned.
   ///
-  /// Not all languages and scripts are necessarily supported for all Claim values.
+  /// Not all languages and scripts are necessarily supported for all Claim
+  /// values.
   @JsonKey(name: 'claims_locales_supported')
   final List<String>? claimsLocalesSupported;
 
@@ -330,4 +321,17 @@ class OidcProviderMetadata {
   /// server.
   @JsonKey(name: 'code_challenge_methods_supported')
   final List<String>? codeChallengeMethodsSupported;
+
+  /// The URL of the pushed authorization request endpoint at which a client can
+  /// post an authorization request to exchange for a request_uri value usable 
+  /// at the authorization server.
+  @JsonKey(name: 'pushed_authorization_request_endpoint')
+  final Uri? pushedAuthorizationRequestEndpoint;
+  
+  /// Boolean parameter indicating whether the authorization server accepts 
+  /// authorization request data only via PAR. 
+  /// 
+  /// If omitted, the default value is false.
+  @JsonKey(name: 'require_pushed_authorization_requests')
+  final bool requirePushedAuthorizationRequests;
 }

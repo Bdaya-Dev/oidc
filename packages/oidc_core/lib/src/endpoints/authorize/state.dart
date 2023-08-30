@@ -1,15 +1,17 @@
 import 'dart:convert';
 
 import 'package:json_annotation/json_annotation.dart';
+import 'package:oidc_core/src/helpers/converters.dart';
 import 'package:oidc_core/src/helpers/pkce.dart';
-import 'package:oidc_core/src/models/enums/response_mode.dart';
 import 'package:oidc_core/src/models/state/state.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../helpers/converters.dart';
 
-part 'sign_in.g.dart';
 
+part 'state.g.dart';
+
+/// Represents a state that takes a snapshot of the request parameters
+/// and some settings to ensure nothing changes during the flow.
 @JsonSerializable(
   createFactory: true,
   createToJson: true,
@@ -18,8 +20,9 @@ part 'sign_in.g.dart';
     UriJsonConverter(),
   ],
 )
-class OidcSignInState extends OidcState {
-  const OidcSignInState({
+class OidcAuthorizeState extends OidcState {
+  ///
+  const OidcAuthorizeState({
     required this.skipUserInfo,
     required super.id,
     required super.createdAt,
@@ -36,33 +39,45 @@ class OidcSignInState extends OidcState {
     required this.responseMode,
   });
 
-  factory OidcSignInState.fromDefaults({
+  ///
+  factory OidcAuthorizeState.fromJson(Map<String, dynamic> src) =>
+      _$OidcAuthorizeStateFromJson(src);
+
+  /// restores [OidcAuthorizeState] from storage string
+  factory OidcAuthorizeState.fromStorageString(String storageString) =>
+      OidcAuthorizeState.fromJson(
+        jsonDecode(storageString) as Map<String, dynamic>,
+      );
+
+  /// creates [OidcAuthorizeState] with automatically generated id,
+  /// and createdAt set to DateTime.now()
+  factory OidcAuthorizeState.fromDefaults({
+    required Uri authority,
+    required String clientId,
+    required Uri redirectUri,
+    required String scope,
     String? id,
     DateTime? createdAt,
     String? requestType,
     dynamic data,
     bool generateCodeVerifierIfNull = true,
     String? codeVerifier,
-    required Uri authority,
-    required String clientId,
-    required Uri redirectUri,
-    required String scope,
     String? clientSecret,
     Map<String, dynamic>? extraTokenParams,
-    OidcResponseMode? responseMode,
+    String? responseMode,
     bool? skipUserInfo,
   }) {
     createdAt ??= DateTime.now().toUtc();
     id ??= const Uuid().v4();
 
     if (generateCodeVerifierIfNull) {
-      codeVerifier ??= PkcePair.generateVerifier(length: 32);
+      codeVerifier ??= PkcePair.generateVerifier();
     }
     String? challenge;
     if (codeVerifier != null) {
       challenge ??= PkcePair.generateChallenge(codeVerifier);
     }
-    return OidcSignInState(
+    return OidcAuthorizeState(
       skipUserInfo: skipUserInfo,
       id: id,
       createdAt: createdAt,
@@ -80,36 +95,49 @@ class OidcSignInState extends OidcState {
     );
   }
 
-  /// The same code_verifier that was used to obtain the authorization_code via PKCE.
+  /// The same code_verifier that was used to obtain the authorization_code
+  /// via PKCE.
   @JsonKey(name: 'code_verifier')
   final String? codeVerifier;
 
-  ///Used to secure authorization code grants via Proof Key for Code Exchange (PKCE).
+  ///Used to secure authorization code grants
+  ///via Proof Key for Code Exchange (PKCE).
   @JsonKey(name: 'code_challenge')
   final String? codeChallenge;
 
   //to ensure state still matches settings
+  ///
   @JsonKey(name: 'authority')
   final Uri authority;
+
+  ///
   @JsonKey(name: 'client_id')
   final String clientId;
   @JsonKey(name: 'redirect_uri')
+
+  ///
   final Uri redirectUri;
+
+  ///
   @JsonKey(name: 'scope')
   final String scope;
+
+  ///
   @JsonKey(name: 'client_secret')
   final String? clientSecret;
+
+  ///
   @JsonKey(name: 'extraTokenParams')
   final Map<String, dynamic>? extraTokenParams;
+
+  ///
   @JsonKey(name: 'response_mode')
-  final OidcResponseMode? responseMode;
+  final String? responseMode;
+
+  ///
   @JsonKey(name: 'skipUserInfo')
   final bool? skipUserInfo;
 
   @override
-  Map<String, dynamic> toJson() => _$OidcSignInStateToJson(this);
-  factory OidcSignInState.fromJson(Map<String, dynamic> src) =>
-      _$OidcSignInStateFromJson(src);
-  factory OidcSignInState.fromStorageString(String storageString) =>
-      OidcSignInState.fromJson(jsonDecode(storageString));
+  Map<String, dynamic> toJson() => _$OidcAuthorizeStateToJson(this);
 }
