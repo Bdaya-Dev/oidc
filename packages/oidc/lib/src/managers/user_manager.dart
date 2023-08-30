@@ -11,7 +11,7 @@ class UserManager {
     required this.discoveryDocumentUri,
     required this.client,
   });
-  
+
   final _userStatusStreamController = StreamController<Object>.broadcast();
 
   /// The discovery document containing openid configuration.

@@ -34,14 +34,14 @@ class OidcErrorAuthResponse extends OidcAuthorizeResponseBase {
   @JsonKey(name: kerror)
   final String error;
 
-  /// OPTIONAL. 
-  /// 
+  /// OPTIONAL.
+  ///
   /// Human-readable ASCII encoded text description of the error.
   @JsonKey(name: 'error_description')
   final String? errorDescription;
 
-  /// OPTIONAL. 
-  /// 
+  /// OPTIONAL.
+  ///
   /// URI of a web page that includes additional information about the error.
   @JsonKey(name: 'error_uri')
   final String? errorUri;

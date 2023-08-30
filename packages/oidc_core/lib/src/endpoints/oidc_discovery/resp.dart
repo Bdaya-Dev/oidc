@@ -323,14 +323,14 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final List<String>? codeChallengeMethodsSupported;
 
   /// The URL of the pushed authorization request endpoint at which a client can
-  /// post an authorization request to exchange for a request_uri value usable 
+  /// post an authorization request to exchange for a request_uri value usable
   /// at the authorization server.
   @JsonKey(name: 'pushed_authorization_request_endpoint')
   final Uri? pushedAuthorizationRequestEndpoint;
-  
-  /// Boolean parameter indicating whether the authorization server accepts 
-  /// authorization request data only via PAR. 
-  /// 
+
+  /// Boolean parameter indicating whether the authorization server accepts
+  /// authorization request data only via PAR.
+  ///
   /// If omitted, the default value is false.
   @JsonKey(name: 'require_pushed_authorization_requests')
   final bool requirePushedAuthorizationRequests;

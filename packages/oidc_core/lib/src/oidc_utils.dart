@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:oidc_core/oidc_core.dart';
 
-
 /// Utilities for the Oidc spec
 class OidcUtils {
   /// Takes a base Url and adds /.well-known/openid-configuration to it

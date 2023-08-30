@@ -6,7 +6,6 @@ import 'package:oidc_core/src/models/json_based_object.dart';
 
 /// The base class for all /authorize responses.
 abstract class OidcAuthorizeResponseBase extends JsonBasedResponse {
-
   ///
   const OidcAuthorizeResponseBase({
     required super.src,

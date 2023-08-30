@@ -109,8 +109,8 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///This use of this parameter is NOT RECOMMENDED when the Response Mode that
   ///would be requested is the default mode specified for the Response Type.
   ///
-  ///the possible values are defined in 
-  ///[OidcAuthorizeRequestConstants_ResponseMode]. 
+  ///the possible values are defined in
+  ///[OidcAuthorizeRequestConstants_ResponseMode].
   @JsonKey(name: 'response_mode')
   final String? responseMode;
 

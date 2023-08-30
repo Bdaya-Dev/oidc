@@ -6,8 +6,6 @@ import 'package:oidc_core/src/helpers/pkce.dart';
 import 'package:oidc_core/src/models/state/state.dart';
 import 'package:uuid/uuid.dart';
 
-
-
 part 'state.g.dart';
 
 /// Represents a state that takes a snapshot of the request parameters
