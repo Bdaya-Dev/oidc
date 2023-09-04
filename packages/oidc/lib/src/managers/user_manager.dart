@@ -1,18 +1,19 @@
 import 'dart:async';
 
+import 'package:oidc/src/models/user.dart';
 import 'package:oidc_core/oidc_core.dart';
 
 /// This class manages a single user's authentication status.
 ///
 /// It's preferred to maintain only a single instance of this class.
-class UserManager {
+class OidcUserManager {
   /// Create a new UserManager.
-  UserManager({
+  OidcUserManager({
     required this.discoveryDocumentUri,
     required this.client,
   });
 
-  final _userStatusStreamController = StreamController<Object>.broadcast();
+  final _userStatusStreamController = StreamController<OidcUser>.broadcast();
 
   /// The discovery document containing openid configuration.
   final Uri discoveryDocumentUri;

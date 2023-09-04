@@ -2,6 +2,7 @@
 // https://github.com/appsup-dart/openid_client/blob/92a9a055c62c3b302d70a401ef872b5b9dba6f21/lib/src/model/metadata.dart
 
 import 'package:json_annotation/json_annotation.dart';
+import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_core/src/helpers/converters.dart';
 import 'package:oidc_core/src/models/json_based_object.dart';
 
@@ -11,32 +12,30 @@ part 'resp.g.dart';
 /// This also includes some metadata that are defined by other extensions
 @JsonSerializable(
   createToJson: false,
-  converters: [
-    UriJsonConverter(),
-  ],
+  converters: commonConverters,
 )
 class OidcProviderMetadata extends JsonBasedResponse {
   const OidcProviderMetadata({
     required super.src,
-    required this.issuer,
-    required this.authorizationEndpoint,
-    required this.jwksUri,
-    required this.responseTypesSupported,
-    required this.subjectTypesSupported,
-    required this.idTokenSigningAlgValuesSupported,
+    this.issuer,
+    this.authorizationEndpoint,
+    this.jwksUri,
+    this.responseTypesSupported,
+    this.subjectTypesSupported,
+    this.idTokenSigningAlgValuesSupported,
     this.tokenEndpoint,
     this.userinfoEndpoint,
     this.registrationEndpoint,
     this.scopesSupported,
-    this.responseModesSupported = const ['query', 'fragment'],
-    this.grantTypesSupported = const ['authorization_code', 'implicit'],
+    this.responseModesSupported,
+    this.grantTypesSupported,
     this.acrValuesSupported,
     this.idTokenEncryptionAlgValuesSupported,
     this.requestObjectSigningAlgValuesSupported,
     this.requestObjectEncryptionAlgValuesSupported,
     this.requestObjectEncryptionEncValuesSupported,
     this.tokenEndpointAuthSigningAlgValuesSupported,
-    this.tokenEndpointAuthMethodsSupported = const ['client_secret_basic'],
+    this.tokenEndpointAuthMethodsSupported,
     this.displayValuesSupported,
     this.claimTypesSupported,
     this.claimsSupported,
@@ -44,11 +43,11 @@ class OidcProviderMetadata extends JsonBasedResponse {
     this.claimsLocalesSupported,
     this.uiLocalesSupported,
     this.pushedAuthorizationRequestEndpoint,
-    this.claimsParameterSupported = false,
-    this.requestParameterSupported = false,
-    this.requireRequestUriRegistration = false,
-    this.requestUriParameterSupported = true,
-    this.requirePushedAuthorizationRequests = false,
+    this.claimsParameterSupported,
+    this.requestParameterSupported,
+    this.requireRequestUriRegistration,
+    this.requestUriParameterSupported,
+    this.requirePushedAuthorizationRequests,
     this.opPolicyUri,
     this.opTosUri,
     this.checkSessionIframe,
@@ -72,11 +71,11 @@ class OidcProviderMetadata extends JsonBasedResponse {
 
   /// URL that the OP asserts as its OpenIdProviderMetadata Identifier.
   @JsonKey(name: 'issuer')
-  final Uri issuer;
+  final Uri? issuer;
 
   /// URL of the OP's OAuth 2.0 Authorization Endpoint.
   @JsonKey(name: 'authorization_endpoint')
-  final Uri authorizationEndpoint;
+  final Uri? authorizationEndpoint;
 
   /// URL of the OP's OAuth 2.0 Token Endpoint.
   @JsonKey(name: 'token_endpoint')
@@ -91,7 +90,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// This contains the signing key(s) the RP uses to validate signatures
   /// from the OP.
   @JsonKey(name: 'jwks_uri')
-  final Uri jwksUri;
+  final Uri? jwksUri;
 
   /// URL of the OP's Dynamic Client Registration Endpoint.
   @JsonKey(name: 'registration_endpoint')
@@ -103,19 +102,25 @@ class OidcProviderMetadata extends JsonBasedResponse {
 
   /// A list of the OAuth 2.0 `response_type` values that this OP supports.
   @JsonKey(name: 'response_types_supported')
-  final List<String> responseTypesSupported;
+  final List<String>? responseTypesSupported;
 
   /// A list of the OAuth 2.0 `response_mode` values that this OP supports.
   @JsonKey(
     name: 'response_modes_supported',
   )
-  final List<String> responseModesSupported;
+  final List<String>? responseModesSupported;
 
   /// A list of the OAuth 2.0 Grant Type values that this OP supports.
   @JsonKey(
     name: 'grant_types_supported',
   )
-  final List<String> grantTypesSupported;
+  final List<String>? grantTypesSupported;
+  List<String> get grantTypesSupportedOrDefault =>
+      grantTypesSupported ??
+      [
+        OidcTokenRequestConstants_GrantType.authorizationCode,
+        OidcDiscoveryConstants_GrantTypes.implicit,
+      ];
 
   /// A list of the Authentication Context Class References that this
   /// OP supports.
@@ -126,7 +131,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   ///
   /// Valid types include `pairwise` and `public`.
   @JsonKey(name: 'subject_types_supported')
-  final List<String> subjectTypesSupported;
+  final List<String>? subjectTypesSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the OP
   /// for the ID Token to encode the Claims in a JWT.
@@ -136,7 +141,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// from the Authorization Endpoint (such as when using the Authorization Code
   /// Flow).
   @JsonKey(name: 'id_token_signing_alg_values_supported')
-  final List<String> idTokenSigningAlgValuesSupported;
+  final List<String>? idTokenSigningAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`alg` values) supported by the OP
   /// for the ID Token to encode the Claims in a JWT.
@@ -197,7 +202,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// `client_secret_jwt`, and `private_key_jwt`. Other authentication methods
   /// MAY be defined by extensions.
   @JsonKey(name: 'token_endpoint_auth_methods_supported')
-  final List<String> tokenEndpointAuthMethodsSupported;
+  final List<String>? tokenEndpointAuthMethodsSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the Token
   /// Endpoint for the signature on the JWT used to authenticate the Client at
@@ -244,20 +249,24 @@ class OidcProviderMetadata extends JsonBasedResponse {
 
   /// `true` when the OP supports use of the `claims` parameter.
   @JsonKey(name: 'claims_parameter_supported')
-  final bool claimsParameterSupported;
+  final bool? claimsParameterSupported;
+  bool get claimsParameterSupportedOrDefault =>
+      claimsParameterSupported ?? false;
 
   /// `true` when the OP supports use of the `request` parameter.
   @JsonKey(name: 'request_parameter_supported')
-  final bool requestParameterSupported;
+  final bool? requestParameterSupported;
 
   /// `true` when the OP supports use of the `request_uri` parameter.
   @JsonKey(name: 'request_uri_parameter_supported')
-  final bool requestUriParameterSupported;
+  final bool? requestUriParameterSupported;
+  bool get requestUriParameterSupportedOrDefault =>
+      requestUriParameterSupported ?? true;
 
   /// `true` when the OP requires any `request_uri` values used to be
   /// pre-registered using the request_uris registration parameter.
   @JsonKey(name: 'require_request_uri_registration')
-  final bool requireRequestUriRegistration;
+  final bool? requireRequestUriRegistration;
 
   /// URL that the OpenID Provider provides to the person registering the Client
   /// to read about the OP's requirements on how the Relying Party can use the
@@ -333,5 +342,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   ///
   /// If omitted, the default value is false.
   @JsonKey(name: 'require_pushed_authorization_requests')
-  final bool requirePushedAuthorizationRequests;
+  final bool? requirePushedAuthorizationRequests;
+  bool get requirePushedAuthorizationRequestsOrDefault =>
+      requirePushedAuthorizationRequests ?? false;
 }

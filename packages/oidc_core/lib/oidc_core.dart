@@ -5,4 +5,4 @@ library;
 
 export 'src/endpoints/_exports.dart';
 export 'src/models/_exports.dart';
-export 'src/oidc_utils.dart';
+export 'src/utils.dart';

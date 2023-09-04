@@ -12,4 +12,8 @@ class OidcTokenRequestConstants_GrantType {
   static const String saml2Bearer =
       'urn:ietf:params:oauth:grant-type:saml2-bearer';
   static const String ciba = 'urn:openid:params:grant-type:ciba';
+
+
+  static const String jwtBearer = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
+  static const String umaTicket = 'urn:ietf:params:oauth:grant-type:uma-ticket';
 }

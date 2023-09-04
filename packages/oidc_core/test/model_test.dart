@@ -64,7 +64,7 @@ void main() {
         expect(parsed.src, src);
         expect(parsed.issuer.toString(), 'https://www.facebook.com');
         expect(
-          parsed.grantTypesSupported,
+          parsed.grantTypesSupportedOrDefault,
           const ['authorization_code', 'implicit'],
         );
       });
