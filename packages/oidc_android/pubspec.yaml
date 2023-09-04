@@ -5,7 +5,8 @@ repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_android
 
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=2.19.0 <4.0.0"
+  flutter: ">=3.7.0"
 
 flutter:
   plugin:
@@ -19,8 +20,7 @@ flutter:
 dependencies:
   flutter:
     sdk: flutter
-  oidc_platform_interface:
-    path: ../oidc_platform_interface
+  oidc_platform_interface: ^0.1.0+1
 
 dev_dependencies:
   flutter_test:

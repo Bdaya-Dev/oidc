@@ -46,10 +46,10 @@ class OidcErrorAuthResponse extends JsonBasedResponse {
   @JsonKey(name: 'error_uri')
   final Uri? errorUri;
 
-  /// REQUIRED, if the Authorization Request included the state parameter. 
-  /// 
-  /// OAuth 2.0 state value. 
-  /// 
+  /// REQUIRED, if the Authorization Request included the state parameter.
+  ///
+  /// OAuth 2.0 state value.
+  ///
   /// Set to the value received from the Client.
   @JsonKey(name: 'state')
   final String? state;

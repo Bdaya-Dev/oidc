@@ -4,8 +4,8 @@ version: 0.1.1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
-
+  sdk: ">=2.19.0 <4.0.0"
+  flutter: ">=3.7.0"
 flutter:
   plugin:
     platforms:
@@ -25,22 +25,14 @@ flutter:
 dependencies:
   flutter:
     sdk: flutter
-  oidc_android:
-    path: ../oidc_android
-  oidc_core:
-    path: ../oidc_core
-  oidc_ios:
-    path: ../oidc_ios
-  oidc_linux:
-    path: ../oidc_linux
-  oidc_macos:
-    path: ../oidc_macos
-  oidc_platform_interface:
-    path: ../oidc_platform_interface
-  oidc_web:
-    path: ../oidc_web
-  oidc_windows:
-    path: ../oidc_windows
+  oidc_android: ^0.1.0+1
+  oidc_core: ^0.2.0
+  oidc_ios: ^0.1.0+1
+  oidc_linux: ^0.1.0+1
+  oidc_macos: ^0.1.0+1
+  oidc_platform_interface: ^0.1.0+1
+  oidc_web: ^0.1.0+1
+  oidc_windows: ^0.1.0+1
     
 
 dev_dependencies:
