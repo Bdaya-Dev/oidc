@@ -13,10 +13,7 @@ part 'state.g.dart';
 @JsonSerializable(
   createFactory: true,
   createToJson: true,
-  converters: [
-    DateTimeEpochConverter(),
-    UriJsonConverter(),
-  ],
+  converters: commonConverters,
 )
 class OidcAuthorizeState extends OidcState {
   ///

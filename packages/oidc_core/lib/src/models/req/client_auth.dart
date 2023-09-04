@@ -17,14 +17,21 @@ class OidcClientAuthentication {
   @JsonKey(name: 'client_secret')
   final String? clientSecret;
 
-  String getBasicAuth() => base64.encode(
-        utf8.encode(
-          [
-            clientId,
-            if (clientSecret != null) clientSecret,
-          ].join(':'),
-        ),
-      );
+  String getBasicAuth() {
+    assert(
+      clientSecret != null,
+      "Client secret can't be null when using basic auth.",
+    );
+    return base64.encode(
+      utf8.encode(
+        [
+          clientId,
+          if (clientSecret != null) clientSecret,
+        ].join(':'),
+      ),
+    );
+  }
+
   Map<String, String> getBodyParameters() =>
       _$OidcClientAuthenticationToJson(this).cast<String, String>();
 }

@@ -4,17 +4,14 @@ import 'package:oidc_core/src/endpoints/authorize/constants.dart';
 import 'package:oidc_core/src/helpers/converters.dart';
 import 'package:oidc_core/src/models/json_based_object.dart';
 
-part 'request.g.dart';
+part 'req.g.dart';
 
 /// A class that descripes an /authorize request.
 @JsonSerializable(
   createFactory: false,
   includeIfNull: false,
   explicitToJson: true,
-  converters: [
-    UriJsonConverter(),
-    DurationSecondsConverter(),
-  ],
+  converters: commonConverters,
 )
 class OidcAuthorizeRequest extends JsonBasedRequest {
   /// Create an OidcAuthorizeRequest.

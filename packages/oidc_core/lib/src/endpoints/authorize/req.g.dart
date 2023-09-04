@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'request.dart';
+part of 'req.dart';
 
 // **************************************************************************
 // JsonSerializableGenerator
@@ -19,7 +19,7 @@ Map<String, dynamic> _$OidcAuthorizeRequestToJson(
   writeNotNull('scope', joinSpaceDelimitedList(instance.scope));
   writeNotNull('response_type', joinSpaceDelimitedList(instance.responseType));
   val['client_id'] = instance.clientId;
-  val['redirect_uri'] = const UriJsonConverter().toJson(instance.redirectUri);
+  val['redirect_uri'] = instance.redirectUri.toString();
   writeNotNull('state', instance.state);
   writeNotNull('response_mode', instance.responseMode);
   writeNotNull('nonce', instance.nonce);

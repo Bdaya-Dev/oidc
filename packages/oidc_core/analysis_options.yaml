@@ -2,6 +2,7 @@ include: package:very_good_analysis/analysis_options.yaml
 analyzer:
   errors:
     sort_pub_dependencies: ignore
+    deprecated_member_use_from_same_package: ignore
     # invalid_dependency: ignore
 
 linter:
@@ -9,6 +10,7 @@ linter:
     require_trailing_commas: false
     always_use_package_imports: false
     public_member_api_docs: false
+    # deprecated_member_use_from_same_package: false
 # Uncomment the following section to specify additional rules.
 
 # linter:

@@ -12,7 +12,9 @@ OidcErrorAuthResponse _$OidcErrorAuthResponseFromJson(
       src: readSrcMap(json, '') as Map<String, dynamic>,
       error: json['error'] as String,
       errorDescription: json['error_description'] as String?,
-      errorUri: json['error_uri'] as String?,
-      sessionState: json['session_state'] as String?,
+      errorUri: json['error_uri'] == null
+          ? null
+          : Uri.parse(json['error_uri'] as String),
+      iss: json['iss'] == null ? null : Uri.parse(json['iss'] as String),
       state: json['state'] as String?,
     );

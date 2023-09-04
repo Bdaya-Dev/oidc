@@ -32,6 +32,29 @@ class UriJsonConverter extends JsonConverter<Uri, String> {
   }
 }
 
+DateTime? readDateTime(Map<dynamic, dynamic> src, String key) {
+  final rawValue = src[key];
+  if (rawValue == null) {
+    return null;
+  }
+  if (rawValue is String) {
+    return DateTime.tryParse(rawValue);
+  } else if (rawValue is int) {
+    return DateTime.fromMillisecondsSinceEpoch(
+      rawValue,
+      isUtc: true,
+    );
+  } else if (rawValue is DateTime) {
+    return rawValue;
+  }
+  throw ArgumentError.value(rawValue, "Value can't be converted to DateTime");
+}
+
+const commonConverters = <JsonConverter<dynamic, dynamic>>[
+  DateTimeEpochConverter(),
+  DurationSecondsConverter()
+];
+
 ///
 class DateTimeEpochConverter extends JsonConverter<DateTime, int> {
   ///

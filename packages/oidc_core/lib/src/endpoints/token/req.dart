@@ -9,14 +9,12 @@ part 'req.g.dart';
   createFactory: false,
   includeIfNull: false,
   explicitToJson: true,
-  converters: [
-    UriJsonConverter(),
-    DurationSecondsConverter(),
-  ],
+  converters: commonConverters,
 )
-class OidcTokenRequestBody extends JsonBasedRequest {
-  const OidcTokenRequestBody({
+class OidcTokenRequest extends JsonBasedRequest {
+  const OidcTokenRequest({
     required this.grantType,
+    this.clientId,
     this.code,
     this.codeVerifier,
     this.username,
@@ -34,10 +32,11 @@ class OidcTokenRequestBody extends JsonBasedRequest {
     super.extra,
   });
 
-  const OidcTokenRequestBody.authorizationCode({
+  const OidcTokenRequest.authorizationCode({
     required Uri this.redirectUri,
+    required String this.code,
+    this.clientId,
     this.scope = const [],
-    this.code,
     this.codeVerifier,
     super.extra,
   })  : grantType = OidcTokenRequestConstants_GrantType.authorizationCode,
@@ -52,10 +51,11 @@ class OidcTokenRequestBody extends JsonBasedRequest {
         authReqId = null,
         refreshToken = null;
 
-  const OidcTokenRequestBody.password({
+  const OidcTokenRequest.password({
     required String this.username,
     required String this.password,
     required this.scope,
+    this.clientId,
     super.extra,
   })  : grantType = OidcTokenRequestConstants_GrantType.password,
         code = null,
@@ -70,8 +70,9 @@ class OidcTokenRequestBody extends JsonBasedRequest {
         authReqId = null,
         refreshToken = null;
 
-  const OidcTokenRequestBody.clientCredentials({
+  const OidcTokenRequest.clientCredentials({
     this.scope = const [],
+    this.clientId,
     super.extra,
   })  : grantType = OidcTokenRequestConstants_GrantType.clientCredentials,
         code = null,
@@ -88,9 +89,10 @@ class OidcTokenRequestBody extends JsonBasedRequest {
         username = null,
         password = null;
 
-  const OidcTokenRequestBody.saml2({
+  const OidcTokenRequest.saml2({
     required String this.assertion,
     this.scope = const [],
+    this.clientId,
     super.extra,
   })  : grantType = OidcTokenRequestConstants_GrantType.saml2Bearer,
         code = null,
@@ -110,6 +112,11 @@ class OidcTokenRequestBody extends JsonBasedRequest {
   final String grantType;
   @JsonKey(name: 'code')
   final String? code;
+
+  /// REQUIRED if client secret (or any other Client Authentication mechanism)
+  /// is not available.
+  @JsonKey(name: 'client_id')
+  final String? clientId;
 
   /// REQUIRED, if using PKCE.
   ///
@@ -143,9 +150,11 @@ class OidcTokenRequestBody extends JsonBasedRequest {
   final String? refreshToken;
   @JsonKey(name: 'scope', toJson: joinSpaceDelimitedList)
   final List<String> scope;
+
   @override
   Map<String, dynamic> toMap() {
     return {
+      ..._$OidcTokenRequestToJson(this),
       ...super.toMap(),
     };
   }
