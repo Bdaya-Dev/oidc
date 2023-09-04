@@ -8,9 +8,11 @@ environment:
 
 dependencies:
   crypto: ^3.0.3
+  dart_jsonwebtoken: ^2.11.0
   http: ^1.1.0
   json_annotation: ^4.8.1
   uuid: ^3.0.7
+  meta: ^1.9.1
 
 dev_dependencies:
   build_runner: ^2.4.6
@@ -18,4 +20,3 @@ dev_dependencies:
   test: ^1.21.0
   very_good_analysis: ^5.0.0+1
   json_serializable: ^6.7.1
-  meta: ^1.9.1
