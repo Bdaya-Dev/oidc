@@ -1,4 +1,4 @@
-name: oidc_example
+name: oidc_example_android
 description: Demonstrates how to use the oidc plugin.
 publish_to: none
 

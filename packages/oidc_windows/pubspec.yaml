@@ -18,6 +18,7 @@ flutter:
 dependencies:
   flutter:
     sdk: flutter
+  oidc_core: ^0.2.0
   oidc_platform_interface: ^0.1.0+1
 
 dev_dependencies:

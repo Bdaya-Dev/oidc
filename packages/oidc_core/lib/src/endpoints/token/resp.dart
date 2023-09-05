@@ -27,11 +27,11 @@ class OidcTokenResponse extends JsonBasedResponse {
   @JsonKey(name: 'scope', fromJson: splitSpaceDelimitedString)
   final List<String> scope;
 
-  /// REQUIRED.
+  /// OPTIONAL.
   ///
   /// The access token issued by the authorization server.
   @JsonKey(name: 'access_token')
-  final String accessToken;
+  final String? accessToken;
 
   /// REQUIRED.
   ///

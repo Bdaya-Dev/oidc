@@ -25,6 +25,7 @@ flutter:
 dependencies:
   flutter:
     sdk: flutter
+  # Endorsed packages
   oidc_android: ^0.1.0+1
   oidc_core: ^0.2.0
   oidc_ios: ^0.1.0+1
@@ -33,7 +34,12 @@ dependencies:
   oidc_platform_interface: ^0.1.0+1
   oidc_web: ^0.1.0+1
   oidc_windows: ^0.1.0+1
-    
+  # ====================
+  http: ^1.1.0
+  jose: ^0.3.4
+  retry: ^3.1.2
+  rxdart: ^0.27.7
+  logging: ^1.2.0
 
 dev_dependencies:
   flutter_test:

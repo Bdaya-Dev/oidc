@@ -1,6 +1,27 @@
 // ignore_for_file: camel_case_types
 
-class OidcAuthorizeRequestConstants_ResponseMode {
+class OidcConstants_GrantType {
+  static const String authorizationCode = 'authorization_code';
+  static const String password = 'password';
+  static const String clientCredentials = 'client_credentials';
+  static const String refreshToken = 'refresh_token';
+  static const String deviceCode =
+      'urn:ietf:params:oauth:grant-type:device_code';
+  static const String tokenExchange =
+      'urn:ietf:params:oauth:grant-type:token-exchange';
+  static const String saml2Bearer =
+      'urn:ietf:params:oauth:grant-type:saml2-bearer';
+  static const String ciba = 'urn:openid:params:grant-type:ciba';
+
+  static const String jwtBearer = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
+  static const String umaTicket = 'urn:ietf:params:oauth:grant-type:uma-ticket';
+}
+
+class OidcConstants_AuthorizeRequest {
+  static const nonce = 'nonce';
+}
+
+class OidcConstants_AuthorizeRequest_ResponseMode {
   /// query
   static const String query = 'query';
 
@@ -15,7 +36,7 @@ class OidcAuthorizeRequestConstants_ResponseMode {
 }
 
 /// The response_type options defined by the spec
-class OidcAuthorizeRequestConstants_ResponseType {
+class OidcConstants_AuthorizeRequest_ResponseType {
   /// Authorization Code Flow
   static const String code = 'code';
 
@@ -30,7 +51,7 @@ class OidcAuthorizeRequestConstants_ResponseType {
 }
 
 /// The display options defind by the spec.
-class OidcAuthorizeRequestConstants_Display {
+class OidcConstants_AuthorizeRequest_Display {
   /// The Authorization Server SHOULD display the authentication and consent UI
   /// consistent with a full User Agent page view. If the display parameter is
   /// not specified, this is the default display mode.
@@ -52,7 +73,7 @@ class OidcAuthorizeRequestConstants_Display {
 }
 
 /// The prompt options defind by the spec
-class OidcAuthorizeRequestConstants_Prompt {
+class OidcConstants_AuthorizeRequest_Prompt {
   /// The Authorization Server MUST NOT display any authentication or consent
   /// user interface pages.
   ///
@@ -90,10 +111,39 @@ class OidcAuthorizeRequestConstants_Prompt {
   static const String selectAccount = 'select_account';
 }
 
-class OidcAuthorizeRequestConstants_CodeChallengeMethod {
+class OidcConstants_AuthorizeRequest_CodeChallengeMethod {
   /// code_challenge = code_verifier
   static const String plain = 'plain';
 
   /// code_challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier)))
   static const String s256 = 'S256';
+}
+
+class OidcConstants_Store {
+  static const latestToken = 'latest';
+  static const idToken = 'id_token';
+  static const accessToken = 'access_token';
+  static const refreshToken = 'refresh_token';
+}
+
+class OidcConstants_PKCE {
+  static const codeVerifier = 'code_verifier';
+  static const codeChallenge = 'code_challenge';
+}
+
+class OidcConstants_Exception {
+  static const discoveryDocumentUri = 'discoveryDocumentUri';
+  static const idToken = 'idToken';
+  static const request = 'request';
+  static const response = 'response';
+  static const statusCode = 'statusCode';
+}
+
+///
+class OidcConstants_RequestMethod {
+  /// GET http method
+  static const get = 'GET';
+
+  /// POST http method
+  static const post = 'POST';
 }

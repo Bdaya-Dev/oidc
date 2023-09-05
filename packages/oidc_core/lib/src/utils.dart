@@ -2,20 +2,25 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:meta/meta.dart';
 import 'package:oidc_core/oidc_core.dart';
 
-Future<http.Response> _sendWithClient({
-  required http.Client? client,
-  required Future<http.Response> Function(http.Client client) action,
-}) async {
-  //
-  final shouldDispose = client == null;
-  client ??= http.Client();
-  try {
-    return await action(client);
-  } finally {
-    if (shouldDispose) {
-      client.close();
+@internal
+class OidcInternalUtilities {
+  static Future<http.Response> sendWithClient({
+    required http.Client? client,
+    required http.Request request,
+  }) async {
+    //
+    final shouldDispose = client == null;
+    client ??= http.Client();
+    try {
+      final res = await client.send(request).then(http.Response.fromStream);
+      return res;
+    } finally {
+      if (shouldDispose) {
+        client.close();
+      }
     }
   }
 }
@@ -34,24 +39,26 @@ class OidcUtils {
   }
 
   /// Gets the Oidc provider metadata from a '.well-known' url
-  static Future<OidcProviderMetadata> getConfiguration(
+  static Future<OidcProviderMetadata> getProviderMetadata(
     Uri wellKnownUri, {
     Map<String, String>? headers,
     http.Client? client,
   }) async {
-    final req = http.Request('GET', wellKnownUri);
+    final req = http.Request(OidcConstants_RequestMethod.get, wellKnownUri);
     if (headers != null) {
       req.headers.addAll(headers);
     }
-    final resp = await _sendWithClient(
+    final resp = await OidcInternalUtilities.sendWithClient(
       client: client,
-      action: (client) => client.send(req).then(http.Response.fromStream),
+      request: req,
     );
     if (resp.statusCode != 200) {
       throw OidcException(
         'Server responded with a non-200 statusCode',
         extra: {
-          'statusCode': resp.statusCode,
+          OidcConstants_Exception.request: req,
+          OidcConstants_Exception.response: resp,
+          OidcConstants_Exception.statusCode: resp.statusCode,
         },
       );
     }

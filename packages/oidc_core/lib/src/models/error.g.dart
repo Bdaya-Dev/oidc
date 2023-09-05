@@ -6,9 +6,8 @@ part of 'error.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-OidcErrorAuthResponse _$OidcErrorAuthResponseFromJson(
-        Map<String, dynamic> json) =>
-    OidcErrorAuthResponse(
+OidcErrorResponse _$OidcErrorAuthResponseFromJson(Map<String, dynamic> json) =>
+    OidcErrorResponse(
       src: readSrcMap(json, '') as Map<String, dynamic>,
       error: json['error'] as String,
       errorDescription: json['error_description'] as String?,

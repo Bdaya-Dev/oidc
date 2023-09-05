@@ -1,6 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_core/src/endpoints/authorize/constants.dart';
 import 'package:oidc_core/src/helpers/converters.dart';
 import 'package:oidc_core/src/models/json_based_object.dart';
 
@@ -60,7 +59,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// When using the Authorization Code Flow, this value is code.
   ///
-  /// see [OidcAuthorizeRequestConstants_ResponseType] for possible values
+  /// see [OidcConstants_AuthorizeRequest_ResponseType] for possible values
   @JsonKey(name: 'response_type', toJson: joinSpaceDelimitedList)
   final List<String> responseType;
 
@@ -107,7 +106,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///would be requested is the default mode specified for the Response Type.
   ///
   ///the possible values are defined in
-  ///[OidcAuthorizeRequestConstants_ResponseMode].
+  ///[OidcConstants_AuthorizeRequest_ResponseMode].
   @JsonKey(name: 'response_mode')
   final String? responseMode;
 
@@ -122,6 +121,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// Sufficient entropy MUST be present in the nonce values used to prevent
   /// attackers from guessing values. For implementation notes,
   /// see [Section 15.5.2](https://openid.net/specs/openid-connect-core-1_0.html#NonceNotes).
+  @JsonKey(name: OidcConstants_AuthorizeRequest.nonce)
   final String? nonce;
 
   /// OPTIONAL.
@@ -129,10 +129,11 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// ASCII string value that specifies how the Authorization Server displays
   /// the authentication and consent user interface pages to the End-User.
   ///
-  /// The defined values are in [OidcAuthorizeRequestConstants_Display].
+  /// The defined values are in [OidcConstants_AuthorizeRequest_Display].
   ///
   /// The Authorization Server MAY also attempt to detect the capabilities of
   /// the User Agent and present an appropriate display.
+  @JsonKey(name: 'display')
   final String? display;
 
   /// OPTIONAL.
@@ -141,7 +142,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///  whether the Authorization Server prompts the End-User
   /// for reauthentication and consent.
   ///
-  /// The defined values are in [OidcAuthorizeRequestConstants_Prompt]
+  /// The defined values are in [OidcConstants_AuthorizeRequest_Prompt]
   ///
   /// The prompt parameter can be used by the Client to make sure that the
   /// End-User is still present for the current session or to bring attention
@@ -264,4 +265,11 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
         ..._$OidcAuthorizeRequestToJson(this),
         ...super.toMap(),
       };
+
+  Uri generateUri(Uri authorizationEndpoint) => authorizationEndpoint.replace(
+        queryParameters: {
+          ...authorizationEndpoint.queryParameters,
+          ...toMap(),
+        },
+      );
 }

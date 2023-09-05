@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
-import 'package:oidc_platform_interface/oidc_platform_interface.dart';
+import 'package:oidc_core/oidc_core.dart';
+import 'models/authorize_options.dart';
+import 'platform.dart';
 
 /// An implementation of [OidcPlatform] that uses method channels.
 class MethodChannelOidc extends OidcPlatform {
@@ -8,8 +10,24 @@ class MethodChannelOidc extends OidcPlatform {
   @visibleForTesting
   final methodChannel = const MethodChannel('oidc');
 
+  ///
+  static const kgetPlatformName = 'getPlatformName';
+
+  ///
+  static const kgetAuthorizationResponse = 'getAuthorizationResponse';
+
+  // @override
+  // Future<String?> getPlatformName() {
+  //   return methodChannel.invokeMethod<String>(kgetPlatformName);
+  // }
+
   @override
-  Future<String?> getPlatformName() {
-    return methodChannel.invokeMethod<String>('getPlatformName');
+  Future<OidcAuthorizeResponse?> getAuthorizationResponse(
+    OidcProviderMetadata metadata,
+    OidcAuthorizeRequest request,
+    OidcStore store,
+    OidcAuthorizePlatformOptions options,
+  ) {
+    throw UnimplementedError();
   }
 }

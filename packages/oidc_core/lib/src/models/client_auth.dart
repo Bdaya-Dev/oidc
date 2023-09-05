@@ -17,19 +17,11 @@ class OidcClientAuthentication {
   @JsonKey(name: 'client_secret')
   final String? clientSecret;
 
-  String getBasicAuth() {
-    assert(
-      clientSecret != null,
-      "Client secret can't be null when using basic auth.",
-    );
-    return base64.encode(
-      utf8.encode(
-        [
-          clientId,
-          if (clientSecret != null) clientSecret,
-        ].join(':'),
-      ),
-    );
+  String? getBasicAuth() {
+    if (clientSecret == null) {
+      return null;
+    }
+    return base64.encode(utf8.encode([clientId, clientSecret!].join(':')));
   }
 
   Map<String, String> getBodyParameters() =>

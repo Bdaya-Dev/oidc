@@ -78,16 +78,15 @@ class OidcState {
   String toStorageString() => jsonEncode(toJson());
 
   ///
-  static Future<void> clearStaleState(
-    OidcStateStore store,
-    Duration age,
-  ) async {
+  static Future<void> clearStaleState({
+    required OidcStore store,
+    required Duration age,
+  }) async {
     final cutoff = DateTime.now().toUtc().subtract(age);
-    final keys = await store.getAllKeys();
+    final keys = await store.getAllKeys(OidcStoreNamespace.state);
     for (final key in keys) {
-      final item = await store.get(key);
+      final item = await store.get(OidcStoreNamespace.state, key: key);
       var remove = false;
-
       if (item != null) {
         try {
           final state = OidcState.fromStorageString(item);
@@ -103,7 +102,7 @@ class OidcState {
 
       if (remove) {
         //no need to await
-        unawaited(store.remove(key));
+        unawaited(store.remove(OidcStoreNamespace.state, key: key));
       }
     }
   }

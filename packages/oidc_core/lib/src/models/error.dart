@@ -10,9 +10,9 @@ part 'error.g.dart';
   createToJson: false,
   converters: commonConverters,
 )
-class OidcErrorAuthResponse extends JsonBasedResponse {
+class OidcErrorResponse extends JsonBasedResponse {
   ///
-  const OidcErrorAuthResponse({
+  const OidcErrorResponse({
     required super.src,
     required this.error,
     this.errorDescription,
@@ -22,7 +22,7 @@ class OidcErrorAuthResponse extends JsonBasedResponse {
   });
 
   ///creates an error response from json
-  factory OidcErrorAuthResponse.fromJson(Map<String, dynamic> src) =>
+  factory OidcErrorResponse.fromJson(Map<String, dynamic> src) =>
       _$OidcErrorAuthResponseFromJson(src);
 
   /// error

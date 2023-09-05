@@ -1,6 +1,7 @@
 name: oidc
 packages:
   - packages/*
+  - packages/*/example
 scripts:
   pana:
     run: melos exec -c 1 "pana"

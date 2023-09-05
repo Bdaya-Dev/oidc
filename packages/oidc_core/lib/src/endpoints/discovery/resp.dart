@@ -118,7 +118,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   List<String> get grantTypesSupportedOrDefault =>
       grantTypesSupported ??
       [
-        OidcTokenRequestConstants_GrantType.authorizationCode,
+        OidcConstants_GrantType.authorizationCode,
         OidcDiscoveryConstants_GrantTypes.implicit,
       ];
 

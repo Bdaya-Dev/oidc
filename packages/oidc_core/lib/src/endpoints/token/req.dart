@@ -39,7 +39,7 @@ class OidcTokenRequest extends JsonBasedRequest {
     this.scope = const [],
     this.codeVerifier,
     super.extra,
-  })  : grantType = OidcTokenRequestConstants_GrantType.authorizationCode,
+  })  : grantType = OidcConstants_GrantType.authorizationCode,
         username = null,
         password = null,
         assertion = null,
@@ -57,7 +57,7 @@ class OidcTokenRequest extends JsonBasedRequest {
     required this.scope,
     this.clientId,
     super.extra,
-  })  : grantType = OidcTokenRequestConstants_GrantType.password,
+  })  : grantType = OidcConstants_GrantType.password,
         code = null,
         codeVerifier = null,
         redirectUri = null,
@@ -74,7 +74,7 @@ class OidcTokenRequest extends JsonBasedRequest {
     this.scope = const [],
     this.clientId,
     super.extra,
-  })  : grantType = OidcTokenRequestConstants_GrantType.clientCredentials,
+  })  : grantType = OidcConstants_GrantType.clientCredentials,
         code = null,
         codeVerifier = null,
         redirectUri = null,
@@ -94,7 +94,7 @@ class OidcTokenRequest extends JsonBasedRequest {
     this.scope = const [],
     this.clientId,
     super.extra,
-  })  : grantType = OidcTokenRequestConstants_GrantType.saml2Bearer,
+  })  : grantType = OidcConstants_GrantType.saml2Bearer,
         code = null,
         codeVerifier = null,
         redirectUri = null,
@@ -121,7 +121,7 @@ class OidcTokenRequest extends JsonBasedRequest {
   /// REQUIRED, if using PKCE.
   ///
   /// Code verifier.
-  @JsonKey(name: 'code_verifier')
+  @JsonKey(name: OidcConstants_PKCE.codeVerifier)
   final String? codeVerifier;
 
   @JsonKey(name: 'username')

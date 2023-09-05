@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
 /// The Linux implementation of [OidcPlatform].
@@ -14,7 +15,17 @@ class OidcLinux extends OidcPlatform {
   }
 
   @override
-  Future<String?> getPlatformName() {
-    return methodChannel.invokeMethod<String>('getPlatformName');
+  Future<OidcAuthorizeResponse?> getAuthorizationResponse(
+    OidcProviderMetadata metadata,
+    OidcAuthorizeRequest request,
+    OidcStore store,
+    OidcAuthorizePlatformOptions options,
+  ) {
+    throw UnimplementedError();
   }
+
+  // @override
+  // Future<String?> getPlatformName() {
+  //   return methodChannel.invokeMethod<String>('getPlatformName');
+  // }
 }

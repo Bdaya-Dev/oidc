@@ -8,7 +8,7 @@ void main() async {
   final serverUri = Uri.parse('http://localhost:4011');
   final wellKnownUrl = OidcUtils.getWellKnownUriFromBase(serverUri);
   try {
-    final config = await OidcUtils.getConfiguration(wellKnownUrl);
+    final config = await OidcUtils.getProviderMetadata(wellKnownUrl);
     // print(config);
     expect(config.issuer.toString(), serverUri.toString());
   } on ClientException {
@@ -19,7 +19,7 @@ void main() async {
 
   group('E2E', () {
     test('fetch discovery', () async {
-      final config = await OidcUtils.getConfiguration(wellKnownUrl);
+      final config = await OidcUtils.getProviderMetadata(wellKnownUrl);
       expect(config.issuer.toString(), 'http://localhost:4011');
     });
   });
