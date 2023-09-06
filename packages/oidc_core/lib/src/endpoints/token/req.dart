@@ -25,7 +25,6 @@ class OidcTokenRequest extends JsonBasedRequest {
     this.subjectToken,
     this.actorTokenType,
     this.actorToken,
-    this.authReqId,
     this.redirectUri,
     this.refreshToken,
     this.scope = const [],
@@ -48,7 +47,6 @@ class OidcTokenRequest extends JsonBasedRequest {
         subjectToken = null,
         actorTokenType = null,
         actorToken = null,
-        authReqId = null,
         refreshToken = null;
 
   const OidcTokenRequest.password({
@@ -67,7 +65,6 @@ class OidcTokenRequest extends JsonBasedRequest {
         subjectToken = null,
         actorTokenType = null,
         actorToken = null,
-        authReqId = null,
         refreshToken = null;
 
   const OidcTokenRequest.clientCredentials({
@@ -84,7 +81,6 @@ class OidcTokenRequest extends JsonBasedRequest {
         subjectToken = null,
         actorTokenType = null,
         actorToken = null,
-        authReqId = null,
         refreshToken = null,
         username = null,
         password = null;
@@ -103,52 +99,52 @@ class OidcTokenRequest extends JsonBasedRequest {
         subjectToken = null,
         actorTokenType = null,
         actorToken = null,
-        authReqId = null,
         refreshToken = null,
         username = null,
         password = null;
 
-  @JsonKey(name: 'grant_type')
+  @JsonKey(name: OidcConstants_AuthParameters.grantType)
   final String grantType;
-  @JsonKey(name: 'code')
+  @JsonKey(name: OidcConstants_AuthParameters.code)
   final String? code;
 
   /// REQUIRED if client secret (or any other Client Authentication mechanism)
   /// is not available.
-  @JsonKey(name: 'client_id')
+  @JsonKey(name: OidcConstants_AuthParameters.clientId)
   final String? clientId;
 
   /// REQUIRED, if using PKCE.
   ///
   /// Code verifier.
-  @JsonKey(name: OidcConstants_PKCE.codeVerifier)
+  @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
   final String? codeVerifier;
 
-  @JsonKey(name: 'username')
+  @JsonKey(name: OidcConstants_AuthParameters.username)
   final String? username;
-  @JsonKey(name: 'password')
+  @JsonKey(name: OidcConstants_AuthParameters.password)
   final String? password;
-  @JsonKey(name: 'assertion')
+  @JsonKey(name: OidcConstants_AuthParameters.assertion)
   final String? assertion;
 
-  @JsonKey(name: 'audience')
+  @JsonKey(name: OidcConstants_AuthParameters.audience)
   final String? audience;
-  @JsonKey(name: 'subject_token_type')
+  @JsonKey(name: OidcConstants_AuthParameters.subjectTokenType)
   final String? subjectTokenType;
-  @JsonKey(name: 'subject_token')
+  @JsonKey(name: OidcConstants_AuthParameters.subjectToken)
   final String? subjectToken;
-  @JsonKey(name: 'actor_token_type')
+  @JsonKey(name: OidcConstants_AuthParameters.actorTokenType)
   final String? actorTokenType;
-  @JsonKey(name: 'actor_token')
+  @JsonKey(name: OidcConstants_AuthParameters.actorToken)
   final String? actorToken;
-  @JsonKey(name: 'auth_req_id')
-  final String? authReqId;
 
-  @JsonKey(name: 'redirect_uri')
+  @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
   final Uri? redirectUri;
-  @JsonKey(name: 'refresh_token')
+  @JsonKey(name: OidcConstants_AuthParameters.refreshToken)
   final String? refreshToken;
-  @JsonKey(name: 'scope', toJson: joinSpaceDelimitedList)
+  @JsonKey(
+    name: OidcConstants_AuthParameters.scope,
+    toJson: joinSpaceDelimitedList,
+  )
   final List<String> scope;
 
   @override

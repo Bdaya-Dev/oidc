@@ -1,4 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
+import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_core/src/helpers/converters.dart';
 import 'package:oidc_core/src/models/json_based_object.dart';
 
@@ -23,27 +24,24 @@ class OidcErrorResponse extends JsonBasedResponse {
 
   ///creates an error response from json
   factory OidcErrorResponse.fromJson(Map<String, dynamic> src) =>
-      _$OidcErrorAuthResponseFromJson(src);
-
-  /// error
-  static const kerror = 'error';
+      _$OidcErrorResponseFromJson(src);
 
   /// REQUIRED.
   ///
   /// Error code.
-  @JsonKey(name: kerror)
+  @JsonKey(name: OidcConstants_AuthParameters.error)
   final String error;
 
   /// OPTIONAL.
   ///
   /// Human-readable ASCII encoded text description of the error.
-  @JsonKey(name: 'error_description')
+  @JsonKey(name: OidcConstants_AuthParameters.errorDescription)
   final String? errorDescription;
 
   /// OPTIONAL.
   ///
   /// URI of a web page that includes additional information about the error.
-  @JsonKey(name: 'error_uri')
+  @JsonKey(name: OidcConstants_AuthParameters.errorUri)
   final Uri? errorUri;
 
   /// REQUIRED, if the Authorization Request included the state parameter.
@@ -51,7 +49,7 @@ class OidcErrorResponse extends JsonBasedResponse {
   /// OAuth 2.0 state value.
   ///
   /// Set to the value received from the Client.
-  @JsonKey(name: 'state')
+  @JsonKey(name: OidcConstants_AuthParameters.state)
   final String? state;
 
   /// OPTIONAL.
@@ -61,6 +59,6 @@ class OidcErrorResponse extends JsonBasedResponse {
   /// authorization server.
   ///
   ///  See [RFC9207](https://www.rfc-editor.org/rfc/rfc9207.html) for additional details on when this parameter is necessary, and how the client can use it to prevent mixup attacks.
-  @JsonKey(name: 'iss')
+  @JsonKey(name: OidcConstants_AuthParameters.iss)
   final Uri? iss;
 }

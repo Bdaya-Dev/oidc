@@ -57,9 +57,9 @@ class OidcMacOS extends OidcPlatform {
       return null;
     }
     return OidcAuthorizeResponse.fromJson({
-      OidcAuthorizeResponse.kcode: resp.authorizationCode,
-      OidcConstants_PKCE.codeVerifier: resp.codeVerifier,
-      OidcConstants_AuthorizeRequest.nonce: resp.nonce,
+      OidcConstants_AuthParameters.code: resp.authorizationCode,
+      OidcConstants_AuthParameters.codeVerifier: resp.codeVerifier,
+      OidcConstants_AuthParameters.nonce: resp.nonce,
       ...?resp.authorizationAdditionalParameters,
     });
   }

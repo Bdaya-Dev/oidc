@@ -1,4 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
+import 'package:oidc_core/src/constants.dart';
 import 'package:oidc_core/src/helpers/converters.dart';
 import 'package:oidc_core/src/models/json_based_object.dart';
 
@@ -23,7 +24,6 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
     this.iss,
     this.scope = const [],
     @Deprecated(_implicitWarning) this.tokenType,
-    @Deprecated(_implicitWarning) this.expiresAt,
     @Deprecated(_implicitWarning) this.expiresIn,
     @Deprecated(_implicitWarning) this.accessToken,
     @Deprecated(_implicitWarning) this.idToken,
@@ -33,10 +33,10 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   factory OidcAuthorizeResponse.fromJson(Map<String, dynamic> src) =>
       _$OidcAuthorizeResponseFromJson(src);
 
-  @JsonKey(name: 'state')
+  @JsonKey(name: OidcConstants_AuthParameters.state)
   final String? state;
 
-  @JsonKey(name: 'session_state')
+  @JsonKey(name: OidcConstants_AuthParameters.sessionState)
   final String? sessionState;
 
   /// OPTIONAL.
@@ -46,11 +46,8 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   /// authorization server.
   ///
   ///  See [RFC9207](https://www.rfc-editor.org/rfc/rfc9207.html) for additional details on when this parameter is necessary, and how the client can use it to prevent mixup attacks.
-  @JsonKey(name: 'iss')
+  @JsonKey(name: OidcConstants_AuthParameters.iss)
   final Uri? iss;
-
-  /// code
-  static const kcode = 'code';
 
   /// REQUIRED, if the request_type was code.
   ///
@@ -62,29 +59,27 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   /// A maximum authorization code lifetime of 10 minutes is RECOMMENDED.
   ///
   /// The client MUST NOT use the authorization code
-  @JsonKey(name: kcode)
+  @JsonKey(name: OidcConstants_AuthParameters.code)
   final String? code;
 
-  @JsonKey(name: 'scope', fromJson: splitSpaceDelimitedString)
+  @JsonKey(
+      name: OidcConstants_AuthParameters.scope,
+      fromJson: splitSpaceDelimitedString)
   final List<String> scope;
 
   @Deprecated(_implicitWarning)
-  @JsonKey(name: 'access_token')
+  @JsonKey(name: OidcConstants_AuthParameters.accessToken)
   final String? accessToken;
 
   @Deprecated(_implicitWarning)
-  @JsonKey(name: 'id_token')
+  @JsonKey(name: OidcConstants_AuthParameters.idToken)
   final String? idToken;
 
   @Deprecated(_implicitWarning)
-  @JsonKey(name: 'token_type')
+  @JsonKey(name: OidcConstants_AuthParameters.tokenType)
   final String? tokenType;
 
   @Deprecated(_implicitWarning)
-  @JsonKey(name: 'expires_in')
+  @JsonKey(name: OidcConstants_AuthParameters.expiresIn)
   final Duration? expiresIn;
-
-  @Deprecated(_implicitWarning)
-  @JsonKey(name: 'expires_at', readValue: readDateTime)
-  final DateTime? expiresAt;
 }

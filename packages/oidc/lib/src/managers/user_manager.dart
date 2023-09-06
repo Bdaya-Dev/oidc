@@ -94,16 +94,21 @@ class OidcUserManager {
 
   Future<void> loginAuthorizationCodeFlow() async {
     _ensureInit();
+    final doc = discoveryDocument;
+    final state = OidcAuthorizeState.fromDefaults(
+      authority:       
+    );
+    final request = OidcAuthorizeRequest(
+      responseType: [OidcConstants_AuthorizationEndpoint_ResponseType.code],
+      clientId: clientCredentials.clientId,
+      redirectUri: settings.redirectUri,
+      scope: [
+        'openid',
+      ],
+    );
     final response = await Oidc.getAuthorizationResponse(
       metadata: discoveryDocument,
-      request: OidcAuthorizeRequest(
-        responseType: [OidcConstants_AuthorizeRequest_ResponseType.code],
-        clientId: clientCredentials.clientId,
-        redirectUri: settings.redirectUri,
-        scope: [
-          'openid',
-        ],
-      ),
+      request: request,
       store: store,
       options: const OidcAuthorizePlatformOptions(
         web: OidcAuthorizePlatformOptions_Web(),

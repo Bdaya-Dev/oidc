@@ -28,7 +28,6 @@ Map<String, dynamic> _$OidcTokenRequestToJson(OidcTokenRequest instance) {
   writeNotNull('subject_token', instance.subjectToken);
   writeNotNull('actor_token_type', instance.actorTokenType);
   writeNotNull('actor_token', instance.actorToken);
-  writeNotNull('auth_req_id', instance.authReqId);
   writeNotNull('redirect_uri', instance.redirectUri?.toString());
   writeNotNull('refresh_token', instance.refreshToken);
   writeNotNull('scope', joinSpaceDelimitedList(instance.scope));

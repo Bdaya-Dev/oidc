@@ -24,6 +24,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     super.extra = const {},
     this.prompt = const [],
     this.state,
+    this.stateData,
     this.responseMode,
     this.nonce,
     this.display,
@@ -48,7 +49,10 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// See Sections [5.4](https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims) and [11](https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess) for additional scope values defined
   /// by this specification.
-  @JsonKey(name: 'scope', toJson: joinSpaceDelimitedList)
+  @JsonKey(
+    name: OidcConstants_AuthParameters.scope,
+    toJson: joinSpaceDelimitedList,
+  )
   final List<String> scope;
 
   /// REQUIRED.
@@ -59,14 +63,16 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// When using the Authorization Code Flow, this value is code.
   ///
-  /// see [OidcConstants_AuthorizeRequest_ResponseType] for possible values
-  @JsonKey(name: 'response_type', toJson: joinSpaceDelimitedList)
+  /// see [OidcConstants_AuthorizationEndpoint_ResponseType] for possible values
+  @JsonKey(
+      name: OidcConstants_AuthParameters.responseType,
+      toJson: joinSpaceDelimitedList)
   final List<String> responseType;
 
   /// REQUIRED.
   ///
   /// OAuth 2.0 Client Identifier valid at the Authorization Server.
-  @JsonKey(name: 'client_id')
+  @JsonKey(name: OidcConstants_AuthParameters.clientId)
   final String clientId;
 
   /// REQUIRED.
@@ -84,7 +90,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// The Redirection URI MAY use an alternate scheme, such as one that is
   /// intended to identify a callback into a native application.
-  @JsonKey(name: 'redirect_uri')
+  @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
   final Uri redirectUri;
 
   /// RECOMMENDED.
@@ -94,7 +100,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// Typically, Cross-Site Request Forgery (CSRF, XSRF)
   /// mitigation is done by cryptographically binding
   /// the value of this parameter with a browser cookie.
-  @JsonKey(name: 'state')
+  @JsonKey(name: OidcConstants_AuthParameters.state)
   final String? state;
 
   ///OPTIONAL.
@@ -107,7 +113,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   ///the possible values are defined in
   ///[OidcConstants_AuthorizeRequest_ResponseMode].
-  @JsonKey(name: 'response_mode')
+  @JsonKey(name: OidcConstants_AuthParameters.responseMode)
   final String? responseMode;
 
   /// OPTIONAL.
@@ -121,7 +127,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// Sufficient entropy MUST be present in the nonce values used to prevent
   /// attackers from guessing values. For implementation notes,
   /// see [Section 15.5.2](https://openid.net/specs/openid-connect-core-1_0.html#NonceNotes).
-  @JsonKey(name: OidcConstants_AuthorizeRequest.nonce)
+  @JsonKey(name: OidcConstants_AuthParameters.nonce)
   final String? nonce;
 
   /// OPTIONAL.
@@ -133,7 +139,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// The Authorization Server MAY also attempt to detect the capabilities of
   /// the User Agent and present an appropriate display.
-  @JsonKey(name: 'display')
+  @JsonKey(name: OidcConstants_AuthParameters.display)
   final String? display;
 
   /// OPTIONAL.
@@ -150,7 +156,8 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// If this parameter contains none with any other value,
   /// an error is returned.
-  @JsonKey(name: 'prompt', toJson: joinSpaceDelimitedList)
+  @JsonKey(
+      name: OidcConstants_AuthParameters.prompt, toJson: joinSpaceDelimitedList)
   final List<String> prompt;
 
   /// OPTIONAL.
@@ -168,7 +175,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// When max_age is used, the ID Token returned MUST include an auth_time
   /// Claim Value.
-  @JsonKey(name: 'max_age')
+  @JsonKey(name: OidcConstants_AuthParameters.maxAge)
   final Duration? maxAge;
 
   /// OPTIONAL.
@@ -182,7 +189,10 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// An error SHOULD NOT result if some or all of the requested locales
   /// are not supported by the OpenID Provider.
-  @JsonKey(name: 'ui_locales', toJson: joinSpaceDelimitedList)
+  @JsonKey(
+    name: OidcConstants_AuthParameters.uiLocales,
+    toJson: joinSpaceDelimitedList,
+  )
   final List<String> uiLocales;
 
   /// OPTIONAL.
@@ -211,7 +221,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// The Client MAY re-encrypt the signed ID token to the Authentication Server
   /// using a key that enables the server to decrypt the ID Token, and use the
   /// re-encrypted ID token as the id_token_hint value.
-  @JsonKey(name: 'id_token_hint')
+  @JsonKey(name: OidcConstants_AuthParameters.idTokenHint)
   final String? idTokenHint;
 
   /// OPTIONAL.
@@ -229,7 +239,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// phone_number Claim.
   ///
   /// The use of this parameter is left to the OP's discretion.
-  @JsonKey(name: 'login_hint')
+  @JsonKey(name: OidcConstants_AuthParameters.loginHint)
   final String? loginHint;
 
   /// OPTIONAL.
@@ -244,19 +254,29 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// performed is returned as the acr Claim Value, as specified in [Section 2.2](https://openid.net/specs/openid-connect-basic-1_0.html#IDToken)
   ///
   /// The acr Claim is requested as a Voluntary Claim by this parameter.
-  @JsonKey(name: 'acr_values', toJson: joinSpaceDelimitedList)
+  @JsonKey(
+    name: OidcConstants_AuthParameters.acrValues,
+    toJson: joinSpaceDelimitedList,
+  )
   final List<String> acrValues;
 
   /// REQUIRED, when using PKCE Extension.
   ///
   /// Code challenge.
-  @JsonKey(name: 'code_challenge')
+  @JsonKey(name: OidcConstants_AuthParameters.codeChallenge)
   final String? codeChallenge;
+
+  /// this parameter is used internally to check the state.
+  @JsonKey(
+    includeFromJson: false,
+    includeToJson: false,
+  )
+  final OidcAuthorizeState? stateData;
 
   /// OPTIONAL, defaults to "plain" if not present in the request.
   ///
   /// Code verifier transformation method is "S256" or "plain".
-  @JsonKey(name: 'code_challenge_method')
+  @JsonKey(name: OidcConstants_AuthParameters.codeChallengeMethod)
   final String? codeChallengeMethod;
 
   /// converts the request into a JSON Map.

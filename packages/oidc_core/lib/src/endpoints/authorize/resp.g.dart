@@ -18,9 +18,6 @@ OidcAuthorizeResponse _$OidcAuthorizeResponseFromJson(
           ? const []
           : splitSpaceDelimitedString(json['scope'] as String?),
       tokenType: json['token_type'] as String?,
-      expiresAt: _$JsonConverterFromJson<int, DateTime>(
-          readDateTime(json, 'expires_at'),
-          const DateTimeEpochConverter().fromJson),
       expiresIn: _$JsonConverterFromJson<int, Duration>(
           json['expires_in'], const DurationSecondsConverter().fromJson),
       accessToken: json['access_token'] as String?,

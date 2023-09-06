@@ -1,0 +1,36 @@
+<!-- Source: https://github.com/openid/AppAuth-JS/blob/master/app/redirect.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>Flutter Oidc Redirect</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="text/javascript">
+        // For supported browsers: https://caniuse.com/broadcastchannel
+        var bc = new BroadcastChannel('oidc_flutter_web');
+        bc.postMessage(window.location.toString());
+        bc.close();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const state = urlParams.get('state');
+        if (state) {
+            const currentState = sessionStorage.getItem('state-' + state);
+        } else {
+            return;
+        }
+        // Read the mode from the state.
+        var REDIRECT_URI = '/index.html';
+        document.addEventListener('DOMContentLoaded', function () {
+            var queryString = window.location.search.substring(1); // includes '?'
+            var path = [REDIRECT_URI, queryString].join('#');
+            window.location.assign(path);
+        });
+    </script>
+</head>
+
+<body>
+    <h3>Authentication Successful! Please close this page.</h3>
+</body>
+
+</html>

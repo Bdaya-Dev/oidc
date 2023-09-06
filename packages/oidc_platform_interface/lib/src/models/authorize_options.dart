@@ -40,10 +40,32 @@ class OidcAuthorizePlatformOptions_AppAuth {
 
 /// The possible navigation modes to use for web.
 enum OidcAuthorizePlatformOptions_Web_NavigationMode {
+  /// NOT RECOMMENDED, since you have to reload your app and lose current ui state.
+  ///
+  /// 1. Navigate to the Uri on the same page
+  /// 2. the redirect Uri should be /redirect.html
+  /// 3. The page will read the stored state, knowing the navigation mode.
+  /// 4. The page should store the query parameters or fragment (based on state)
+  /// 5. the page should send you back to the original page uri (based on state)
+  /// 6. in the init() function, check for unprocessed states.
   samePage,
+
+  /// RECOMMENDED
+  ///
+  /// 1. Navigate to the Uri on a new page.
+  /// 2. the redirect Uri should be /redirect.html
+  /// 3. the page should postMessage the original page with the query parameters
+  /// 4. the page should close itself
+  /// 5. the app receives the postMessage, and finishes the flow.
   newPage,
+
+  /// RECOMMENDED
+  ///
+  ///
   popup,
-  // iframe,
+
+  ///
+  iframe,
 }
 
 ///
