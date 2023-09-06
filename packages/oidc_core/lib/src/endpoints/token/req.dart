@@ -1,6 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_core/src/helpers/converters.dart';
+import 'package:oidc_core/src/converters.dart';
 import 'package:oidc_core/src/models/json_based_object.dart';
 part 'req.g.dart';
 
@@ -9,10 +9,10 @@ part 'req.g.dart';
   createFactory: false,
   includeIfNull: false,
   explicitToJson: true,
-  converters: commonConverters,
+  converters: OidcInternalUtilities.commonConverters,
 )
 class OidcTokenRequest extends JsonBasedRequest {
-  const OidcTokenRequest({
+  OidcTokenRequest({
     required this.grantType,
     this.clientId,
     this.code,
@@ -27,15 +27,15 @@ class OidcTokenRequest extends JsonBasedRequest {
     this.actorToken,
     this.redirectUri,
     this.refreshToken,
-    this.scope = const [],
+    this.scope,
     super.extra,
   });
 
-  const OidcTokenRequest.authorizationCode({
+  OidcTokenRequest.authorizationCode({
     required Uri this.redirectUri,
     required String this.code,
     this.clientId,
-    this.scope = const [],
+    this.scope,
     this.codeVerifier,
     super.extra,
   })  : grantType = OidcConstants_GrantType.authorizationCode,
@@ -49,10 +49,10 @@ class OidcTokenRequest extends JsonBasedRequest {
         actorToken = null,
         refreshToken = null;
 
-  const OidcTokenRequest.password({
+  OidcTokenRequest.password({
     required String this.username,
     required String this.password,
-    required this.scope,
+    required List<String> this.scope,
     this.clientId,
     super.extra,
   })  : grantType = OidcConstants_GrantType.password,
@@ -67,8 +67,8 @@ class OidcTokenRequest extends JsonBasedRequest {
         actorToken = null,
         refreshToken = null;
 
-  const OidcTokenRequest.clientCredentials({
-    this.scope = const [],
+  OidcTokenRequest.clientCredentials({
+    this.scope,
     this.clientId,
     super.extra,
   })  : grantType = OidcConstants_GrantType.clientCredentials,
@@ -85,9 +85,9 @@ class OidcTokenRequest extends JsonBasedRequest {
         username = null,
         password = null;
 
-  const OidcTokenRequest.saml2({
+  OidcTokenRequest.saml2({
     required String this.assertion,
-    this.scope = const [],
+    this.scope,
     this.clientId,
     super.extra,
   })  : grantType = OidcConstants_GrantType.saml2Bearer,
@@ -104,48 +104,50 @@ class OidcTokenRequest extends JsonBasedRequest {
         password = null;
 
   @JsonKey(name: OidcConstants_AuthParameters.grantType)
-  final String grantType;
+  String grantType;
   @JsonKey(name: OidcConstants_AuthParameters.code)
-  final String? code;
+  String? code;
 
   /// REQUIRED if client secret (or any other Client Authentication mechanism)
   /// is not available.
   @JsonKey(name: OidcConstants_AuthParameters.clientId)
-  final String? clientId;
+  String? clientId;
 
   /// REQUIRED, if using PKCE.
   ///
   /// Code verifier.
   @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
-  final String? codeVerifier;
+  String? codeVerifier;
 
   @JsonKey(name: OidcConstants_AuthParameters.username)
-  final String? username;
+  String? username;
   @JsonKey(name: OidcConstants_AuthParameters.password)
-  final String? password;
+  String? password;
   @JsonKey(name: OidcConstants_AuthParameters.assertion)
-  final String? assertion;
+  String? assertion;
 
   @JsonKey(name: OidcConstants_AuthParameters.audience)
-  final String? audience;
+  String? audience;
   @JsonKey(name: OidcConstants_AuthParameters.subjectTokenType)
-  final String? subjectTokenType;
+  String? subjectTokenType;
   @JsonKey(name: OidcConstants_AuthParameters.subjectToken)
-  final String? subjectToken;
+  String? subjectToken;
   @JsonKey(name: OidcConstants_AuthParameters.actorTokenType)
-  final String? actorTokenType;
+  String? actorTokenType;
   @JsonKey(name: OidcConstants_AuthParameters.actorToken)
-  final String? actorToken;
+  String? actorToken;
 
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
-  final Uri? redirectUri;
+  Uri? redirectUri;
+
   @JsonKey(name: OidcConstants_AuthParameters.refreshToken)
-  final String? refreshToken;
+  String? refreshToken;
+
   @JsonKey(
     name: OidcConstants_AuthParameters.scope,
-    toJson: joinSpaceDelimitedList,
+    toJson: OidcInternalUtilities.joinSpaceDelimitedList,
   )
-  final List<String> scope;
+  List<String>? scope;
 
   @override
   Map<String, dynamic> toMap() {

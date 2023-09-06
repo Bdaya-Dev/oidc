@@ -1,7 +1,8 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/src/constants.dart';
-import 'package:oidc_core/src/helpers/converters.dart';
+import 'package:oidc_core/src/converters.dart';
 import 'package:oidc_core/src/models/json_based_object.dart';
+import 'package:oidc_core/src/utils.dart';
 
 part 'resp.g.dart';
 
@@ -12,7 +13,7 @@ const _implicitWarning =
 @JsonSerializable(
   createFactory: true,
   createToJson: false,
-  converters: commonConverters,
+  converters: OidcInternalUtilities.commonConverters,
 )
 class OidcAuthorizeResponse extends JsonBasedResponse {
   ///
@@ -63,8 +64,9 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   final String? code;
 
   @JsonKey(
-      name: OidcConstants_AuthParameters.scope,
-      fromJson: splitSpaceDelimitedString)
+    name: OidcConstants_AuthParameters.scope,
+    fromJson: OidcInternalUtilities.splitSpaceDelimitedString,
+  )
   final List<String> scope;
 
   @Deprecated(_implicitWarning)

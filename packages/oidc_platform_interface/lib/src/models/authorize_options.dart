@@ -1,9 +1,9 @@
 // ignore_for_file: camel_case_types
 
 ///
-class OidcAuthorizePlatformOptions {
+class OidcAuthorizePlatformSpecificOptions {
   ///
-  const OidcAuthorizePlatformOptions({
+  const OidcAuthorizePlatformSpecificOptions({
     this.android = const OidcAuthorizePlatformOptions_AppAuth(),
     this.ios = const OidcAuthorizePlatformOptions_AppAuth(),
     this.macos = const OidcAuthorizePlatformOptions_AppAuth(),

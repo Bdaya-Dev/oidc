@@ -40,10 +40,15 @@ dependencies:
   retry: ^3.1.2
   rxdart: ^0.27.7
   logging: ^1.2.0
+  json_annotation: ^4.8.1
+  nonce: ^1.2.0
+  uuid: ^3.0.7
 
 dev_dependencies:
+  built_value: ^8.6.2
   flutter_test:
     sdk: flutter
+  json_serializable: ^6.7.1
   mocktail: ^1.0.0
   plugin_platform_interface: ^2.0.0
   very_good_analysis: ^5.0.0

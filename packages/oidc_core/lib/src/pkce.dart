@@ -6,18 +6,18 @@ import 'package:crypto/crypto.dart';
 
 /// A pair of ([codeVerifier], [codeChallenge]) that can be used with PKCE
 /// (Proof Key for Code Exchange).
-class PkcePair {
-  const PkcePair._(this.codeVerifier, this.codeChallenge);
+class OidcPkcePair {
+  const OidcPkcePair._(this.codeVerifier, this.codeChallenge);
 
-  /// Generates a [PkcePair].
+  /// Generates a [OidcPkcePair].
   ///
   /// [length] is the length used to generate the [codeVerifier]. It must be
   /// between 32 and 96, inclusive, which corresponds to a [codeVerifier] of
   /// length between 43 and 128, inclusive. The spec recommends a length of 32.
-  factory PkcePair.generate({int length = 32}) {
+  factory OidcPkcePair.generate({int length = 32}) {
     final verifier = generateVerifier(length: length);
-    final challenge = generateChallenge(verifier);
-    return PkcePair._(verifier, challenge);
+    final challenge = generateS256Challenge(verifier);
+    return OidcPkcePair._(verifier, challenge);
   }
 
   /// The code verifier.
@@ -39,9 +39,13 @@ class PkcePair {
         .first;
   }
 
-  static String generateChallenge(String verifier) {
+  static String generateS256Challenge(String verifier) {
     return base64UrlEncode(sha256.convert(ascii.encode(verifier)).bytes)
         .split('=')
         .first;
+  }
+
+  static String generatePlainChallenge(String verifier) {
+    return verifier;
   }
 }

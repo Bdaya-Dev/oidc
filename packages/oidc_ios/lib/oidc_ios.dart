@@ -21,7 +21,8 @@ class OidcIOS extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcStore store,
-    OidcAuthorizePlatformOptions options,
+    OidcAuthorizeState stateData,
+    OidcAuthorizePlatformSpecificOptions options,
   ) async {
     const appAuth = FlutterAppAuth();
     final authorizationEndpoint = metadata.authorizationEndpoint;

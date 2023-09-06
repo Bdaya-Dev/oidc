@@ -3,7 +3,7 @@
 
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_core/src/helpers/converters.dart';
+
 import 'package:oidc_core/src/models/json_based_object.dart';
 
 part 'resp.g.dart';
@@ -14,7 +14,7 @@ part 'resp.g.dart';
 /// see https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml
 @JsonSerializable(
   createToJson: false,
-  converters: commonConverters,
+  converters: OidcInternalUtilities.commonConverters,
 )
 class OidcProviderMetadata extends JsonBasedResponse {
   const OidcProviderMetadata({
@@ -373,8 +373,9 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// A list of PKCE code challenge methods supported by this authorization
   /// server.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
-          .codeChallengeMethodsSupported)
+    name:
+        OidcConstants_AuthorizationServerMetadata.codeChallengeMethodsSupported,
+  )
   final List<String>? codeChallengeMethodsSupported;
 
   /// The URL of the pushed authorization request endpoint at which a client can

@@ -13,14 +13,15 @@ OidcTokenResponse _$OidcTokenResponseFromJson(Map<String, dynamic> json) =>
       tokenType: json['token_type'] as String,
       scope: json['scope'] == null
           ? const []
-          : splitSpaceDelimitedString(json['scope'] as String?),
+          : OidcInternalUtilities.splitSpaceDelimitedString(
+              json['scope'] as String?),
       idToken: json['id_token'] as String?,
       refreshToken: json['refresh_token'] as String?,
       expiresIn: _$JsonConverterFromJson<int, Duration>(
-          json['expires_in'], const DurationSecondsConverter().fromJson),
+          json['expires_in'], const OidcDurationSecondsConverter().fromJson),
       expiresAt: _$JsonConverterFromJson<int, DateTime>(
-          readDateTime(json, 'expires_at'),
-          const DateTimeEpochConverter().fromJson),
+          OidcInternalUtilities.readDateTime(json, 'expires_at'),
+          const OidcDateTimeEpochConverter().fromJson),
     );
 
 Value? _$JsonConverterFromJson<Json, Value>(

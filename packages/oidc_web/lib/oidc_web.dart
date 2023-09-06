@@ -19,7 +19,7 @@ class OidcWeb extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcStore store,
-    OidcAuthorizePlatformOptions options,
+    OidcAuthorizePlatformSpecificOptions options,
   ) async {
     final authEndpoint = metadata.authorizationEndpoint;
     if (authEndpoint == null) {
@@ -27,14 +27,16 @@ class OidcWeb extends OidcPlatform {
         "The OpenId Provider doesn't provide the authorizationEndpoint",
       );
     }
-    final channel = BroadcastChannel('oidc_flutter_web');
-    final uri = request.generateUri(authEndpoint);
-    if (!await canLaunchUrl(uri)) {
-      _logger.warning(
-        "Couldn't launch the authorization request url: $uri, this might be a false positive.",
-      );
-    }
-    /*
+    final channel = BroadcastChannel('oidc_flutter_web/redirect');
+    final sub = channel.onMessage.listen((event) {});
+    try {
+      final uri = request.generateUri(authEndpoint);
+      if (!await canLaunchUrl(uri)) {
+        _logger.warning(
+          "Couldn't launch the authorization request url: $uri, this might be a false positive.",
+        );
+      }
+      /*
     samePage:
     1. return null
     2. 
@@ -44,52 +46,57 @@ class OidcWeb extends OidcPlatform {
     iframe
     */
 
-    //first prepare
-    switch (options.web.navigationMode) {
-      // case OidcAuthorizePlatformOptions_Web_NavigationMode.popup:
-      //   //TODO(ahmednfwela): launch a popup, and get a window handle.
-      //   break;
-      case OidcAuthorizePlatformOptions_Web_NavigationMode.samePage:
-        final state = OidcAuthorizeState.fromDefaults(
-          authority: authority,
-          clientId: clientId,
-          redirectUri: redirectUri,
-          scope: scope,
-        );
-        await store.set(
-          OidcStoreNamespace.state,
-          key: /* get a state Id */ key,
-          value: value,
-        );
-        if (!await launchUrl(
-          uri,
-          webOnlyWindowName: '_self',
-        )) {
-          _logger.severe("Couldn't launch the authorization request url: $uri");
-        }
-        // return null, since this mode can't be awaited.
-        return null;
-      case OidcAuthorizePlatformOptions_Web_NavigationMode.newPage:
-        final c = Completer<Uri>();
-        if (!await launchUrl(
-          uri,
-          webOnlyWindowName: '_blank',
-        )) {
-          _logger.severe("Couldn't launch the authorization request url: $uri");
+      //first prepare
+      switch (options.web.navigationMode) {
+        // case OidcAuthorizePlatformOptions_Web_NavigationMode.popup:
+        //   //TODO(ahmednfwela): launch a popup, and get a window handle.
+        //   break;
+        case OidcAuthorizePlatformOptions_Web_NavigationMode.samePage:
+          final state = OidcAuthorizeState.fromRequest(
+            authority: authority,
+            clientId: clientId,
+            redirectUri: redirectUri,
+            scope: scope,
+          );
+          await store.set(
+            OidcStoreNamespace.state,
+            key: /* get a state Id */ key,
+            value: value,
+          );
+          if (!await launchUrl(
+            uri,
+            webOnlyWindowName: '_self',
+          )) {
+            _logger
+                .severe("Couldn't launch the authorization request url: $uri");
+          }
+          // return null, since this mode can't be awaited.
           return null;
-        }
-        //listen to
-        // window.sessionStorage.;
-        break;
-      // case OidcAuthorizePlatformOptions_Web_NavigationMode.iframe:
-      //   //TODO: redirect to the new page in a new tab
-      //   break;
-      case OidcAuthorizePlatformOptions_Web_NavigationMode.popup:
-        // TODO: Handle this case.
-        break;
-      case OidcAuthorizePlatformOptions_Web_NavigationMode.iframe:
-        // TODO: Handle this case.
-        break;
+        case OidcAuthorizePlatformOptions_Web_NavigationMode.newPage:
+          final c = Completer<Uri>();
+          if (!await launchUrl(
+            uri,
+            webOnlyWindowName: '_blank',
+          )) {
+            _logger
+                .severe("Couldn't launch the authorization request url: $uri");
+            return null;
+          }
+          //listen to
+          // window.sessionStorage.;
+          break;
+        // case OidcAuthorizePlatformOptions_Web_NavigationMode.iframe:
+        //   //TODO: redirect to the new page in a new tab
+        //   break;
+        case OidcAuthorizePlatformOptions_Web_NavigationMode.popup:
+          // TODO: Handle this case.
+          break;
+        case OidcAuthorizePlatformOptions_Web_NavigationMode.iframe:
+          // TODO: Handle this case.
+          break;
+      }
+    } finally {
+      await sub.cancel();
     }
   }
 

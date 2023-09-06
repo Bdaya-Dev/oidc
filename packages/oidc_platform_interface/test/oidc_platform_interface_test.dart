@@ -11,7 +11,8 @@ class OidcMock extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcStore store,
-    OidcAuthorizePlatformOptions options,
+    OidcAuthorizeState stateData,
+    OidcAuthorizePlatformSpecificOptions options,
   ) {
     throw UnimplementedError();
   }

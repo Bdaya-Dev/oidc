@@ -19,7 +19,7 @@ class OidcWindows extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcStore store,
-    OidcAuthorizePlatformOptions options,
+    OidcAuthorizePlatformSpecificOptions options,
   ) {
     throw UnimplementedError();
   }

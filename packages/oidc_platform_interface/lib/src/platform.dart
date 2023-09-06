@@ -37,6 +37,7 @@ abstract class OidcPlatform extends PlatformInterface {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcStore store,
-    OidcAuthorizePlatformOptions options,
+    OidcAuthorizeState stateData,
+    OidcAuthorizePlatformSpecificOptions options,
   );
 }

@@ -1,6 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_core/src/helpers/converters.dart';
 import 'package:oidc_core/src/models/json_based_object.dart';
 
 part 'error.g.dart';
@@ -9,7 +8,7 @@ part 'error.g.dart';
 @JsonSerializable(
   createFactory: true,
   createToJson: false,
-  converters: commonConverters,
+  converters: OidcInternalUtilities.commonConverters,
 )
 class OidcErrorResponse extends JsonBasedResponse {
   ///

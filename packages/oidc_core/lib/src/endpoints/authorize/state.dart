@@ -1,9 +1,7 @@
 import 'dart:convert';
 
 import 'package:json_annotation/json_annotation.dart';
-import 'package:oidc_core/src/helpers/converters.dart';
-import 'package:oidc_core/src/helpers/pkce.dart';
-import 'package:oidc_core/src/models/state/state.dart';
+import 'package:oidc_core/oidc_core.dart';
 import 'package:uuid/uuid.dart';
 
 part 'state.g.dart';
@@ -13,25 +11,20 @@ part 'state.g.dart';
 @JsonSerializable(
   createFactory: true,
   createToJson: true,
-  converters: commonConverters,
+  converters: OidcInternalUtilities.commonConverters,
 )
 class OidcAuthorizeState extends OidcState {
   ///
   const OidcAuthorizeState({
-    required this.skipUserInfo,
     required super.id,
     required super.createdAt,
     required super.requestType,
-    required super.data,
+    required this.authorizationRequest,
     required this.codeVerifier,
     required this.codeChallenge,
-    required this.authority,
-    required this.clientId,
-    required this.redirectUri,
-    required this.scope,
-    required this.clientSecret,
-    required this.extraTokenParams,
-    required this.responseMode,
+    required this.originalUri,
+    required this.nonce,
+    super.data,
   });
 
   ///
@@ -44,94 +37,26 @@ class OidcAuthorizeState extends OidcState {
         jsonDecode(storageString) as Map<String, dynamic>,
       );
 
-  /// creates [OidcAuthorizeState] with automatically generated id,
-  /// and createdAt set to DateTime.now()
-  factory OidcAuthorizeState.fromDefaults({
-    required Uri authority,
-    required String clientId,
-    required Uri redirectUri,
-    required String scope,
-    String? id,
-    DateTime? createdAt,
-    String? requestType,
-    dynamic data,
-    bool generateCodeVerifierIfNull = true,
-    String? codeVerifier,
-    String? clientSecret,
-    Map<String, dynamic>? extraTokenParams,
-    String? responseMode,
-    bool? skipUserInfo,
-  }) {
-    createdAt ??= DateTime.now().toUtc();
-    id ??= const Uuid().v4();
+  @JsonKey(name: 'authRequest')
+  final Map<String, dynamic> authorizationRequest;
 
-    if (generateCodeVerifierIfNull) {
-      codeVerifier ??= PkcePair.generateVerifier();
-    }
-    String? challenge;
-    if (codeVerifier != null) {
-      challenge ??= PkcePair.generateChallenge(codeVerifier);
-    }
-    return OidcAuthorizeState(
-      skipUserInfo: skipUserInfo,
-      id: id,
-      createdAt: createdAt,
-      requestType: requestType,
-      data: data,
-      codeVerifier: codeVerifier,
-      codeChallenge: challenge,
-      authority: authority,
-      clientId: clientId,
-      redirectUri: redirectUri,
-      scope: scope,
-      clientSecret: clientSecret,
-      extraTokenParams: extraTokenParams,
-      responseMode: responseMode,
-    );
-  }
+  /// The same code_challenge that was used to obtain the authorization_code
+  /// via PKCE.
+  @JsonKey(name: OidcConstants_AuthParameters.codeChallenge)
+  final String? codeChallenge;
 
   /// The same code_verifier that was used to obtain the authorization_code
   /// via PKCE.
-  @JsonKey(name: 'code_verifier')
+  @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
   final String? codeVerifier;
 
-  ///Used to secure authorization code grants
-  ///via Proof Key for Code Exchange (PKCE).
-  @JsonKey(name: 'code_challenge')
-  final String? codeChallenge;
+  /// The uri to go back to after the page in `redirectUri`
+  /// processes the response.
+  @JsonKey(name: 'original_uri')
+  final Uri? originalUri;
 
-  //to ensure state still matches settings
-  ///
-  @JsonKey(name: 'authority')
-  final Uri authority;
-
-  ///
-  @JsonKey(name: 'client_id')
-  final String clientId;
-  @JsonKey(name: 'redirect_uri')
-
-  ///
-  final Uri redirectUri;
-
-  ///
-  @JsonKey(name: 'scope')
-  final String scope;
-
-  ///
-  @JsonKey(name: 'client_secret')
-  final String? clientSecret;
-
-  ///
-  @JsonKey(name: 'extraTokenParams')
-  final Map<String, dynamic>? extraTokenParams;
-
-  ///
-  @JsonKey(name: 'response_mode')
-  final String? responseMode;
-
-  ///
-  @JsonKey(name: 'skipUserInfo')
-  final bool? skipUserInfo;
+  @JsonKey(name: 'nonce')
+  final String nonce;
 
   @override
   Map<String, dynamic> toJson() => _$OidcAuthorizeStateToJson(this);

@@ -32,6 +32,14 @@ class OidcConstants_GrantType {
   static const String umaTicket = 'urn:ietf:params:oauth:grant-type:uma-ticket';
 }
 
+class OidcConstants_Scopes {
+  static const openid = 'openid';
+  static const profile = 'profile';
+  static const email = 'email';
+  static const address = 'address';
+  static const phone = 'phone';
+}
+
 class OidcConstants_AuthParameters {
   /// authorization request, token request
   static const clientId = 'client_id';
@@ -520,14 +528,17 @@ class OidcConstants_AuthorizationEndpoint_ResponseType {
 /// The display options defind by the spec.
 class OidcConstants_AuthorizeRequest_Display {
   /// The Authorization Server SHOULD display the authentication and consent UI
-  /// consistent with a full User Agent page view. If the display parameter is
-  /// not specified, this is the default display mode.
+  /// consistent with a full User Agent page view.
+  ///
+  /// If the display parameter is not specified, this is the default display mode.
   static const String page = 'page';
 
   /// The Authorization Server SHOULD display the authentication and consent UI
-  /// consistent with a popup User Agent window. The popup User Agent window
-  /// should be of an appropriate size for a login-focused dialog and should not
-  /// obscure the entire window that it is popping up over.
+  /// consistent with a popup User Agent window.
+  ///
+  /// The popup User Agent window should be of an appropriate size for a
+  /// login-focused dialog and should not obscure the entire window
+  /// that it is popping up over.
   static const String popup = 'popup';
 
   /// The Authorization Server SHOULD display the authentication and consent UI

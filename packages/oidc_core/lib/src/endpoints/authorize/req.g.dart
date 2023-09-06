@@ -16,23 +16,28 @@ Map<String, dynamic> _$OidcAuthorizeRequestToJson(
     }
   }
 
-  writeNotNull('scope', joinSpaceDelimitedList(instance.scope));
-  writeNotNull('response_type', joinSpaceDelimitedList(instance.responseType));
+  writeNotNull(
+      'scope', OidcInternalUtilities.joinSpaceDelimitedList(instance.scope));
+  writeNotNull('response_type',
+      OidcInternalUtilities.joinSpaceDelimitedList(instance.responseType));
   val['client_id'] = instance.clientId;
   val['redirect_uri'] = instance.redirectUri.toString();
   writeNotNull('state', instance.state);
   writeNotNull('response_mode', instance.responseMode);
   writeNotNull('nonce', instance.nonce);
   writeNotNull('display', instance.display);
-  writeNotNull('prompt', joinSpaceDelimitedList(instance.prompt));
+  writeNotNull(
+      'prompt', OidcInternalUtilities.joinSpaceDelimitedList(instance.prompt));
   writeNotNull(
       'max_age',
       _$JsonConverterToJson<int, Duration>(
-          instance.maxAge, const DurationSecondsConverter().toJson));
-  writeNotNull('ui_locales', joinSpaceDelimitedList(instance.uiLocales));
+          instance.maxAge, const OidcDurationSecondsConverter().toJson));
+  writeNotNull('ui_locales',
+      OidcInternalUtilities.joinSpaceDelimitedList(instance.uiLocales));
   writeNotNull('id_token_hint', instance.idTokenHint);
   writeNotNull('login_hint', instance.loginHint);
-  writeNotNull('acr_values', joinSpaceDelimitedList(instance.acrValues));
+  writeNotNull('acr_values',
+      OidcInternalUtilities.joinSpaceDelimitedList(instance.acrValues));
   writeNotNull('code_challenge', instance.codeChallenge);
   writeNotNull('code_challenge_method', instance.codeChallengeMethod);
   return val;

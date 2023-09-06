@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:json_annotation/json_annotation.dart';
-import 'package:oidc_core/src/helpers/converters.dart';
+import 'package:oidc_core/src/converters.dart';
 import 'package:oidc_core/src/models/managers/state_store.dart';
+import 'package:oidc_core/src/utils.dart';
 import 'package:uuid/uuid.dart';
 
 part 'state.g.dart';
@@ -12,9 +13,7 @@ part 'state.g.dart';
 @JsonSerializable(
   createFactory: true,
   createToJson: true,
-  converters: [
-    DateTimeEpochConverter(),
-  ],
+  converters: OidcInternalUtilities.commonConverters,
 )
 class OidcState {
   ///

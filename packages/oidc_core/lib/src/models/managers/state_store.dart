@@ -1,5 +1,16 @@
 enum OidcStoreNamespace {
+  /// Stores ephermal information, such as the current state id and nonce.
+  session('session'),
+
   /// Stores states.
+  ///
+  /// on web, this MUST be stored in localStorage, since the html page has no
+  /// access to the `OidcStore` object.
+  ///
+  /// the key MUST be with the format:
+  /// `oidc-state-{key}`
+  ///
+  /// since the html page has no access to the `OidcStore` object.
   state('state'),
 
   /// Stores discovery documents as json

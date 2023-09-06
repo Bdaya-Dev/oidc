@@ -1,38 +1,39 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_core/src/helpers/converters.dart';
+
 import 'package:oidc_core/src/models/json_based_object.dart';
 
 part 'req.g.dart';
 
 /// A class that descripes an /authorize request.
+/// 
+/// Note: this class does NO special logic.
 @JsonSerializable(
   createFactory: false,
   includeIfNull: false,
   explicitToJson: true,
-  converters: commonConverters,
+  converters: OidcInternalUtilities.commonConverters,
 )
 class OidcAuthorizeRequest extends JsonBasedRequest {
   /// Create an OidcAuthorizeRequest.
-  const OidcAuthorizeRequest({
+  OidcAuthorizeRequest({
     required this.responseType,
     required this.clientId,
     required this.redirectUri,
     required this.scope,
     this.codeChallenge,
     this.codeChallengeMethod,
-    super.extra = const {},
-    this.prompt = const [],
+    super.extra,
+    this.prompt,
     this.state,
-    this.stateData,
     this.responseMode,
     this.nonce,
     this.display,
     this.maxAge,
-    this.uiLocales = const [],
+    this.uiLocales,
     this.idTokenHint,
     this.loginHint,
-    this.acrValues = const [],
+    this.acrValues,
   });
 
   /// REQUIRED.
@@ -51,9 +52,9 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// by this specification.
   @JsonKey(
     name: OidcConstants_AuthParameters.scope,
-    toJson: joinSpaceDelimitedList,
+    toJson: OidcInternalUtilities.joinSpaceDelimitedList,
   )
-  final List<String> scope;
+  List<String> scope;
 
   /// REQUIRED.
   ///
@@ -65,15 +66,16 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// see [OidcConstants_AuthorizationEndpoint_ResponseType] for possible values
   @JsonKey(
-      name: OidcConstants_AuthParameters.responseType,
-      toJson: joinSpaceDelimitedList)
-  final List<String> responseType;
+    name: OidcConstants_AuthParameters.responseType,
+    toJson: OidcInternalUtilities.joinSpaceDelimitedList,
+  )
+  List<String> responseType;
 
   /// REQUIRED.
   ///
   /// OAuth 2.0 Client Identifier valid at the Authorization Server.
   @JsonKey(name: OidcConstants_AuthParameters.clientId)
-  final String clientId;
+  String clientId;
 
   /// REQUIRED.
   ///
@@ -91,7 +93,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// The Redirection URI MAY use an alternate scheme, such as one that is
   /// intended to identify a callback into a native application.
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
-  final Uri redirectUri;
+  Uri redirectUri;
 
   /// RECOMMENDED.
   ///
@@ -101,7 +103,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// mitigation is done by cryptographically binding
   /// the value of this parameter with a browser cookie.
   @JsonKey(name: OidcConstants_AuthParameters.state)
-  final String? state;
+  String? state;
 
   ///OPTIONAL.
   ///
@@ -114,7 +116,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///the possible values are defined in
   ///[OidcConstants_AuthorizeRequest_ResponseMode].
   @JsonKey(name: OidcConstants_AuthParameters.responseMode)
-  final String? responseMode;
+  String? responseMode;
 
   /// OPTIONAL.
   ///
@@ -128,7 +130,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// attackers from guessing values. For implementation notes,
   /// see [Section 15.5.2](https://openid.net/specs/openid-connect-core-1_0.html#NonceNotes).
   @JsonKey(name: OidcConstants_AuthParameters.nonce)
-  final String? nonce;
+  String? nonce;
 
   /// OPTIONAL.
   ///
@@ -140,7 +142,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// The Authorization Server MAY also attempt to detect the capabilities of
   /// the User Agent and present an appropriate display.
   @JsonKey(name: OidcConstants_AuthParameters.display)
-  final String? display;
+  String? display;
 
   /// OPTIONAL.
   ///
@@ -157,8 +159,10 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// If this parameter contains none with any other value,
   /// an error is returned.
   @JsonKey(
-      name: OidcConstants_AuthParameters.prompt, toJson: joinSpaceDelimitedList)
-  final List<String> prompt;
+    name: OidcConstants_AuthParameters.prompt,
+    toJson: OidcInternalUtilities.joinSpaceDelimitedList,
+  )
+  List<String>? prompt;
 
   /// OPTIONAL.
   ///
@@ -176,7 +180,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// When max_age is used, the ID Token returned MUST include an auth_time
   /// Claim Value.
   @JsonKey(name: OidcConstants_AuthParameters.maxAge)
-  final Duration? maxAge;
+  Duration? maxAge;
 
   /// OPTIONAL.
   ///
@@ -191,9 +195,9 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// are not supported by the OpenID Provider.
   @JsonKey(
     name: OidcConstants_AuthParameters.uiLocales,
-    toJson: joinSpaceDelimitedList,
+    toJson: OidcInternalUtilities.joinSpaceDelimitedList,
   )
-  final List<String> uiLocales;
+  List<String>? uiLocales;
 
   /// OPTIONAL.
   ///
@@ -222,7 +226,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// using a key that enables the server to decrypt the ID Token, and use the
   /// re-encrypted ID token as the id_token_hint value.
   @JsonKey(name: OidcConstants_AuthParameters.idTokenHint)
-  final String? idTokenHint;
+  String? idTokenHint;
 
   /// OPTIONAL.
   ///
@@ -240,7 +244,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// The use of this parameter is left to the OP's discretion.
   @JsonKey(name: OidcConstants_AuthParameters.loginHint)
-  final String? loginHint;
+  String? loginHint;
 
   /// OPTIONAL.
   ///
@@ -256,28 +260,21 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// The acr Claim is requested as a Voluntary Claim by this parameter.
   @JsonKey(
     name: OidcConstants_AuthParameters.acrValues,
-    toJson: joinSpaceDelimitedList,
+    toJson: OidcInternalUtilities.joinSpaceDelimitedList,
   )
-  final List<String> acrValues;
+  List<String>? acrValues;
 
   /// REQUIRED, when using PKCE Extension.
   ///
   /// Code challenge.
   @JsonKey(name: OidcConstants_AuthParameters.codeChallenge)
-  final String? codeChallenge;
-
-  /// this parameter is used internally to check the state.
-  @JsonKey(
-    includeFromJson: false,
-    includeToJson: false,
-  )
-  final OidcAuthorizeState? stateData;
+  String? codeChallenge;
 
   /// OPTIONAL, defaults to "plain" if not present in the request.
   ///
   /// Code verifier transformation method is "S256" or "plain".
   @JsonKey(name: OidcConstants_AuthParameters.codeChallengeMethod)
-  final String? codeChallengeMethod;
+  String? codeChallengeMethod;
 
   /// converts the request into a JSON Map.
   @override

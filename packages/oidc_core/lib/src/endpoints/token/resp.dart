@@ -1,13 +1,14 @@
 import 'package:json_annotation/json_annotation.dart';
-import 'package:oidc_core/src/helpers/converters.dart';
+
 import 'package:oidc_core/src/models/json_based_object.dart';
+import 'package:oidc_core/src/utils.dart';
 
 part 'resp.g.dart';
 
 @JsonSerializable(
   createFactory: true,
   createToJson: false,
-  converters: commonConverters,
+  converters: OidcInternalUtilities.commonConverters,
 )
 class OidcTokenResponse extends JsonBasedResponse {
   const OidcTokenResponse({
@@ -24,7 +25,10 @@ class OidcTokenResponse extends JsonBasedResponse {
   factory OidcTokenResponse.fromJson(Map<String, dynamic> src) =>
       _$OidcTokenResponseFromJson(src);
 
-  @JsonKey(name: 'scope', fromJson: splitSpaceDelimitedString)
+  @JsonKey(
+    name: 'scope',
+    fromJson: OidcInternalUtilities.splitSpaceDelimitedString,
+  )
   final List<String> scope;
 
   /// OPTIONAL.
@@ -69,6 +73,9 @@ class OidcTokenResponse extends JsonBasedResponse {
   final String? refreshToken;
 
   /// NOT WITHIN SPEC, but some Identity Providers include this.
-  @JsonKey(name: 'expires_at', readValue: readDateTime)
+  @JsonKey(
+    name: 'expires_at',
+    readValue: OidcInternalUtilities.readDateTime,
+  )
   final DateTime? expiresAt;
 }

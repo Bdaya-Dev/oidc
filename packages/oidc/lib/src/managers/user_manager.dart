@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:oidc/src/managers/utils.dart';
+import 'package:oidc/src/models/authorize_request.dart';
 import 'package:oidc/src/models/code_flow_parameters.dart';
 import 'package:oidc/src/models/id_token_verification_options.dart';
 import 'package:oidc/src/models/user.dart';
@@ -76,6 +78,9 @@ class OidcUserManager {
   /// Gets a stream that reflects the current data of the user.
   Stream<OidcUser?> userChanges() => _userSubject.stream;
 
+  /// The current authenticated user.
+  OidcUser? get currentUser => _userSubject.valueOrNull;
+
   void _ensureInit() {
     if (!_hasInit) {
       _logAndThrow(
@@ -92,28 +97,72 @@ class OidcUserManager {
     return endpoint != null;
   }
 
-  Future<void> loginAuthorizationCodeFlow() async {
+  /// requests logging in via the AuthorizationCodeFlow
+  ///
+  /// originalUri is the internal Uri
+  Future<void> loginAuthorizationCodeFlow({
+    Uri? redirectUriOverride,
+    Uri? originalUri,
+    List<String>? scopeOverride,
+    List<String>? promptOverride,
+    List<String>? uiLocalesOverride,
+    String? displayOverride,
+    List<String>? acrValuesOverride,
+    dynamic extraStateData,
+    bool includeIdTokenHintFromCurrentUser = true,
+    String? idTokenHintOverride,
+    String? loginHint,
+    Duration? maxAgeOverride,
+    Map<String, dynamic>? extraParameters,
+    OidcAuthorizePlatformSpecificOptions? options,
+  }) async {
     _ensureInit();
     final doc = discoveryDocument;
-    final state = OidcAuthorizeState.fromDefaults(
-      authority:       
-    );
-    final request = OidcAuthorizeRequest(
-      responseType: [OidcConstants_AuthorizationEndpoint_ResponseType.code],
-      clientId: clientCredentials.clientId,
-      redirectUri: settings.redirectUri,
-      scope: [
-        'openid',
-      ],
-    );
-    final response = await Oidc.getAuthorizationResponse(
-      metadata: discoveryDocument,
-      request: request,
-      store: store,
-      options: const OidcAuthorizePlatformOptions(
-        web: OidcAuthorizePlatformOptions_Web(),
+    options ??= const OidcAuthorizePlatformSpecificOptions();
+    final req = await Oidc.prepareAuthorizationCodeFlowRequest(
+      input: OidcSimpleAuthorizationCodeRequest(
+        clientId: clientCredentials.clientId,
+        originalUri: originalUri,
+        redirectUri: redirectUriOverride ?? settings.redirectUri,
+        scope: scopeOverride ?? settings.scope,
+        prompt: promptOverride ?? settings.prompt,
+        display: displayOverride ?? settings.display,
+        extraStateData: extraStateData,
+        uiLocales: uiLocalesOverride ?? settings.uiLocales,
+        acrValues: acrValuesOverride ?? settings.acrValues,
+        idTokenHint: idTokenHintOverride ??
+            (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
+        loginHint: loginHint,
+        extra: {
+          ...?settings.extraAuthenticationParameters,
+          ...?extraParameters,
+        },
+        maxAge: maxAgeOverride ?? settings.maxAge,
       ),
+      metadata: doc,
+      store: store,
+      options: options,
     );
+
+    final responseFuture = Oidc.getAuthorizationResponse(
+      metadata: discoveryDocument,
+      request: req,
+      store: store,
+      options: options,
+    );
+
+    final resp = await responseFuture;
+    if (resp == null) {
+      return;
+    }
+    await _handleSuccessfulLogin(resp);
+  }
+
+  Future<void> _handleSuccessfulLogin({
+    required OidcAuthorizeResponse resp,
+    
+  }) async {
+    //TODO: validate the response
   }
 
   /// The discovery document containing openid configuration.

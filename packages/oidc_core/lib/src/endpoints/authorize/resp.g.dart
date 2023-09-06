@@ -16,10 +16,11 @@ OidcAuthorizeResponse _$OidcAuthorizeResponseFromJson(
       iss: json['iss'] == null ? null : Uri.parse(json['iss'] as String),
       scope: json['scope'] == null
           ? const []
-          : splitSpaceDelimitedString(json['scope'] as String?),
+          : OidcInternalUtilities.splitSpaceDelimitedString(
+              json['scope'] as String?),
       tokenType: json['token_type'] as String?,
       expiresIn: _$JsonConverterFromJson<int, Duration>(
-          json['expires_in'], const DurationSecondsConverter().fromJson),
+          json['expires_in'], const OidcDurationSecondsConverter().fromJson),
       accessToken: json['access_token'] as String?,
       idToken: json['id_token'] as String?,
     );
