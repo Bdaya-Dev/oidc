@@ -5,11 +5,15 @@ class OidcException implements Exception {
     this.message, {
     this.extra = const {},
     this.errorResponse,
+    this.internalException,
+    this.internalStackTrace,
   });
 
   final String message;
   final Map<String, dynamic> extra;
   final OidcErrorResponse? errorResponse;
+  final Object? internalException;
+  final StackTrace? internalStackTrace;
 
   @override
   String toString() {

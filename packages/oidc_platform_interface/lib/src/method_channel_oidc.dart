@@ -26,7 +26,7 @@ class MethodChannelOidc extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcStore store,
-    OidcAuthorizeState stateData,
+    OidcAuthorizeState? stateData,
     OidcAuthorizePlatformSpecificOptions options,
   ) {
     throw UnimplementedError();

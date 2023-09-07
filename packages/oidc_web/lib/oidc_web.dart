@@ -19,6 +19,7 @@ class OidcWeb extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcStore store,
+    OidcAuthorizeState? stateData,
     OidcAuthorizePlatformSpecificOptions options,
   ) async {
     final authEndpoint = metadata.authorizationEndpoint;
@@ -28,7 +29,19 @@ class OidcWeb extends OidcPlatform {
       );
     }
     final channel = BroadcastChannel('oidc_flutter_web/redirect');
-    final sub = channel.onMessage.listen((event) {});
+    final c = Completer<Uri>();
+    final sub = channel.onMessage.listen((event) {
+      final data = event.data;
+      if (data is! String) {
+        return;
+      }
+      final parsed = Uri.tryParse(data);
+      if (parsed == null) {
+        return;
+      }
+      c.complete(parsed);
+    });
+
     try {
       final uri = request.generateUri(authEndpoint);
       if (!await canLaunchUrl(uri)) {
@@ -36,33 +49,10 @@ class OidcWeb extends OidcPlatform {
           "Couldn't launch the authorization request url: $uri, this might be a false positive.",
         );
       }
-      /*
-    samePage:
-    1. return null
-    2. 
-    ===========
-    newPage
-    popup
-    iframe
-    */
 
       //first prepare
       switch (options.web.navigationMode) {
-        // case OidcAuthorizePlatformOptions_Web_NavigationMode.popup:
-        //   //TODO(ahmednfwela): launch a popup, and get a window handle.
-        //   break;
         case OidcAuthorizePlatformOptions_Web_NavigationMode.samePage:
-          final state = OidcAuthorizeState.fromRequest(
-            authority: authority,
-            clientId: clientId,
-            redirectUri: redirectUri,
-            scope: scope,
-          );
-          await store.set(
-            OidcStoreNamespace.state,
-            key: /* get a state Id */ key,
-            value: value,
-          );
           if (!await launchUrl(
             uri,
             webOnlyWindowName: '_self',
@@ -73,7 +63,6 @@ class OidcWeb extends OidcPlatform {
           // return null, since this mode can't be awaited.
           return null;
         case OidcAuthorizePlatformOptions_Web_NavigationMode.newPage:
-          final c = Completer<Uri>();
           if (!await launchUrl(
             uri,
             webOnlyWindowName: '_blank',
@@ -82,24 +71,34 @@ class OidcWeb extends OidcPlatform {
                 .severe("Couldn't launch the authorization request url: $uri");
             return null;
           }
-          //listen to
-          // window.sessionStorage.;
-          break;
-        // case OidcAuthorizePlatformOptions_Web_NavigationMode.iframe:
-        //   //TODO: redirect to the new page in a new tab
-        //   break;
+          //listen to response uri.
+          return await OidcEndpoints.parseAuthorizeResponse(
+            store: store,
+            responseUri: await c.future,
+          );
         case OidcAuthorizePlatformOptions_Web_NavigationMode.popup:
-          // TODO: Handle this case.
-          break;
-        case OidcAuthorizePlatformOptions_Web_NavigationMode.iframe:
-          // TODO: Handle this case.
-          break;
+          final h = options.web.popupHeight;
+          final w = options.web.popupWidth;
+          final top = (window.outerHeight - h) / 2 +
+              (window.screen?.available.top ?? 0);
+          final left = (window.outerWidth - w) / 2 +
+              (window.screen?.available.left ?? 0);
+
+          final windowOpts =
+              'width=$w,height=$h,toolbar=no,location=no,directories=no,status=no,menubar=no,copyhistory=no&top=$top,left=$left';
+
+          window.open(
+            uri.toString(),
+            'oidc_auth_popup',
+            windowOpts,
+          );
+          return await OidcEndpoints.parseAuthorizeResponse(
+            store: store,
+            responseUri: await c.future,
+          );
       }
     } finally {
       await sub.cancel();
     }
   }
-
-  // @override
-  // Future<String?> getPlatformName() async => 'Web';
 }

@@ -7,10 +7,8 @@ enum OidcStoreNamespace {
   /// on web, this MUST be stored in localStorage, since the html page has no
   /// access to the `OidcStore` object.
   ///
-  /// the key MUST be with the format:
+  /// the key MUST be in the format:
   /// `oidc-state-{key}`
-  ///
-  /// since the html page has no access to the `OidcStore` object.
   state('state'),
 
   /// Stores discovery documents as json
@@ -42,7 +40,7 @@ abstract interface class OidcStore {
     required String key,
   });
 
-  Future<List<String>> getAllKeys(OidcStoreNamespace namespace);
+  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace);
 
   Future<Map<String, String>> setMany(
     OidcStoreNamespace namespace, {

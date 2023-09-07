@@ -1,3 +1,4 @@
+import 'package:oidc/oidc.dart';
 import 'package:oidc_core/oidc_core.dart';
 
 ///
@@ -15,6 +16,8 @@ class UserManagerSettings {
     this.acrValues,
     this.maxAge,
     this.extraAuthenticationParameters,
+    this.expiryTolerance = Duration.zero,
+    this.extraTokenParameters,
   });
 
   /// see [OidcAuthorizeRequest.redirectUri].
@@ -40,4 +43,10 @@ class UserManagerSettings {
 
   /// see [OidcAuthorizeRequest.extra]
   final Map<String, dynamic>? extraAuthenticationParameters;
+
+  /// see [OidcTokenRequest.extra]
+  final Map<String, dynamic>? extraTokenParameters;
+
+  /// see [OidcIdTokenVerificationOptions.expiryTolerance].
+  final Duration expiryTolerance;
 }

@@ -19,5 +19,7 @@ Map<String, dynamic> _$OidcClientAuthenticationToJson(
   }
 
   writeNotNull('client_secret', instance.clientSecret);
+  writeNotNull('client_assertion_type', instance.clientAssertionType);
+  writeNotNull('client_assertion', instance.clientAssertion);
   return val;
 }

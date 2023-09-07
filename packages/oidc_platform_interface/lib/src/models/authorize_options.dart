@@ -54,18 +54,19 @@ enum OidcAuthorizePlatformOptions_Web_NavigationMode {
   ///
   /// 1. Navigate to the Uri on a new page.
   /// 2. the redirect Uri should be /redirect.html
-  /// 3. the page should postMessage the original page with the query parameters
+  /// 3. the page should call BroadcastChannel postMessage the original page with the query parameters
   /// 4. the page should close itself
   /// 5. the app receives the postMessage, and finishes the flow.
   newPage,
 
   /// RECOMMENDED
   ///
-  ///
+  /// 1. Navigate to the Uri using a popup.
+  /// 2. the redirect Uri should be /redirect.html
+  /// 3. the page should call BroadcastChannel postMessage the original page with the query parameters
+  /// 4. the page should close itself
+  /// 5. the app receives the postMessage, and finishes the flow.
   popup,
-
-  ///
-  iframe,
 }
 
 ///
@@ -74,8 +75,16 @@ class OidcAuthorizePlatformOptions_Web {
   const OidcAuthorizePlatformOptions_Web({
     this.navigationMode =
         OidcAuthorizePlatformOptions_Web_NavigationMode.newPage,
+    this.popupWidth = 700,
+    this.popupHeight = 750,
   });
 
   /// The navigation mode to use for web.
   final OidcAuthorizePlatformOptions_Web_NavigationMode navigationMode;
+
+  /// The width of the popup window if [navigationMode] is set to [OidcAuthorizePlatformOptions_Web_NavigationMode.popup].
+  final double popupWidth;
+
+  /// The height of the popup window if [navigationMode] is set to [OidcAuthorizePlatformOptions_Web_NavigationMode.popup].
+  final double popupHeight;
 }

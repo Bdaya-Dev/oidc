@@ -9,6 +9,7 @@ class OidcIdTokenVerificationOptions {
     this.validateAudience = false,
     this.validateIssuer = false,
     this.expiryTolerance = Duration.zero,
+    this.clientId,
   });
 
   /// A key store to lookup [JsonWebKey]s
@@ -27,4 +28,7 @@ class OidcIdTokenVerificationOptions {
   /// some small leeway, usually no more than a few
   /// minutes, to account for clock skew.
   final Duration expiryTolerance;
+
+  /// the client id to validate
+  final String? clientId;
 }

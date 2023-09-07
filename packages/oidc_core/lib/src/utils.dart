@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:json_annotation/json_annotation.dart';
@@ -76,33 +75,5 @@ class OidcUtils {
         'openid-configuration',
       ],
     );
-  }
-
-  /// Gets the Oidc provider metadata from a '.well-known' url
-  static Future<OidcProviderMetadata> getProviderMetadata(
-    Uri wellKnownUri, {
-    Map<String, String>? headers,
-    http.Client? client,
-  }) async {
-    final req = http.Request(OidcConstants_RequestMethod.get, wellKnownUri);
-    if (headers != null) {
-      req.headers.addAll(headers);
-    }
-    final resp = await OidcInternalUtilities.sendWithClient(
-      client: client,
-      request: req,
-    );
-    if (resp.statusCode != 200) {
-      throw OidcException(
-        'Server responded with a non-200 statusCode',
-        extra: {
-          OidcConstants_Exception.request: req,
-          OidcConstants_Exception.response: resp,
-          OidcConstants_Exception.statusCode: resp.statusCode,
-        },
-      );
-    }
-    final decoded = jsonDecode(resp.body);
-    return OidcProviderMetadata.fromJson(decoded as Map<String, dynamic>);
   }
 }

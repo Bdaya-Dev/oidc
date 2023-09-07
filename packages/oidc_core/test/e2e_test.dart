@@ -3,24 +3,26 @@ import 'dart:developer';
 import 'package:http/http.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
+import 'package:http/testing.dart';
+
+import 'mock_client.dart';
 
 void main() async {
-  final serverUri = Uri.parse('http://localhost:4011');
+  final serverUri = Uri.parse('http://accounts.google.com');
   final wellKnownUrl = OidcUtils.getWellKnownUriFromBase(serverUri);
-  try {
-    final config = await OidcUtils.getProviderMetadata(wellKnownUrl);
-    // print(config);
-    expect(config.issuer.toString(), serverUri.toString());
-  } on ClientException {
-    log("Skipping e2e tests since server isn't up");
-    test('dummy', () {});
-    return;
-  }
-
   group('E2E', () {
+    final client = createMockOidcClient();
     test('fetch discovery', () async {
-      final config = await OidcUtils.getProviderMetadata(wellKnownUrl);
-      expect(config.issuer.toString(), 'http://localhost:4011');
+      
+      final config = await OidcEndpoints.getProviderMetadata(
+        wellKnownUrl,
+        client: client,
+      );
+      expect(config.issuer.toString(), 'https://accounts.google.com');
     });
+    test(
+      'token',
+      () {},
+    );
   });
 }

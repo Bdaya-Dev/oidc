@@ -7,9 +7,9 @@ Map<dynamic, dynamic> readSrcMap(Map<dynamic, dynamic> src, String key) {
 }
 
 abstract class JsonBasedRequest {
-  JsonBasedRequest({
+  const JsonBasedRequest({
     Map<String, dynamic>? extra,
-  }) : extra = extra ?? {};
+  }) : extra = extra ?? const {};
 
   /// Extra parameters to add to the request.
   @JsonKey(

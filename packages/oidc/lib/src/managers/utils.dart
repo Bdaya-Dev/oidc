@@ -1,6 +1,5 @@
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
 import 'package:nonce/nonce.dart';
 import 'package:oidc/src/models/authorize_request.dart';
 import 'package:oidc_core/oidc_core.dart';
@@ -53,14 +52,14 @@ class Oidc {
       createdAt: DateTime.now(),
       codeVerifier: codeVerifier,
       codeChallenge: codeChallenge,
-      authorizationRequest: {
-        // store the information that you need from the simple request.
-        OidcConstants_AuthParameters.clientId: input.clientId,
-      },
+      redirectUri: input.redirectUri,
+      clientId: input.clientId,
       nonce: nonce,
       originalUri: input.originalUri,
       requestType: options.web.navigationMode.name,
       data: input.extraStateData,
+      extraTokenParams: input.extraTokenParameters,
+      webLaunchMode: options.web.navigationMode.name,
     );
     //store the state
     await store.set(
@@ -98,7 +97,7 @@ class Oidc {
       codeChallenge: codeChallenge,
       codeChallengeMethod: codeChallengeMethod,
       display: input.display,
-      extra: input.extra,
+      extra: input.extraParameters,
       idTokenHint: input.idTokenHint,
       loginHint: input.loginHint,
       maxAge: input.maxAge,
@@ -123,7 +122,16 @@ class Oidc {
     required OidcStore store,
     OidcAuthorizePlatformSpecificOptions options =
         const OidcAuthorizePlatformSpecificOptions(),
-  }) {
+  }) async {
+    final stateStr = request.state == null
+        ? null
+        : await store.get(
+            OidcStoreNamespace.state,
+            key: request.state!,
+          );
+    final stateData = stateStr == null
+        ? null
+        : OidcAuthorizeState.fromStorageString(stateStr);
     return _platform.getAuthorizationResponse(
       metadata,
       request,

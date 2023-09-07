@@ -45,7 +45,7 @@ dependencies:
   uuid: ^3.0.7
 
 dev_dependencies:
-  built_value: ^8.6.2
+  build_runner: ^2.4.6
   flutter_test:
     sdk: flutter
   json_serializable: ^6.7.1

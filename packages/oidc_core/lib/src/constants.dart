@@ -14,6 +14,22 @@ class OidcConstants_AccessTokenTypes {
   static const dPoP = 'DPoP';
 }
 
+class OidcConstants_ClientAuthenticationMethods {
+  static const clientSecretBasic = 'client_secret_basic';
+  static const clientSecretPost = 'client_secret_post';
+  static const clientSecretJwt = 'client_secret_jwt';
+  static const privateKeyJwt = 'private_key_jwt';
+  static const none = 'none';
+}
+
+class OidcConstants_ClientAssertionTypes {
+  static const jwtBearer =
+      'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+
+  static const saml2Bearer =
+      'urn:ietf:params:oauth:client-assertion-type:saml2-bearer';
+}
+
 class OidcConstants_GrantType {
   static const String implicit = 'implicit';
   static const String authorizationCode = 'authorization_code';
@@ -598,10 +614,13 @@ class OidcConstants_AuthorizeRequest_CodeChallengeMethod {
 }
 
 class OidcConstants_Store {
-  static const latestToken = 'latest';
-  static const idToken = 'id_token';
-  static const accessToken = 'access_token';
-  static const refreshToken = 'refresh_token';
+  static const expiresAt = 'expiresAt';
+  static const expiresInReferenceDate = 'expiresInReferenceDate';
+  static const currentUserMetadata = 'currentUser';
+  // static const latestToken = 'latest';
+  // static const idToken = 'id_token';
+  // static const accessToken = 'access_token';
+  // static const refreshToken = 'refresh_token';
 }
 
 class OidcConstants_Exception {

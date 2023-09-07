@@ -1,7 +1,7 @@
 import 'package:json_annotation/json_annotation.dart';
+import 'package:oidc_core/oidc_core.dart';
 
 import 'package:oidc_core/src/models/json_based_object.dart';
-import 'package:oidc_core/src/utils.dart';
 
 part 'resp.g.dart';
 
@@ -26,7 +26,7 @@ class OidcTokenResponse extends JsonBasedResponse {
       _$OidcTokenResponseFromJson(src);
 
   @JsonKey(
-    name: 'scope',
+    name: OidcConstants_AuthParameters.scope,
     fromJson: OidcInternalUtilities.splitSpaceDelimitedString,
   )
   final List<String> scope;
@@ -34,7 +34,7 @@ class OidcTokenResponse extends JsonBasedResponse {
   /// OPTIONAL.
   ///
   /// The access token issued by the authorization server.
-  @JsonKey(name: 'access_token')
+  @JsonKey(name: OidcConstants_AuthParameters.accessToken)
   final String? accessToken;
 
   /// REQUIRED.
@@ -42,13 +42,13 @@ class OidcTokenResponse extends JsonBasedResponse {
   /// The type of the access token issued.
   ///
   /// Value is case insensitive.
-  @JsonKey(name: 'token_type')
+  @JsonKey(name: OidcConstants_AuthParameters.tokenType)
   final String tokenType;
 
   /// REQUIRED, in the OIDC spec.
   ///
   /// ID Token value associated with the authenticated session.
-  @JsonKey(name: 'id_token')
+  @JsonKey(name: OidcConstants_AuthParameters.idToken)
   final String? idToken;
 
   bool get isOidc => idToken?.isNotEmpty ?? false;
@@ -62,14 +62,14 @@ class OidcTokenResponse extends JsonBasedResponse {
   ///
   /// If omitted, the authorization server SHOULD provide the expiration time
   /// via other means or document the default value.
-  @JsonKey(name: 'expires_in')
+  @JsonKey(name: OidcConstants_AuthParameters.expiresIn)
   final Duration? expiresIn;
 
   /// OPTIONAL.
   ///
   /// The refresh token, which can be used to obtain new access tokens based on
   /// the grant passed in the corresponding token request.
-  @JsonKey(name: 'refresh_token')
+  @JsonKey(name: OidcConstants_AuthParameters.refreshToken)
   final String? refreshToken;
 
   /// NOT WITHIN SPEC, but some Identity Providers include this.

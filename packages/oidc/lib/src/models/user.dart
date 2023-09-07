@@ -1,6 +1,6 @@
 import 'package:jose/jose.dart';
+import 'package:oidc/src/models/user_metadata.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'id_token_verification_options.dart';
 
 /// A user is a verified JWT id_token, with some metadata (like access_token and refresh_token).
 class OidcUser {
@@ -8,38 +8,40 @@ class OidcUser {
   const OidcUser({
     required this.idToken,
     required this.parsedToken,
-    this.metadata = const {},
+    this.metadata = const OidcUserMetadata.empty(),
   });
 
   /// Creates a OidcUser from an encoded idToken.
   ///
-  /// You can verify the idToken by passing the [verificationOptions] parameter,
-  /// which requires at least the key.
+  /// You can verify the idToken by passing the [keystore] parameter.
   ///
   /// You can also pass optional [metadata] that will get stored with the user.
   static Future<OidcUser> fromIdToken({
     required String idToken,
-    Map<String, dynamic> metadata = const {},
-    OidcIdTokenVerificationOptions? verificationOptions,
+    OidcUserMetadata? metadata,
+    JsonWebKeyStore? keystore,
+    List<String>? allowedAlgorithms,
   }) async {
-    final keystore = verificationOptions?.keyStore;
-    final token = verificationOptions == null || keystore == null
+    final token = keystore == null
         ? JsonWebToken.unverified(idToken)
         : await JsonWebToken.decodeAndVerify(
             idToken,
             keystore,
-            allowedArguments: verificationOptions.allowedAlgorithms,
+            allowedArguments: allowedAlgorithms,
           );
 
     return OidcUser(
       idToken: idToken,
       parsedToken: token,
-      metadata: metadata,
+      metadata: metadata ?? const OidcUserMetadata.empty(),
     );
   }
 
   /// The jwt token this user was verified from.
   final String idToken;
+
+  /// The parsed jwt token
+  final JsonWebToken parsedToken;
 
   /// The claims that were decoded from the idToken
   JsonWebTokenClaims get claims => parsedToken.claims;
@@ -51,16 +53,5 @@ class OidcUser {
   String get uidRequired => uid!;
 
   /// Extra metadata for the user
-  final Map<String, dynamic> metadata;
-
-  /// Try getting the `access_token` from the [metadata].
-  String? get accessToken =>
-      metadata[OidcConstants_Store.accessToken] as String?;
-
-  /// Try getting the `refresh_token` from the [metadata].
-  String? get refreshToken =>
-      metadata[OidcConstants_Store.refreshToken] as String?;
-
-  /// The parsed jwt token
-  final JsonWebToken parsedToken;
+  final OidcUserMetadata metadata;
 }

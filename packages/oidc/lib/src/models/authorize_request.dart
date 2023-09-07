@@ -21,48 +21,52 @@ class OidcSimpleAuthorizationCodeRequest {
     this.loginHint,
     this.acrValues,
     this.extraStateData,
-    this.extra,
+    this.extraParameters,
+    this.extraTokenParameters,    
   });
 
   /// Extra state data that will be persisted and roundtripped when the response
   /// is received.
   ///
   /// it MUST be json serializable.
-  dynamic extraStateData;
+  final dynamic extraStateData;
 
   /// see [OidcAuthorizeRequest.scope].
-  List<String> scope;
+  final List<String> scope;
 
   /// see [OidcAuthorizeRequest.clientId].
-  String clientId;
+  final String clientId;
 
   /// see [OidcAuthorizeRequest.redirectUri].
-  Uri redirectUri;
+  final Uri redirectUri;
 
   /// The original uri to go back to after the authorization succeeds, if null, defaults to [redirectUri].
-  Uri? originalUri;
+  final Uri? originalUri;
 
   /// see [OidcAuthorizeRequest.display].
-  String? display;
+  final String? display;
 
   /// see [OidcAuthorizeRequest.prompt].
-  List<String>? prompt;
+  final List<String>? prompt;
 
   /// see [OidcAuthorizeRequest.maxAge].
-  Duration? maxAge;
+  final Duration? maxAge;
 
   /// see [OidcAuthorizeRequest.uiLocales].
-  List<String>? uiLocales;
+  final List<String>? uiLocales;
 
   /// see [OidcAuthorizeRequest.idTokenHint].
-  String? idTokenHint;
+  final String? idTokenHint;
 
   /// see [OidcAuthorizeRequest.loginHint].
-  String? loginHint;
+  final String? loginHint;
 
   /// see [OidcAuthorizeRequest.acrValues].
-  List<String>? acrValues;
+  final List<String>? acrValues;
 
   /// see [OidcAuthorizeRequest.extra].
-  Map<String, dynamic>? extra;
+  final Map<String, dynamic>? extraParameters;
+
+  /// see [OidcAuthorizeState.extraTokenParams]
+  final Map<String, dynamic>? extraTokenParameters;
 }

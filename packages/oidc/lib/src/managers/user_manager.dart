@@ -1,15 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:jose/jose.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/src/managers/utils.dart';
 import 'package:oidc/src/models/authorize_request.dart';
-import 'package:oidc/src/models/code_flow_parameters.dart';
-import 'package:oidc/src/models/id_token_verification_options.dart';
 import 'package:oidc/src/models/user.dart';
 import 'package:oidc/src/models/user_manager_settings.dart';
+import 'package:oidc/src/models/user_metadata.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 import 'package:rxdart/rxdart.dart';
@@ -43,7 +42,7 @@ class OidcUserManager {
     required this.store,
     required this.settings,
     this.httpClient,
-    this.verificationOptions,
+    this.keyStore,
   })  : discoveryDocumentUri = null,
         _discoveryDocument = discoveryDocument;
 
@@ -55,7 +54,7 @@ class OidcUserManager {
     required this.store,
     required this.settings,
     this.httpClient,
-    this.verificationOptions,
+    this.keyStore,
   });
 
   /// The client authentication information.
@@ -68,7 +67,7 @@ class OidcUserManager {
   final OidcStore store;
 
   /// The id_token verification options.
-  final OidcIdTokenVerificationOptions? verificationOptions;
+  final JsonWebKeyStore? keyStore;
 
   /// The settings used in this manager.
   final UserManagerSettings settings;
@@ -90,16 +89,10 @@ class OidcUserManager {
     }
   }
 
-  bool canAuthorizeCodeFlow() {
-    _ensureInit();
-    final endpoint = discoveryDocument.authorizationEndpoint;
-
-    return endpoint != null;
-  }
-
-  /// requests logging in via the AuthorizationCodeFlow
+  /// Attempts to login the user via the AuthorizationCodeFlow.
   ///
-  /// originalUri is the internal Uri
+  /// [originalUri] is the uri you want to be redirected to after authentication is done,
+  /// if null, it defaults to `redirectUri`.
   Future<void> loginAuthorizationCodeFlow({
     Uri? redirectUriOverride,
     Uri? originalUri,
@@ -114,55 +107,192 @@ class OidcUserManager {
     String? loginHint,
     Duration? maxAgeOverride,
     Map<String, dynamic>? extraParameters,
+    Map<String, dynamic>? extraTokenParameters,
     OidcAuthorizePlatformSpecificOptions? options,
   }) async {
     _ensureInit();
     final doc = discoveryDocument;
     options ??= const OidcAuthorizePlatformSpecificOptions();
-    final req = await Oidc.prepareAuthorizationCodeFlowRequest(
-      input: OidcSimpleAuthorizationCodeRequest(
-        clientId: clientCredentials.clientId,
-        originalUri: originalUri,
-        redirectUri: redirectUriOverride ?? settings.redirectUri,
-        scope: scopeOverride ?? settings.scope,
-        prompt: promptOverride ?? settings.prompt,
-        display: displayOverride ?? settings.display,
-        extraStateData: extraStateData,
-        uiLocales: uiLocalesOverride ?? settings.uiLocales,
-        acrValues: acrValuesOverride ?? settings.acrValues,
-        idTokenHint: idTokenHintOverride ??
-            (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
-        loginHint: loginHint,
-        extra: {
-          ...?settings.extraAuthenticationParameters,
-          ...?extraParameters,
-        },
-        maxAge: maxAgeOverride ?? settings.maxAge,
-      ),
+    final simpleReq = OidcSimpleAuthorizationCodeRequest(
+      clientId: clientCredentials.clientId,
+      originalUri: originalUri,
+      redirectUri: redirectUriOverride ?? settings.redirectUri,
+      scope: scopeOverride ?? settings.scope,
+      prompt: promptOverride ?? settings.prompt,
+      display: displayOverride ?? settings.display,
+      extraStateData: extraStateData,
+      uiLocales: uiLocalesOverride ?? settings.uiLocales,
+      acrValues: acrValuesOverride ?? settings.acrValues,
+      idTokenHint: idTokenHintOverride ??
+          (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
+      loginHint: loginHint,
+      extraTokenParameters: extraTokenParameters,
+      extraParameters: {
+        ...?settings.extraAuthenticationParameters,
+        ...?extraParameters,
+      },
+      maxAge: maxAgeOverride ?? settings.maxAge,
+    );
+    final request = await Oidc.prepareAuthorizationCodeFlowRequest(
+      input: simpleReq,
       metadata: doc,
       store: store,
       options: options,
     );
 
-    final responseFuture = Oidc.getAuthorizationResponse(
+    final response = await Oidc.getAuthorizationResponse(
       metadata: discoveryDocument,
-      request: req,
+      request: request,
       store: store,
       options: options,
     );
-
-    final resp = await responseFuture;
-    if (resp == null) {
+    if (response == null) {
       return;
     }
-    await _handleSuccessfulLogin(resp);
+
+    await _handleSuccessfulAuthResponse(
+      response: response,
+    );
   }
 
-  Future<void> _handleSuccessfulLogin({
-    required OidcAuthorizeResponse resp,
-    
+  Future<void> _handleSuccessfulAuthResponse({
+    required OidcAuthorizeResponse response,
   }) async {
-    //TODO: validate the response
+    final receivedStateKey = response.state;
+    if (receivedStateKey == null) {
+      throw const OidcException(
+        "Server didn't return state parameter, even though it was sent.",
+      );
+    }
+    final currentStateKey = await store.get(
+      OidcStoreNamespace.session,
+      key: OidcConstants_AuthParameters.state,
+    );
+    if (currentStateKey != receivedStateKey) {
+      throw const OidcException(
+        'Server sent an older or different state parameter.',
+      );
+    }
+
+    final stateDataStr = await store.get(
+      OidcStoreNamespace.state,
+      key: receivedStateKey,
+    );
+    if (stateDataStr == null) {
+      throw const OidcException(
+        "Internal error, the session state wasn't cleared after the state was deleted.",
+      );
+    }
+    final stateData = OidcAuthorizeState.fromStorageString(stateDataStr);
+
+    final doc = discoveryDocument;
+    final tokenEndPoint = doc.tokenEndpoint;
+    if (tokenEndPoint == null) {
+      throw const OidcException(
+        "This provider doesn't provide a token endpoint",
+      );
+    }
+    final code = response.code;
+    if (code == null) {
+      throw const OidcException(
+        "Server didn't send code even though the authorization code flow was used.",
+      );
+    }
+    final tokenResp = await OidcEndpoints.token(
+      tokenEndpoint: tokenEndPoint,
+      credentials: clientCredentials,
+      request: OidcTokenRequest.authorizationCode(
+        redirectUri: stateData.redirectUri,
+        codeVerifier: stateData.codeVerifier,
+        extra: stateData.extraTokenParams,
+        code: code,
+        clientId: clientCredentials.clientId,
+      ),
+      client: httpClient,
+    );
+    await _handleTokenResponse(
+      response: tokenResp,
+      nonce: stateData.nonce,
+      refDate: DateTime.now().toUtc(),
+    );
+  }
+
+  Future<void> _handleTokenResponse({
+    required OidcTokenResponse response,
+    required String? nonce,
+    required DateTime? refDate,
+  }) async {
+    refDate ??= DateTime.now().toUtc();
+    final idToken = response.idToken;
+    if (idToken == null) {
+      throw const OidcException(
+        "Server didn't return the id_token.",
+      );
+    }
+    final metadataObject = OidcUserMetadata.fromJson({
+      ...response.src,
+      OidcConstants_Store.expiresInReferenceDate: refDate,
+    });
+    final user = await OidcUser.fromIdToken(
+      idToken: idToken,
+      metadata: metadataObject,
+      allowedAlgorithms:
+          discoveryDocument.tokenEndpointAuthSigningAlgValuesSupported,
+      keystore: keyStore,
+    );
+    final idTokenNonce =
+        user.parsedToken.claims[OidcConstants_AuthParameters.nonce] as String?;
+    if (nonce != null && idTokenNonce != nonce) {
+      throw const OidcException(
+        'Server returned a wrong id_token nonce, might be a replay attack.',
+      );
+    }
+    await _handleUser(user);
+  }
+
+  Future<void> _handleUser(OidcUser user) async {
+    final errors = user.parsedToken.claims
+        .validate(
+          clientId: clientCredentials.clientId,
+          issuer: discoveryDocument.issuer,
+          expiryTolerance: settings.expiryTolerance,
+        )
+        .toList();
+    if (errors.isEmpty) {
+      await store.setMany(
+        OidcStoreNamespace.secureTokens,
+        values: {
+          OidcConstants_AuthParameters.idToken: user.idToken,
+          OidcConstants_Store.currentUserMetadata:
+              jsonEncode(user.metadata.toJson()),
+        },
+      );
+      _userSubject.add(user);
+    } else {
+      for (final element in errors) {
+        _logger.fine(
+          'found a JWT, but failed the validation test',
+          element,
+          StackTrace.current,
+        );
+      }
+      await _cleanUpStore(
+        toDelete: {
+          OidcStoreNamespace.session,
+          OidcStoreNamespace.state,
+          OidcStoreNamespace.secureTokens,
+        },
+      );
+    }
+  }
+
+  Future<void> _cleanUpStore({
+    required Set<OidcStoreNamespace> toDelete,
+  }) async {
+    for (final element in toDelete) {
+      final keys = await store.getAllKeys(element);
+      await store.removeMany(element, keys: keys);
+    }
   }
 
   /// The discovery document containing openid configuration.
@@ -219,7 +349,7 @@ class OidcUserManager {
     }
 
     try {
-      _discoveryDocument = await OidcUtils.getProviderMetadata(uri);
+      _discoveryDocument = await OidcEndpoints.getProviderMetadata(uri);
     } catch (e, st) {
       //maybe there is no internet.
       if (_discoveryDocument == null) {
@@ -244,69 +374,72 @@ class OidcUserManager {
   /// Loads and verifies the idToken, accessToken and refreshToken
   Future<void> _loadCachedTokens() async {
     final usedKeys = <String>{
-      OidcConstants_Store.idToken,
-      OidcConstants_Store.accessToken,
-      OidcConstants_Store.refreshToken,
+      OidcConstants_AuthParameters.idToken,
+      OidcConstants_Store.currentUserMetadata,
     };
+
     final tokens = await store.getMany(
       OidcStoreNamespace.secureTokens,
       keys: usedKeys,
     );
-    final idToken = tokens[OidcConstants_Store.idToken];
-
-    final verificationOptions = this.verificationOptions;
-    if (idToken != null) {
-      try {
-        final accessToken = tokens[OidcConstants_Store.accessToken];
-        final refreshToken = tokens[OidcConstants_Store.refreshToken];
-        final user = await OidcUser.fromIdToken(
-          idToken: idToken,
-          metadata: {
-            if (accessToken != null)
-              OidcConstants_Store.accessToken: accessToken,
-            if (refreshToken != null)
-              OidcConstants_Store.refreshToken: refreshToken,
-          },
-          verificationOptions: verificationOptions,
-        );
-
-        final errors = verificationOptions == null
-            ? <Exception>[]
-            : user.parsedToken.claims
-                .validate(
-                  clientId: verificationOptions.validateAudience
-                      ? clientCredentials.clientId
-                      : null,
-                  issuer: verificationOptions.validateIssuer
-                      ? discoveryDocument.issuer
-                      : null,
-                  expiryTolerance: verificationOptions.expiryTolerance,
-                )
-                .toList();
-        if (errors.isEmpty) {
-          _logger.finer('found a JWT and validated it');
-          _userSubject.add(user);
-        } else {
-          for (final element in errors) {
-            _logger.fine(
-              'found a JWT, but failed the validation test',
-              element,
-              StackTrace.current,
-            );
-          }
-          await store.removeMany(
-            OidcStoreNamespace.secureTokens,
-            keys: usedKeys,
-          );
-        }
-      } catch (e) {
-        // swallow error
-        await store.removeMany(
-          OidcStoreNamespace.secureTokens,
-          keys: usedKeys,
-        );
-      }
+    final idToken = tokens[OidcConstants_AuthParameters.idToken];
+    final rawMetadata = tokens[OidcConstants_Store.currentUserMetadata];
+    if (idToken == null || rawMetadata == null) {
+      return;
     }
+    final decodedMetadata = jsonDecode(rawMetadata) as Map<String, dynamic>;
+    // final parsedMetadata = OidcUserMetadata.fromJson(decodedMetadata);
+    OidcTokenResponse? tokenResponse;
+    try {
+      tokenResponse = OidcTokenResponse.fromJson({
+        OidcConstants_AuthParameters.idToken: idToken,
+        ...decodedMetadata,
+      });
+    } catch (e) {
+      await store.removeMany(
+        OidcStoreNamespace.secureTokens,
+        keys: usedKeys,
+      );
+    }
+    if (tokenResponse != null) {
+      await _handleTokenResponse(
+        response: tokenResponse,
+        nonce: null,
+        refDate: OidcInternalUtilities.readDateTime(
+          tokens,
+          OidcConstants_Store.expiresInReferenceDate,
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadStateResult() async {
+    final stateKey = await store.get(
+      OidcStoreNamespace.session,
+      key: OidcConstants_AuthParameters.state,
+    );
+    if (stateKey == null) {
+      return;
+    }
+    final stateResponseRaw = await store.get(
+      OidcStoreNamespace.state,
+      key: '$stateKey-response',
+    );
+    if (stateResponseRaw == null) {
+      return;
+    }
+    final stateResponseUrl = Uri.tryParse(stateResponseRaw);
+    if (stateResponseUrl == null) {
+      return;
+    }
+    final resp = await OidcEndpoints.parseAuthorizeResponse(
+      responseUri: stateResponseUrl,
+      store: store,
+    );
+    if (resp == null) {
+      return;
+    }
+    await _handleSuccessfulAuthResponse(response: resp);
   }
 
   /// true if [init] has been called with no exceptions.
@@ -322,7 +455,9 @@ class OidcUserManager {
       //load cached tokens if they exist.
       await _loadCachedTokens();
       //get the authorization response
-      // await OidcPlatform.instance.getAuthorizationResponse();
+      if (currentUser == null) {
+        await _loadStateResult();
+      }
     } catch (e) {
       _hasInit = false;
       rethrow;
