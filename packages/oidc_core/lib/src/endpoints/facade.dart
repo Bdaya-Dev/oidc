@@ -101,7 +101,6 @@ class OidcEndpoints {
     var queryParameters = responseUri.queryParameters;
 
     if (stateKey is! String) {
-      // TODO(ahmednfwela): test this.
       final fragmentUri = Uri(query: responseUri.fragment);
       stateKey =
           fragmentUri.queryParameters[OidcConstants_AuthParameters.state];

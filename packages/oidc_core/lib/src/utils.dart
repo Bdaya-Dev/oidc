@@ -33,6 +33,17 @@ class OidcInternalUtilities {
     return value.join(' ');
   }
 
+  static Object? readDurationSeconds(Map<dynamic, dynamic> p1, String p2) {
+    final res = p1[p2];
+    if (res == null) {
+      return null;
+    }
+    if (res is int) {
+      return res;
+    }
+    return int.tryParse(res.toString());
+  }
+
   static List<String> splitSpaceDelimitedString(String? value) {
     if (value == null || value.isEmpty) {
       return [];
@@ -47,7 +58,7 @@ class OidcInternalUtilities {
     return value.toIso8601String();
   }
 
-  static DateTime? dateTimeFromJson(dynamic rawValue ) {    
+  static DateTime? dateTimeFromJson(dynamic rawValue) {
     if (rawValue == null) {
       return null;
     }

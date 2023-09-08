@@ -10,6 +10,7 @@ OidcAuthorizeResponse _$OidcAuthorizeResponseFromJson(
         Map<String, dynamic> json) =>
     OidcAuthorizeResponse(
       src: readSrcMap(json, '') as Map<String, dynamic>,
+      codeVerifier: json['code_verifier'] as String?,
       code: json['code'] as String?,
       sessionState: json['session_state'] as String?,
       state: json['state'] as String?,
@@ -20,7 +21,8 @@ OidcAuthorizeResponse _$OidcAuthorizeResponseFromJson(
               json['scope'] as String?),
       tokenType: json['token_type'] as String?,
       expiresIn: _$JsonConverterFromJson<int, Duration>(
-          json['expires_in'], const OidcDurationSecondsConverter().fromJson),
+          OidcInternalUtilities.readDurationSeconds(json, 'expires_in'),
+          const OidcDurationSecondsConverter().fromJson),
       accessToken: json['access_token'] as String?,
       idToken: json['id_token'] as String?,
     );

@@ -46,8 +46,9 @@ class OidcAndroid extends OidcPlatform {
           tokenEndpoint: tokenEndpoint.toString(),
           endSessionEndpoint: metadata.endSessionEndpoint?.toString(),
         ),
-        additionalParameters:
-            request.extra.map((key, value) => MapEntry(key, value.toString())),
+        additionalParameters: {
+          ...request.extra.map((key, value) => MapEntry(key, value.toString())),
+        },
         issuer: metadata.issuer?.toString(),
         loginHint: request.loginHint,
         nonce: request.nonce,
@@ -65,12 +66,9 @@ class OidcAndroid extends OidcPlatform {
       OidcConstants_AuthParameters.code: resp.authorizationCode,
       OidcConstants_AuthParameters.codeVerifier: resp.codeVerifier,
       OidcConstants_AuthParameters.nonce: resp.nonce,
+      // add state here since appauth handles state itself
+      OidcConstants_AuthParameters.state: request.state,
       ...?resp.authorizationAdditionalParameters,
     });
   }
-
-  // @override
-  // Future<Uri?> getAuthorizationResponse(String state) async {
-
-  // }
 }

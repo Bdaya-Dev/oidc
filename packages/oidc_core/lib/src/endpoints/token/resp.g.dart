@@ -9,8 +9,8 @@ part of 'resp.dart';
 OidcTokenResponse _$OidcTokenResponseFromJson(Map<String, dynamic> json) =>
     OidcTokenResponse(
       src: readSrcMap(json, '') as Map<String, dynamic>,
+      tokenType: json['token_type'] as String?,
       accessToken: json['access_token'] as String?,
-      tokenType: json['token_type'] as String,
       scope: json['scope'] == null
           ? const []
           : OidcInternalUtilities.splitSpaceDelimitedString(
@@ -18,7 +18,8 @@ OidcTokenResponse _$OidcTokenResponseFromJson(Map<String, dynamic> json) =>
       idToken: json['id_token'] as String?,
       refreshToken: json['refresh_token'] as String?,
       expiresIn: _$JsonConverterFromJson<int, Duration>(
-          json['expires_in'], const OidcDurationSecondsConverter().fromJson),
+          OidcInternalUtilities.readDurationSeconds(json, 'expires_in'),
+          const OidcDurationSecondsConverter().fromJson),
       expiresAt: OidcInternalUtilities.dateTimeFromJson(json['expires_at']),
     );
 

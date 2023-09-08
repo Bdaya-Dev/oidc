@@ -16,5 +16,13 @@
                 "22433"
             ],
         },
+        {
+            "name": "example",
+            "cwd": "packages\\oidc\\example",
+            "request": "launch",
+            "type": "dart",
+           
+            
+        },
     ]
 }

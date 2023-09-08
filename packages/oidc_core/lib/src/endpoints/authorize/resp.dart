@@ -19,6 +19,7 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   ///
   const OidcAuthorizeResponse({
     required super.src,
+    required this.codeVerifier,
     this.code,
     this.sessionState,
     this.state,
@@ -62,7 +63,8 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   /// The client MUST NOT use the authorization code
   @JsonKey(name: OidcConstants_AuthParameters.code)
   final String? code;
-
+  @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
+  final String? codeVerifier;
   @JsonKey(
     name: OidcConstants_AuthParameters.scope,
     fromJson: OidcInternalUtilities.splitSpaceDelimitedString,
@@ -82,6 +84,9 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   final String? tokenType;
 
   @Deprecated(_implicitWarning)
-  @JsonKey(name: OidcConstants_AuthParameters.expiresIn)
+  @JsonKey(
+    name: OidcConstants_AuthParameters.expiresIn,
+    readValue: OidcInternalUtilities.readDurationSeconds,
+  )
   final Duration? expiresIn;
 }

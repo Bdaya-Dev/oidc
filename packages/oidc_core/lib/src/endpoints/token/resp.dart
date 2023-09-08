@@ -13,8 +13,8 @@ part 'resp.g.dart';
 class OidcTokenResponse extends JsonBasedResponse {
   const OidcTokenResponse({
     required super.src,
-    required this.accessToken,
-    required this.tokenType,
+    this.tokenType,
+    this.accessToken,
     this.scope = const [],
     this.idToken,
     this.refreshToken,
@@ -43,7 +43,7 @@ class OidcTokenResponse extends JsonBasedResponse {
   ///
   /// Value is case insensitive.
   @JsonKey(name: OidcConstants_AuthParameters.tokenType)
-  final String tokenType;
+  final String? tokenType;
 
   /// REQUIRED, in the OIDC spec.
   ///
@@ -62,7 +62,10 @@ class OidcTokenResponse extends JsonBasedResponse {
   ///
   /// If omitted, the authorization server SHOULD provide the expiration time
   /// via other means or document the default value.
-  @JsonKey(name: OidcConstants_AuthParameters.expiresIn)
+  @JsonKey(
+    name: OidcConstants_AuthParameters.expiresIn,
+    readValue: OidcInternalUtilities.readDurationSeconds,
+  )
   final Duration? expiresIn;
 
   /// OPTIONAL.

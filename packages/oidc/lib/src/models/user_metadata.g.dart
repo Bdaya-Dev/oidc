@@ -12,7 +12,8 @@ OidcUserMetadata _$OidcUserMetadataFromJson(Map<String, dynamic> json) =>
       scope: OidcInternalUtilities.splitSpaceDelimitedString(
           json['scope'] as String?),
       expiresIn: _$JsonConverterFromJson<int, Duration>(
-          json['expires_in'], const OidcDurationSecondsConverter().fromJson),
+          OidcInternalUtilities.readDurationSeconds(json, 'expires_in'),
+          const OidcDurationSecondsConverter().fromJson),
       expiresInReferenceDate: OidcInternalUtilities.dateTimeFromJson(
           json['expiresInReferenceDate']),
       accessToken: json['access_token'] as String?,

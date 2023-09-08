@@ -15,7 +15,7 @@ class Oidc {
   /// This creates a [OidcAuthorizeState] and stores in it some of the passed parameters.
   static Future<OidcAuthorizeRequest> prepareAuthorizationCodeFlowRequest({
     required OidcProviderMetadata metadata,
-    required OidcSimpleAuthorizationCodeRequest input,
+    required OidcSimpleAuthorizationCodeFlowRequest input,
     required OidcStore store,
     OidcAuthorizePlatformSpecificOptions options =
         const OidcAuthorizePlatformSpecificOptions(),
@@ -109,9 +109,81 @@ class Oidc {
     );
   }
 
-  /// starts the authorization code flow, and returns the response.
+  /// Prepares an [OidcAuthorizeRequest] to be used in [getAuthorizationResponse].
   ///
-  /// if the `request.responseType` is set to anything other than `code`, it returns null.
+  /// This creates a [OidcAuthorizeState] and stores in it some of the passed parameters.
+  static Future<OidcAuthorizeRequest> prepareImplicitCodeFlowRequest({
+    required OidcProviderMetadata metadata,
+    required OidcSimpleImplicitFlowRequest input,
+    required OidcStore store,
+    OidcAuthorizePlatformSpecificOptions options =
+        const OidcAuthorizePlatformSpecificOptions(),
+  }) async {
+    //
+    final nonce = Nonce.generate(32, Random.secure());
+    final stateData = OidcAuthorizeState(
+      id: const Uuid().v4(),
+      createdAt: DateTime.now(),
+      codeVerifier: null,
+      codeChallenge: null,
+      redirectUri: input.redirectUri,
+      clientId: input.clientId,
+      nonce: nonce,
+      originalUri: input.originalUri,
+      requestType: options.web.navigationMode.name,
+      data: input.extraStateData,
+      extraTokenParams: null,
+      webLaunchMode: options.web.navigationMode.name,
+    );
+    //store the state
+    await store.set(
+      OidcStoreNamespace.state,
+      key: stateData.id,
+      value: stateData.toStorageString(),
+    );
+    // store the current state and nonce.
+    await store.set(
+      OidcStoreNamespace.session,
+      key: OidcConstants_AuthParameters.state,
+      value: stateData.id,
+    );
+    await store.set(
+      OidcStoreNamespace.session,
+      key: OidcConstants_AuthParameters.nonce,
+      value: nonce,
+    );
+    final supportsOpenIdScope =
+        metadata.scopesSupported?.contains(OidcConstants_Scopes.openid) ??
+            false;
+
+    return OidcAuthorizeRequest(
+      state: stateData.id,
+      clientId: input.clientId,
+      redirectUri: input.redirectUri,
+      responseType: input.responseType,
+      scope: input.scope.contains(OidcConstants_Scopes.openid)
+          ? input.scope
+          : [
+              if (supportsOpenIdScope) OidcConstants_Scopes.openid,
+              ...input.scope,
+            ],
+      acrValues: input.acrValues,
+      display: input.display,
+      extra: input.extraParameters,
+      idTokenHint: input.idTokenHint,
+      loginHint: input.loginHint,
+      maxAge: input.maxAge,
+      nonce: nonce,
+      prompt: input.prompt,
+      // it isn't recommended to change the response_mode
+      // responseMode: OidcConstants_AuthorizeRequest_ResponseMode.query,
+      uiLocales: input.uiLocales,
+    );
+  }
+
+  /// starts the authorization flow, and returns the response.
+  ///
+  /// on android/ios/macos, if the `request.responseType` is set to anything other than `code`, it returns null.
   ///
   /// NOTE: this DOES NOT do token exchange.
   ///
@@ -132,12 +204,20 @@ class Oidc {
     final stateData = stateStr == null
         ? null
         : OidcAuthorizeState.fromStorageString(stateStr);
-    return _platform.getAuthorizationResponse(
-      metadata,
-      request,
-      store,
-      stateData,
-      options,
-    );
+    try {
+      return _platform.getAuthorizationResponse(
+        metadata,
+        request,
+        store,
+        stateData,
+        options,
+      );
+    } catch (e, st) {
+      throw OidcException(
+        'Failed to authorize user',
+        internalException: e,
+        internalStackTrace: st,
+      );
+    }
   }
 }

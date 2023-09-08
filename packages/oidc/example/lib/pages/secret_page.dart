@@ -28,6 +28,10 @@ class SecretPage extends StatelessWidget {
             },
             child: const Text('back to home'),
           ),
+          ElevatedButton(
+            onPressed: app_state.manager.logout,
+            child: const Text('Logout'),
+          ),
           const Divider(),
           Text('user id: ${user.uid}'),
           const Divider(),

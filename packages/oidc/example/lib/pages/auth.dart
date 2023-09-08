@@ -47,7 +47,75 @@ class _AuthPageState extends State<AuthPage> {
           ElevatedButton(
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
-              final result = await app_state.manager.loginAuthorizationCodeFlow(
+              try {
+                final result =
+                    await app_state.manager.loginAuthorizationCodeFlow(
+                  // final result = await app_state.manager.loginImplicitFlow(
+                  originalUri: parsedOriginalUri ?? Uri.parse('/'),
+                  //store any arbitrary data, here we store the authorization
+                  //start time.
+                  extraStateData: DateTime.now().toIso8601String(),
+                  // this translates to the `scope` parameter:  "openid profile"
+                  // scopeOverride: [
+                  //   // defaultScopes is [openid]
+                  //   ...OidcUserManagerSettings.defaultScopes,
+                  //   OidcConstants_Scopes.profile,
+                  // ],
+                  // login options.
+                  promptOverride: ['login'],
+                  options: const OidcAuthorizePlatformSpecificOptions(
+                    web: OidcAuthorizePlatformOptions_Web(
+                      navigationMode:
+                          OidcAuthorizePlatformOptions_Web_NavigationMode
+                              .newPage,
+                      popupHeight: 800,
+                      popupWidth: 730,
+                    ),
+                    // these settings are from https://pub.dev/packages/flutter_appauth.
+                    android: OidcAuthorizePlatformOptions_AppAuth(
+                      allowInsecureConnections: true,
+                      preferEphemeralSession: true,
+                    ),
+                    ios: OidcAuthorizePlatformOptions_AppAuth(
+                      allowInsecureConnections: true,
+                      preferEphemeralSession: true,
+                    ),
+                    macos: OidcAuthorizePlatformOptions_AppAuth(
+                      allowInsecureConnections: true,
+                      preferEphemeralSession: true,
+                    ),
+                  ),
+                );
+
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'loginAuthorizationCodeFlow returned user id: ${result?.uid}',
+                    ),
+                  ),
+                );
+              } catch (e) {
+                app_state.exampleLogger.severe(e.toString());
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'loginAuthorizationCodeFlow failed!',
+                    ),
+                  ),
+                );
+              }
+            },
+            child: const Text('Start Auth code flow'),
+          ),
+          const Divider(),
+          ElevatedButton(
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+
+              // ignore: deprecated_member_use
+              final result = await app_state.manager.loginImplicitFlow(
+                responseType: OidcConstants_AuthorizationEndpoint_ResponseType
+                    .idToken_Token,
                 originalUri: parsedOriginalUri ?? Uri.parse('/'),
                 //store any arbitrary data, here we store the authorization
                 //start time.
@@ -62,7 +130,7 @@ class _AuthPageState extends State<AuthPage> {
                 options: const OidcAuthorizePlatformSpecificOptions(
                   web: OidcAuthorizePlatformOptions_Web(
                     navigationMode:
-                        OidcAuthorizePlatformOptions_Web_NavigationMode.newPage,
+                        OidcAuthorizePlatformOptions_Web_NavigationMode.popup,
                     popupHeight: 800,
                     popupWidth: 730,
                   ),
@@ -90,7 +158,7 @@ class _AuthPageState extends State<AuthPage> {
                 ),
               );
             },
-            child: const Text('Start Auth code flow'),
+            child: const Text('Start Implicit flow'),
           ),
         ],
       ),

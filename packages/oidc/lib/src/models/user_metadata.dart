@@ -65,7 +65,10 @@ class OidcUserMetadata extends JsonBasedResponse {
   final List<String>? scope;
 
   ///
-  @JsonKey(name: OidcConstants_AuthParameters.expiresIn)
+  @JsonKey(
+    name: OidcConstants_AuthParameters.expiresIn,
+    readValue: OidcInternalUtilities.readDurationSeconds,
+  )
   final Duration? expiresIn;
 
   /// The start date of calculating [expiresIn].

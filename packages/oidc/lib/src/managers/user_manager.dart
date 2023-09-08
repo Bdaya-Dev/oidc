@@ -112,9 +112,14 @@ class OidcUserManager {
     OidcAuthorizePlatformSpecificOptions? options,
   }) async {
     _ensureInit();
+    await _cleanUpStore(toDelete: {
+      OidcStoreNamespace.session,
+      OidcStoreNamespace.state,
+      OidcStoreNamespace.secureTokens,
+    });
     final doc = discoveryDocument;
     options ??= const OidcAuthorizePlatformSpecificOptions();
-    final simpleReq = OidcSimpleAuthorizationCodeRequest(
+    final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
       redirectUri: redirectUriOverride ?? settings.redirectUri,
@@ -153,16 +158,113 @@ class OidcUserManager {
 
     return _handleSuccessfulAuthResponse(
       response: response,
+      grantType: OidcConstants_GrantType.authorizationCode,
+    );
+  }
+
+  ///
+  @Deprecated('Implicit flow is deprecated due to security reasons.')
+  Future<OidcUser?> loginImplicitFlow({
+    required List<String> responseType,
+    Uri? redirectUriOverride,
+    Uri? originalUri,
+    List<String>? scopeOverride,
+    List<String>? promptOverride,
+    List<String>? uiLocalesOverride,
+    String? displayOverride,
+    List<String>? acrValuesOverride,
+    dynamic extraStateData,
+    bool includeIdTokenHintFromCurrentUser = true,
+    String? idTokenHintOverride,
+    String? loginHint,
+    Duration? maxAgeOverride,
+    Map<String, dynamic>? extraParameters,
+    OidcAuthorizePlatformSpecificOptions? options,
+  }) async {
+    _ensureInit();
+    final doc = discoveryDocument;
+    options ??= const OidcAuthorizePlatformSpecificOptions();
+    final simpleReq = OidcSimpleImplicitFlowRequest(
+      responseType: responseType,
+      clientId: clientCredentials.clientId,
+      originalUri: originalUri,
+      redirectUri: redirectUriOverride ?? settings.redirectUri,
+      scope: scopeOverride ?? settings.scope,
+      prompt: promptOverride ?? settings.prompt,
+      display: displayOverride ?? settings.display,
+      extraStateData: extraStateData,
+      uiLocales: uiLocalesOverride ?? settings.uiLocales,
+      acrValues: acrValuesOverride ?? settings.acrValues,
+      idTokenHint: idTokenHintOverride ??
+          (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
+      loginHint: loginHint,
+      extraParameters: {
+        ...?settings.extraAuthenticationParameters,
+        ...?extraParameters,
+      },
+      maxAge: maxAgeOverride ?? settings.maxAge,
+    );
+    final request = await Oidc.prepareImplicitCodeFlowRequest(
+      input: simpleReq,
+      metadata: doc,
+      store: store,
+      options: options,
+    );
+
+    final response = await Oidc.getAuthorizationResponse(
+      metadata: discoveryDocument,
+      request: request,
+      store: store,
+      options: options,
+    );
+    if (response == null) {
+      return null;
+    }
+
+    return _handleSuccessfulAuthResponse(
+      response: response,
+      grantType: OidcConstants_GrantType.implicit,
     );
   }
 
   /// Logs out the current user and clears the cache.
   Future<void> logout() async {
-    // TODO(ahmednfwela): add logout.
+    final currentUser = this.currentUser;
+    if (currentUser == null) {
+      return;
+    }
+    await _cleanUpStore(toDelete: {
+      OidcStoreNamespace.state,
+      OidcStoreNamespace.session,
+      OidcStoreNamespace.secureTokens,
+    });
+    _userSubject.add(null);
+    final accessToken = currentUser.metadata.accessToken;
+    if (accessToken != null) {
+      final revokeEP = discoveryDocument.revocationEndpoint;
+      if (revokeEP != null) {
+        //
+        try {
+          await OidcInternalUtilities.sendWithClient(
+            client: httpClient,
+            request: http.Request(
+              'POST',
+              revokeEP.replace(queryParameters: {
+                ...revokeEP.queryParameters,
+                'token': accessToken,
+              }),
+            ),
+          );
+        } catch (e) {
+          //do nothing
+        }
+      }
+    }
   }
 
   Future<OidcUser?> _handleSuccessfulAuthResponse({
     required OidcAuthorizeResponse response,
+    required String grantType,
   }) async {
     final receivedStateKey = response.state;
     if (receivedStateKey == null) {
@@ -190,7 +292,18 @@ class OidcUserManager {
       );
     }
     final stateData = OidcAuthorizeState.fromStorageString(stateDataStr);
-
+    if (grantType == OidcConstants_GrantType.implicit) {
+      //
+      final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
+      if (implicitTokenResponse.accessToken != null ||
+          implicitTokenResponse.idToken != null) {
+        return _handleTokenResponse(
+          response: implicitTokenResponse,
+          nonce: stateData.nonce,
+          refDate: DateTime.now().toUtc(),
+        );
+      }
+    }
     final doc = discoveryDocument;
     final tokenEndPoint = doc.tokenEndpoint;
     if (tokenEndPoint == null) {
@@ -209,7 +322,7 @@ class OidcUserManager {
       credentials: clientCredentials,
       request: OidcTokenRequest.authorizationCode(
         redirectUri: stateData.redirectUri,
-        codeVerifier: stateData.codeVerifier,
+        codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
         extra: stateData.extraTokenParams,
         code: code,
         clientId: clientCredentials.clientId,
@@ -447,7 +560,12 @@ class OidcUserManager {
     if (resp == null) {
       return;
     }
-    await _handleSuccessfulAuthResponse(response: resp);
+    await _handleSuccessfulAuthResponse(
+      response: resp,
+      grantType: resp.code == null
+          ? OidcConstants_GrantType.implicit
+          : OidcConstants_GrantType.authorizationCode,
+    );
   }
 
   /// true if [init] has been called with no exceptions.
