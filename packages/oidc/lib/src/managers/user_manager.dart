@@ -42,9 +42,10 @@ class OidcUserManager {
     required this.store,
     required this.settings,
     this.httpClient,
-    this.keyStore,
+    JsonWebKeyStore? keyStore,
   })  : discoveryDocumentUri = null,
-        _discoveryDocument = discoveryDocument;
+        _discoveryDocument = discoveryDocument,
+        keyStore = keyStore ?? JsonWebKeyStore();
 
   /// Create a new UserManager that delays getting the discovery document until
   /// [init] is called.
@@ -54,8 +55,8 @@ class OidcUserManager {
     required this.store,
     required this.settings,
     this.httpClient,
-    this.keyStore,
-  });
+    JsonWebKeyStore? keyStore,
+  }) : keyStore = keyStore ?? JsonWebKeyStore();
 
   /// The client authentication information.
   final OidcClientAuthentication clientCredentials;
@@ -67,10 +68,10 @@ class OidcUserManager {
   final OidcStore store;
 
   /// The id_token verification options.
-  final JsonWebKeyStore? keyStore;
+  final JsonWebKeyStore keyStore;
 
   /// The settings used in this manager.
-  final UserManagerSettings settings;
+  final OidcUserManagerSettings settings;
 
   final _userSubject = BehaviorSubject<OidcUser?>.seeded(null);
 
@@ -93,7 +94,7 @@ class OidcUserManager {
   ///
   /// [originalUri] is the uri you want to be redirected to after authentication is done,
   /// if null, it defaults to `redirectUri`.
-  Future<void> loginAuthorizationCodeFlow({
+  Future<OidcUser?> loginAuthorizationCodeFlow({
     Uri? redirectUriOverride,
     Uri? originalUri,
     List<String>? scopeOverride,
@@ -147,15 +148,19 @@ class OidcUserManager {
       options: options,
     );
     if (response == null) {
-      return;
+      return null;
     }
 
-    await _handleSuccessfulAuthResponse(
+    return _handleSuccessfulAuthResponse(
       response: response,
     );
   }
 
-  Future<void> _handleSuccessfulAuthResponse({
+  Future<void> signout() async {
+    
+  }
+
+  Future<OidcUser?> _handleSuccessfulAuthResponse({
     required OidcAuthorizeResponse response,
   }) async {
     final receivedStateKey = response.state;
@@ -210,14 +215,14 @@ class OidcUserManager {
       ),
       client: httpClient,
     );
-    await _handleTokenResponse(
+    return _handleTokenResponse(
       response: tokenResp,
       nonce: stateData.nonce,
       refDate: DateTime.now().toUtc(),
     );
   }
 
-  Future<void> _handleTokenResponse({
+  Future<OidcUser?> _handleTokenResponse({
     required OidcTokenResponse response,
     required String? nonce,
     required DateTime? refDate,
@@ -247,10 +252,10 @@ class OidcUserManager {
         'Server returned a wrong id_token nonce, might be a replay attack.',
       );
     }
-    await _handleUser(user);
+    return _handleUser(user);
   }
 
-  Future<void> _handleUser(OidcUser user) async {
+  Future<OidcUser?> _handleUser(OidcUser user) async {
     final errors = user.parsedToken.claims
         .validate(
           clientId: clientCredentials.clientId,
@@ -268,6 +273,7 @@ class OidcUserManager {
         },
       );
       _userSubject.add(user);
+      return user;
     } else {
       for (final element in errors) {
         _logger.fine(
@@ -284,6 +290,7 @@ class OidcUserManager {
         },
       );
     }
+    return null;
   }
 
   Future<void> _cleanUpStore({
@@ -312,6 +319,7 @@ class OidcUserManager {
   /// Then trys to get it from the network.
   Future<void> _ensureDiscoveryDocument() async {
     final uri = discoveryDocumentUri;
+
     if (_discoveryDocument != null) {
       return;
     }
@@ -405,9 +413,8 @@ class OidcUserManager {
       await _handleTokenResponse(
         response: tokenResponse,
         nonce: null,
-        refDate: OidcInternalUtilities.readDateTime(
-          tokens,
-          OidcConstants_Store.expiresInReferenceDate,
+        refDate: OidcInternalUtilities.dateTimeFromJson(
+          tokens[OidcConstants_Store.expiresInReferenceDate],
         ),
       );
     }
@@ -451,7 +458,12 @@ class OidcUserManager {
   Future<void> init() async {
     try {
       _hasInit = true;
+      await store.init();
       await _ensureDiscoveryDocument();
+      final jwksUri = discoveryDocument.jwksUri;
+      if (jwksUri != null) {
+        keyStore.addKeySetUrl(jwksUri);
+      }
       //load cached tokens if they exist.
       await _loadCachedTokens();
       //get the authorization response

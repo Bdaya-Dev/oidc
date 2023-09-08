@@ -1,0 +1,1 @@
+Thanks to https://github.com/Soluto/oidc-server-mock

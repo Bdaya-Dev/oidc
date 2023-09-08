@@ -1,3 +1,5 @@
+// ignore_for_file: lines_longer_than_80_chars
+
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_core/src/models/json_based_object.dart';
@@ -18,6 +20,7 @@ class OidcErrorResponse extends JsonBasedResponse {
     this.errorDescription,
     this.errorUri,
     this.iss,
+    this.sessionState,
     this.state,
   });
 
@@ -50,6 +53,16 @@ class OidcErrorResponse extends JsonBasedResponse {
   /// Set to the value received from the Client.
   @JsonKey(name: OidcConstants_AuthParameters.state)
   final String? state;
+
+  /// Session State.
+  ///
+  /// JSON string that represents the End-User's login state at the OP.
+  ///
+  /// It MUST NOT contain the space (" ") character. This value is opaque to the RP.
+  ///
+  /// This is REQUIRED if session management is supported.
+  @JsonKey(name: OidcConstants_AuthParameters.sessionState)
+  final String? sessionState;
 
   /// OPTIONAL.
   ///

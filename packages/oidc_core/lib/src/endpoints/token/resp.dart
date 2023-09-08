@@ -75,7 +75,7 @@ class OidcTokenResponse extends JsonBasedResponse {
   /// NOT WITHIN SPEC, but some Identity Providers include this.
   @JsonKey(
     name: 'expires_at',
-    readValue: OidcInternalUtilities.readDateTime,
+    fromJson: OidcInternalUtilities.dateTimeFromJson,
   )
   final DateTime? expiresAt;
 }

@@ -115,7 +115,7 @@ class Oidc {
   ///
   /// NOTE: this DOES NOT do token exchange.
   ///
-  /// consider using [OidcUtils.getProviderMetadata] to get the [metadata] parameter if you don't have it.
+  /// consider using [OidcEndpoints.getProviderMetadata] to get the [metadata] parameter if you don't have it.
   static Future<OidcAuthorizeResponse?> getAuthorizationResponse({
     required OidcProviderMetadata metadata,
     required OidcAuthorizeRequest request,

@@ -65,7 +65,7 @@ class OidcAuthorizeState extends OidcState {
 
   /// The uri to go back to after the page in `redirectUri`
   /// processes the response.
-  @JsonKey(name: 'original_uri')
+  @JsonKey(name: OidcConstants_Store.originalUri)
   final Uri? originalUri;
 
   @JsonKey(name: OidcConstants_AuthParameters.nonce)

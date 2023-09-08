@@ -1,0 +1,20 @@
+name: oidc_default_store
+description: The default OidcStore implementation for package:oidc
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_secure_storage: ^9.0.0
+  oidc_core: ^0.2.0
+  shared_preferences: ^2.2.1
+  universal_html: ^2.2.3
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mocktail: ^0.3.0
+  very_good_analysis: ^5.0.0

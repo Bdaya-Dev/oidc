@@ -4,8 +4,8 @@ enum OidcStoreNamespace {
 
   /// Stores states.
   ///
-  /// on web, this MUST be stored in localStorage, since the html page has no
-  /// access to the `OidcStore` object.
+  /// on web, this MUST be stored in localStorage for the `samePage` navigation mode to work,
+  /// since the html page has no access to the `OidcStore` object.
   ///
   /// the key MUST be in the format:
   /// `oidc-state-{key}`
@@ -24,6 +24,9 @@ enum OidcStoreNamespace {
 }
 
 abstract interface class OidcStore {
+  Future<void> init();
+  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace);
+
   Future<void> set(
     OidcStoreNamespace namespace, {
     required String key,
@@ -35,14 +38,13 @@ abstract interface class OidcStore {
     required String key,
   });
 
-  Future<String?> remove(
+  Future<void> remove(
     OidcStoreNamespace namespace, {
     required String key,
   });
 
-  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace);
 
-  Future<Map<String, String>> setMany(
+  Future<void> setMany(
     OidcStoreNamespace namespace, {
     required Map<String, String> values,
   });

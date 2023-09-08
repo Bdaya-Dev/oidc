@@ -617,6 +617,7 @@ class OidcConstants_Store {
   static const expiresAt = 'expiresAt';
   static const expiresInReferenceDate = 'expiresInReferenceDate';
   static const currentUserMetadata = 'currentUser';
+  static const originalUri = 'original_uri';
   // static const latestToken = 'latest';
   // static const idToken = 'id_token';
   // static const accessToken = 'access_token';

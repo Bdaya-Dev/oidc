@@ -11,7 +11,9 @@ part 'user_metadata.g.dart';
   createFactory: true,
   explicitToJson: true,
   createFieldMap: true,
-  converters: OidcInternalUtilities.commonConverters,
+  converters: [
+    OidcDurationSecondsConverter(),
+  ],
   constructor: '_',
 )
 class OidcUserMetadata extends JsonBasedResponse {
@@ -32,6 +34,7 @@ class OidcUserMetadata extends JsonBasedResponse {
           src: const {},
         );
 
+  /// All the used field keys.
   static final fieldKeys = _$OidcUserMetadataFieldMap.values.toSet();
 
   ///
@@ -54,7 +57,11 @@ class OidcUserMetadata extends JsonBasedResponse {
   final String? tokenType;
 
   ///
-  @JsonKey(name: OidcConstants_AuthParameters.scope)
+  @JsonKey(
+    name: OidcConstants_AuthParameters.scope,
+    fromJson: OidcInternalUtilities.splitSpaceDelimitedString,
+    toJson: OidcInternalUtilities.joinSpaceDelimitedList,
+  )
   final List<String>? scope;
 
   ///
@@ -62,7 +69,11 @@ class OidcUserMetadata extends JsonBasedResponse {
   final Duration? expiresIn;
 
   /// The start date of calculating [expiresIn].
-  @JsonKey(name: OidcConstants_Store.expiresInReferenceDate)
+  @JsonKey(
+    name: OidcConstants_Store.expiresInReferenceDate,
+    fromJson: OidcInternalUtilities.dateTimeFromJson,
+    toJson: OidcInternalUtilities.dateTimeToJson,
+  )
   final DateTime? expiresInReferenceDate;
 
   /// Calculates the expirey date of the access token from [expiresIn] and [expiresInReferenceDate].

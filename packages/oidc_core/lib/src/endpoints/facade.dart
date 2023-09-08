@@ -96,12 +96,16 @@ class OidcEndpoints {
     required Uri responseUri,
     required OidcStore store,
   }) async {
-    var stateKey = responseUri.queryParameters[OidcConstants_AuthParameters.state];
+    var stateKey =
+        responseUri.queryParameters[OidcConstants_AuthParameters.state];
+    var queryParameters = responseUri.queryParameters;
+
     if (stateKey is! String) {
       //TODO: test this.
       final fragmentUri = Uri(query: responseUri.fragment);
       stateKey =
           fragmentUri.queryParameters[OidcConstants_AuthParameters.state];
+      queryParameters = fragmentUri.queryParameters;
     }
     if (stateKey is! String) {
       return null;
@@ -116,9 +120,7 @@ class OidcEndpoints {
       );
     }
 
-    return OidcAuthorizeResponse.fromJson(
-      jsonDecode(stateStr) as Map<String, dynamic>,
-    );
+    return OidcAuthorizeResponse.fromJson(queryParameters);
   }
 
   /// Sends a token exchange request

@@ -19,9 +19,7 @@ OidcTokenResponse _$OidcTokenResponseFromJson(Map<String, dynamic> json) =>
       refreshToken: json['refresh_token'] as String?,
       expiresIn: _$JsonConverterFromJson<int, Duration>(
           json['expires_in'], const OidcDurationSecondsConverter().fromJson),
-      expiresAt: _$JsonConverterFromJson<int, DateTime>(
-          OidcInternalUtilities.readDateTime(json, 'expires_at'),
-          const OidcDateTimeEpochConverter().fromJson),
+      expiresAt: OidcInternalUtilities.dateTimeFromJson(json['expires_at']),
     );
 
 Value? _$JsonConverterFromJson<Json, Value>(

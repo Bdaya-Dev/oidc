@@ -9,13 +9,12 @@ part of 'user_metadata.dart';
 OidcUserMetadata _$OidcUserMetadataFromJson(Map<String, dynamic> json) =>
     OidcUserMetadata._(
       src: readSrcMap(json, '') as Map<String, dynamic>,
-      scope:
-          (json['scope'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      scope: OidcInternalUtilities.splitSpaceDelimitedString(
+          json['scope'] as String?),
       expiresIn: _$JsonConverterFromJson<int, Duration>(
           json['expires_in'], const OidcDurationSecondsConverter().fromJson),
-      expiresInReferenceDate: _$JsonConverterFromJson<int, DateTime>(
-          json['expiresInReferenceDate'],
-          const OidcDateTimeEpochConverter().fromJson),
+      expiresInReferenceDate: OidcInternalUtilities.dateTimeFromJson(
+          json['expiresInReferenceDate']),
       accessToken: json['access_token'] as String?,
       refreshToken: json['refresh_token'] as String?,
       tokenType: json['token_type'] as String?,
@@ -35,12 +34,11 @@ Map<String, dynamic> _$OidcUserMetadataToJson(OidcUserMetadata instance) =>
       'access_token': instance.accessToken,
       'refresh_token': instance.refreshToken,
       'token_type': instance.tokenType,
-      'scope': instance.scope,
+      'scope': OidcInternalUtilities.joinSpaceDelimitedList(instance.scope),
       'expires_in': _$JsonConverterToJson<int, Duration>(
           instance.expiresIn, const OidcDurationSecondsConverter().toJson),
-      'expiresInReferenceDate': _$JsonConverterToJson<int, DateTime>(
-          instance.expiresInReferenceDate,
-          const OidcDateTimeEpochConverter().toJson),
+      'expiresInReferenceDate':
+          OidcInternalUtilities.dateTimeToJson(instance.expiresInReferenceDate),
     };
 
 Value? _$JsonConverterFromJson<Json, Value>(

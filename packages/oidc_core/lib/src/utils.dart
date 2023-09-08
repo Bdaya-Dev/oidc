@@ -40,8 +40,14 @@ class OidcInternalUtilities {
     return value.split(' ');
   }
 
-  static DateTime? readDateTime(Map<dynamic, dynamic> src, String key) {
-    final rawValue = src[key];
+  static String? dateTimeToJson(DateTime? value) {
+    if (value == null) {
+      return null;
+    }
+    return value.toIso8601String();
+  }
+
+  static DateTime? dateTimeFromJson(dynamic rawValue ) {    
     if (rawValue == null) {
       return null;
     }

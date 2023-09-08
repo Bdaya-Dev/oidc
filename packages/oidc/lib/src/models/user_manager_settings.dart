@@ -2,12 +2,12 @@ import 'package:oidc/oidc.dart';
 import 'package:oidc_core/oidc_core.dart';
 
 ///
-class UserManagerSettings {
+class OidcUserManagerSettings {
   /// The default scopes
   static const defaultScopes = ['openid'];
 
   ///
-  const UserManagerSettings({
+  const OidcUserManagerSettings({
     required this.redirectUri,
     this.uiLocales,
     this.scope = defaultScopes,

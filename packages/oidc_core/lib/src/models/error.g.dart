@@ -15,5 +15,6 @@ OidcErrorResponse _$OidcErrorResponseFromJson(Map<String, dynamic> json) =>
           ? null
           : Uri.parse(json['error_uri'] as String),
       iss: json['iss'] == null ? null : Uri.parse(json['iss'] as String),
+      sessionState: json['session_state'] as String?,
       state: json['state'] as String?,
     );
