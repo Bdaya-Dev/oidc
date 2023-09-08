@@ -1,6 +1,7 @@
 name: oidc_default_store
 description: The default OidcStore implementation for package:oidc
 version: 0.1.0+2
+repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_default_store
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

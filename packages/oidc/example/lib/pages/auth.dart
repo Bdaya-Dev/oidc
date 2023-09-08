@@ -39,7 +39,7 @@ class _AuthPageState extends State<AuthPage> {
           ),
           ElevatedButton(
             onPressed: () {
-              //TODO:
+              // TODO(ahmednfwela): add password login.
             },
             child: const Text('login with Resource owner grant'),
           ),

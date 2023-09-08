@@ -156,8 +156,9 @@ class OidcUserManager {
     );
   }
 
-  Future<void> signout() async {
-    
+  /// Logs out the current user and clears the cache.
+  Future<void> logout() async {
+    // TODO(ahmednfwela): add logout.
   }
 
   Future<OidcUser?> _handleSuccessfulAuthResponse({

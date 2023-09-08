@@ -1,3 +1,5 @@
+// ignore_for_file: lines_longer_than_80_chars
+
 enum OidcStoreNamespace {
   /// Stores ephermal information, such as the current state id and nonce.
   session('session'),

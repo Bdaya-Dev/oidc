@@ -6,7 +6,7 @@ linter:
     sort_pub_dependencies: false
     sort_constructors_first: false
     lines_longer_than_80_chars: false
-
+    require_trailing_commas: false
 analyzer:
   errors:
     invalid_use_of_internal_member: ignore

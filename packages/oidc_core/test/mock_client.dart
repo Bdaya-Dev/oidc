@@ -15,7 +15,7 @@ Future<Response> _handleRequest(Request request) async {
     return Response(_googleProviderMetadata, 304);
   }
   if (url.pathSegments.first == 'token') {
-    //TODO: add other types of responses based on request.
+    // TODO(ahmednfwela): add other types of responses based on request.
     return Response(_tokenResponse, 200);
   }
   throw UnimplementedError(

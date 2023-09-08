@@ -3,11 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
+import 'package:oidc_example/pages/auth.dart';
 import 'package:oidc_example/pages/home.dart';
-import 'package:oidc_example/pages/secret-page.dart';
+import 'package:oidc_example/pages/secret_page.dart';
 import 'package:oidc_example/state.dart' as app_state;
-
-import 'pages/auth.dart';
 
 // you must run this app with --web-port 22433
 
@@ -61,7 +60,7 @@ void main() {
                 return null;
               },
               builder: (context, state) => const AuthPage(),
-            )
+            ),
           ],
         ),
         builder: (context, child) {

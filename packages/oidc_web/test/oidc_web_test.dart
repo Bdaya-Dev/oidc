@@ -16,11 +16,7 @@ void main() {
     test('can be registered', () {
       OidcWeb.registerWith();
       expect(OidcPlatform.instance, isA<OidcWeb>());
-    });
-
-    test('getPlatformName returns correct name', () async {
-      // final name = await oidc.getPlatformName();
-      // expect(name, equals(kPlatformName));
+      expect(OidcPlatform.instance, oidc);
     });
   });
 }
