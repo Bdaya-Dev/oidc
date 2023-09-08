@@ -1,3 +1,7 @@
+## 0.2.0
+
+ - Working authorization code flow, without refresh_token support.
+
 ## 0.1.0+2
 
  - Update a dependency to the latest release.

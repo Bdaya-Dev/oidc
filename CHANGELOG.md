@@ -15,6 +15,57 @@ Packages with breaking changes:
 
 Packages with other changes:
 
+ - [`oidc_android` - `v0.2.0`](#oidc_android---v020)
+ - [`oidc_ios` - `v0.2.0`](#oidc_ios---v020)
+ - [`oidc_windows` - `v0.2.0`](#oidc_windows---v020)
+ - [`oidc` - `v0.2.0`](#oidc---v020)
+ - [`oidc_linux` - `v0.2.0`](#oidc_linux---v020)
+ - [`oidc_web` - `v0.2.0`](#oidc_web---v020)
+ - [`oidc_macos` - `v0.2.0`](#oidc_macos---v020)
+
+---
+
+#### `oidc_android` - `v0.2.0`
+
+ - Working authorization code flow, without refresh_token support.
+
+#### `oidc_ios` - `v0.2.0`
+
+ - Working authorization code flow, without refresh_token support.
+
+#### `oidc_windows` - `v0.2.0`
+
+ - Working authorization code flow, without refresh_token support.
+
+#### `oidc` - `v0.2.0`
+
+ - Working authorization code flow, without refresh_token support.
+
+#### `oidc_linux` - `v0.2.0`
+
+ - Working authorization code flow, without refresh_token support.
+
+#### `oidc_web` - `v0.2.0`
+
+ - Working authorization code flow, without refresh_token support.
+
+#### `oidc_macos` - `v0.2.0`
+
+ - Working authorization code flow, without refresh_token support.
+
+
+## 2023-09-08
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
  - [`oidc_core` - `v0.3.0`](#oidc_core---v030)
  - [`oidc` - `v0.1.1+1`](#oidc---v0111)
  - [`oidc_android` - `v0.1.0+2`](#oidc_android---v0102)

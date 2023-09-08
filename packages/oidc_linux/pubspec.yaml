@@ -1,6 +1,6 @@
 name: oidc_linux
 description: Linux implementation of the oidc plugin
-version: 0.1.0+2
+version: 0.2.0
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_linux
 
 environment:
