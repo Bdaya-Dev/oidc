@@ -1,3 +1,7 @@
+## 0.3.0
+
+ - Working authorization code flow, without refresh_token support.
+
 ## 0.2.0
 
  - **FEAT**: added more helpers.
