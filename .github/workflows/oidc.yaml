@@ -157,17 +157,12 @@ jobs:
 
       - name: Flutter Doctor
         run: flutter doctor -v
-      - name: Setup Chrome
-        uses: browser-actions/setup-chrome@v1.2.0
-        with:
-          chrome-version: "1135562"
-      - run: chrome --version
       - name: Run Chromedriver
         run: |
-          git clone https://github.com/flutter/web_installers
+          git clone https://github.com/Bdaya-Dev/web_installers
           cd web_installers/packages/web_drivers
           dart pub get
-          dart lib/web_driver_installer.dart chromedriver --install-only --driver-version="114.0.5735.90"          
+          dart lib/web_driver_installer.dart chromedriver --install-only
           ./chromedriver/chromedriver --port=4444 &
 
       - name: Integration Tests
