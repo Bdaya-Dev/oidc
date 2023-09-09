@@ -101,8 +101,7 @@ bool _listsAreEqual(List<String> list1, List<String> list2) {
 }
 
 /// The default html page to display to the user.
-const oidcDefaultHtmlPage =
-    '''
+const oidcDefaultHtmlPage = '''
 <html>
 
 <head>

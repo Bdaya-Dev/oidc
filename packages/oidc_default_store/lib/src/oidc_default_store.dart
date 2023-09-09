@@ -144,14 +144,20 @@ class OidcDefaultStore implements OidcStore {
       case OidcStoreNamespace.secureTokens:
         // optimally we would make these operations concurrent, but due to this issue we can't.
         // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
-        final res = <String, String>{};
-        for (final k in keys) {
-          final v = await _secureStorage.read(key: _getKey(namespace, k));
-          if (v != null) {
-            res[k] = v;
+        try {
+          // secure storage might not be supported in all platforms,
+          // so we fallback to normal storage if that's the case.
+          final res = <String, String>{};
+          for (final k in keys) {
+            final v = await _secureStorage.read(key: _getKey(namespace, k));
+            if (v != null) {
+              res[k] = v;
+            }
           }
+          return res;
+        } catch (e) {
+          return _defaultGetMany(namespace, keys);
         }
-        return res;
       case OidcStoreNamespace.state:
         if (kIsWeb) {
           return keys
@@ -200,13 +206,17 @@ class OidcDefaultStore implements OidcStore {
 
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
-        // optimally we would make these operations concurrent, but due to this issue we can't.
-        // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
-        for (final entry in values.entries) {
-          await _secureStorage.write(
-            key: _getKey(namespace, entry.key),
-            value: entry.value,
-          );
+        try {
+          // optimally we would make these operations concurrent, but due to this issue we can't.
+          // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
+          for (final entry in values.entries) {
+            await _secureStorage.write(
+              key: _getKey(namespace, entry.key),
+              value: entry.value,
+            );
+          }
+        } catch (e) {
+          return _defaultSetMany(namespace, values);
         }
       case OidcStoreNamespace.state:
         if (kIsWeb) {
@@ -248,10 +258,14 @@ class OidcDefaultStore implements OidcStore {
     // final mappedKeys = keys.map((e) => _getKey(namespace, e)).toSet();
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
-        // optimally we would make these operations concurrent, but due to this issue we can't.
-        // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
-        for (final key in keys) {
-          await _secureStorage.delete(key: _getKey(namespace, key));
+        try {
+          // optimally we would make these operations concurrent, but due to this issue we can't.
+          // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
+          for (final key in keys) {
+            await _secureStorage.delete(key: _getKey(namespace, key));
+          }
+        } catch (e) {
+          await _defaultRemoveMany(namespace, keys);
         }
       case OidcStoreNamespace.state:
         if (kIsWeb) {
