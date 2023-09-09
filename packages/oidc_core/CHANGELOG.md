@@ -1,3 +1,7 @@
+## 0.3.1
+
+ - **FEAT**: initial version.
+
 ## 0.3.0
 
  - Working authorization code flow, without refresh_token support.

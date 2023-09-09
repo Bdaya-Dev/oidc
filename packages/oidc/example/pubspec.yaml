@@ -15,7 +15,7 @@ dependencies:
   logging: ^1.2.0
   oidc:
     path: ../
-  oidc_core: ^0.3.0
+  oidc_core: ^0.3.1
   oidc_default_store:
   url_strategy: ^0.2.0
   
