@@ -162,8 +162,8 @@ jobs:
           git clone https://github.com/Bdaya-Dev/web_installers --branch new-chromedriver-urls
           cd web_installers/packages/web_drivers
           dart pub get
-          dart lib/web_driver_installer.dart chromedriver --install-only
-          ./chromedriver/chromedriver --port=4444 &
+          dart lib/web_driver_installer.dart chromedriver &
+        # ./chromedriver/chromedriver --port=4444 &
 
       - name: Integration Tests
         run: flutter drive --driver test_driver/integration_test.dart --target integration_test/app_test.dart -d web-server --browser-name=chrome
