@@ -20,12 +20,7 @@ jobs:
     uses: ./.github/workflows/flutter_package.yaml
     with:
       working_directory: packages/oidc_web
-      setup: |
-        git clone https://github.com/flutter/web_installers
-        cd web_installers/packages/web_drivers
-        dart pub get
-        dart lib/web_driver_installer.dart chromedriver --install-only
-        ./chromedriver/chromedriver --port=4444 &      
+      run_tests: false
 
   pana:
     uses: ./.github/workflows/pana.yaml

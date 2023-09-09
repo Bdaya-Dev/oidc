@@ -54,8 +54,8 @@ on:
         default: "!*"
       run_tests:
         required: false
-        type: string
-        default: ""
+        type: boolean
+        default: true
 
 jobs:
   build:
@@ -94,15 +94,12 @@ jobs:
         run: flutter analyze ${{inputs.analyze_directories}}
 
       - name: 🧪 Run Tests        
-        if: "${{inputs.run_tests == ''}}"
+        if: ${{ inputs.run_tests }}
         run: very_good test -j ${{inputs.concurrency}} ${{(inputs.test_recursion && '--recursive') || ''}} ${{(inputs.test_optimization && '--optimization') || '--no-optimization'}} --coverage --test-randomize-ordering-seed random
         
-      - name: 🧪 Run Custom Tests
-        if: "${{inputs.run_tests != ''}}"
-        run: ${{inputs.run_tests}}
-
-      - name: Report to Codecov        
+      - name: Report to Codecov
         uses: codecov/codecov-action@v3
+        if: ${{ inputs.run_tests }}
         with:
           file: ${{inputs.working_directory}}/coverage/lcov.info
           fail_ci_if_error: false        
