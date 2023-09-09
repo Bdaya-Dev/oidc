@@ -14,19 +14,7 @@ import 'package:oidc_default_store/oidc_default_store.dart';
 //usually you would use a dependency injection library
 //and put these in a service.
 final exampleLogger = Logger('oidc.example');
-final initMemoizer = AsyncMemoizer<void>();
-Future<void> initApp() {
-  return initMemoizer.runOnce(() async {
-    manager.userChanges().listen((event) {
-      cachedAuthedUser.$ = event;
-      exampleLogger.info('User changed: ${event?.claims.toJson()}');
-    });
 
-    await manager.init();
-  });
-}
-
-final cachedAuthedUser = SharedValue<OidcUser?>(value: null);
 final manager = OidcUserManager.lazy(
   discoveryDocumentUri: OidcUtils.getWellKnownUriFromBase(
     Uri.parse('https://demo.duendesoftware.com'),
@@ -67,3 +55,16 @@ final manager = OidcUserManager.lazy(
                 : Uri(),
   ),
 );
+final initMemoizer = AsyncMemoizer<void>();
+Future<void> initApp() {
+  return initMemoizer.runOnce(() async {
+    manager.userChanges().listen((event) {
+      cachedAuthedUser.$ = event;
+      exampleLogger.info('User changed: ${event?.claims.toJson()}');
+    });
+
+    await manager.init();
+  });
+}
+
+final cachedAuthedUser = SharedValue<OidcUser?>(value: null);
