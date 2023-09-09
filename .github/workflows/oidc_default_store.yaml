@@ -6,15 +6,15 @@ concurrency:
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/oidc_default_store.yaml"
-      - "packages/oidc_default_store/**"
+    # paths:
+    #   - ".github/workflows/oidc_default_store.yaml"
+    #   - "packages/oidc_default_store/**"
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/oidc_default_store.yaml"
-      - "packages/oidc_default_store/**"
+    # paths:
+    #   - ".github/workflows/oidc_default_store.yaml"
+    #   - "packages/oidc_default_store/**"
 
 jobs:
   build:

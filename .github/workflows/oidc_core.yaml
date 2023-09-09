@@ -6,15 +6,15 @@ concurrency:
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/oidc_core.yaml"
-      - "packages/oidc_core/**"
+    # paths:
+    #   - ".github/workflows/oidc_core.yaml"
+    #   - "packages/oidc_core/**"
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/oidc_core.yaml"
-      - "packages/oidc_core/**"
+    # paths:
+    #   - ".github/workflows/oidc_core.yaml"
+    #   - "packages/oidc_core/**"
 
 jobs:
 
