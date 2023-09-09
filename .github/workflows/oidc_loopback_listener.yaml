@@ -26,7 +26,7 @@ jobs:
       min_coverage: 20
 
   pana:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
+    uses: ./.github/workflows/base/pana.yaml
     needs: build
     with:
       min_score: 100

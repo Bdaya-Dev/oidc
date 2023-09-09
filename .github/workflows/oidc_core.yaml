@@ -20,14 +20,13 @@ jobs:
 
   build:
     name: Dart Package workflow
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1
+    uses: ./.github/workflows/base/dart_package.yaml
     with:
-      dart_sdk: 3.1.0
       working_directory: packages/oidc_core
-      min_coverage: 20    
+      min_coverage: 20
 
   pana:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1    
+    uses: ./.github/workflows/base/pana.yaml
     needs: build
     with:
       min_score: 100

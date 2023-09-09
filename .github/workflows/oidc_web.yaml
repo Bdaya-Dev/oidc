@@ -18,14 +18,12 @@ on:
 
 jobs:
   build:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/flutter_package.yml@v1
+    uses: ./.github/workflows/base/flutter_package.yaml
     with:
-      flutter_channel: stable
-      flutter_version: 3.13.1
       working_directory: packages/oidc_web
 
   pana:
-    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
+    uses: ./.github/workflows/base/pana.yaml
     with:
       min_score: 100
 
