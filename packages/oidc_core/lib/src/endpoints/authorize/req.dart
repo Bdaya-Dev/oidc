@@ -6,7 +6,7 @@ import 'package:oidc_core/src/models/json_based_object.dart';
 part 'req.g.dart';
 
 /// A class that descripes an /authorize request.
-/// 
+///
 /// Note: this class does NO special logic.
 @JsonSerializable(
   createFactory: false,

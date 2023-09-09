@@ -8,9 +8,12 @@ part of 'resp.dart';
 
 OidcAuthorizeResponse _$OidcAuthorizeResponseFromJson(
         Map<String, dynamic> json) =>
-    OidcAuthorizeResponse(
+    OidcAuthorizeResponse._(
       src: readSrcMap(json, '') as Map<String, dynamic>,
       codeVerifier: json['code_verifier'] as String?,
+      redirectUri: json['redirect_uri'] == null
+          ? null
+          : Uri.parse(json['redirect_uri'] as String),
       code: json['code'] as String?,
       sessionState: json['session_state'] as String?,
       state: json['state'] as String?,

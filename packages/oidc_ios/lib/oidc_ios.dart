@@ -50,8 +50,8 @@ class OidcIOS extends OidcPlatform {
         promptValues: request.prompt,
         scopes: request.scope,
         responseMode: request.responseMode,
-        allowInsecureConnections: options.android.allowInsecureConnections,
-        preferEphemeralSession: options.android.preferEphemeralSession,
+        allowInsecureConnections: options.ios.allowInsecureConnections,
+        preferEphemeralSession: options.ios.preferEphemeralSession,
       ),
     );
     if (resp == null) {
@@ -61,7 +61,8 @@ class OidcIOS extends OidcPlatform {
       OidcConstants_AuthParameters.code: resp.authorizationCode,
       OidcConstants_AuthParameters.codeVerifier: resp.codeVerifier,
       OidcConstants_AuthParameters.nonce: resp.nonce,
-            // add state here since appauth handles state itself
+      OidcConstants_AuthParameters.redirectUri: request.redirectUri,
+      // add state here since appauth handles state itself
       OidcConstants_AuthParameters.state: request.state,
       ...?resp.authorizationAdditionalParameters,
     });

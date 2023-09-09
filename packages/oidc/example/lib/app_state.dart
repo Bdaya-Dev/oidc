@@ -43,13 +43,27 @@ final manager = OidcUserManager.lazy(
   // keyStore: JsonWebKeyStore(),
   settings: OidcUserManagerSettings(
     uiLocales: ['ar'],
+    // scopes supported by the provider and needed by the client.
     scope: ['openid', 'profile', 'email', 'offline_access', 'api'],
-
-    /// you must run this app with --web-port 22433
     redirectUri: kIsWeb
+        // this url must be an actual html page.
+        // see the file in /web/redirect.html for an example.
+        //
+        // for debugging in flutter, you must run this app with --web-port 22433
         ? Uri.parse('http://localhost:22433/redirect.html')
         : Platform.isAndroid
+            // scheme: reverse domain name notation of your pacakge name.
+            // path: anything.
             ? Uri.parse('com.bdayadev.oidc.example:/oauth2redirect')
-            : Uri(),
+            : Platform.isWindows || Platform.isLinux
+                // using port 0 means that we don't care which port is used,
+                // and a random unused port will be assigned.
+                //
+                // this is safer than passing a port yourself.
+                //
+                // note that you can also pass a path like /redirect,
+                // but it's completely optional.
+                ? Uri.parse('http://localhost:0')
+                : Uri(),
   ),
 );

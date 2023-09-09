@@ -26,7 +26,7 @@ class OidcAuthorizeState extends OidcState {
     required this.clientId,
     required this.extraTokenParams,
     required this.webLaunchMode,
-    super.data,
+    required super.data,
   });
 
   ///

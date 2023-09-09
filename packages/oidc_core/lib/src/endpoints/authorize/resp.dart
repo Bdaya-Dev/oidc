@@ -14,12 +14,14 @@ const _implicitWarning =
   createFactory: true,
   createToJson: false,
   converters: OidcInternalUtilities.commonConverters,
+  constructor: '_',
 )
 class OidcAuthorizeResponse extends JsonBasedResponse {
   ///
-  const OidcAuthorizeResponse({
+  const OidcAuthorizeResponse._({
     required super.src,
-    required this.codeVerifier,
+    this.codeVerifier,
+    this.redirectUri,
     this.code,
     this.sessionState,
     this.state,
@@ -65,6 +67,8 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   final String? code;
   @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
   final String? codeVerifier;
+  @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
+  final Uri? redirectUri;
   @JsonKey(
     name: OidcConstants_AuthParameters.scope,
     fromJson: OidcInternalUtilities.splitSpaceDelimitedString,

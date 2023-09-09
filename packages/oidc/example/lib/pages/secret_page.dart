@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:oidc_example/state.dart' as app_state;
+import 'package:oidc_example/app_state.dart' as app_state;
 
 class SecretPage extends StatelessWidget {
   const SecretPage({super.key});

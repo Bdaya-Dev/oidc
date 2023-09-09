@@ -9,9 +9,10 @@ part 'resp.g.dart';
   createFactory: true,
   createToJson: false,
   converters: OidcInternalUtilities.commonConverters,
+  constructor: '_',
 )
 class OidcTokenResponse extends JsonBasedResponse {
-  const OidcTokenResponse({
+  const OidcTokenResponse._({
     required super.src,
     this.tokenType,
     this.accessToken,

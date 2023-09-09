@@ -1,13 +1,12 @@
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
+import 'package:oidc_example/app_state.dart' as app_state;
 import 'package:oidc_example/pages/auth.dart';
 import 'package:oidc_example/pages/home.dart';
 import 'package:oidc_example/pages/secret_page.dart';
-import 'package:oidc_example/state.dart' as app_state;
 import 'package:url_strategy/url_strategy.dart';
 // you must run this app with --web-port 22433
 
@@ -35,13 +34,13 @@ void main() {
               path: '/secret-route',
               redirect: (context, state) {
                 final user = app_state.cachedAuthedUser.of(context);
-                
+
                 if (user == null) {
                   return Uri(
                     path: '/auth',
                     queryParameters: {
                       // Note that this requires setPathUrlStrategy(); from `package:url_strategy`
-                      // and set 
+                      // and set
                       OidcConstants_Store.originalUri: state.uri.toString(),
                     },
                   ).toString();

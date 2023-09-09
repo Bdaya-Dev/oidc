@@ -321,7 +321,7 @@ class OidcUserManager {
       tokenEndpoint: tokenEndPoint,
       credentials: clientCredentials,
       request: OidcTokenRequest.authorizationCode(
-        redirectUri: stateData.redirectUri,
+        redirectUri: response.redirectUri ?? stateData.redirectUri,
         codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
         extra: stateData.extraTokenParams,
         code: code,

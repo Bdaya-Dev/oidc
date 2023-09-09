@@ -45,7 +45,6 @@ abstract interface class OidcStore {
     required String key,
   });
 
-
   Future<void> setMany(
     OidcStoreNamespace namespace, {
     required Map<String, String> values,

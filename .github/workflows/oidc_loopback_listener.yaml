@@ -1,0 +1,33 @@
+name: oidc_loopback_listener
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/oidc_loopback_listener.yaml"
+      - "packages/oidc_loopback_listener/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/oidc_loopback_listener.yaml"
+      - "packages/oidc_loopback_listener/**"
+
+jobs:
+  build:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/dart_package.yml@v1
+    with:
+      platform: vm
+      dart_sdk: 3.1.0
+      working_directory: packages/oidc_loopback_listener
+      min_coverage: 20
+
+  pana:
+    uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/pana.yml@v1
+    needs: build
+    with:
+      min_score: 100
+

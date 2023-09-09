@@ -5,22 +5,30 @@ class OidcAuthorizePlatformSpecificOptions {
   ///
   const OidcAuthorizePlatformSpecificOptions({
     this.android = const OidcAuthorizePlatformOptions_AppAuth(),
-    this.ios = const OidcAuthorizePlatformOptions_AppAuth(),
-    this.macos = const OidcAuthorizePlatformOptions_AppAuth(),
+    this.ios = const OidcAuthorizePlatformOptions_AppAuth_IosMacos(),
+    this.macos = const OidcAuthorizePlatformOptions_AppAuth_IosMacos(),
     this.web = const OidcAuthorizePlatformOptions_Web(),
+    this.windows = const OidcAuthorizePlatformOptions_Native(),
+    this.linux = const OidcAuthorizePlatformOptions_Native(),
   });
 
   ///
   final OidcAuthorizePlatformOptions_AppAuth android;
 
   ///
-  final OidcAuthorizePlatformOptions_AppAuth ios;
+  final OidcAuthorizePlatformOptions_AppAuth_IosMacos ios;
 
   ///
-  final OidcAuthorizePlatformOptions_AppAuth macos;
+  final OidcAuthorizePlatformOptions_AppAuth_IosMacos macos;
 
   ///
   final OidcAuthorizePlatformOptions_Web web;
+
+  ///
+  final OidcAuthorizePlatformOptions_Native linux;
+
+  ///
+  final OidcAuthorizePlatformOptions_Native windows;
 }
 
 ///
@@ -28,14 +36,42 @@ class OidcAuthorizePlatformOptions_AppAuth {
   ///
   const OidcAuthorizePlatformOptions_AppAuth({
     this.allowInsecureConnections = false,
-    this.preferEphemeralSession = false,
   });
 
   ///
   final bool allowInsecureConnections;
+}
+
+///
+class OidcAuthorizePlatformOptions_AppAuth_IosMacos
+    extends OidcAuthorizePlatformOptions_AppAuth {
+  ///
+  const OidcAuthorizePlatformOptions_AppAuth_IosMacos({
+    this.preferEphemeralSession = false,
+    super.allowInsecureConnections,
+  });
 
   ///
   final bool preferEphemeralSession;
+}
+
+///
+class OidcAuthorizePlatformOptions_Native {
+  ///
+  const OidcAuthorizePlatformOptions_Native({
+    this.successfulPageResponse,
+    this.methodMismatchResponse,
+    this.notFoundResponse,
+  });
+
+  /// What to return if a URI is matched
+  final String? successfulPageResponse;
+
+  /// What to return if a method other than `GET` is requested.
+  final String? methodMismatchResponse;
+
+  /// What to return if a different path is used.
+  final String? notFoundResponse;
 }
 
 /// The possible navigation modes to use for web.

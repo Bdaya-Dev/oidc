@@ -50,8 +50,8 @@ class OidcMacOS extends OidcPlatform {
         promptValues: request.prompt,
         scopes: request.scope,
         responseMode: request.responseMode,
-        allowInsecureConnections: options.android.allowInsecureConnections,
-        preferEphemeralSession: options.android.preferEphemeralSession,
+        allowInsecureConnections: options.macos.allowInsecureConnections,
+        preferEphemeralSession: options.macos.preferEphemeralSession,
       ),
     );
     if (resp == null) {

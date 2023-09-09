@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oidc/oidc.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_example/state.dart' as app_state;
+import 'package:oidc_example/app_state.dart' as app_state;
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -74,16 +74,16 @@ class _AuthPageState extends State<AuthPage> {
                     // these settings are from https://pub.dev/packages/flutter_appauth.
                     android: OidcAuthorizePlatformOptions_AppAuth(
                       allowInsecureConnections: true,
-                      preferEphemeralSession: true,
                     ),
-                    ios: OidcAuthorizePlatformOptions_AppAuth(
+                    ios: OidcAuthorizePlatformOptions_AppAuth_IosMacos(
                       allowInsecureConnections: true,
                       preferEphemeralSession: true,
                     ),
-                    macos: OidcAuthorizePlatformOptions_AppAuth(
+                    macos: OidcAuthorizePlatformOptions_AppAuth_IosMacos(
                       allowInsecureConnections: true,
                       preferEphemeralSession: true,
                     ),
+                    windows: OidcAuthorizePlatformOptions_Native(),
                   ),
                 );
 
@@ -126,28 +126,6 @@ class _AuthPageState extends State<AuthPage> {
                   ...OidcUserManagerSettings.defaultScopes,
                   OidcConstants_Scopes.profile,
                 ],
-                // login options.
-                options: const OidcAuthorizePlatformSpecificOptions(
-                  web: OidcAuthorizePlatformOptions_Web(
-                    navigationMode:
-                        OidcAuthorizePlatformOptions_Web_NavigationMode.popup,
-                    popupHeight: 800,
-                    popupWidth: 730,
-                  ),
-                  // these settings are from https://pub.dev/packages/flutter_appauth.
-                  android: OidcAuthorizePlatformOptions_AppAuth(
-                    allowInsecureConnections: true,
-                    preferEphemeralSession: true,
-                  ),
-                  ios: OidcAuthorizePlatformOptions_AppAuth(
-                    allowInsecureConnections: true,
-                    preferEphemeralSession: true,
-                  ),
-                  macos: OidcAuthorizePlatformOptions_AppAuth(
-                    allowInsecureConnections: true,
-                    preferEphemeralSession: true,
-                  ),
-                ),
               );
 
               messenger.showSnackBar(

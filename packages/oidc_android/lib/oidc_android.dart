@@ -56,7 +56,6 @@ class OidcAndroid extends OidcPlatform {
         scopes: request.scope,
         responseMode: request.responseMode,
         allowInsecureConnections: options.android.allowInsecureConnections,
-        preferEphemeralSession: options.android.preferEphemeralSession,
       ),
     );
     if (resp == null) {
@@ -66,6 +65,7 @@ class OidcAndroid extends OidcPlatform {
       OidcConstants_AuthParameters.code: resp.authorizationCode,
       OidcConstants_AuthParameters.codeVerifier: resp.codeVerifier,
       OidcConstants_AuthParameters.nonce: resp.nonce,
+      OidcConstants_AuthParameters.redirectUri: request.redirectUri,
       // add state here since appauth handles state itself
       OidcConstants_AuthParameters.state: request.state,
       ...?resp.authorizationAdditionalParameters,

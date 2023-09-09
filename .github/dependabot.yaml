@@ -18,6 +18,14 @@ updates:
     schedule:
       interval: "daily"
   - package-ecosystem: "pub"
+    directory: "/packages/oidc_core"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
+    directory: "/packages/oidc_loopback_listener"
+    schedule:
+      interval: "daily"
+  - package-ecosystem: "pub"
     directory: "/packages/oidc_android"
     schedule:
       interval: "daily"

@@ -1,4 +1,4 @@
-name: oidc_platform_interface
+name: oidc_core
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

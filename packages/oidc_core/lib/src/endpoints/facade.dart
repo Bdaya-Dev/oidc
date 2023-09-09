@@ -95,6 +95,7 @@ class OidcEndpoints {
   static Future<OidcAuthorizeResponse?> parseAuthorizeResponse({
     required Uri responseUri,
     required OidcStore store,
+    Map<String, dynamic>? overrides,
   }) async {
     var stateKey =
         responseUri.queryParameters[OidcConstants_AuthParameters.state];
@@ -119,7 +120,10 @@ class OidcEndpoints {
       );
     }
 
-    return OidcAuthorizeResponse.fromJson(queryParameters);
+    return OidcAuthorizeResponse.fromJson({
+      ...queryParameters,
+      ...?overrides,
+    });
   }
 
   /// Sends a token exchange request
