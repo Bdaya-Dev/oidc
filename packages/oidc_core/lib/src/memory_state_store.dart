@@ -2,7 +2,7 @@ import 'state_store.dart';
 
 /// A simple OidcStore implementation that relies on memory and doesn't actually
 /// store anything.
-/// 
+///
 /// for a persistent store, consider using (oidc_default_store)[https://pub.dev/packages/oidc_default_store]
 class OidcMemoryStore implements OidcStore {
   final _namespaces = <OidcStoreNamespace, Map<String, String>>{};

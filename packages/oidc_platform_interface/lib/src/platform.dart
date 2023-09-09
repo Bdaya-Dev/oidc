@@ -1,5 +1,5 @@
+// coverage:ignore-file
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_platform_interface/src/method_channel_oidc.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'models/authorize_options.dart';
@@ -17,11 +17,11 @@ abstract class OidcPlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static OidcPlatform _instance = MethodChannelOidc();
+  static OidcPlatform _instance = _NoOpOidcPlugin();
 
   /// The default instance of [OidcPlatform] to use.
   ///
-  /// Defaults to [MethodChannelOidc].
+  /// Defaults to [_NoOpOidcPlugin] which throws an exception on each operation.
   static OidcPlatform get instance => _instance;
 
   /// Platform-specific plugins should set this with their own platform-specific
@@ -40,4 +40,17 @@ abstract class OidcPlatform extends PlatformInterface {
     OidcAuthorizeState? stateData,
     OidcAuthorizePlatformSpecificOptions options,
   );
+}
+
+class _NoOpOidcPlugin extends OidcPlatform {
+  @override
+  Future<OidcAuthorizeResponse?> getAuthorizationResponse(
+    OidcProviderMetadata metadata,
+    OidcAuthorizeRequest request,
+    OidcStore store,
+    OidcAuthorizeState? stateData,
+    OidcAuthorizePlatformSpecificOptions options,
+  ) {
+    throw UnimplementedError();
+  }
 }

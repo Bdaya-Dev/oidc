@@ -26,9 +26,9 @@ enum OidcStoreNamespace {
 }
 
 /// An abstract interface for storing/fetching data.
-/// 
+///
 /// you can use [package:oidc_default_store](https://pub.dev/packages/oidc_default_store) for a persistent store (for production apps).
-/// 
+///
 /// or `OidcMemoryStore` for a memory-only store (for CI/CD or CLI apps).
 abstract interface class OidcStore {
   Future<void> init();
