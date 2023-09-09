@@ -18,12 +18,12 @@ on:
 
 jobs:
   build:
-    uses: ./.github/workflows/base/flutter_package.yaml
+    uses: ./.github/workflows/flutter_package.yaml
     with:
       working_directory: packages/oidc_platform_interface
 
   pana:
-    uses: ./.github/workflows/base/pana.yaml
+    uses: ./.github/workflows/pana.yaml
     with:
       min_score: 100
 

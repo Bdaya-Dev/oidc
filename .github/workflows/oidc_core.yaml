@@ -20,13 +20,13 @@ jobs:
 
   build:
     name: Dart Package workflow
-    uses: ./.github/workflows/base/dart_package.yaml
+    uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: packages/oidc_core
       min_coverage: 20
 
   pana:
-    uses: ./.github/workflows/base/pana.yaml
+    uses: ./.github/workflows/pana.yaml
     needs: build
     with:
       min_score: 100
