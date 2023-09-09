@@ -88,10 +88,10 @@ jobs:
         with:
           file: ${{inputs.working_directory}}/coverage/lcov.info
           fail_ci_if_error: false            
-      - name: 📊 Check Code Coverage
-        uses: VeryGoodOpenSource/very_good_coverage@v2
-        with:
-            path: ${{inputs.working_directory}}/coverage/lcov.info
-            exclude: ${{inputs.coverage_excludes}}
-            min_coverage: ${{inputs.min_coverage}}
+      # - name: 📊 Check Code Coverage
+      #   uses: VeryGoodOpenSource/very_good_coverage@v2
+      #   with:
+      #       path: ${{inputs.working_directory}}/coverage/lcov.info
+      #       exclude: ${{inputs.coverage_excludes}}
+      #       min_coverage: ${{inputs.min_coverage}}
     

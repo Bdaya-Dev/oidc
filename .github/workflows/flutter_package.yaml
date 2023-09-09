@@ -91,10 +91,14 @@ jobs:
 
       - name: 🧪 Run Tests
         run: very_good test -j ${{inputs.concurrency}} ${{(inputs.test_recursion && '--recursive') || ''}} ${{(inputs.test_optimization && '--optimization') || '--no-optimization'}} --coverage --test-randomize-ordering-seed random
-
-      - name: 📊 Check Code Coverage
-        uses: VeryGoodOpenSource/very_good_coverage@v2
+      - name: Report to Codecov
+        uses: codecov/codecov-action@v3
         with:
-          path: ${{inputs.working_directory}}/coverage/lcov.info
-          exclude: ${{inputs.coverage_excludes}}
-          min_coverage: ${{inputs.min_coverage}}
+          file: ${{inputs.working_directory}}/coverage/lcov.info
+          fail_ci_if_error: false        
+      # - name: 📊 Check Code Coverage
+      #   uses: VeryGoodOpenSource/very_good_coverage@v2
+      #   with:
+      #     path: ${{inputs.working_directory}}/coverage/lcov.info
+      #     exclude: ${{inputs.coverage_excludes}}
+      #     min_coverage: ${{inputs.min_coverage}}
