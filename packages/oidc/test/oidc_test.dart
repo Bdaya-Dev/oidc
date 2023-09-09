@@ -19,6 +19,9 @@ void main() {
       OidcPlatform.instance = oidcPlatform;
     });
 
+    group('description', () {
+      test('description', () {});
+    });
     // group('getPlatformName', () {
     //   test('returns correct name when platform implementation exists',
     //       () async {
