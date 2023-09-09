@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/src/converters.dart';
-import 'package:oidc_core/src/models/managers/state_store.dart';
+import 'package:oidc_core/src/state_store.dart';
 import 'package:oidc_core/src/utils.dart';
 import 'package:uuid/uuid.dart';
 

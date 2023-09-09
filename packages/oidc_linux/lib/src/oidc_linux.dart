@@ -8,6 +8,7 @@ import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_loopback_listener/oidc_loopback_listener.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:window_to_front/window_to_front.dart';
 
 final _logger = Logger('Oidc.Linux');
 
@@ -82,7 +83,11 @@ class OidcLinux extends OidcPlatform {
     if (responseUri == null) {
       return null;
     }
-
+    try {
+      await WindowToFront.activate();
+    } catch (e) {
+      //try bringing the window to front, swallow errors if it fails.
+    }
     return OidcEndpoints.parseAuthorizeResponse(
       responseUri: responseUri,
       store: store,
