@@ -163,7 +163,7 @@ jobs:
           git clone https://github.com/flutter/web_installers
           cd web_installers/packages/web_drivers
           dart pub get
-          dart lib/web_driver_installer.dart chromedriver --install-only
+          dart lib/web_driver_installer.dart chromedriver --install-only --driver-version="114.0.5735.90"          
           ./chromedriver/chromedriver --port=4444 &
 
       - name: Integration Tests
