@@ -159,7 +159,7 @@ jobs:
         run: flutter doctor -v
       - name: Run Chromedriver
         run: |
-          git clone https://github.com/Bdaya-Dev/web_installers
+          git clone https://github.com/Bdaya-Dev/web_installers --branch new-chromedriver-urls
           cd web_installers/packages/web_drivers
           dart pub get
           dart lib/web_driver_installer.dart chromedriver --install-only
