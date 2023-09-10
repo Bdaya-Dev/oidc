@@ -102,8 +102,8 @@ jobs:
         run: very_good test -j ${{inputs.concurrency}} ${{(inputs.test_recursion && '--recursive') || ''}} ${{(inputs.test_optimization && '--optimization') || '--no-optimization'}} --coverage --test-randomize-ordering-seed random
         
       - name: 🧪 Run Custom Tests        
-        if: "${{ inputs.custom_tests != '.' }}"
-        run: ${{ inputs.custom_tests }}
+        if: "${{inputs.custom_tests != ''}}"
+        run: ${{inputs.custom_tests}}
         
       - name: Report to Codecov
         uses: codecov/codecov-action@v3
