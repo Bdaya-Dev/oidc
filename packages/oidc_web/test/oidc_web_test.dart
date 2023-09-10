@@ -1,22 +1,12 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:oidc_platform_interface/oidc_platform_interface.dart';
-import 'package:oidc_web/oidc_web.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  group('OidcWeb', () {
-    // const kPlatformName = 'Web';
-    late OidcWeb oidc;
-
-    setUp(() async {
-      oidc = OidcWeb();
-    });
-
-    test('can be registered', () {
-      OidcWeb.registerWith();
-      expect(OidcPlatform.instance, isA<OidcWeb>());
-      expect(OidcPlatform.instance, oidc);
-    });
+  test('Tell the user where to find the real tests', () {
+    print('---');
+    print('This package uses integration_test for its tests.');
+    print('See `example/README.md` for more info.');
+    print('---');
   });
 }

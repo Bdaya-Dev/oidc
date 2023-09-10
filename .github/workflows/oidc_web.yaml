@@ -21,7 +21,6 @@ jobs:
     with:
       working_directory: packages/oidc_web
       run_tests: false
-
   pana:
     uses: ./.github/workflows/pana.yaml
     with:
