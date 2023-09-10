@@ -2,9 +2,13 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_html/html.dart' as html;
+
+// coverage:ignore-line
+final _logger = Logger('Oidc.DefaultStore');
 
 /// {@template oidc_default_store}
 /// The default [OidcStore] implementation for `package:oidc`
@@ -32,6 +36,10 @@ class OidcDefaultStore implements OidcStore {
   SharedPreferences? __sharedPreferences;
   SharedPreferences get _sharedPreferences => __sharedPreferences!;
 
+  /// checks if the current platform is web.
+  @visibleForTesting
+  bool testIsWeb = kIsWeb;
+
   /// if true, we use the `sessionStorage` on web for the [OidcStoreNamespace.session] namespace.
   final bool useSessionStorageForSessionNamespaceOnWeb;
 
@@ -54,6 +62,7 @@ class OidcDefaultStore implements OidcStore {
       _hasInit = true;
       __sharedPreferences = await SharedPreferences.getInstance();
     } catch (e) {
+      // coverage:ignore-line
       _hasInit = false;
       rethrow;
     }
@@ -156,10 +165,15 @@ class OidcDefaultStore implements OidcStore {
           }
           return res;
         } catch (e) {
+          // coverage:ignore-start
+          _logger.warning(
+              'tried reading secure tokens using package:flutter_secure_storage,'
+              ' but it failed, falling back to using package:shared_pereferences, which is not secure.');
           return _defaultGetMany(namespace, keys);
+          // coverage:ignore-end
         }
       case OidcStoreNamespace.state:
-        if (kIsWeb) {
+        if (testIsWeb) {
           return keys
               .map(
                 (key) => MapEntry(
@@ -174,7 +188,7 @@ class OidcDefaultStore implements OidcStore {
       case OidcStoreNamespace.discoveryDocument:
         return _defaultGetMany(namespace, keys);
       case OidcStoreNamespace.session:
-        if (kIsWeb && useSessionStorageForSessionNamespaceOnWeb) {
+        if (testIsWeb && useSessionStorageForSessionNamespaceOnWeb) {
           return keys
               .map(
                 (key) => MapEntry(
@@ -216,10 +230,15 @@ class OidcDefaultStore implements OidcStore {
             );
           }
         } catch (e) {
+          // coverage:ignore-start
+          _logger.warning(
+              'tried writing secure tokens using package:flutter_secure_storage,'
+              ' but it failed, falling back to using package:shared_pereferences, which is not secure.');
           return _defaultSetMany(namespace, values);
+          // coverage:ignore-end
         }
       case OidcStoreNamespace.state:
-        if (kIsWeb) {
+        if (testIsWeb) {
           for (final element in values.entries) {
             html.window.localStorage[_getKey(namespace, element.key)] =
                 element.value;
@@ -228,7 +247,7 @@ class OidcDefaultStore implements OidcStore {
           return _defaultSetMany(namespace, values);
         }
       case OidcStoreNamespace.session:
-        if (kIsWeb && useSessionStorageForSessionNamespaceOnWeb) {
+        if (testIsWeb && useSessionStorageForSessionNamespaceOnWeb) {
           for (final element in values.entries) {
             html.window.sessionStorage[_getKey(namespace, element.key)] =
                 element.value;
@@ -265,10 +284,15 @@ class OidcDefaultStore implements OidcStore {
             await _secureStorage.delete(key: _getKey(namespace, key));
           }
         } catch (e) {
+          // coverage:ignore-start
+          _logger.warning(
+              'tried removing secure tokens using package:flutter_secure_storage,'
+              ' but it failed, falling back to reading using package:shared_pereferences, which is not secure.');
           await _defaultRemoveMany(namespace, keys);
+          // coverage:ignore-end
         }
       case OidcStoreNamespace.state:
-        if (kIsWeb) {
+        if (testIsWeb) {
           for (final element in keys) {
             html.window.localStorage.remove(_getKey(namespace, element));
           }
@@ -276,7 +300,7 @@ class OidcDefaultStore implements OidcStore {
           await _defaultRemoveMany(namespace, keys);
         }
       case OidcStoreNamespace.session:
-        if (kIsWeb && useSessionStorageForSessionNamespaceOnWeb) {
+        if (testIsWeb && useSessionStorageForSessionNamespaceOnWeb) {
           for (final element in keys) {
             html.window.sessionStorage.remove(_getKey(namespace, element));
           }
