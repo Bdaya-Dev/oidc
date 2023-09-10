@@ -26,6 +26,7 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
     this.sessionState,
     this.state,
     this.iss,
+    this.nonce,
     this.scope = const [],
     @Deprecated(_implicitWarning) this.tokenType,
     @Deprecated(_implicitWarning) this.expiresIn,
@@ -67,6 +68,8 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   final String? code;
   @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
   final String? codeVerifier;
+  @JsonKey(name: OidcConstants_AuthParameters.nonce)
+  final String? nonce;
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
   final Uri? redirectUri;
   @JsonKey(

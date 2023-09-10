@@ -1,44 +1,74 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_ios/oidc_ios.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
+
+import 'duendo_discovery.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('OidcIOS', () {
-    const kPlatformName = 'iOS';
     late OidcIOS oidc;
     late List<MethodCall> log;
+    const methodChannel =
+        MethodChannel('crossingthestreams.io/flutter_appauth');
+    const mockAuthResponse = {
+      'authorizationCode': '1234',
+      'codeVerifier': '12344321',
+      'nonce': 'abcd',
+      'authorizationAdditionalParameters': {
+        'hello': 'world',
+      },
+    };
+    final metadata = OidcProviderMetadata.fromJson(testDiscoveryRaw);
+    final store = OidcMemoryStore();
 
     setUp(() async {
       oidc = OidcIOS();
 
       log = <MethodCall>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(oidc.methodChannel, (methodCall) async {
+          .setMockMethodCallHandler(methodChannel, (methodCall) async {
         log.add(methodCall);
         switch (methodCall.method) {
-          case 'getPlatformName':
-            return kPlatformName;
+          case 'authorize':
+            return mockAuthResponse;
           default:
-            return null;
+            throw UnimplementedError();
         }
       });
     });
+    tearDown(() => log.clear());
 
     test('can be registered', () {
       OidcIOS.registerWith();
       expect(OidcPlatform.instance, isA<OidcIOS>());
     });
 
-    test('getPlatformName returns correct name', () async {
-      // final name = await oidc.getPlatformName();
-      // expect(
-      //   log,
-      //   <Matcher>[isMethodCall('getPlatformName', arguments: null)],
-      // );
-      // expect(name, equals(kPlatformName));
+    test('getAuthorizationResponse', () async {
+       final response = await oidc.getAuthorizationResponse(
+        metadata,
+        OidcAuthorizeRequest(
+          responseType: ['code'],
+          clientId: 'someClientId',
+          redirectUri: Uri.parse('hello:/world'),
+          scope: ['openid'],
+        ),
+        store,
+        null,
+        const OidcAuthorizePlatformSpecificOptions(),
+      );
+      expect(response, isNotNull);
+      expect(response!.code, mockAuthResponse['authorizationCode']);
+      expect(response.codeVerifier, mockAuthResponse['codeVerifier']);
+      expect(response.nonce, mockAuthResponse['nonce']);
+      expect(
+        response.src['hello'],
+        (mockAuthResponse['authorizationAdditionalParameters']
+            as Map<String, dynamic>?)?['hello'],
+      );
     });
   });
 }

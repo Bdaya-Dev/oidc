@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:oidc_core/oidc_core.dart';
 
@@ -7,10 +5,6 @@ import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
 /// The MacOS implementation of [OidcPlatform].
 class OidcMacOS extends OidcPlatform {
-  /// The method channel used to interact with the native platform.
-  @visibleForTesting
-  final methodChannel = const MethodChannel('oidc_macos');
-
   /// Registers this class as the default instance of [OidcPlatform]
   static void registerWith() {
     OidcPlatform.instance = OidcMacOS();
@@ -61,6 +55,7 @@ class OidcMacOS extends OidcPlatform {
       OidcConstants_AuthParameters.code: resp.authorizationCode,
       OidcConstants_AuthParameters.codeVerifier: resp.codeVerifier,
       OidcConstants_AuthParameters.nonce: resp.nonce,
+      OidcConstants_AuthParameters.redirectUri: request.redirectUri.toString(),
       // add state here since appauth handles state itself
       OidcConstants_AuthParameters.state: request.state,
       ...?resp.authorizationAdditionalParameters,

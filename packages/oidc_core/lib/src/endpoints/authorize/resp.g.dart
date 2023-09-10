@@ -18,6 +18,7 @@ OidcAuthorizeResponse _$OidcAuthorizeResponseFromJson(
       sessionState: json['session_state'] as String?,
       state: json['state'] as String?,
       iss: json['iss'] == null ? null : Uri.parse(json['iss'] as String),
+      nonce: json['nonce'] as String?,
       scope: json['scope'] == null
           ? const []
           : OidcInternalUtilities.splitSpaceDelimitedString(
