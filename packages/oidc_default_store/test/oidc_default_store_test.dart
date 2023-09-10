@@ -55,7 +55,9 @@ void main() {
             completes,
           );
           await expectLater(
-              store.get(namespace, key: 'k1'), completion('nnv1'));
+            store.get(namespace, key: 'k1'),
+            completion('nnv1'),
+          );
           await expectLater(store.remove(namespace, key: 'k1'), completes);
           await expectLater(store.get(namespace, key: 'k1'), completion(null));
           //test remove many.
