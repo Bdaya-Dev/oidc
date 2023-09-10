@@ -1,9 +1,6 @@
 # oidc
 
-[![Very Good Ventures][logo_white]][very_good_ventures_link_dark]
-[![Very Good Ventures][logo_black]][very_good_ventures_link_light]
-
-Developed with 💙 by [Very Good Ventures][very_good_ventures_link] 🦄
+> The Most comprehensive OpenId Connect (OIDC) + OAuth 2.0 Package in dart.
 
 ![coverage][coverage_badge]
 [![style: very good analysis][very_good_analysis_badge]][very_good_analysis_link]
