@@ -23,7 +23,10 @@ jobs:
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: packages/oidc_core
-      min_coverage: 20
+      min_coverage: 80
+      custom_tests: |
+        pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$'
+
 
   pana:
     uses: ./.github/workflows/pana.yaml

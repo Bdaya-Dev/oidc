@@ -48,6 +48,10 @@ on:
         required: false
         type: string
         default: "."
+      custom_tests:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   build:
@@ -83,6 +87,11 @@ jobs:
         run: |
           dart pub global activate coverage 1.2.0
           dart test -j ${{inputs.concurrency}} --coverage=coverage --platform=${{inputs.platform}} && dart pub global run coverage:format_coverage --lcov ${{(inputs.check_ignore && '--check-ignore') || ''}} --in=coverage --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=${{inputs.report_on}}
+      
+      - name: 🧪 Run Custom Tests        
+        if: "${{inputs.custom_tests != ''}}"
+        run: ${{inputs.custom_tests}}
+
       - name: Report to Codecov
         uses: codecov/codecov-action@v3
         env:
