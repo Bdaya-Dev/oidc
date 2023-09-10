@@ -8,5 +8,13 @@ void main() {
     test('can be instantiated', () {
       expect(OidcDefaultStore(), isNotNull);
     });
+
+    testWidgets('init', (widgetTester) async {
+      final store = OidcDefaultStore();
+
+      await store.init();
+
+      expect(store.didInit, true);
+    });
   });
 }
