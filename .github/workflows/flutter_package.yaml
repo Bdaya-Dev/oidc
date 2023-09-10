@@ -99,6 +99,8 @@ jobs:
         
       - name: Report to Codecov
         uses: codecov/codecov-action@v3
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         if: ${{ inputs.run_tests }}
         with:
           file: ${{inputs.working_directory}}/coverage/lcov.info
