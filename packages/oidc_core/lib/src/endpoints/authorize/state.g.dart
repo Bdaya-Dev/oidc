@@ -9,9 +9,8 @@ part of 'state.dart';
 OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
     OidcAuthorizeState(
       id: json['id'] as String,
-      createdAt: const OidcDateTimeEpochConverter()
-          .fromJson(json['created_at'] as int),
-      requestType: json['request_type'] as String?,
+      createdAt:
+          const OidcNumericDateConverter().fromJson(json['created_at'] as int),
       redirectUri: Uri.parse(json['redirect_uri'] as String),
       codeVerifier: json['code_verifier'] as String?,
       codeChallenge: json['code_challenge'] as String?,
@@ -21,19 +20,17 @@ OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
       nonce: json['nonce'] as String,
       clientId: json['client_id'] as String,
       extraTokenParams: json['extraTokenParams'] as Map<String, dynamic>?,
-      webLaunchMode: json['webLaunchMode'] as String?,
+      options: json['options'] as Map<String, dynamic>?,
       data: json['data'],
     );
 
 Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
     <String, dynamic>{
       'id': instance.id,
-      'created_at':
-          const OidcDateTimeEpochConverter().toJson(instance.createdAt),
-      'request_type': instance.requestType,
+      'created_at': const OidcNumericDateConverter().toJson(instance.createdAt),
       'data': instance.data,
       'extraTokenParams': instance.extraTokenParams,
-      'webLaunchMode': instance.webLaunchMode,
+      'options': instance.options,
       'code_challenge': instance.codeChallenge,
       'code_verifier': instance.codeVerifier,
       'redirect_uri': instance.redirectUri.toString(),

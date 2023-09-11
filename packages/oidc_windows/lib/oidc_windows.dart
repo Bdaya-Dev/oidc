@@ -27,8 +27,6 @@ class OidcWindows extends OidcPlatform {
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
-    OidcStore store,
-    OidcAuthorizeState? stateData,
     OidcAuthorizePlatformSpecificOptions options,
   ) async {
     final authEndpoint = metadata.authorizationEndpoint;
@@ -89,7 +87,6 @@ class OidcWindows extends OidcPlatform {
     }
     return OidcEndpoints.parseAuthorizeResponse(
       responseUri: responseUri,
-      store: store,
       overrides: {
         OidcConstants_AuthParameters.redirectUri: redirectUri.toString(),
       },

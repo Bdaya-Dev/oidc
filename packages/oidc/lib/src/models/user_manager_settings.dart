@@ -18,10 +18,14 @@ class OidcUserManagerSettings {
     this.extraAuthenticationParameters,
     this.expiryTolerance = Duration.zero,
     this.extraTokenParameters,
+    this.postLogoutRedirectUri,
   });
 
   /// see [OidcAuthorizeRequest.redirectUri].
   final Uri redirectUri;
+
+  /// see [OidcEndSessionRequest.postLogoutRedirectUri].
+  final Uri? postLogoutRedirectUri;
 
   /// see [OidcAuthorizeRequest.scope].
   final List<String> scope;

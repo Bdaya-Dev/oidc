@@ -17,7 +17,6 @@ class OidcAuthorizeState extends OidcState {
   const OidcAuthorizeState({
     required super.id,
     required super.createdAt,
-    required super.requestType,
     required this.redirectUri,
     required this.codeVerifier,
     required this.codeChallenge,
@@ -25,7 +24,7 @@ class OidcAuthorizeState extends OidcState {
     required this.nonce,
     required this.clientId,
     required this.extraTokenParams,
-    required this.webLaunchMode,
+    required this.options,
     required super.data,
   });
 
@@ -42,8 +41,8 @@ class OidcAuthorizeState extends OidcState {
   @JsonKey(name: 'extraTokenParams')
   final Map<String, dynamic>? extraTokenParams;
 
-  @JsonKey(name: 'webLaunchMode')
-  final String? webLaunchMode;
+  @JsonKey(name: 'options')
+  final Map<String, dynamic>? options;
 
   /// The same code_challenge that was used to obtain the authorization_code
   /// via PKCE.

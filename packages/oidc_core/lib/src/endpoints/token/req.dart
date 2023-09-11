@@ -104,6 +104,10 @@ class OidcTokenRequest extends JsonBasedRequest {
 
   @JsonKey(name: OidcConstants_AuthParameters.grantType)
   final String grantType;
+
+  /// REQUIRED, if using the Authorization Code Flow.
+  ///
+  /// This is the code you received from the /authorize response
   @JsonKey(name: OidcConstants_AuthParameters.code)
   final String? code;
 

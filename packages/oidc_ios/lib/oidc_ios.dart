@@ -14,8 +14,6 @@ class OidcIOS extends OidcPlatform {
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
-    OidcStore store,
-    OidcAuthorizeState? stateData,
     OidcAuthorizePlatformSpecificOptions options,
   ) async {
     const appAuth = FlutterAppAuth();
@@ -61,9 +59,4 @@ class OidcIOS extends OidcPlatform {
       ...?resp.authorizationAdditionalParameters,
     });
   }
-
-  // @override
-  // Future<String?> getPlatformName() {
-  //   return methodChannel.invokeMethod<String>('getPlatformName');
-  // }
 }

@@ -3,3 +3,5 @@ export 'client_auth.dart';
 export 'error.dart';
 export 'exception.dart';
 export 'state/_exports.dart';
+export 'user.dart';
+export 'user_metadata.dart';

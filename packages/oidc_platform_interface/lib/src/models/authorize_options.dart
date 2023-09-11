@@ -1,7 +1,10 @@
 // coverage:ignore-file
 // ignore_for_file: camel_case_types
 
-///
+import 'package:json_annotation/json_annotation.dart';
+
+/// Represents flutter platform-specific options.
+@JsonSerializable()
 class OidcAuthorizePlatformSpecificOptions {
   ///
   const OidcAuthorizePlatformSpecificOptions({
@@ -13,26 +16,33 @@ class OidcAuthorizePlatformSpecificOptions {
     this.linux = const OidcAuthorizePlatformOptions_Native(),
   });
 
-  ///
+  /// Android options that will get passed to `package:flutter_appauth`
+  @JsonKey(name: 'android')
   final OidcAuthorizePlatformOptions_AppAuth android;
 
-  ///
+  /// IOs options that will get passed to `package:flutter_appauth`
+  @JsonKey(name: 'ios')
   final OidcAuthorizePlatformOptions_AppAuth_IosMacos ios;
 
-  ///
+  /// MacOs options that will get passed to `package:flutter_appauth`
+  @JsonKey(name: 'macos')
   final OidcAuthorizePlatformOptions_AppAuth_IosMacos macos;
 
-  ///
+  /// Web options.
+  @JsonKey(name: 'web')
   final OidcAuthorizePlatformOptions_Web web;
 
-  ///
+  /// Linux options.
+  @JsonKey(name: 'linux')
   final OidcAuthorizePlatformOptions_Native linux;
 
-  ///
+  /// Windows options.
+  @JsonKey(name: 'windows')
   final OidcAuthorizePlatformOptions_Native windows;
 }
 
 ///
+@JsonSerializable()
 class OidcAuthorizePlatformOptions_AppAuth {
   ///
   const OidcAuthorizePlatformOptions_AppAuth({
@@ -44,6 +54,7 @@ class OidcAuthorizePlatformOptions_AppAuth {
 }
 
 ///
+@JsonSerializable()
 class OidcAuthorizePlatformOptions_AppAuth_IosMacos
     extends OidcAuthorizePlatformOptions_AppAuth {
   ///
@@ -57,6 +68,7 @@ class OidcAuthorizePlatformOptions_AppAuth_IosMacos
 }
 
 ///
+@JsonSerializable()
 class OidcAuthorizePlatformOptions_Native {
   ///
   const OidcAuthorizePlatformOptions_Native({
@@ -76,6 +88,7 @@ class OidcAuthorizePlatformOptions_Native {
 }
 
 /// The possible navigation modes to use for web.
+@JsonEnum()
 enum OidcAuthorizePlatformOptions_Web_NavigationMode {
   /// NOT RECOMMENDED, since you have to reload your app and lose current ui state.
   ///
@@ -107,6 +120,7 @@ enum OidcAuthorizePlatformOptions_Web_NavigationMode {
 }
 
 ///
+@JsonSerializable()
 class OidcAuthorizePlatformOptions_Web {
   ///
   const OidcAuthorizePlatformOptions_Web({

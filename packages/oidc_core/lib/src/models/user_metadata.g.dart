@@ -9,8 +9,7 @@ part of 'user_metadata.dart';
 OidcUserMetadata _$OidcUserMetadataFromJson(Map<String, dynamic> json) =>
     OidcUserMetadata._(
       src: readSrcMap(json, '') as Map<String, dynamic>,
-      scope: OidcInternalUtilities.splitSpaceDelimitedString(
-          json['scope'] as String?),
+      scope: OidcInternalUtilities.splitSpaceDelimitedString(json['scope']),
       expiresIn: _$JsonConverterFromJson<int, Duration>(
           OidcInternalUtilities.readDurationSeconds(json, 'expires_in'),
           const OidcDurationSecondsConverter().fromJson),

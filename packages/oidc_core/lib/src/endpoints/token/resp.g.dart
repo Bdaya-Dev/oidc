@@ -13,8 +13,7 @@ OidcTokenResponse _$OidcTokenResponseFromJson(Map<String, dynamic> json) =>
       accessToken: json['access_token'] as String?,
       scope: json['scope'] == null
           ? const []
-          : OidcInternalUtilities.splitSpaceDelimitedString(
-              json['scope'] as String?),
+          : OidcInternalUtilities.splitSpaceDelimitedString(json['scope']),
       idToken: json['id_token'] as String?,
       refreshToken: json['refresh_token'] as String?,
       expiresIn: _$JsonConverterFromJson<int, Duration>(

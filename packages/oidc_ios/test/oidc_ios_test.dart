@@ -23,7 +23,6 @@ void main() {
       },
     };
     final metadata = OidcProviderMetadata.fromJson(testDiscoveryRaw);
-    final store = OidcMemoryStore();
 
     setUp(() async {
       oidc = OidcIOS();
@@ -48,7 +47,7 @@ void main() {
     });
 
     test('getAuthorizationResponse', () async {
-       final response = await oidc.getAuthorizationResponse(
+      final response = await oidc.getAuthorizationResponse(
         metadata,
         OidcAuthorizeRequest(
           responseType: ['code'],
@@ -56,8 +55,6 @@ void main() {
           redirectUri: Uri.parse('hello:/world'),
           scope: ['openid'],
         ),
-        store,
-        null,
         const OidcAuthorizePlatformSpecificOptions(),
       );
       expect(response, isNotNull);

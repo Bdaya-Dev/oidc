@@ -10,13 +10,24 @@ import 'package:universal_html/html.dart' as html;
 // coverage:ignore-line
 final _logger = Logger('Oidc.DefaultStore');
 
+/// where to store the values when using the [OidcStoreNamespace.session] namespace.
+enum OidcDefaultStoreWebSessionManagementLocation {
+  /// sessionStorage
+  sessionStorage,
+
+  /// localStorage
+  localStorage,
+}
+
 /// {@template oidc_default_store}
 /// The default [OidcStore] implementation for `package:oidc`
 /// this relies on:
 /// - for the [OidcStoreNamespace.secureTokens] namespace, we use [FlutterSecureStorage].
 /// - for the [OidcStoreNamespace.session] namespace
-///     - we use `package:universal_html` + `sessionStorage` for web,
-///       but if [useSessionStorageForSessionNamespaceOnWeb] is set to false, we use `localStorage`.
+///     - we use `dart:html` for web,
+///         - if [webSessionManagementLocation] is set to [OidcDefaultStoreWebSessionManagementLocation.sessionStorage]
+///           we use [html.window.sessionStorage].
+///         - if it's set to [OidcDefaultStoreWebSessionManagementLocation.sessionStorage] we use [html.window.localStorage].
 ///     - we use [SharedPreferences] for other platforms
 /// - for the [OidcStoreNamespace.state] namespace
 ///     - we use `package:universal_html` + `localStorage` for web.
@@ -29,7 +40,8 @@ class OidcDefaultStore implements OidcStore {
   OidcDefaultStore({
     FlutterSecureStorage? secureStorageInstance,
     SharedPreferences? sharedPreferences,
-    this.useSessionStorageForSessionNamespaceOnWeb = true,
+    this.webSessionManagementLocation =
+        OidcDefaultStoreWebSessionManagementLocation.sessionStorage,
   })  : _secureStorage = secureStorageInstance ?? const FlutterSecureStorage(),
         __sharedPreferences = sharedPreferences;
   final FlutterSecureStorage _secureStorage;
@@ -41,7 +53,8 @@ class OidcDefaultStore implements OidcStore {
   bool testIsWeb = kIsWeb;
 
   /// if true, we use the `sessionStorage` on web for the [OidcStoreNamespace.session] namespace.
-  final bool useSessionStorageForSessionNamespaceOnWeb;
+  final OidcDefaultStoreWebSessionManagementLocation
+      webSessionManagementLocation;
 
   /// true if [init] has been called with no exceptions.
   bool get didInit => _hasInit;
@@ -136,15 +149,6 @@ class OidcDefaultStore implements OidcStore {
   }
 
   @override
-  Future<String?> get(
-    OidcStoreNamespace namespace, {
-    required String key,
-  }) async {
-    final res = await getMany(namespace, keys: {key});
-    return res[key];
-  }
-
-  @override
   Future<Map<String, String>> getMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
@@ -188,7 +192,9 @@ class OidcDefaultStore implements OidcStore {
       case OidcStoreNamespace.discoveryDocument:
         return _defaultGetMany(namespace, keys);
       case OidcStoreNamespace.session:
-        if (testIsWeb && useSessionStorageForSessionNamespaceOnWeb) {
+        if (testIsWeb &&
+            webSessionManagementLocation ==
+                OidcDefaultStoreWebSessionManagementLocation.sessionStorage) {
           return keys
               .map(
                 (key) => MapEntry(
@@ -200,15 +206,6 @@ class OidcDefaultStore implements OidcStore {
         }
         return _defaultGetMany(namespace, keys);
     }
-  }
-
-  @override
-  Future<void> set(
-    OidcStoreNamespace namespace, {
-    required String key,
-    required String value,
-  }) {
-    return setMany(namespace, values: {key: value});
   }
 
   @override
@@ -247,7 +244,9 @@ class OidcDefaultStore implements OidcStore {
           return _defaultSetMany(namespace, values);
         }
       case OidcStoreNamespace.session:
-        if (testIsWeb && useSessionStorageForSessionNamespaceOnWeb) {
+        if (testIsWeb &&
+            webSessionManagementLocation ==
+                OidcDefaultStoreWebSessionManagementLocation.sessionStorage) {
           for (final element in values.entries) {
             html.window.sessionStorage[_getKey(namespace, element.key)] =
                 element.value;
@@ -258,14 +257,6 @@ class OidcDefaultStore implements OidcStore {
       case OidcStoreNamespace.discoveryDocument:
         await _defaultSetMany(namespace, values);
     }
-  }
-
-  @override
-  Future<void> remove(
-    OidcStoreNamespace namespace, {
-    required String key,
-  }) {
-    return removeMany(namespace, keys: {key});
   }
 
   @override
@@ -300,7 +291,9 @@ class OidcDefaultStore implements OidcStore {
           await _defaultRemoveMany(namespace, keys);
         }
       case OidcStoreNamespace.session:
-        if (testIsWeb && useSessionStorageForSessionNamespaceOnWeb) {
+        if (testIsWeb &&
+            webSessionManagementLocation ==
+                OidcDefaultStoreWebSessionManagementLocation.sessionStorage) {
           for (final element in keys) {
             html.window.sessionStorage.remove(_getKey(namespace, element));
           }

@@ -36,8 +36,6 @@ abstract class OidcPlatform extends PlatformInterface {
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
-    OidcStore store,
-    OidcAuthorizeState? stateData,
     OidcAuthorizePlatformSpecificOptions options,
   );
 }
@@ -47,8 +45,6 @@ class _NoOpOidcPlugin extends OidcPlatform {
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
-    OidcStore store,
-    OidcAuthorizeState? stateData,
     OidcAuthorizePlatformSpecificOptions options,
   ) {
     throw UnimplementedError();

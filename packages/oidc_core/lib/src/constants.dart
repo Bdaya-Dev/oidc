@@ -1,3 +1,4 @@
+// coverage:ignore-file
 // ignore_for_file: camel_case_types, lines_longer_than_80_chars
 // This file was colelcted from https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml
 class OidcConstants_AccessTokenTypes {
@@ -68,6 +69,12 @@ class OidcConstants_AuthParameters {
 
   /// authorization request, token request
   static const redirectUri = 'redirect_uri';
+
+  /// logout_hint
+  static const logoutHint = 'logout_hint';
+
+  /// post_logout_redirect_uri
+  static const postLogoutRedirectUri = 'post_logout_redirect_uri';
 
   /// authorization request, authorization response, token request, token response
   static const scope = 'scope';
@@ -275,7 +282,7 @@ class OidcConstants_AuthParameters {
   static const dpopJkt = 'dpop_jkt';
 }
 
-class OidcConstants_AuthorizationServerMetadata {
+class OidcConstants_ProviderMetadata {
   ///Authorization server's issuer identifier URL
   static const issuer = 'issuer';
 

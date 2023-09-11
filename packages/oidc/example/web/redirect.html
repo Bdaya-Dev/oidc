@@ -42,11 +42,12 @@
                 return;
             }
             // Read the mode from the state.
-            if (!parsedState.webLaunchMode) {
-                console.log('webLaunchMode not found in parsed state');
+            const webLaunchMode = parsedState.options?.webLaunchMode;
+            if (!webLaunchMode) {
+                console.log('webLaunchMode not found in parsed state.');
                 return;
             }
-            if (parsedState.webLaunchMode != 'samePage') {
+            if (webLaunchMode != 'samePage') {
                 window.close();
                 return;
             }

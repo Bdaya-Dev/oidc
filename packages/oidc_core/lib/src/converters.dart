@@ -17,21 +17,21 @@ class OidcUriJsonConverter extends JsonConverter<Uri, String> {
 }
 
 ///
-class OidcDateTimeEpochConverter extends JsonConverter<DateTime, int> {
+class OidcNumericDateConverter extends JsonConverter<DateTime, int> {
   ///
-  const OidcDateTimeEpochConverter();
+  const OidcNumericDateConverter();
 
   @override
   DateTime fromJson(int json) {
     return DateTime.fromMillisecondsSinceEpoch(
-      json,
+      json * 1000,
       isUtc: true,
     );
   }
 
   @override
   int toJson(DateTime object) {
-    return object.millisecondsSinceEpoch;
+    return (object.millisecondsSinceEpoch / 1000).ceil();
   }
 }
 

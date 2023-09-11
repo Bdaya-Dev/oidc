@@ -18,8 +18,6 @@ class OidcWeb extends OidcPlatform {
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
-    OidcStore store,
-    OidcAuthorizeState? stateData,
     OidcAuthorizePlatformSpecificOptions options,
   ) async {
     final authEndpoint = metadata.authorizationEndpoint;
@@ -73,7 +71,6 @@ class OidcWeb extends OidcPlatform {
           }
           //listen to response uri.
           return await OidcEndpoints.parseAuthorizeResponse(
-            store: store,
             responseUri: await c.future,
           );
         case OidcAuthorizePlatformOptions_Web_NavigationMode.popup:
@@ -93,7 +90,6 @@ class OidcWeb extends OidcPlatform {
             windowOpts,
           );
           return await OidcEndpoints.parseAuthorizeResponse(
-            store: store,
             responseUri: await c.future,
           );
       }

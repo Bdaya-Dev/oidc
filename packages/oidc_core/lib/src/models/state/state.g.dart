@@ -8,16 +8,13 @@ part of 'state.dart';
 
 OidcState _$OidcStateFromJson(Map<String, dynamic> json) => OidcState(
       id: json['id'] as String,
-      createdAt: const OidcDateTimeEpochConverter()
-          .fromJson(json['created_at'] as int),
-      requestType: json['request_type'] as String?,
+      createdAt:
+          const OidcNumericDateConverter().fromJson(json['created_at'] as int),
       data: json['data'],
     );
 
 Map<String, dynamic> _$OidcStateToJson(OidcState instance) => <String, dynamic>{
       'id': instance.id,
-      'created_at':
-          const OidcDateTimeEpochConverter().toJson(instance.createdAt),
-      'request_type': instance.requestType,
+      'created_at': const OidcNumericDateConverter().toJson(instance.createdAt),
       'data': instance.data,
     };

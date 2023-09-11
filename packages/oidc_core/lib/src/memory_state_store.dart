@@ -12,11 +12,6 @@ class OidcMemoryStore implements OidcStore {
   }
 
   @override
-  Future<String?> get(OidcStoreNamespace namespace, {required String key}) {
-    return Future.value(_perNamespaceMap(namespace)[key]);
-  }
-
-  @override
   Future<Set<String>> getAllKeys(OidcStoreNamespace namespace) {
     return Future.value(_perNamespaceMap(namespace).keys.toSet());
   }
@@ -41,27 +36,11 @@ class OidcMemoryStore implements OidcStore {
   }
 
   @override
-  Future<void> remove(OidcStoreNamespace namespace, {required String key}) {
-    _perNamespaceMap(namespace).remove(key);
-    return Future.value();
-  }
-
-  @override
   Future<void> removeMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
   }) {
     _perNamespaceMap(namespace).removeWhere((key, value) => keys.contains(key));
-    return Future.value();
-  }
-
-  @override
-  Future<void> set(
-    OidcStoreNamespace namespace, {
-    required String key,
-    required String value,
-  }) {
-    _perNamespaceMap(namespace)[key] = value;
     return Future.value();
   }
 

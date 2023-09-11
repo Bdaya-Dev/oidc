@@ -4,11 +4,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart';
 import 'package:logging/logging.dart';
-import 'package:oidc/src/managers/utils.dart';
-import 'package:oidc/src/models/authorize_request.dart';
-import 'package:oidc/src/models/user.dart';
+import 'package:oidc/src/facade.dart';
+
+import 'package:oidc_core/src/models/user.dart';
 import 'package:oidc/src/models/user_manager_settings.dart';
-import 'package:oidc/src/models/user_metadata.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 import 'package:rxdart/rxdart.dart';
@@ -139,17 +138,16 @@ class OidcUserManager {
       },
       maxAge: maxAgeOverride ?? settings.maxAge,
     );
-    final request = await Oidc.prepareAuthorizationCodeFlowRequest(
+    final requestContainer =
+        await OidcEndpoints.prepareAuthorizationCodeFlowRequest(
       input: simpleReq,
       metadata: doc,
       store: store,
-      options: options,
     );
 
-    final response = await Oidc.getAuthorizationResponse(
+    final response = await OidcFlutter.getPlatformAuthorizationResponse(
       metadata: discoveryDocument,
-      request: request,
-      store: store,
+      request: requestContainer.request,
       options: options,
     );
     if (response == null) {
@@ -185,36 +183,34 @@ class OidcUserManager {
     final doc = discoveryDocument;
     options ??= const OidcAuthorizePlatformSpecificOptions();
     final simpleReq = OidcSimpleImplicitFlowRequest(
-      responseType: responseType,
-      clientId: clientCredentials.clientId,
-      originalUri: originalUri,
-      redirectUri: redirectUriOverride ?? settings.redirectUri,
-      scope: scopeOverride ?? settings.scope,
-      prompt: promptOverride ?? settings.prompt,
-      display: displayOverride ?? settings.display,
-      extraStateData: extraStateData,
-      uiLocales: uiLocalesOverride ?? settings.uiLocales,
-      acrValues: acrValuesOverride ?? settings.acrValues,
-      idTokenHint: idTokenHintOverride ??
-          (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
-      loginHint: loginHint,
-      extraParameters: {
-        ...?settings.extraAuthenticationParameters,
-        ...?extraParameters,
-      },
-      maxAge: maxAgeOverride ?? settings.maxAge,
-    );
-    final request = await Oidc.prepareImplicitCodeFlowRequest(
+        responseType: responseType,
+        clientId: clientCredentials.clientId,
+        originalUri: originalUri,
+        redirectUri: redirectUriOverride ?? settings.redirectUri,
+        scope: scopeOverride ?? settings.scope,
+        prompt: promptOverride ?? settings.prompt,
+        display: displayOverride ?? settings.display,
+        extraStateData: extraStateData,
+        uiLocales: uiLocalesOverride ?? settings.uiLocales,
+        acrValues: acrValuesOverride ?? settings.acrValues,
+        idTokenHint: idTokenHintOverride ??
+            (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
+        loginHint: loginHint,
+        extraParameters: {
+          ...?settings.extraAuthenticationParameters,
+          ...?extraParameters,
+        },
+        maxAge: maxAgeOverride ?? settings.maxAge,
+        options: {});
+    final request = await OidcEndpoints.prepareImplicitFlowRequest(
       input: simpleReq,
       metadata: doc,
       store: store,
-      options: options,
     );
 
-    final response = await Oidc.getAuthorizationResponse(
+    final response = await OidcFlutter.getPlatformAuthorizationResponse(
       metadata: discoveryDocument,
       request: request,
-      store: store,
       options: options,
     );
     if (response == null) {
@@ -239,13 +235,14 @@ class OidcUserManager {
       OidcStoreNamespace.secureTokens,
     });
     _userSubject.add(null);
+
     final accessToken = currentUser.metadata.accessToken;
     if (accessToken != null) {
       final revokeEP = discoveryDocument.revocationEndpoint;
       if (revokeEP != null) {
         //
         try {
-          await OidcInternalUtilities.sendWithClient(
+          final response = await OidcInternalUtilities.sendWithClient(
             client: httpClient,
             request: http.Request(
               'POST',
@@ -555,11 +552,8 @@ class OidcUserManager {
     }
     final resp = await OidcEndpoints.parseAuthorizeResponse(
       responseUri: stateResponseUrl,
-      store: store,
     );
-    if (resp == null) {
-      return;
-    }
+
     await _handleSuccessfulAuthResponse(
       response: resp,
       grantType: resp.code == null

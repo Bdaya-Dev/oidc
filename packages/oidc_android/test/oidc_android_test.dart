@@ -23,7 +23,6 @@ void main() {
       },
     };
     final metadata = OidcProviderMetadata.fromJson(testDiscoveryRaw);
-    final store = OidcMemoryStore();
 
     setUp(() async {
       oidc = OidcAndroid();
@@ -57,8 +56,6 @@ void main() {
           redirectUri: Uri.parse('hello:/world'),
           scope: ['openid'],
         ),
-        store,
-        null,
         const OidcAuthorizePlatformSpecificOptions(),
       );
       expect(response, isNotNull);

@@ -1,4 +1,5 @@
-//Source: https://github.com/nrubin29/pkce_dart/blob/master/lib/pkce.dart
+// coverage:ignore-file
+// Source: https://github.com/nrubin29/pkce_dart/blob/master/lib/pkce.dart
 import 'dart:convert';
 import 'dart:math';
 

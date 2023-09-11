@@ -1,13 +1,12 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
-// ignore: implementation_imports
-import 'package:oidc_core/src/models/json_based_object.dart';
+import 'json_based_object.dart';
 
 part 'user_metadata.g.dart';
 
-///
+/// Represents the metadata of a user.
 @JsonSerializable(
-  createToJson: true,
+  createToJson: false,
   createFactory: true,
   explicitToJson: true,
   createFieldMap: true,
@@ -17,6 +16,10 @@ part 'user_metadata.g.dart';
   constructor: '_',
 )
 class OidcUserMetadata extends JsonBasedResponse {
+  ///
+  factory OidcUserMetadata.fromJson(Map<String, dynamic> src) =>
+      _$OidcUserMetadataFromJson(src);
+
   ///
   const OidcUserMetadata._({
     required super.src,
@@ -29,20 +32,13 @@ class OidcUserMetadata extends JsonBasedResponse {
   });
 
   ///
-  const OidcUserMetadata.empty()
-      : this._(
-          src: const {},
-        );
+  const OidcUserMetadata.empty() : this._(src: const {});
 
   /// All the used field keys.
   static final fieldKeys = _$OidcUserMetadataFieldMap.values.toSet();
 
-  ///
-  factory OidcUserMetadata.fromJson(Map<String, dynamic> src) =>
-      _$OidcUserMetadataFromJson(src);
-
   /// converts the metadata to json
-  Map<String, dynamic> toJson() => _$OidcUserMetadataToJson(this);
+  Map<String, dynamic> toJson() => src;
 
   ///
   @JsonKey(name: OidcConstants_AuthParameters.accessToken)
@@ -79,7 +75,8 @@ class OidcUserMetadata extends JsonBasedResponse {
   )
   final DateTime? expiresInReferenceDate;
 
-  /// Calculates the expirey date of the access token from [expiresIn] and [expiresInReferenceDate].
+  /// Calculates the expirey date of the access token from [expiresIn] and
+  /// [expiresInReferenceDate].
   DateTime? get calculatedExpiresAt {
     final expIn = expiresIn;
     final refDate = expiresInReferenceDate;

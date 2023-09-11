@@ -21,8 +21,7 @@ OidcAuthorizeResponse _$OidcAuthorizeResponseFromJson(
       nonce: json['nonce'] as String?,
       scope: json['scope'] == null
           ? const []
-          : OidcInternalUtilities.splitSpaceDelimitedString(
-              json['scope'] as String?),
+          : OidcInternalUtilities.splitSpaceDelimitedString(json['scope']),
       tokenType: json['token_type'] as String?,
       expiresIn: _$JsonConverterFromJson<int, Duration>(
           OidcInternalUtilities.readDurationSeconds(json, 'expires_in'),

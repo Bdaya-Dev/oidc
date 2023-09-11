@@ -1,3 +1,4 @@
+// coverage:ignore-file
 import 'package:oidc_core/oidc_core.dart';
 
 class OidcException implements Exception {

@@ -1,6 +1,3 @@
-// NOTICE: This file was mostly copied and edited from:
-// https://github.com/appsup-dart/openid_client/blob/92a9a055c62c3b302d70a401ef872b5b9dba6f21/lib/src/model/metadata.dart
-
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
 
@@ -15,9 +12,10 @@ part 'resp.g.dart';
 @JsonSerializable(
   createToJson: false,
   converters: OidcInternalUtilities.commonConverters,
+  constructor: '_'
 )
 class OidcProviderMetadata extends JsonBasedResponse {
-  const OidcProviderMetadata({
+  const OidcProviderMetadata._({
     required super.src,
     this.issuer,
     this.authorizationEndpoint,
@@ -72,51 +70,51 @@ class OidcProviderMetadata extends JsonBasedResponse {
       _$OidcProviderMetadataFromJson(json);
 
   /// URL that the OP asserts as its OpenIdProviderMetadata Identifier.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.issuer)
+  @JsonKey(name: OidcConstants_ProviderMetadata.issuer)
   final Uri? issuer;
 
   /// URL of the OP's OAuth 2.0 Authorization Endpoint.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata.authorizationEndpoint)
+      name: OidcConstants_ProviderMetadata.authorizationEndpoint)
   final Uri? authorizationEndpoint;
 
   /// URL of the OP's OAuth 2.0 Token Endpoint.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.tokenEndpoint)
+  @JsonKey(name: OidcConstants_ProviderMetadata.tokenEndpoint)
   final Uri? tokenEndpoint;
 
   /// URL of the OP's UserInfo Endpoint.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.userinfoEndpoint)
+  @JsonKey(name: OidcConstants_ProviderMetadata.userinfoEndpoint)
   final Uri? userinfoEndpoint;
 
   /// URL of the OP's JSON Web Key Set document.
   ///
   /// This contains the signing key(s) the RP uses to validate signatures
   /// from the OP.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.jwksUri)
+  @JsonKey(name: OidcConstants_ProviderMetadata.jwksUri)
   final Uri? jwksUri;
 
   /// URL of the OP's Dynamic Client Registration Endpoint.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.registrationEndpoint)
+  @JsonKey(name: OidcConstants_ProviderMetadata.registrationEndpoint)
   final Uri? registrationEndpoint;
 
   /// A list of the OAuth 2.0 scope values that this server supports.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.scopesSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.scopesSupported)
   final List<String>? scopesSupported;
 
   /// A list of the OAuth 2.0 `responseType` values that this OP supports.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata.responseTypesSupported)
+      name: OidcConstants_ProviderMetadata.responseTypesSupported)
   final List<String>? responseTypesSupported;
 
   /// A list of the OAuth 2.0 `responseMode` values that this OP supports.
   @JsonKey(
-    name: OidcConstants_AuthorizationServerMetadata.responseModesSupported,
+    name: OidcConstants_ProviderMetadata.responseModesSupported,
   )
   final List<String>? responseModesSupported;
 
   /// A list of the OAuth 2.0 Grant Type values that this OP supports.
   @JsonKey(
-    name: OidcConstants_AuthorizationServerMetadata.grantTypesSupported,
+    name: OidcConstants_ProviderMetadata.grantTypesSupported,
   )
   final List<String>? grantTypesSupported;
   List<String> get grantTypesSupportedOrDefault =>
@@ -128,14 +126,14 @@ class OidcProviderMetadata extends JsonBasedResponse {
 
   /// A list of the Authentication Context Class References that this
   /// OP supports.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.acrValuesSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.acrValuesSupported)
   final List<String>? acrValuesSupported;
 
   /// A list of the Subject Identifier types that this OP supports.
   ///
   /// Valid types include `pairwise` and `public`.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata.subjectTypesSupported)
+      name: OidcConstants_ProviderMetadata.subjectTypesSupported)
   final List<String>? subjectTypesSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the OP
@@ -146,21 +144,21 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// from the Authorization Endpoint (such as when using the Authorization Code
   /// Flow).
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .idTokenSigningAlgValuesSupported)
   final List<String>? idTokenSigningAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`alg` values) supported by the OP
   /// for the ID Token to encode the Claims in a JWT.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .idTokenEncryptionAlgValuesSupported)
   final List<String>? idTokenEncryptionAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`enc` values) supported by the OP
   /// for the ID Token to encode the Claims in a JWT.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .idTokenEncryptionEncValuesSupported)
   final List<String>? idTokenEncryptionEncValuesSupported;
 
@@ -168,7 +166,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
 
   /// UserInfo Endpoint to encode the Claims in a JWT.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .userinfoSigningAlgValuesSupported)
   final List<String>? userinfoSigningAlgValuesSupported;
 
@@ -176,7 +174,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// UserInfo Endpoint to encode the Claims in a JWT.
 
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .userinfoEncryptionAlgValuesSupported)
   final List<String>? userinfoEncryptionAlgValuesSupported;
 
@@ -184,7 +182,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// UserInfo Endpoint to encode the Claims in a JWT.
 
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .userinfoEncryptionEncValuesSupported)
   final List<String>? userinfoEncryptionEncValuesSupported;
 
@@ -195,7 +193,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// (using the request parameter) and when it is passed by reference (using
   /// the requestUri parameter).
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .requestObjectSigningAlgValuesSupported)
   final List<String>? requestObjectSigningAlgValuesSupported;
 
@@ -205,7 +203,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// These algorithms are used both when the Request Object is passed by value
   /// and when it is passed by reference.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .requestObjectEncryptionAlgValuesSupported)
   final List<String>? requestObjectEncryptionAlgValuesSupported;
 
@@ -215,7 +213,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// These algorithms are used both when the Request Object is passed by value
   /// and when it is passed by reference.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .requestObjectEncryptionEncValuesSupported)
   final List<String>? requestObjectEncryptionEncValuesSupported;
 
@@ -225,7 +223,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// `clientSecretJwt`, and `privateKeyJwt`. Other authentication methods
   /// MAY be defined by extensions.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .tokenEndpointAuthMethodsSupported)
   final List<String>? tokenEndpointAuthMethodsSupported;
 
@@ -234,13 +232,13 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// the Token Endpoint for the `privateKeyJwt` and `clientSecretJwt`
   /// authentication methods.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .tokenEndpointAuthSigningAlgValuesSupported)
   final List<String>? tokenEndpointAuthSigningAlgValuesSupported;
 
   /// A list of the display parameter values that the OpenID Provider supports.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata.displayValuesSupported)
+      name: OidcConstants_ProviderMetadata.displayValuesSupported)
   final List<String>? displayValuesSupported;
 
   /// A list of the Claim Types that the OpenID Provider supports.
@@ -248,7 +246,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// Values defined by the specification are `normal`, `aggregated`, and
   /// `distributed`. If omitted, the implementation supports only `normal`
   /// Claims.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.claimTypesSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.claimTypesSupported)
   final List<String>? claimTypesSupported;
 
   /// A list of the Claim Names of the Claims that the OpenID Provider MAY be
@@ -256,12 +254,12 @@ class OidcProviderMetadata extends JsonBasedResponse {
   ///
   /// Note that for privacy or other reasons, this might not be an exhaustive
   /// list.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.claimsSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.claimsSupported)
   final List<String>? claimsSupported;
 
   /// URL of a page containing human-readable information that developers might
   /// want or need to know when using the OpenID Provider.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.serviceDocumentation)
+  @JsonKey(name: OidcConstants_ProviderMetadata.serviceDocumentation)
   final Uri? serviceDocumentation;
 
   /// Languages and scripts supported for values in Claims being returned.
@@ -269,28 +267,28 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// Not all languages and scripts are necessarily supported for all Claim
   /// values.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata.claimsLocalesSupported)
+      name: OidcConstants_ProviderMetadata.claimsLocalesSupported)
   final List<String>? claimsLocalesSupported;
 
   /// Languages and scripts supported for the user interface.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.uiLocalesSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.uiLocalesSupported)
   final List<String>? uiLocalesSupported;
 
   /// `true` when the OP supports use of the `claims` parameter.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata.claimsParameterSupported)
+      name: OidcConstants_ProviderMetadata.claimsParameterSupported)
   final bool? claimsParameterSupported;
   bool get claimsParameterSupportedOrDefault =>
       claimsParameterSupported ?? false;
 
   /// `true` when the OP supports use of the `request` parameter.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata.requestParameterSupported)
+      name: OidcConstants_ProviderMetadata.requestParameterSupported)
   final bool? requestParameterSupported;
 
   /// `true` when the OP supports use of the `requestUri` parameter.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .requestUriParameterSupported)
   final bool? requestUriParameterSupported;
   bool get requestUriParameterSupportedOrDefault =>
@@ -299,19 +297,19 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// `true` when the OP requires any `requestUri` values used to be
   /// pre-registered using the requestUris registration parameter.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .requireRequestUriRegistration)
   final bool? requireRequestUriRegistration;
 
   /// URL that the OpenID Provider provides to the person registering the Client
   /// to read about the OP's requirements on how the Relying Party can use the
   /// data provided by the OP.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.opPolicyUri)
+  @JsonKey(name: OidcConstants_ProviderMetadata.opPolicyUri)
   final Uri? opPolicyUri;
 
   /// URL that the OpenID Provider provides to the person registering the Client
   /// to read about OpenID Provider's terms of service.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.opTosUri)
+  @JsonKey(name: OidcConstants_ProviderMetadata.opTosUri)
   final Uri? opTosUri;
 
   /// URL of an OP iframe that supports cross-origin communications for session
@@ -321,22 +319,22 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// it can run in the OP's security context. It accepts postMessage requests
   /// from the relevant RP iframe and uses postMessage to post back the login
   /// status of the End-User at the OP.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.checkSessionIframe)
+  @JsonKey(name: OidcConstants_ProviderMetadata.checkSessionIframe)
   final Uri? checkSessionIframe;
 
   /// URL at the OP to which an RP can perform a redirect to request that the
   /// End-User be logged out at the OP.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.endSessionEndpoint)
+  @JsonKey(name: OidcConstants_ProviderMetadata.endSessionEndpoint)
   final Uri? endSessionEndpoint;
 
   /// URL of the authorization server's OAuth 2.0 revocation endpoint.
-  @JsonKey(name: OidcConstants_AuthorizationServerMetadata.revocationEndpoint)
+  @JsonKey(name: OidcConstants_ProviderMetadata.revocationEndpoint)
   final Uri? revocationEndpoint;
 
   /// A list of client authentication methods supported by this revocation
   /// endpoint.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .revocationEndpointAuthMethodsSupported)
   final List<String>? revocationEndpointAuthMethodsSupported;
 
@@ -345,19 +343,19 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// client at the revocation endpoint for the `privateKeyJwt` and
   /// `clientSecretJwt` authentication methods.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .revocationEndpointAuthSigningAlgValuesSupported)
   final List<String>? revocationEndpointAuthSigningAlgValuesSupported;
 
   /// URL of the authorization server's OAuth 2.0 introspection endpoint.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata.introspectionEndpoint)
+      name: OidcConstants_ProviderMetadata.introspectionEndpoint)
   final Uri? introspectionEndpoint;
 
   /// A list of client authentication methods supported by this introspection
   /// endpoint.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .introspectionEndpointAuthMethodsSupported)
   final List<String>? introspectionEndpointAuthMethodsSupported;
 
@@ -366,7 +364,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// the client at the introspection endpoint for the `privateKeyJwt` and
   /// `clientSecretJwt` authentication methods.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .introspectionEndpointAuthSigningAlgValuesSupported)
   final List<String>? introspectionEndpointAuthSigningAlgValuesSupported;
 
@@ -374,7 +372,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// server.
   @JsonKey(
     name:
-        OidcConstants_AuthorizationServerMetadata.codeChallengeMethodsSupported,
+        OidcConstants_ProviderMetadata.codeChallengeMethodsSupported,
   )
   final List<String>? codeChallengeMethodsSupported;
 
@@ -382,7 +380,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// post an authorization request to exchange for a requestUri value usable
   /// at the authorization server.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .pushedAuthorizationRequestEndpoint)
   final Uri? pushedAuthorizationRequestEndpoint;
 
@@ -391,7 +389,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   ///
   /// If omitted, the default value is false.
   @JsonKey(
-      name: OidcConstants_AuthorizationServerMetadata
+      name: OidcConstants_ProviderMetadata
           .requirePushedAuthorizationRequests)
   final bool? requirePushedAuthorizationRequests;
   bool get requirePushedAuthorizationRequestsOrDefault =>

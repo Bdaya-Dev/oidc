@@ -1,11 +1,15 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
+import 'package:nonce/nonce.dart';
 import 'package:oidc_core/oidc_core.dart';
+import 'package:uuid/uuid.dart';
 
 const _authorizationHeaderKey = 'Authorization';
 const _formUrlEncoded = 'application/x-www-form-urlencoded';
 
+/// Helper class for dart-based openid connect clients.
 class OidcEndpoints {
   static T _handleResponse<T>({
     required Uri uri,
@@ -68,6 +72,170 @@ class OidcEndpoints {
     return req;
   }
 
+  /// Prepares an opinionated [OidcAuthorizeRequest]
+  /// from an [OidcSimpleAuthorizationCodeFlowRequest].
+  ///
+  /// This creates a [OidcAuthorizeState] as well, which is used to store useful
+  /// information about the flow parameters for later validation.
+  ///
+  /// If the [store] parameter is passed, it persists the generated nonce/state.
+  static Future<OidcSimpleAuthorizationRequestContainer>
+      prepareAuthorizationCodeFlowRequest({
+    required OidcProviderMetadata metadata,
+    required OidcSimpleAuthorizationCodeFlowRequest input,
+    OidcStore? store,
+  }) async {
+    //
+    final supportedCodeChallengeMethods =
+        metadata.codeChallengeMethodsSupported;
+    String? codeVerifier;
+    String? codeChallenge;
+    String? codeChallengeMethod;
+
+    if (supportedCodeChallengeMethods != null &&
+        supportedCodeChallengeMethods.isNotEmpty) {
+      codeVerifier = OidcPkcePair.generateVerifier();
+      if (supportedCodeChallengeMethods
+          .contains(OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256)) {
+        codeChallenge = OidcPkcePair.generateS256Challenge(codeVerifier);
+        codeChallengeMethod =
+            OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256;
+      } else if (supportedCodeChallengeMethods
+          .contains(OidcConstants_AuthorizeRequest_CodeChallengeMethod.plain)) {
+        codeChallenge = OidcPkcePair.generatePlainChallenge(codeVerifier);
+        codeChallengeMethod =
+            OidcConstants_AuthorizeRequest_CodeChallengeMethod.plain;
+      } else {
+        codeVerifier = null;
+        codeChallenge = null;
+      }
+    }
+
+    final nonce = Nonce.generate(32, Random.secure());
+    final stateData = OidcAuthorizeState(
+      id: const Uuid().v4(),
+      createdAt: DateTime.now(),
+      codeVerifier: codeVerifier,
+      codeChallenge: codeChallenge,
+      redirectUri: input.redirectUri,
+      clientId: input.clientId,
+      nonce: nonce,
+      originalUri: input.originalUri,
+      data: input.extraStateData,
+      extraTokenParams: input.extraTokenParameters,
+      options: input.options,
+    );
+    //store the state
+    if (store != null) {
+      await store.setStateData(
+        state: stateData.id,
+        stateData: stateData.toStorageString(),
+      );
+      // store the current state and nonce.
+      await store.setCurrentState(stateData.id);
+      await store.setCurrentNonce(nonce);
+    }
+
+    final supportsOpenIdScope =
+        metadata.scopesSupported?.contains(OidcConstants_Scopes.openid) ??
+            false;
+
+    final req = OidcAuthorizeRequest(
+      state: stateData.id,
+      clientId: input.clientId,
+      redirectUri: input.redirectUri,
+      responseType: [OidcConstants_AuthorizationEndpoint_ResponseType.code],
+      scope: input.scope.contains(OidcConstants_Scopes.openid)
+          ? input.scope
+          : [
+              if (supportsOpenIdScope) OidcConstants_Scopes.openid,
+              ...input.scope,
+            ],
+      acrValues: input.acrValues,
+      codeChallenge: codeChallenge,
+      codeChallengeMethod: codeChallengeMethod,
+      display: input.display,
+      extra: input.extraParameters,
+      idTokenHint: input.idTokenHint,
+      loginHint: input.loginHint,
+      maxAge: input.maxAge,
+      nonce: nonce,
+      prompt: input.prompt,
+      uiLocales: input.uiLocales,
+    );
+
+    return OidcSimpleAuthorizationRequestContainer(
+      request: req,
+      stateData: stateData,
+    );
+  }
+
+  /// Prepares an opinionated [OidcAuthorizeRequest]
+  /// from an [OidcSimpleImplicitFlowRequest].
+  ///
+  /// This creates a [OidcAuthorizeState] as well, which is used to store useful
+  /// information about the flow parameters for later validation.
+  ///
+  /// If the [store] parameter is passed, it persists the generated nonce/state.
+  static Future<OidcAuthorizeRequest> prepareImplicitFlowRequest({
+    required OidcProviderMetadata metadata,
+    required OidcSimpleImplicitFlowRequest input,
+    OidcStore? store,
+  }) async {
+    //
+    final nonce = Nonce.generate(32, Random.secure());
+    final stateData = OidcAuthorizeState(
+      id: const Uuid().v4(),
+      createdAt: DateTime.now(),
+      codeVerifier: null,
+      codeChallenge: null,
+      redirectUri: input.redirectUri,
+      clientId: input.clientId,
+      nonce: nonce,
+      originalUri: input.originalUri,
+      options: input.options,
+      data: input.extraStateData,
+      
+      extraTokenParams: null,
+    );
+    if (store != null) {
+      //store the state
+      await store.setStateData(
+        state: stateData.id,
+        stateData: stateData.toStorageString(),
+      );
+      // store the current state and nonce.
+      await store.setCurrentState(stateData.id);
+      await store.setCurrentNonce(nonce);
+    }
+
+    final supportsOpenIdScope =
+        metadata.scopesSupported?.contains(OidcConstants_Scopes.openid) ??
+            false;
+
+    return OidcAuthorizeRequest(
+      state: stateData.id,
+      clientId: input.clientId,
+      redirectUri: input.redirectUri,
+      responseType: input.responseType,
+      scope: input.scope.contains(OidcConstants_Scopes.openid)
+          ? input.scope
+          : [
+              if (supportsOpenIdScope) OidcConstants_Scopes.openid,
+              ...input.scope,
+            ],
+      acrValues: input.acrValues,
+      display: input.display,
+      extra: input.extraParameters,
+      idTokenHint: input.idTokenHint,
+      loginHint: input.loginHint,
+      maxAge: input.maxAge,
+      nonce: nonce,
+      prompt: input.prompt,
+      uiLocales: input.uiLocales,
+    );
+  }
+
   /// Gets the Oidc provider metadata from a '.well-known' url
   static Future<OidcProviderMetadata> getProviderMetadata(
     Uri wellKnownUri, {
@@ -91,51 +259,87 @@ class OidcEndpoints {
     );
   }
 
-  /// parses the Uri from an /authorize response
-  static Future<OidcAuthorizeResponse?> parseAuthorizeResponse({
+  /// parses the Uri from an /authorize response.
+  ///
+  /// if [responseMode] is assigned, it's used to determine the
+  /// response location; it can either be:
+  /// - `query` (in authorization code flow)
+  /// - `fragment` (in implicit flow).
+  ///
+  /// if [responseMode] is null, [resolveResponseModeByKey] (`state` by default)
+  /// is used to dynamically determine the response location,
+  /// where it would first look in the query parameters, then look in
+  /// the fragment parameters if it didn't find the key.
+  ///
+  /// if [responseMode] wasn't assigned a proper value, or if it wasn't resolved
+  /// , an [OidcException] is raised explaining the error.
+  static Future<OidcAuthorizeResponse> parseAuthorizeResponse({
     required Uri responseUri,
-    required OidcStore store,
+    String? responseMode,
+    String? resolveResponseModeByKey,
     Map<String, dynamic>? overrides,
   }) async {
-    var stateKey =
-        responseUri.queryParameters[OidcConstants_AuthParameters.state];
-    var queryParameters = responseUri.queryParameters;
+    String resolvedResponseMode;
+    Map<String, String> parameters;
+    if (responseMode != null) {
+      resolvedResponseMode = responseMode;
+      switch (responseMode) {
+        case OidcConstants_AuthorizeRequest_ResponseMode.query:
+          parameters = responseUri.queryParameters;
+        case OidcConstants_AuthorizeRequest_ResponseMode.fragment:
+          final fragmentUri = Uri(query: responseUri.fragment);
+          parameters = fragmentUri.queryParameters;
+        default:
+          throw OidcException(
+            "responseMode of $responseMode can't "
+            'be handled using a Uri only response.',
+          );
+      }
+    } else {
+      final key =
+          resolveResponseModeByKey ?? OidcConstants_AuthParameters.state;
 
-    if (stateKey is! String) {
-      final fragmentUri = Uri(query: responseUri.fragment);
-      stateKey =
-          fragmentUri.queryParameters[OidcConstants_AuthParameters.state];
-      queryParameters = fragmentUri.queryParameters;
-    }
-    if (stateKey is! String) {
-      return null;
-    }
-    final stateStr = await store.get(OidcStoreNamespace.state, key: stateKey);
-    if (stateStr == null) {
-      throw OidcException(
-        'State not found!',
-        extra: {
-          OidcConstants_AuthParameters.state: stateKey,
-        },
-      );
+      if (responseUri.queryParameters.containsKey(key)) {
+        parameters = responseUri.queryParameters;
+        resolvedResponseMode =
+            OidcConstants_AuthorizeRequest_ResponseMode.query;
+      } else {
+        final fragmentUri = Uri(query: responseUri.fragment);
+        if (fragmentUri.queryParameters.containsKey(key)) {
+          parameters = fragmentUri.queryParameters;
+
+          resolvedResponseMode =
+              OidcConstants_AuthorizeRequest_ResponseMode.fragment;
+        } else {
+          throw OidcException(
+            "Couldn't resolve the response mode, "
+            'make sure the key ($key) exists in the Uri.',
+          );
+        }
+      }
     }
 
     return OidcAuthorizeResponse.fromJson({
-      ...queryParameters,
+      ...parameters,
+      OidcConstants_AuthParameters.responseMode: resolvedResponseMode,
       ...?overrides,
     });
   }
 
-  /// Sends a token exchange request
+  /// Sends a token exchange request.
+  ///
+  /// if [credentials] is set to null, it's up to the caller how to authenticate
+  /// the request; either via [headers] or [extraBodyFields].
   static Future<OidcTokenResponse> token({
     required Uri tokenEndpoint,
     required OidcTokenRequest request,
-    required OidcClientAuthentication credentials,
+    OidcClientAuthentication? credentials,
     Map<String, String>? headers,
+    Map<String, dynamic>? extraBodyFields,
     http.Client? client,
   }) async {
-    final authHeader = credentials.getAuthorizationHeader();
-    final authBodyParams = credentials.getBodyParameters();
+    final authHeader = credentials?.getAuthorizationHeader();
+    final authBodyParams = credentials?.getBodyParameters();
     final req = _prepareRequest(
       method: OidcConstants_RequestMethod.post,
       uri: tokenEndpoint,
@@ -146,7 +350,8 @@ class OidcEndpoints {
       contentType: _formUrlEncoded,
       bodyFields: {
         ...request.toMap(),
-        if (authHeader == null) ...authBodyParams,
+        if (authHeader == null) ...?authBodyParams,
+        ...?extraBodyFields,
       },
     );
     final resp = await OidcInternalUtilities.sendWithClient(

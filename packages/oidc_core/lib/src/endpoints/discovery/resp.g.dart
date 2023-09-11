@@ -8,7 +8,7 @@ part of 'resp.dart';
 
 OidcProviderMetadata _$OidcProviderMetadataFromJson(
         Map<String, dynamic> json) =>
-    OidcProviderMetadata(
+    OidcProviderMetadata._(
       src: readSrcMap(json, '') as Map<String, dynamic>,
       issuer:
           json['issuer'] == null ? null : Uri.parse(json['issuer'] as String),

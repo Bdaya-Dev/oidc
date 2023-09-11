@@ -1,5 +1,7 @@
 // ignore_for_file: lines_longer_than_80_chars
 
+import 'package:oidc_core/oidc_core.dart';
+
 enum OidcStoreNamespace {
   /// Stores ephermal information, such as the current state id and nonce.
   session('session'),
@@ -25,41 +27,127 @@ enum OidcStoreNamespace {
   final String value;
 }
 
+/// An abstract interface for fetching data.
+///
+/// you can use [package:oidc_default_store](https://pub.dev/packages/oidc_default_store) for a persistent store (for production apps).
+///
+/// or `OidcMemoryStore` for a memory-only store (for CI/CD or CLI apps).
+abstract interface class OidcReadOnlyStore {
+  Future<void> init();
+  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace);
+
+  Future<Map<String, String>> getMany(
+    OidcStoreNamespace namespace, {
+    required Set<String> keys,
+  });
+}
+
 /// An abstract interface for storing/fetching data.
 ///
 /// you can use [package:oidc_default_store](https://pub.dev/packages/oidc_default_store) for a persistent store (for production apps).
 ///
 /// or `OidcMemoryStore` for a memory-only store (for CI/CD or CLI apps).
-abstract interface class OidcStore {
-  Future<void> init();
-  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace);
-
-  Future<void> set(
-    OidcStoreNamespace namespace, {
-    required String key,
-    required String value,
-  });
-
-  Future<String?> get(
-    OidcStoreNamespace namespace, {
-    required String key,
-  });
-
-  Future<void> remove(
-    OidcStoreNamespace namespace, {
-    required String key,
-  });
-
+abstract interface class OidcStore extends OidcReadOnlyStore {
   Future<void> setMany(
     OidcStoreNamespace namespace, {
     required Map<String, String> values,
-  });
-  Future<Map<String, String>> getMany(
-    OidcStoreNamespace namespace, {
-    required Set<String> keys,
   });
   Future<void> removeMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
   });
+}
+
+extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
+  /// gets a single key from a namespace.
+  Future<String?> get(
+    OidcStoreNamespace namespace, {
+    required String key,
+  }) {
+    return getMany(namespace, keys: {key})
+        .then((value) => value.values.firstOrNull);
+  }
+
+  /// Gets the current state from the session namespace.
+  Future<String?> getCurrentState() => get(
+        OidcStoreNamespace.session,
+        key: OidcConstants_AuthParameters.state,
+      );
+
+  /// Gets the current nonce from the session namespace.
+  Future<String?> getCurrentNonce() => get(
+        OidcStoreNamespace.session,
+        key: OidcConstants_AuthParameters.nonce,
+      );
+
+  /// Gets the stateData (value) of a [state] (key).
+  Future<String?> getStateData(String state) => get(
+        OidcStoreNamespace.state,
+        key: state,
+      );
+}
+
+extension OidcStoreExt on OidcStore {
+  /// Sets a single key to the store.
+  Future<void> set(
+    OidcStoreNamespace namespace, {
+    required String key,
+    required String value,
+  }) {
+    return setMany(namespace, values: {key: value});
+  }
+
+  /// Removes a single key from the store.
+  Future<void> remove(
+    OidcStoreNamespace namespace, {
+    required String key,
+  }) {
+    return removeMany(namespace, keys: {key});
+  }
+
+  /// Sets the current state from the session namespace.
+  ///
+  /// Sending null will remove the key.
+  Future<void> setCurrentState(String? state) => state == null
+      ? remove(
+          OidcStoreNamespace.session,
+          key: OidcConstants_AuthParameters.state,
+        )
+      : set(
+          OidcStoreNamespace.session,
+          key: OidcConstants_AuthParameters.state,
+          value: state,
+        );
+
+  /// Sets the current state from the session namespace.
+  ///
+  /// Sending null will remove the key.
+  Future<void> setCurrentNonce(String? nonce) => nonce == null
+      ? remove(
+          OidcStoreNamespace.session,
+          key: OidcConstants_AuthParameters.nonce,
+        )
+      : set(
+          OidcStoreNamespace.session,
+          key: OidcConstants_AuthParameters.nonce,
+          value: nonce,
+        );
+
+  /// Sets the [stateData] (value) of a [state] (key).
+  ///
+  /// if [stateData] (value) is null, the [state] (key) will be removed.
+  Future<void> setStateData({
+    required String state,
+    required String? stateData,
+  }) =>
+      stateData == null
+          ? remove(
+              OidcStoreNamespace.state,
+              key: state,
+            )
+          : set(
+              OidcStoreNamespace.state,
+              key: state,
+              value: stateData,
+            );
 }

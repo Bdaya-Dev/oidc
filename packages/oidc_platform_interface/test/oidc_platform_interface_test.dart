@@ -10,8 +10,6 @@ class OidcMock extends OidcPlatform {
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
-    OidcStore store,
-    OidcAuthorizeState? stateData,
     OidcAuthorizePlatformSpecificOptions options,
   ) {
     throw UnimplementedError();

@@ -44,11 +44,24 @@ class OidcInternalUtilities {
     return int.tryParse(res.toString());
   }
 
-  static List<String> splitSpaceDelimitedString(String? value) {
-    if (value == null || value.isEmpty) {
+  static List<String> splitSpaceDelimitedString(Object? value) {
+    if (value == null) {
       return [];
     }
-    return value.split(' ');
+    if (value is List) {
+      return value.whereType<String>().toList();
+    }
+    if (value is String) {
+      if (value.isEmpty) {
+        return [];
+      }
+      return value.split(' ');
+    }
+    throw ArgumentError.value(
+      value,
+      'value',
+      'parameter be null or List or String',
+    );
   }
 
   static String? dateTimeToJson(DateTime? value) {
@@ -76,7 +89,7 @@ class OidcInternalUtilities {
   }
 
   static const commonConverters = <JsonConverter<dynamic, dynamic>>[
-    OidcDateTimeEpochConverter(),
+    OidcNumericDateConverter(),
     OidcDurationSecondsConverter()
   ];
 }
