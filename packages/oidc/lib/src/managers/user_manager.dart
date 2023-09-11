@@ -5,8 +5,6 @@ import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/src/facade.dart';
-
-import 'package:oidc_core/src/models/user.dart';
 import 'package:oidc/src/models/user_manager_settings.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';

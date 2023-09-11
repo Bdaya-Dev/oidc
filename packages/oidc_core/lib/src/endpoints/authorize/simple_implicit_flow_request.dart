@@ -1,7 +1,8 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
 
-/// This authorization request takes only the minimal parameters and generates the rest.
+/// This authorization request takes only the minimal parameters and generates 
+/// the rest.
 ///
 /// this is a simpler version of [OidcAuthorizeRequest].
 class OidcSimpleImplicitFlowRequest {
