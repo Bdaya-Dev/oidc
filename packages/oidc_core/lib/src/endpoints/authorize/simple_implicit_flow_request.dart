@@ -1,7 +1,7 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
 
-/// This authorization request takes only the minimal parameters and generates 
+/// This authorization request takes only the minimal parameters and generates
 /// the rest.
 ///
 /// this is a simpler version of [OidcAuthorizeRequest].
@@ -50,7 +50,7 @@ class OidcSimpleImplicitFlowRequest {
   /// see [OidcAuthorizeRequest.redirectUri].
   final Uri redirectUri;
 
-  /// The original uri to go back to after the authorization succeeds, 
+  /// The original uri to go back to after the authorization succeeds,
   /// if null, defaults to [redirectUri].
   final Uri? originalUri;
 

@@ -56,7 +56,7 @@ void main() {
           redirectUri: Uri.parse('hello:/world'),
           scope: ['openid'],
         ),
-        const OidcAuthorizePlatformSpecificOptions(),
+        const OidcPlatformSpecificOptions(),
       );
       expect(response, isNotNull);
       expect(response!.code, mockAuthResponse['authorizationCode']);

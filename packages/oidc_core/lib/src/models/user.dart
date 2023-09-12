@@ -1,7 +1,7 @@
 import 'package:jose/jose.dart';
 import 'package:oidc_core/oidc_core.dart';
 
-/// A user is a verified JWT id_token, with some 
+/// A user is a verified JWT id_token, with some
 /// metadata (like access_token and refresh_token).
 class OidcUser {
   ///

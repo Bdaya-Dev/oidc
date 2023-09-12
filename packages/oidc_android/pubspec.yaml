@@ -22,6 +22,7 @@ dependencies:
     sdk: flutter
   flutter_appauth: ^6.0.2
   oidc_core: ^0.3.1
+  oidc_flutter_appauth: ^0.1.0+1
   oidc_platform_interface: ^0.2.0+1
 
 dev_dependencies:

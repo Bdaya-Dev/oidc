@@ -6,7 +6,7 @@ part 'user_metadata.g.dart';
 
 /// Represents the metadata of a user.
 @JsonSerializable(
-  createToJson: false,
+  createToJson: true,
   createFactory: true,
   explicitToJson: true,
   createFieldMap: true,
@@ -38,7 +38,10 @@ class OidcUserMetadata extends JsonBasedResponse {
   static final fieldKeys = _$OidcUserMetadataFieldMap.values.toSet();
 
   /// converts the metadata to json
-  Map<String, dynamic> toJson() => src;
+  Map<String, dynamic> toJson() => {
+        ...src,
+        ..._$OidcUserMetadataToJson(this),
+      };
 
   ///
   @JsonKey(name: OidcConstants_AuthParameters.accessToken)

@@ -1,6 +1,18 @@
 // coverage:ignore-file
 // ignore_for_file: camel_case_types, lines_longer_than_80_chars
-// This file was colelcted from https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml
+//==========================================================================================================
+// This file was colelcted from https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml  ||
+//==========================================================================================================
+
+///
+class OidcConstants_OperationDiscriminators {
+  /// for redirect-based auth
+  static const authorize = 'auth';
+
+  /// for redirect-based end_session
+  static const endSession = 'end_session';
+}
+
 class OidcConstants_AccessTokenTypes {
   /// Bearer
   static const bearer = 'Bearer';
@@ -629,6 +641,10 @@ class OidcConstants_Store {
   static const expiresInReferenceDate = 'expiresInReferenceDate';
   static const currentUserMetadata = 'currentUser';
   static const originalUri = 'original_uri';
+  static const operationDiscriminator = 'operationDiscriminator';
+
+  static const options = 'options';
+  static const extraTokenParams = 'extraTokenParams';
   // static const latestToken = 'latest';
   // static const idToken = 'id_token';
   // static const accessToken = 'access_token';

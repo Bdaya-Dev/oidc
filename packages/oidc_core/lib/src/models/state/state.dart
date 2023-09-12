@@ -3,33 +3,39 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:json_annotation/json_annotation.dart';
-import 'package:oidc_core/src/converters.dart';
-import 'package:oidc_core/src/state_store.dart';
-import 'package:oidc_core/src/utils.dart';
+import 'package:oidc_core/oidc_core.dart';
+import 'package:uuid/uuid.dart';
 
 part 'state.g.dart';
 
 /// Base class for any state
 @JsonSerializable(
-  createFactory: true,
+  createFactory: false,
   createToJson: true,
   converters: OidcInternalUtilities.commonConverters,
 )
 class OidcState {
   ///
-  const OidcState({
-    required this.id,
-    required this.createdAt,
+  OidcState({
+    required this.operationDiscriminator,
+    String? id,
+    DateTime? createdAt,
     this.data,
-  });
+  })  : id = id ?? const Uuid().v4(),
+        createdAt = createdAt ?? DateTime.now();
 
   ///
-  factory OidcState.fromJson(Map<String, dynamic> src) =>
-      _$OidcStateFromJson(src);
-
-  ///
-  factory OidcState.fromStorageString(String storageString) =>
-      OidcState.fromJson(jsonDecode(storageString) as Map<String, dynamic>);
+  factory OidcState.fromStorageString(String storageString) {
+    final src = jsonDecode(storageString) as Map<String, dynamic>;
+    switch (src[OidcConstants_Store.operationDiscriminator]) {
+      case OidcConstants_OperationDiscriminators.authorize:
+        return OidcAuthorizeState.fromJson(src);
+      case OidcConstants_OperationDiscriminators.endSession:
+        return OidcEndSessionState.fromJson(src);
+      default:
+        throw const OidcException('unkown state type.');
+    }
+  }
 
   ///
   @JsonKey(name: 'id')
@@ -39,7 +45,14 @@ class OidcState {
   @JsonKey(name: 'created_at')
   final DateTime createdAt;
 
-  
+  ///
+  @JsonKey(
+    name: OidcConstants_Store.operationDiscriminator,
+    includeToJson: true,
+    includeFromJson: true,
+  )
+  final String operationDiscriminator;
+
   /// custom "state", which can be used by a caller to have "data" round tripped
   ///
   /// it MUST be json encodable.

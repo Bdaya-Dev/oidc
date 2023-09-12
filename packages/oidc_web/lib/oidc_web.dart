@@ -14,19 +14,24 @@ class OidcWeb extends OidcPlatform {
     OidcPlatform.instance = OidcWeb();
   }
 
-  @override
-  Future<OidcAuthorizeResponse?> getAuthorizationResponse(
-    OidcProviderMetadata metadata,
-    OidcAuthorizeRequest request,
-    OidcAuthorizePlatformSpecificOptions options,
-  ) async {
-    final authEndpoint = metadata.authorizationEndpoint;
-    if (authEndpoint == null) {
-      throw const OidcException(
-        "The OpenId Provider doesn't provide the authorizationEndpoint",
-      );
-    }
-    final channel = BroadcastChannel('oidc_flutter_web/redirect');
+  String _calculatePopupOptions(OidcPlatformSpecificOptions_Web web) {
+    final h = web.popupHeight;
+    final w = web.popupWidth;
+    final top =
+        (window.outerHeight - h) / 2 + (window.screen?.available.top ?? 0);
+    final left =
+        (window.outerWidth - w) / 2 + (window.screen?.available.left ?? 0);
+
+    final windowOpts =
+        'width=$w,height=$h,toolbar=no,location=no,directories=no,status=no,menubar=no,copyhistory=no&top=$top,left=$left';
+    return windowOpts;
+  }
+
+  Future<Uri?> _getResponseUri({
+    required OidcPlatformSpecificOptions_Web options,
+    required Uri uri,
+  }) async {
+    final channel = BroadcastChannel(options.broadcastChannel);
     final c = Completer<Uri>();
     final sub = channel.onMessage.listen((event) {
       final data = event.data;
@@ -39,62 +44,93 @@ class OidcWeb extends OidcPlatform {
       }
       c.complete(parsed);
     });
-
     try {
-      final uri = request.generateUri(authEndpoint);
+      //
       if (!await canLaunchUrl(uri)) {
         _logger.warning(
-          "Couldn't launch the authorization request url: $uri, this might be a false positive.",
+          "Couldn't launch the request url: $uri, this might be a false positive.",
         );
       }
 
       //first prepare
-      switch (options.web.navigationMode) {
-        case OidcAuthorizePlatformOptions_Web_NavigationMode.samePage:
+      switch (options.navigationMode) {
+        case OidcPlatformSpecificOptions_Web_NavigationMode.samePage:
           if (!await launchUrl(
             uri,
             webOnlyWindowName: '_self',
           )) {
-            _logger
-                .severe("Couldn't launch the authorization request url: $uri");
+            _logger.severe("Couldn't launch the request url: $uri");
           }
           // return null, since this mode can't be awaited.
           return null;
-        case OidcAuthorizePlatformOptions_Web_NavigationMode.newPage:
+        case OidcPlatformSpecificOptions_Web_NavigationMode.newPage:
           if (!await launchUrl(
             uri,
             webOnlyWindowName: '_blank',
           )) {
-            _logger
-                .severe("Couldn't launch the authorization request url: $uri");
+            _logger.severe("Couldn't launch the request url: $uri");
             return null;
           }
           //listen to response uri.
-          return await OidcEndpoints.parseAuthorizeResponse(
-            responseUri: await c.future,
-          );
-        case OidcAuthorizePlatformOptions_Web_NavigationMode.popup:
-          final h = options.web.popupHeight;
-          final w = options.web.popupWidth;
-          final top = (window.outerHeight - h) / 2 +
-              (window.screen?.available.top ?? 0);
-          final left = (window.outerWidth - w) / 2 +
-              (window.screen?.available.left ?? 0);
-
-          final windowOpts =
-              'width=$w,height=$h,toolbar=no,location=no,directories=no,status=no,menubar=no,copyhistory=no&top=$top,left=$left';
-
+          return await c.future;
+        case OidcPlatformSpecificOptions_Web_NavigationMode.popup:
+          final windowOpts = _calculatePopupOptions(options);
           window.open(
             uri.toString(),
             'oidc_auth_popup',
             windowOpts,
           );
-          return await OidcEndpoints.parseAuthorizeResponse(
-            responseUri: await c.future,
-          );
+          return await c.future;
       }
     } finally {
       await sub.cancel();
     }
+  }
+
+  @override
+  Future<OidcAuthorizeResponse?> getAuthorizationResponse(
+    OidcProviderMetadata metadata,
+    OidcAuthorizeRequest request,
+    OidcPlatformSpecificOptions options,
+  ) async {
+    final endpoint = metadata.authorizationEndpoint;
+    if (endpoint == null) {
+      throw const OidcException(
+        "The OpenId Provider doesn't provide '${OidcConstants_ProviderMetadata.authorizationEndpoint}'",
+      );
+    }
+    final respUri = await _getResponseUri(
+      options: options.web,
+      uri: request.generateUri(endpoint),
+    );
+    if (respUri == null) {
+      return null;
+    }
+    return OidcEndpoints.parseAuthorizeResponse(
+      responseUri: respUri,
+    );
+  }
+
+  @override
+  Future<OidcEndSessionResponse?> getEndSessionResponse(
+    OidcProviderMetadata metadata,
+    OidcEndSessionRequest request,
+    OidcPlatformSpecificOptions options,
+  ) async {
+    final endpoint = metadata.endSessionEndpoint;
+    if (endpoint == null) {
+      throw const OidcException(
+        "The OpenId Provider doesn't provide '${OidcConstants_ProviderMetadata.endSessionEndpoint}'.",
+      );
+    }
+
+    final respUri = await _getResponseUri(
+      options: options.web,
+      uri: request.generateUri(endpoint),
+    );
+    if (respUri == null) {
+      return null;
+    }
+    return OidcEndSessionResponse.fromJson(respUri.queryParameters);
   }
 }

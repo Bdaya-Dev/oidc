@@ -12,9 +12,8 @@
         var bc = new BroadcastChannel('oidc_flutter_web/redirect');
         bc.postMessage(window.location.toString());
         bc.close();
-
+        
         handleRedirect();
-
 
         function handleRedirect(params) {
             let dataSrc;
@@ -33,18 +32,19 @@
             }
             const currentState = localStorage.getItem('oidc-state-' + state);
             if (!currentState) {
-                console.log('state not found, key: ' + state);
+                console.error('state not found, key: ' + state);
                 return;
             }
+            localStorage.setItem('oidc-state-' + state + '-response', window.location.toString());
             const parsedState = JSON.parse(currentState);
             if (!parsedState) {
-                console.log('parsed state is null');
+                console.error('parsed state is null');
                 return;
             }
             // Read the mode from the state.
             const webLaunchMode = parsedState.options?.webLaunchMode;
             if (!webLaunchMode) {
-                console.log('webLaunchMode not found in parsed state.');
+                console.error('webLaunchMode not found in parsed state.');
                 return;
             }
             if (webLaunchMode != 'samePage') {
@@ -53,9 +53,9 @@
             }
             const original_uri = parsedState.original_uri;
             if (!original_uri) {
+                console.warn("it's preferred that original_uri is used when webLaunchMode is samePage.");
                 return;
             }
-            localStorage.setItem('oidc-state-' + state + '-response', window.location.toString());
             window.location.assign(original_uri);
         }
     </script>

@@ -15,8 +15,7 @@ class OidcFlutter {
   static Future<OidcAuthorizeResponse?> getPlatformAuthorizationResponse({
     required OidcProviderMetadata metadata,
     required OidcAuthorizeRequest request,
-    OidcAuthorizePlatformSpecificOptions options =
-        const OidcAuthorizePlatformSpecificOptions(),
+    OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
   }) async {
     try {
       return _platform.getAuthorizationResponse(
@@ -27,6 +26,29 @@ class OidcFlutter {
     } catch (e, st) {
       throw OidcException(
         'Failed to authorize user',
+        internalException: e,
+        internalStackTrace: st,
+      );
+    }
+  }
+
+  /// starts the end session flow, and returns the response.
+  ///
+  /// consider using [OidcEndpoints.getProviderMetadata] to get the [metadata] parameter if you don't have it.
+  static Future<OidcEndSessionResponse?> getPlatformEndSessionResponse({
+    required OidcProviderMetadata metadata,
+    required OidcEndSessionRequest request,
+    OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
+  }) async {
+    try {
+      return _platform.getEndSessionResponse(
+        metadata,
+        request,
+        options,
+      );
+    } catch (e, st) {
+      throw OidcException(
+        'Failed to end user session',
         internalException: e,
         internalStackTrace: st,
       );

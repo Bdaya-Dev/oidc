@@ -78,7 +78,7 @@ class OidcSimpleAuthorizationCodeFlowRequest {
   final Map<String, dynamic>? extraParameters;
 }
 
-/// The result of processing an [OidcSimpleAuthorizationCodeFlowRequest] 
+/// The result of processing an [OidcSimpleAuthorizationCodeFlowRequest]
 /// or [OidcSimpleImplicitFlowRequest].
 class OidcSimpleAuthorizationRequestContainer {
   ///

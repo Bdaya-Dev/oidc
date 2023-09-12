@@ -85,6 +85,12 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
         OidcStoreNamespace.state,
         key: state,
       );
+
+  /// Gets the stateData (value) of a [state] (key).
+  Future<String?> getStateResponseData(String state) => get(
+        OidcStoreNamespace.state,
+        key: '$state-response',
+      );
 }
 
 extension OidcStoreExt on OidcStore {

@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_redundant_argument_values
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oidc/oidc.dart';
@@ -16,6 +17,34 @@ class AuthPage extends StatefulWidget {
 class _AuthPageState extends State<AuthPage> {
   final userNameController = TextEditingController();
   final passwordController = TextEditingController();
+
+  OidcPlatformSpecificOptions_Web_NavigationMode webNavigationMode =
+      OidcPlatformSpecificOptions_Web_NavigationMode.newPage;
+
+  bool allowInsecureConnections = false;
+  bool preferEphemeralSession = false;
+
+  OidcPlatformSpecificOptions _getOptions() {
+    return OidcPlatformSpecificOptions(
+      web: OidcPlatformSpecificOptions_Web(
+        navigationMode: webNavigationMode,
+        popupHeight: 800,
+        popupWidth: 730,
+      ),
+      // these settings are from https://pub.dev/packages/flutter_appauth.
+      android: OidcPlatformSpecificOptions_AppAuth_Android(
+        allowInsecureConnections: allowInsecureConnections,
+      ),
+      ios: OidcPlatformSpecificOptions_AppAuth_IosMacos(
+        preferEphemeralSession: preferEphemeralSession,
+      ),
+      macos: OidcPlatformSpecificOptions_AppAuth_IosMacos(
+        preferEphemeralSession: preferEphemeralSession,
+      ),
+      windows: const OidcPlatformSpecificOptions_Native(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     //remember, you can only enter this route if there is no user.
@@ -44,49 +73,47 @@ class _AuthPageState extends State<AuthPage> {
             child: const Text('login with Resource owner grant'),
           ),
           const Divider(),
+          DropdownButton<OidcPlatformSpecificOptions_Web_NavigationMode>(
+            hint: const Text('Web Navigation Mode'),
+            items: OidcPlatformSpecificOptions_Web_NavigationMode.values
+                .map(
+                  (e) => DropdownMenuItem(
+                    value: e,
+                    child: Text(e.name),
+                  ),
+                )
+                .toList(),
+            value: webNavigationMode,
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() {
+                webNavigationMode = value;
+              });
+            },
+          ),
+          const Divider(),
           ElevatedButton(
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               try {
                 final result =
                     await app_state.manager.loginAuthorizationCodeFlow(
-                  // final result = await app_state.manager.loginImplicitFlow(
                   originalUri: parsedOriginalUri ?? Uri.parse('/'),
                   //store any arbitrary data, here we store the authorization
                   //start time.
                   extraStateData: DateTime.now().toIso8601String(),
-                  // this translates to the `scope` parameter:  "openid profile"
-                  // scopeOverride: [
-                  //   // defaultScopes is [openid]
-                  //   ...OidcUserManagerSettings.defaultScopes,
-                  //   OidcConstants_Scopes.profile,
-                  // ],
-                  // login options.
-                  promptOverride: ['login'],
-                  options: const OidcAuthorizePlatformSpecificOptions(
-                    web: OidcAuthorizePlatformOptions_Web(
-                      navigationMode:
-                          OidcAuthorizePlatformOptions_Web_NavigationMode
-                              .newPage,
-                      popupHeight: 800,
-                      popupWidth: 730,
-                    ),
-                    // these settings are from https://pub.dev/packages/flutter_appauth.
-                    android: OidcAuthorizePlatformOptions_AppAuth(
-                      allowInsecureConnections: true,
-                    ),
-                    ios: OidcAuthorizePlatformOptions_AppAuth_IosMacos(
-                      allowInsecureConnections: true,
-                      preferEphemeralSession: true,
-                    ),
-                    macos: OidcAuthorizePlatformOptions_AppAuth_IosMacos(
-                      allowInsecureConnections: true,
-                      preferEphemeralSession: true,
-                    ),
-                    windows: OidcAuthorizePlatformOptions_Native(),
-                  ),
+                  options: _getOptions(),
+                  //NOTE: you can pass more parameters here.
                 );
-
+                if (kIsWeb &&
+                    webNavigationMode ==
+                        OidcPlatformSpecificOptions_Web_NavigationMode
+                            .samePage) {
+                  //in samePage navigation, you can't know the result here.
+                  return;
+                }
                 messenger.showSnackBar(
                   SnackBar(
                     content: Text(
@@ -120,14 +147,13 @@ class _AuthPageState extends State<AuthPage> {
                 //store any arbitrary data, here we store the authorization
                 //start time.
                 extraStateData: DateTime.now().toIso8601String(),
-                // this translates to the `scope` parameter:  "openid profile"
-                scopeOverride: [
-                  // defaultScopes is [openid]
-                  ...OidcUserManagerSettings.defaultScopes,
-                  OidcConstants_Scopes.profile,
-                ],
               );
-
+              if (kIsWeb &&
+                  webNavigationMode ==
+                      OidcPlatformSpecificOptions_Web_NavigationMode.samePage) {
+                //in samePage navigation, you can't know the result here.
+                return;
+              }
               messenger.showSnackBar(
                 SnackBar(
                   content: Text(

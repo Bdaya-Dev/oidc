@@ -5,47 +5,47 @@ import 'package:json_annotation/json_annotation.dart';
 
 /// Represents flutter platform-specific options.
 @JsonSerializable()
-class OidcAuthorizePlatformSpecificOptions {
+class OidcPlatformSpecificOptions {
   ///
-  const OidcAuthorizePlatformSpecificOptions({
-    this.android = const OidcAuthorizePlatformOptions_AppAuth(),
-    this.ios = const OidcAuthorizePlatformOptions_AppAuth_IosMacos(),
-    this.macos = const OidcAuthorizePlatformOptions_AppAuth_IosMacos(),
-    this.web = const OidcAuthorizePlatformOptions_Web(),
-    this.windows = const OidcAuthorizePlatformOptions_Native(),
-    this.linux = const OidcAuthorizePlatformOptions_Native(),
+  const OidcPlatformSpecificOptions({
+    this.android = const OidcPlatformSpecificOptions_AppAuth_Android(),
+    this.ios = const OidcPlatformSpecificOptions_AppAuth_IosMacos(),
+    this.macos = const OidcPlatformSpecificOptions_AppAuth_IosMacos(),
+    this.web = const OidcPlatformSpecificOptions_Web(),
+    this.windows = const OidcPlatformSpecificOptions_Native(),
+    this.linux = const OidcPlatformSpecificOptions_Native(),
   });
 
   /// Android options that will get passed to `package:flutter_appauth`
   @JsonKey(name: 'android')
-  final OidcAuthorizePlatformOptions_AppAuth android;
+  final OidcPlatformSpecificOptions_AppAuth_Android android;
 
   /// IOs options that will get passed to `package:flutter_appauth`
   @JsonKey(name: 'ios')
-  final OidcAuthorizePlatformOptions_AppAuth_IosMacos ios;
+  final OidcPlatformSpecificOptions_AppAuth_IosMacos ios;
 
   /// MacOs options that will get passed to `package:flutter_appauth`
   @JsonKey(name: 'macos')
-  final OidcAuthorizePlatformOptions_AppAuth_IosMacos macos;
+  final OidcPlatformSpecificOptions_AppAuth_IosMacos macos;
 
   /// Web options.
   @JsonKey(name: 'web')
-  final OidcAuthorizePlatformOptions_Web web;
+  final OidcPlatformSpecificOptions_Web web;
 
   /// Linux options.
   @JsonKey(name: 'linux')
-  final OidcAuthorizePlatformOptions_Native linux;
+  final OidcPlatformSpecificOptions_Native linux;
 
   /// Windows options.
   @JsonKey(name: 'windows')
-  final OidcAuthorizePlatformOptions_Native windows;
+  final OidcPlatformSpecificOptions_Native windows;
 }
 
 ///
 @JsonSerializable()
-class OidcAuthorizePlatformOptions_AppAuth {
+class OidcPlatformSpecificOptions_AppAuth_Android {
   ///
-  const OidcAuthorizePlatformOptions_AppAuth({
+  const OidcPlatformSpecificOptions_AppAuth_Android({
     this.allowInsecureConnections = false,
   });
 
@@ -55,12 +55,10 @@ class OidcAuthorizePlatformOptions_AppAuth {
 
 ///
 @JsonSerializable()
-class OidcAuthorizePlatformOptions_AppAuth_IosMacos
-    extends OidcAuthorizePlatformOptions_AppAuth {
+class OidcPlatformSpecificOptions_AppAuth_IosMacos {
   ///
-  const OidcAuthorizePlatformOptions_AppAuth_IosMacos({
+  const OidcPlatformSpecificOptions_AppAuth_IosMacos({
     this.preferEphemeralSession = false,
-    super.allowInsecureConnections,
   });
 
   ///
@@ -69,9 +67,9 @@ class OidcAuthorizePlatformOptions_AppAuth_IosMacos
 
 ///
 @JsonSerializable()
-class OidcAuthorizePlatformOptions_Native {
+class OidcPlatformSpecificOptions_Native {
   ///
-  const OidcAuthorizePlatformOptions_Native({
+  const OidcPlatformSpecificOptions_Native({
     this.successfulPageResponse,
     this.methodMismatchResponse,
     this.notFoundResponse,
@@ -89,7 +87,7 @@ class OidcAuthorizePlatformOptions_Native {
 
 /// The possible navigation modes to use for web.
 @JsonEnum()
-enum OidcAuthorizePlatformOptions_Web_NavigationMode {
+enum OidcPlatformSpecificOptions_Web_NavigationMode {
   /// NOT RECOMMENDED, since you have to reload your app and lose current ui state.
   ///
   /// 1. Navigate to the Uri on the same page
@@ -121,21 +119,30 @@ enum OidcAuthorizePlatformOptions_Web_NavigationMode {
 
 ///
 @JsonSerializable()
-class OidcAuthorizePlatformOptions_Web {
+class OidcPlatformSpecificOptions_Web {
   ///
-  const OidcAuthorizePlatformOptions_Web({
+  const OidcPlatformSpecificOptions_Web({
     this.navigationMode =
-        OidcAuthorizePlatformOptions_Web_NavigationMode.newPage,
+        OidcPlatformSpecificOptions_Web_NavigationMode.newPage,
     this.popupWidth = 700,
     this.popupHeight = 750,
+    this.broadcastChannel = defaultBroadcastChannel,
   });
 
-  /// The navigation mode to use for web.
-  final OidcAuthorizePlatformOptions_Web_NavigationMode navigationMode;
+  /// The default broadcast channel to use.
+  static const defaultBroadcastChannel = 'oidc_flutter_web/redirect';
 
-  /// The width of the popup window if [navigationMode] is set to [OidcAuthorizePlatformOptions_Web_NavigationMode.popup].
+  /// The navigation mode to use for web.
+  final OidcPlatformSpecificOptions_Web_NavigationMode navigationMode;
+
+  /// The width of the popup window if [navigationMode] is set to [OidcPlatformSpecificOptions_Web_NavigationMode.popup].
   final double popupWidth;
 
-  /// The height of the popup window if [navigationMode] is set to [OidcAuthorizePlatformOptions_Web_NavigationMode.popup].
+  /// The height of the popup window if [navigationMode] is set to [OidcPlatformSpecificOptions_Web_NavigationMode.popup].
   final double popupHeight;
+
+  /// The broadcast channel to use when receiving messages from the browser.
+  ///
+  /// defaults to [defaultBroadcastChannel].
+  final String broadcastChannel;
 }

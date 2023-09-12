@@ -10,10 +10,9 @@ part 'resp.g.dart';
 ///
 /// see https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml
 @JsonSerializable(
-  createToJson: false,
-  converters: OidcInternalUtilities.commonConverters,
-  constructor: '_'
-)
+    createToJson: false,
+    converters: OidcInternalUtilities.commonConverters,
+    constructor: '_')
 class OidcProviderMetadata extends JsonBasedResponse {
   const OidcProviderMetadata._({
     required super.src,
@@ -74,8 +73,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final Uri? issuer;
 
   /// URL of the OP's OAuth 2.0 Authorization Endpoint.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata.authorizationEndpoint)
+  @JsonKey(name: OidcConstants_ProviderMetadata.authorizationEndpoint)
   final Uri? authorizationEndpoint;
 
   /// URL of the OP's OAuth 2.0 Token Endpoint.
@@ -102,8 +100,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final List<String>? scopesSupported;
 
   /// A list of the OAuth 2.0 `responseType` values that this OP supports.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata.responseTypesSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.responseTypesSupported)
   final List<String>? responseTypesSupported;
 
   /// A list of the OAuth 2.0 `responseMode` values that this OP supports.
@@ -132,8 +129,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// A list of the Subject Identifier types that this OP supports.
   ///
   /// Valid types include `pairwise` and `public`.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata.subjectTypesSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.subjectTypesSupported)
   final List<String>? subjectTypesSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the OP
@@ -144,46 +140,40 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// from the Authorization Endpoint (such as when using the Authorization Code
   /// Flow).
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .idTokenSigningAlgValuesSupported)
+      name: OidcConstants_ProviderMetadata.idTokenSigningAlgValuesSupported)
   final List<String>? idTokenSigningAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`alg` values) supported by the OP
   /// for the ID Token to encode the Claims in a JWT.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .idTokenEncryptionAlgValuesSupported)
+      name: OidcConstants_ProviderMetadata.idTokenEncryptionAlgValuesSupported)
   final List<String>? idTokenEncryptionAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`enc` values) supported by the OP
   /// for the ID Token to encode the Claims in a JWT.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .idTokenEncryptionEncValuesSupported)
+      name: OidcConstants_ProviderMetadata.idTokenEncryptionEncValuesSupported)
   final List<String>? idTokenEncryptionEncValuesSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the
 
   /// UserInfo Endpoint to encode the Claims in a JWT.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .userinfoSigningAlgValuesSupported)
+      name: OidcConstants_ProviderMetadata.userinfoSigningAlgValuesSupported)
   final List<String>? userinfoSigningAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`alg` values) supported by the
   /// UserInfo Endpoint to encode the Claims in a JWT.
 
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .userinfoEncryptionAlgValuesSupported)
+      name: OidcConstants_ProviderMetadata.userinfoEncryptionAlgValuesSupported)
   final List<String>? userinfoEncryptionAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`enc` values) supported by the
   /// UserInfo Endpoint to encode the Claims in a JWT.
 
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .userinfoEncryptionEncValuesSupported)
+      name: OidcConstants_ProviderMetadata.userinfoEncryptionEncValuesSupported)
   final List<String>? userinfoEncryptionEncValuesSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the OP
@@ -193,8 +183,8 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// (using the request parameter) and when it is passed by reference (using
   /// the requestUri parameter).
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .requestObjectSigningAlgValuesSupported)
+      name:
+          OidcConstants_ProviderMetadata.requestObjectSigningAlgValuesSupported)
   final List<String>? requestObjectSigningAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`alg` values) supported by the OP
@@ -223,8 +213,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// `clientSecretJwt`, and `privateKeyJwt`. Other authentication methods
   /// MAY be defined by extensions.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .tokenEndpointAuthMethodsSupported)
+      name: OidcConstants_ProviderMetadata.tokenEndpointAuthMethodsSupported)
   final List<String>? tokenEndpointAuthMethodsSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the Token
@@ -237,8 +226,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final List<String>? tokenEndpointAuthSigningAlgValuesSupported;
 
   /// A list of the display parameter values that the OpenID Provider supports.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata.displayValuesSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.displayValuesSupported)
   final List<String>? displayValuesSupported;
 
   /// A list of the Claim Types that the OpenID Provider supports.
@@ -266,8 +254,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   ///
   /// Not all languages and scripts are necessarily supported for all Claim
   /// values.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata.claimsLocalesSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.claimsLocalesSupported)
   final List<String>? claimsLocalesSupported;
 
   /// Languages and scripts supported for the user interface.
@@ -275,30 +262,24 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final List<String>? uiLocalesSupported;
 
   /// `true` when the OP supports use of the `claims` parameter.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata.claimsParameterSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.claimsParameterSupported)
   final bool? claimsParameterSupported;
   bool get claimsParameterSupportedOrDefault =>
       claimsParameterSupported ?? false;
 
   /// `true` when the OP supports use of the `request` parameter.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata.requestParameterSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.requestParameterSupported)
   final bool? requestParameterSupported;
 
   /// `true` when the OP supports use of the `requestUri` parameter.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .requestUriParameterSupported)
+  @JsonKey(name: OidcConstants_ProviderMetadata.requestUriParameterSupported)
   final bool? requestUriParameterSupported;
   bool get requestUriParameterSupportedOrDefault =>
       requestUriParameterSupported ?? true;
 
   /// `true` when the OP requires any `requestUri` values used to be
   /// pre-registered using the requestUris registration parameter.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .requireRequestUriRegistration)
+  @JsonKey(name: OidcConstants_ProviderMetadata.requireRequestUriRegistration)
   final bool? requireRequestUriRegistration;
 
   /// URL that the OpenID Provider provides to the person registering the Client
@@ -334,8 +315,8 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// A list of client authentication methods supported by this revocation
   /// endpoint.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .revocationEndpointAuthMethodsSupported)
+      name:
+          OidcConstants_ProviderMetadata.revocationEndpointAuthMethodsSupported)
   final List<String>? revocationEndpointAuthMethodsSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the
@@ -348,8 +329,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final List<String>? revocationEndpointAuthSigningAlgValuesSupported;
 
   /// URL of the authorization server's OAuth 2.0 introspection endpoint.
-  @JsonKey(
-      name: OidcConstants_ProviderMetadata.introspectionEndpoint)
+  @JsonKey(name: OidcConstants_ProviderMetadata.introspectionEndpoint)
   final Uri? introspectionEndpoint;
 
   /// A list of client authentication methods supported by this introspection
@@ -371,8 +351,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// A list of PKCE code challenge methods supported by this authorization
   /// server.
   @JsonKey(
-    name:
-        OidcConstants_ProviderMetadata.codeChallengeMethodsSupported,
+    name: OidcConstants_ProviderMetadata.codeChallengeMethodsSupported,
   )
   final List<String>? codeChallengeMethodsSupported;
 
@@ -380,8 +359,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// post an authorization request to exchange for a requestUri value usable
   /// at the authorization server.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .pushedAuthorizationRequestEndpoint)
+      name: OidcConstants_ProviderMetadata.pushedAuthorizationRequestEndpoint)
   final Uri? pushedAuthorizationRequestEndpoint;
 
   /// Boolean parameter indicating whether the authorization server accepts
@@ -389,8 +367,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   ///
   /// If omitted, the default value is false.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .requirePushedAuthorizationRequests)
+      name: OidcConstants_ProviderMetadata.requirePushedAuthorizationRequests)
   final bool? requirePushedAuthorizationRequests;
   bool get requirePushedAuthorizationRequestsOrDefault =>
       requirePushedAuthorizationRequests ?? false;

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
 
@@ -14,9 +12,7 @@ part 'state.g.dart';
 )
 class OidcAuthorizeState extends OidcState {
   ///
-  const OidcAuthorizeState({
-    required super.id,
-    required super.createdAt,
+  OidcAuthorizeState({
     required this.redirectUri,
     required this.codeVerifier,
     required this.codeChallenge,
@@ -25,23 +21,22 @@ class OidcAuthorizeState extends OidcState {
     required this.clientId,
     required this.extraTokenParams,
     required this.options,
-    required super.data,
-  });
+    super.id,
+    super.createdAt,
+    super.data,
+  }) : super(
+          operationDiscriminator:
+              OidcConstants_OperationDiscriminators.authorize,
+        );
 
   ///
   factory OidcAuthorizeState.fromJson(Map<String, dynamic> src) =>
       _$OidcAuthorizeStateFromJson(src);
 
-  /// restores [OidcAuthorizeState] from storage string
-  factory OidcAuthorizeState.fromStorageString(String storageString) =>
-      OidcAuthorizeState.fromJson(
-        jsonDecode(storageString) as Map<String, dynamic>,
-      );
-
-  @JsonKey(name: 'extraTokenParams')
+  @JsonKey(name: OidcConstants_Store.extraTokenParams)
   final Map<String, dynamic>? extraTokenParams;
 
-  @JsonKey(name: 'options')
+  @JsonKey(name: OidcConstants_Store.options)
   final Map<String, dynamic>? options;
 
   /// The same code_challenge that was used to obtain the authorization_code
@@ -54,8 +49,7 @@ class OidcAuthorizeState extends OidcState {
   @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
   final String? codeVerifier;
 
-  /// The uri to go back to after the page in `redirectUri`
-  /// processes the response.
+  /// The redirectUri that was passed.
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
   final Uri redirectUri;
 

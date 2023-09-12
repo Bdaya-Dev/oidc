@@ -19,6 +19,7 @@ class OidcUserManagerSettings {
     this.expiryTolerance = Duration.zero,
     this.extraTokenParameters,
     this.postLogoutRedirectUri,
+    this.options,
   });
 
   /// see [OidcAuthorizeRequest.redirectUri].
@@ -53,4 +54,7 @@ class OidcUserManagerSettings {
 
   /// see [OidcIdTokenVerificationOptions.expiryTolerance].
   final Duration expiryTolerance;
+
+  /// platform-specific options.
+  final OidcPlatformSpecificOptions? options;
 }

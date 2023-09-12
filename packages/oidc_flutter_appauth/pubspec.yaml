@@ -1,0 +1,22 @@
+name: oidc_flutter_appauth
+description: Base Implementation connecting oidc_* packages with flutter_appauth
+version: 0.1.0+1
+
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_appauth: ^6.0.2
+  oidc_core: ^0.3.1
+  oidc_platform_interface: ^0.2.0+1
+  
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mocktail: ^0.3.0
+  very_good_analysis: ^5.0.0

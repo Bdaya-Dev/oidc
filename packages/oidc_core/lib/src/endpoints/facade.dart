@@ -195,7 +195,6 @@ class OidcEndpoints {
       originalUri: input.originalUri,
       options: input.options,
       data: input.extraStateData,
-      
       extraTokenParams: null,
     );
     if (store != null) {

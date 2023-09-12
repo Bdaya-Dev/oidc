@@ -33,6 +33,13 @@ final manager = OidcUserManager.lazy(
     uiLocales: ['ar'],
     // scopes supported by the provider and needed by the client.
     scope: ['openid', 'profile', 'email', 'offline_access', 'api'],
+    postLogoutRedirectUri: kIsWeb
+        ? Uri.parse('http://localhost:22433/redirect.html')
+        : Platform.isAndroid
+            ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
+            : Platform.isWindows || Platform.isLinux
+                ? Uri.parse('http://localhost:0')
+                : null,
     redirectUri: kIsWeb
         // this url must be an actual html page.
         // see the file in /web/redirect.html for an example.

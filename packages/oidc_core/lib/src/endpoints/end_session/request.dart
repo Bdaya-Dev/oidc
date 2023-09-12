@@ -117,10 +117,15 @@ class OidcEndSessionRequest extends JsonBasedRequest {
   final List<String>? uiLocales;
 
   @override
-  Map<String, dynamic> toMap() {
-    return {
-      ..._$OidcEndSessionRequestToJson(this),
-      ...super.toMap(),
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        ..._$OidcEndSessionRequestToJson(this),
+        ...super.toMap(),
+      };
+
+  Uri generateUri(Uri endpoint) => endpoint.replace(
+        queryParameters: {
+          ...endpoint.queryParameters,
+          ...toMap(),
+        },
+      );
 }

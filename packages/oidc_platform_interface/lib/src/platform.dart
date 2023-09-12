@@ -17,11 +17,11 @@ abstract class OidcPlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static OidcPlatform _instance = _NoOpOidcPlugin();
+  static OidcPlatform _instance = NoOpOidcPlatform();
 
   /// The default instance of [OidcPlatform] to use.
   ///
-  /// Defaults to [_NoOpOidcPlugin] which throws an exception on each operation.
+  /// Defaults to [NoOpOidcPlatform] which throws an exception on each operation.
   static OidcPlatform get instance => _instance;
 
   /// Platform-specific plugins should set this with their own platform-specific
@@ -36,16 +36,34 @@ abstract class OidcPlatform extends PlatformInterface {
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
-    OidcAuthorizePlatformSpecificOptions options,
+    OidcPlatformSpecificOptions options,
+  );
+
+  /// Returns the authorization response.
+  /// may throw an [OidcException].
+  Future<OidcEndSessionResponse?> getEndSessionResponse(
+    OidcProviderMetadata metadata,
+    OidcEndSessionRequest request,
+    OidcPlatformSpecificOptions options,
   );
 }
 
-class _NoOpOidcPlugin extends OidcPlatform {
+/// an implementation of [OidcPlatform] that throws [UnimplementedError].
+class NoOpOidcPlatform extends OidcPlatform {
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
-    OidcAuthorizePlatformSpecificOptions options,
+    OidcPlatformSpecificOptions options,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<OidcEndSessionResponse?> getEndSessionResponse(
+    OidcProviderMetadata metadata,
+    OidcEndSessionRequest request,
+    OidcPlatformSpecificOptions options,
   ) {
     throw UnimplementedError();
   }

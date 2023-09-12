@@ -26,6 +26,7 @@
         if (!state) {
             return;
         }
+        localStorage.setItem('oidc-state-' + state + '-response', window.location.toString());
         const currentState = localStorage.getItem('oidc-state-' + state);
         if (!currentState) {
             console.log('state not found, key: ' + state);
@@ -49,7 +50,6 @@
         if (!original_uri) {
             return;
         }
-        localStorage.setItem('oidc-state-' + state + '-response', window.location.toString());
         window.location.assign(original_uri);
     </script>
 </head>

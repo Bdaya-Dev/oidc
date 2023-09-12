@@ -8,9 +8,6 @@ part of 'state.dart';
 
 OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
     OidcAuthorizeState(
-      id: json['id'] as String,
-      createdAt:
-          const OidcNumericDateConverter().fromJson(json['created_at'] as int),
       redirectUri: Uri.parse(json['redirect_uri'] as String),
       codeVerifier: json['code_verifier'] as String?,
       codeChallenge: json['code_challenge'] as String?,
@@ -21,6 +18,9 @@ OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
       clientId: json['client_id'] as String,
       extraTokenParams: json['extraTokenParams'] as Map<String, dynamic>?,
       options: json['options'] as Map<String, dynamic>?,
+      id: json['id'] as String?,
+      createdAt: _$JsonConverterFromJson<int, DateTime>(
+          json['created_at'], const OidcNumericDateConverter().fromJson),
       data: json['data'],
     );
 
@@ -28,6 +28,7 @@ Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
     <String, dynamic>{
       'id': instance.id,
       'created_at': const OidcNumericDateConverter().toJson(instance.createdAt),
+      'operationDiscriminator': instance.operationDiscriminator,
       'data': instance.data,
       'extraTokenParams': instance.extraTokenParams,
       'options': instance.options,
@@ -38,3 +39,9 @@ Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
       'original_uri': instance.originalUri?.toString(),
       'nonce': instance.nonce,
     };
+
+Value? _$JsonConverterFromJson<Json, Value>(
+  Object? json,
+  Value? Function(Json json) fromJson,
+) =>
+    json == null ? null : fromJson(json as Json);

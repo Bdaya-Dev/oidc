@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:jose/jose.dart';
 import 'package:logging/logging.dart';
@@ -87,6 +88,10 @@ class OidcUserManager {
     }
   }
 
+  Map<String, dynamic> _getOptions(OidcPlatformSpecificOptions options) => {
+        if (kIsWeb) 'webLaunchMode': options.web.navigationMode.name,
+      };
+
   /// Attempts to login the user via the AuthorizationCodeFlow.
   ///
   /// [originalUri] is the uri you want to be redirected to after authentication is done,
@@ -106,7 +111,7 @@ class OidcUserManager {
     Duration? maxAgeOverride,
     Map<String, dynamic>? extraParameters,
     Map<String, dynamic>? extraTokenParameters,
-    OidcAuthorizePlatformSpecificOptions? options,
+    OidcPlatformSpecificOptions? options,
   }) async {
     _ensureInit();
     await _cleanUpStore(toDelete: {
@@ -115,7 +120,7 @@ class OidcUserManager {
       OidcStoreNamespace.secureTokens,
     });
     final doc = discoveryDocument;
-    options ??= const OidcAuthorizePlatformSpecificOptions();
+    options ??= const OidcPlatformSpecificOptions();
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
@@ -135,6 +140,7 @@ class OidcUserManager {
         ...?extraParameters,
       },
       maxAge: maxAgeOverride ?? settings.maxAge,
+      options: _getOptions(options),
     );
     final requestContainer =
         await OidcEndpoints.prepareAuthorizationCodeFlowRequest(
@@ -175,31 +181,32 @@ class OidcUserManager {
     String? loginHint,
     Duration? maxAgeOverride,
     Map<String, dynamic>? extraParameters,
-    OidcAuthorizePlatformSpecificOptions? options,
+    OidcPlatformSpecificOptions? options,
   }) async {
     _ensureInit();
     final doc = discoveryDocument;
-    options ??= const OidcAuthorizePlatformSpecificOptions();
+    options ??= const OidcPlatformSpecificOptions();
     final simpleReq = OidcSimpleImplicitFlowRequest(
-        responseType: responseType,
-        clientId: clientCredentials.clientId,
-        originalUri: originalUri,
-        redirectUri: redirectUriOverride ?? settings.redirectUri,
-        scope: scopeOverride ?? settings.scope,
-        prompt: promptOverride ?? settings.prompt,
-        display: displayOverride ?? settings.display,
-        extraStateData: extraStateData,
-        uiLocales: uiLocalesOverride ?? settings.uiLocales,
-        acrValues: acrValuesOverride ?? settings.acrValues,
-        idTokenHint: idTokenHintOverride ??
-            (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
-        loginHint: loginHint,
-        extraParameters: {
-          ...?settings.extraAuthenticationParameters,
-          ...?extraParameters,
-        },
-        maxAge: maxAgeOverride ?? settings.maxAge,
-        options: {});
+      responseType: responseType,
+      clientId: clientCredentials.clientId,
+      originalUri: originalUri,
+      redirectUri: redirectUriOverride ?? settings.redirectUri,
+      scope: scopeOverride ?? settings.scope,
+      prompt: promptOverride ?? settings.prompt,
+      display: displayOverride ?? settings.display,
+      extraStateData: extraStateData,
+      uiLocales: uiLocalesOverride ?? settings.uiLocales,
+      acrValues: acrValuesOverride ?? settings.acrValues,
+      idTokenHint: idTokenHintOverride ??
+          (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
+      loginHint: loginHint,
+      extraParameters: {
+        ...?settings.extraAuthenticationParameters,
+        ...?extraParameters,
+      },
+      maxAge: maxAgeOverride ?? settings.maxAge,
+      options: _getOptions(options),
+    );
     final request = await OidcEndpoints.prepareImplicitFlowRequest(
       input: simpleReq,
       metadata: doc,
@@ -221,40 +228,109 @@ class OidcUserManager {
     );
   }
 
-  /// Logs out the current user and clears the cache.
-  Future<void> logout() async {
-    final currentUser = this.currentUser;
-    if (currentUser == null) {
-      return;
-    }
+  /// This simply forgets the current user.
+  ///
+  /// this adds a new event to [userChanges] with value `null`, and also clears
+  /// the store namespaces: state, session, secureTokens.
+  ///
+  /// NOTE: this is different than [logout], since this method doesn't initiate
+  /// any logout flows.
+  Future<void> forgetUser() async {
     await _cleanUpStore(toDelete: {
       OidcStoreNamespace.state,
       OidcStoreNamespace.session,
       OidcStoreNamespace.secureTokens,
     });
     _userSubject.add(null);
+  }
 
-    final accessToken = currentUser.metadata.accessToken;
-    if (accessToken != null) {
-      final revokeEP = discoveryDocument.revocationEndpoint;
-      if (revokeEP != null) {
-        //
-        try {
-          final response = await OidcInternalUtilities.sendWithClient(
-            client: httpClient,
-            request: http.Request(
-              'POST',
-              revokeEP.replace(queryParameters: {
-                ...revokeEP.queryParameters,
-                'token': accessToken,
-              }),
-            ),
-          );
-        } catch (e) {
-          //do nothing
-        }
-      }
+  /// Logs out the current user and calls [forgetUser] if successful.
+  Future<void> logout({
+    String? logoutHint,
+    Map<String, dynamic>? extraParameters,
+    OidcPlatformSpecificOptions? options,
+    Uri? postLogoutRedirectUriOverride,
+    Uri? originalUri,
+    dynamic extraStateData,
+    List<String>? uiLocalesOverride,
+  }) async {
+    _ensureInit();
+    final doc = discoveryDocument;
+    options ??= const OidcPlatformSpecificOptions();
+    final currentUser = this.currentUser;
+    if (currentUser == null) {
+      return;
     }
+    final postLogoutRedirectUri =
+        postLogoutRedirectUriOverride ?? settings.postLogoutRedirectUri;
+
+    // final willComeBack = postLogoutRedirectUri != null;
+    final stateData = postLogoutRedirectUri == null
+        ? null
+        : OidcEndSessionState(
+            postLogoutRedirectUri: postLogoutRedirectUri,
+            originalUri: originalUri,
+            options: _getOptions(options),
+            data: extraStateData,
+          );
+    if (stateData != null) {
+      await store.setStateData(
+        state: stateData.id,
+        stateData: stateData.toStorageString(),
+      );
+      await store.setCurrentState(stateData.id);
+    }
+    final resultFuture = OidcFlutter.getPlatformEndSessionResponse(
+      metadata: doc,
+      request: OidcEndSessionRequest(
+        clientId: clientCredentials.clientId,
+        postLogoutRedirectUri: postLogoutRedirectUri,
+        uiLocales: uiLocalesOverride ?? settings.uiLocales,
+        idTokenHint: currentUser.idToken,
+        extra: extraParameters,
+        logoutHint: logoutHint,
+        state: stateData?.id,
+      ),
+      options: options,
+    );
+    if (stateData == null) {
+      // they won't come back with a result!
+      await forgetUser();
+      return;
+    }
+    final result = await resultFuture;
+    if (result == null) {
+      if (kIsWeb &&
+          options.web.navigationMode ==
+              OidcPlatformSpecificOptions_Web_NavigationMode.samePage) {
+        //wait for a result after redirect.
+        return;
+      }
+      await forgetUser();
+      return;
+    }
+    await store.setCurrentState(null);
+    await _handEndSessionResponse(result: result);
+  }
+
+  Future<void> _handEndSessionResponse({
+    required OidcEndSessionResponse result,
+  }) async {
+    //found result!
+    final resState = result.state;
+    if (resState == null) {
+      _logAndThrow("Didn't receive state, even though it was sent.");
+    }
+    final resStateData = await store.getStateData(resState);
+    if (resStateData == null) {
+      _logAndThrow("Didn't receive correct state value.");
+    }
+    final parsedState = OidcState.fromStorageString(resStateData);
+    if (parsedState is! OidcEndSessionState) {
+      _logAndThrow('received wrong state type.');
+    }
+    //if all state checks are successful, do logout.
+    await forgetUser();
   }
 
   Future<OidcUser?> _handleSuccessfulAuthResponse({
@@ -267,26 +343,23 @@ class OidcUserManager {
         "Server didn't return state parameter, even though it was sent.",
       );
     }
-    final currentStateKey = await store.get(
-      OidcStoreNamespace.session,
-      key: OidcConstants_AuthParameters.state,
-    );
+    final currentStateKey = await store.getCurrentState();
     if (currentStateKey != receivedStateKey) {
       throw const OidcException(
         'Server sent an older or different state parameter.',
       );
     }
 
-    final stateDataStr = await store.get(
-      OidcStoreNamespace.state,
-      key: receivedStateKey,
-    );
+    final stateDataStr = await store.getStateData(receivedStateKey);
     if (stateDataStr == null) {
       throw const OidcException(
         "Internal error, the session state wasn't cleared after the state was deleted.",
       );
     }
-    final stateData = OidcAuthorizeState.fromStorageString(stateDataStr);
+    final stateData = OidcState.fromStorageString(stateDataStr);
+    if (stateData is! OidcAuthorizeState) {
+      _logAndThrow('received wrong state type.');
+    }
     if (grantType == OidcConstants_GrantType.implicit) {
       //
       final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
@@ -530,17 +603,15 @@ class OidcUserManager {
   }
 
   Future<void> _loadStateResult() async {
-    final stateKey = await store.get(
-      OidcStoreNamespace.session,
-      key: OidcConstants_AuthParameters.state,
-    );
+    final stateKey = await store.getCurrentState();
     if (stateKey == null) {
       return;
     }
-    final stateResponseRaw = await store.get(
-      OidcStoreNamespace.state,
-      key: '$stateKey-response',
-    );
+    final stateRaw = await store.getStateData(stateKey);
+    if (stateRaw == null) {
+      return;
+    }
+    final stateResponseRaw = await store.getStateResponseData(stateKey);
     if (stateResponseRaw == null) {
       return;
     }
@@ -548,16 +619,24 @@ class OidcUserManager {
     if (stateResponseUrl == null) {
       return;
     }
-    final resp = await OidcEndpoints.parseAuthorizeResponse(
-      responseUri: stateResponseUrl,
-    );
-
-    await _handleSuccessfulAuthResponse(
-      response: resp,
-      grantType: resp.code == null
-          ? OidcConstants_GrantType.implicit
-          : OidcConstants_GrantType.authorizationCode,
-    );
+    final stateData = OidcState.fromStorageString(stateRaw);
+    switch (stateData) {
+      case OidcAuthorizeState():
+        final resp = await OidcEndpoints.parseAuthorizeResponse(
+          responseUri: stateResponseUrl,
+        );
+        await _handleSuccessfulAuthResponse(
+          response: resp,
+          grantType: resp.code == null
+              ? OidcConstants_GrantType.implicit
+              : OidcConstants_GrantType.authorizationCode,
+        );
+      case OidcEndSessionState():
+        final resp =
+            OidcEndSessionResponse.fromJson(stateResponseUrl.queryParameters);
+        await _handEndSessionResponse(result: resp);
+      default:
+    }
   }
 
   /// true if [init] has been called with no exceptions.
@@ -575,12 +654,11 @@ class OidcUserManager {
       if (jwksUri != null) {
         keyStore.addKeySetUrl(jwksUri);
       }
+      //get the authorization response
+      await _loadStateResult();
+
       //load cached tokens if they exist.
       await _loadCachedTokens();
-      //get the authorization response
-      if (currentUser == null) {
-        await _loadStateResult();
-      }
     } catch (e) {
       _hasInit = false;
       rethrow;
