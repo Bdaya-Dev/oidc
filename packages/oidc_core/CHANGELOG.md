@@ -1,3 +1,7 @@
+## 0.3.2
+
+ - **FEAT**: support logout.
+
 ## 0.3.1
 
  - **FEAT**: initial version.

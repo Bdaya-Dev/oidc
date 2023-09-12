@@ -1,6 +1,6 @@
 name: oidc_core
 description: A dart package containing classes and helpers for OpenIdConnect v1.0
-version: 0.3.1
+version: 0.3.2
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_core
 topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
 environment:
