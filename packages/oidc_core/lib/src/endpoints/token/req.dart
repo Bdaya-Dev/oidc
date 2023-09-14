@@ -14,6 +14,7 @@ class OidcTokenRequest extends JsonBasedRequest {
   OidcTokenRequest({
     required this.grantType,
     this.clientId,
+    this.clientSecret,
     this.code,
     this.codeVerifier,
     this.username,
@@ -31,9 +32,10 @@ class OidcTokenRequest extends JsonBasedRequest {
   });
 
   OidcTokenRequest.authorizationCode({
-    required Uri this.redirectUri,
     required String this.code,
+    this.redirectUri,
     this.clientId,
+    this.clientSecret,
     this.codeVerifier,
     super.extra,
   })  : grantType = OidcConstants_GrantType.authorizationCode,
@@ -48,11 +50,31 @@ class OidcTokenRequest extends JsonBasedRequest {
         refreshToken = null,
         scope = null;
 
+  OidcTokenRequest.refreshToken({
+    required String this.refreshToken,
+    this.clientId,
+    this.clientSecret,
+    this.scope,
+    super.extra,
+  })  : grantType = OidcConstants_GrantType.refreshToken,
+        codeVerifier = null,
+        redirectUri = null,
+        username = null,
+        password = null,
+        assertion = null,
+        code = null,
+        audience = null,
+        subjectTokenType = null,
+        subjectToken = null,
+        actorTokenType = null,
+        actorToken = null;
+
   OidcTokenRequest.password({
     required String this.username,
     required String this.password,
     required List<String> this.scope,
     this.clientId,
+    this.clientSecret,
     super.extra,
   })  : grantType = OidcConstants_GrantType.password,
         code = null,
@@ -69,6 +91,7 @@ class OidcTokenRequest extends JsonBasedRequest {
   OidcTokenRequest.clientCredentials({
     this.scope,
     this.clientId,
+    this.clientSecret,
     super.extra,
   })  : grantType = OidcConstants_GrantType.clientCredentials,
         code = null,
@@ -88,6 +111,7 @@ class OidcTokenRequest extends JsonBasedRequest {
     required String this.assertion,
     this.scope,
     this.clientId,
+    this.clientSecret,
     super.extra,
   })  : grantType = OidcConstants_GrantType.saml2Bearer,
         code = null,
@@ -115,6 +139,11 @@ class OidcTokenRequest extends JsonBasedRequest {
   /// is not available.
   @JsonKey(name: OidcConstants_AuthParameters.clientId)
   final String? clientId;
+
+  /// REQUIRED if client secret (or any other Client Authentication mechanism)
+  /// is not available.
+  @JsonKey(name: OidcConstants_AuthParameters.clientSecret)
+  final String? clientSecret;
 
   /// REQUIRED, if using PKCE.
   ///

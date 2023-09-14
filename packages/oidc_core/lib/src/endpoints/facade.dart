@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:nonce/nonce.dart';
 import 'package:oidc_core/oidc_core.dart';
+import 'package:oidc_core/src/endpoints/userinfo/response.dart';
 import 'package:uuid/uuid.dart';
 
 const _authorizationHeaderKey = 'Authorization';
@@ -360,6 +361,33 @@ class OidcEndpoints {
     return _handleResponse(
       uri: tokenEndpoint,
       mapper: OidcTokenResponse.fromJson,
+      response: resp,
+      request: req,
+    );
+  }
+
+  static Future<OidcUserInfoResponse> userInfo({
+    required Uri userInfoEndpoint,
+    required String accessToken,
+    Map<String, String>? headers,
+    http.Client? client,
+  }) async {
+    final req = _prepareRequest(
+      method: OidcConstants_RequestMethod.get,
+      uri: userInfoEndpoint,
+      headers: {
+        _authorizationHeaderKey: 'Bearer $accessToken',
+        ...?headers,
+      },
+    );
+
+    final resp = await OidcInternalUtilities.sendWithClient(
+      client: client,
+      request: req,
+    );
+    return _handleResponse(
+      uri: userInfoEndpoint,
+      mapper: OidcUserInfoResponse.fromJson,
       response: resp,
       request: req,
     );

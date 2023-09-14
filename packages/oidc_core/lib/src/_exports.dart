@@ -1,6 +1,7 @@
 export 'constants.dart';
 export 'converters.dart';
 export 'endpoints/_exports.dart';
+export 'managers/_exports.dart';
 export 'memory_state_store.dart';
 export 'models/_exports.dart';
 export 'pkce.dart';

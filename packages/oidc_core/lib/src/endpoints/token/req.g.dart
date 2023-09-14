@@ -19,6 +19,7 @@ Map<String, dynamic> _$OidcTokenRequestToJson(OidcTokenRequest instance) {
 
   writeNotNull('code', instance.code);
   writeNotNull('client_id', instance.clientId);
+  writeNotNull('client_secret', instance.clientSecret);
   writeNotNull('code_verifier', instance.codeVerifier);
   writeNotNull('username', instance.username);
   writeNotNull('password', instance.password);

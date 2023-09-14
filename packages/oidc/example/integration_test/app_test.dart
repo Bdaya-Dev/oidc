@@ -12,7 +12,7 @@ void main() {
     testWidgets('manager initializes correctly', (tester) async {
       app.main();
       await tester.pumpAndSettle();
-      expect(app_state.manager.didInit, true);
+      expect(app_state.currentManager.didInit, true);
       // await tester.tap(find.text('Get Platform Name'));
       // await tester.pumpAndSettle();
       // final expected = expectedPlatformName();

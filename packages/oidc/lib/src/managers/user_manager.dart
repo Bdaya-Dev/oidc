@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:jose/jose.dart';
+import 'package:jose_plus/jose.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/src/facade.dart';
 import 'package:oidc/src/models/user_manager_settings.dart';
@@ -161,6 +161,31 @@ class OidcUserManager {
     return _handleSuccessfulAuthResponse(
       response: response,
       grantType: OidcConstants_GrantType.authorizationCode,
+    );
+  }
+
+  /// Attempts to login the user via resource owner's credentials.
+  Future<OidcUser?> loginPassword({
+    required String username,
+    required String password,
+    List<String>? scopeOverride,
+  }) async {
+    final tokenResp = await OidcEndpoints.token(
+      tokenEndpoint: discoveryDocument.tokenEndpoint!,
+      request: OidcTokenRequest.password(
+        password: password,
+        username: username,
+        scope: scopeOverride ?? settings.scope,
+        clientId: clientCredentials.clientId,
+        extra: settings.extraTokenParameters,
+      ),
+      headers: settings.extraTokenHeaders,
+      client: httpClient,
+      credentials: clientCredentials,
+    );
+    return _createUserFromToken(
+      token: OidcToken.fromResponse(tokenResp),
+      nonce: null,
     );
   }
 
@@ -339,49 +364,46 @@ class OidcUserManager {
   }) async {
     final receivedStateKey = response.state;
     if (receivedStateKey == null) {
-      throw const OidcException(
-        "Server didn't return state parameter, even though it was sent.",
-      );
+      _logAndThrow(
+          "Server didn't return state parameter, even though it was sent.");
     }
     final currentStateKey = await store.getCurrentState();
     if (currentStateKey != receivedStateKey) {
-      throw const OidcException(
-        'Server sent an older or different state parameter.',
-      );
+      _logAndThrow('Server sent an older or different state parameter.');
     }
 
     final stateDataStr = await store.getStateData(receivedStateKey);
     if (stateDataStr == null) {
-      throw const OidcException(
+      await store.setCurrentState(null);
+      _logger.warning(
         "Internal error, the session state wasn't cleared after the state was deleted.",
       );
+      return null;
     }
     final stateData = OidcState.fromStorageString(stateDataStr);
     if (stateData is! OidcAuthorizeState) {
       _logAndThrow('received wrong state type.');
     }
     if (grantType == OidcConstants_GrantType.implicit) {
-      //
       final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
       if (implicitTokenResponse.accessToken != null ||
           implicitTokenResponse.idToken != null) {
-        return _handleTokenResponse(
-          response: implicitTokenResponse,
+        return _createUserFromToken(
+          token: OidcToken.fromResponse(implicitTokenResponse),
           nonce: stateData.nonce,
-          refDate: DateTime.now().toUtc(),
         );
       }
     }
     final doc = discoveryDocument;
     final tokenEndPoint = doc.tokenEndpoint;
     if (tokenEndPoint == null) {
-      throw const OidcException(
+      _logAndThrow(
         "This provider doesn't provide a token endpoint",
       );
     }
     final code = response.code;
     if (code == null) {
-      throw const OidcException(
+      _logAndThrow(
         "Server didn't send code even though the authorization code flow was used.",
       );
     }
@@ -392,74 +414,177 @@ class OidcUserManager {
         redirectUri: response.redirectUri ?? stateData.redirectUri,
         codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
         extra: stateData.extraTokenParams,
-        code: code,
         clientId: clientCredentials.clientId,
+        clientSecret: clientCredentials.clientSecret,
+        code: code,
       ),
       client: httpClient,
     );
-    return _handleTokenResponse(
-      response: tokenResp,
+    return _createUserFromToken(
+      token: OidcToken.fromResponse(tokenResp),
       nonce: stateData.nonce,
-      refDate: DateTime.now().toUtc(),
     );
   }
 
-  Future<OidcUser?> _handleTokenResponse({
-    required OidcTokenResponse response,
+  /// Handles a token; either from cache, in which case the [nonce] will be null
+  /// , or from an auth response, in which case [nonce] will not be null.
+  ///
+  /// This function creates an [OidcUser] by validating the token, and then
+  /// passing the result to [_validateAndSaveUser].
+  ///
+  /// if the manager already has a [currentUser], this function replaces
+  /// its internal token (after validation).
+  Future<OidcUser?> _createUserFromToken({
+    required OidcToken token,
     required String? nonce,
-    required DateTime? refDate,
+    Map<String, dynamic>? attributes,
   }) async {
-    refDate ??= DateTime.now().toUtc();
-    final idToken = response.idToken;
-    if (idToken == null) {
-      throw const OidcException(
-        "Server didn't return the id_token.",
+    final currentUser = this.currentUser;
+    OidcUser newUser;
+    if (currentUser == null) {
+      newUser = await OidcUser.fromIdToken(
+        token: token,
+        allowedAlgorithms:
+            discoveryDocument.tokenEndpointAuthSigningAlgValuesSupported,
+        keystore: keyStore,
+        attributes: attributes,
       );
+    } else {
+      newUser = await currentUser.replaceToken(token);
+      if (attributes != null) {
+        newUser = newUser.setAttributes(attributes);
+      }
     }
-    final metadataObject = OidcUserMetadata.fromJson({
-      ...response.src,
-      OidcConstants_Store.expiresInReferenceDate: refDate,
-    });
-    final user = await OidcUser.fromIdToken(
-      idToken: idToken,
-      metadata: metadataObject,
-      allowedAlgorithms:
-          discoveryDocument.tokenEndpointAuthSigningAlgValuesSupported,
-      keystore: keyStore,
-    );
-    final idTokenNonce =
-        user.parsedToken.claims[OidcConstants_AuthParameters.nonce] as String?;
+
+    final idTokenNonce = newUser
+        .parsedIdToken.claims[OidcConstants_AuthParameters.nonce] as String?;
     if (nonce != null && idTokenNonce != nonce) {
-      throw const OidcException(
+      _logAndThrow(
         'Server returned a wrong id_token nonce, might be a replay attack.',
       );
     }
-    return _handleUser(user);
+    return _validateAndSaveUser(newUser);
   }
 
-  Future<OidcUser?> _handleUser(OidcUser user) async {
-    final errors = user.parsedToken.claims
+  Future<void> _saveUser(OidcUser user) async {
+    await store.setMany(
+      OidcStoreNamespace.secureTokens,
+      values: {
+        OidcConstants_Store.currentToken: jsonEncode(user.token.toJson()),
+        OidcConstants_Store.currentUserAttributes: jsonEncode(user.attributes),
+      },
+    );
+    _userSubject.add(user);
+  }
+
+  late final _tokenEvents = OidcTokenEventsManager(
+    getExpiringNotificationTime: settings.refreshBefore,
+  );
+  Future<void> _listenToTokenRefreshIfSupported(
+    OidcTokenEventsManager tokenEventsManager,
+    OidcUser? user,
+  ) async {
+    if (user == null) {
+      tokenEventsManager.unload();
+    } else {
+      if (!discoveryDocument.grantTypesSupportedOrDefault
+          .contains(OidcConstants_GrantType.refreshToken)) {
+        //Server doesn't support refresh_token grant.
+        return;
+      }
+      if (user.token.refreshToken == null) {
+        // Can't refresh the access token anyway.
+        return;
+      }
+      if (user.token.expiresIn == null) {
+        // Can't know how much time is left.
+        return;
+      }
+      tokenEventsManager.load(user.token);
+    }
+  }
+
+  Future<void> _handleTokenExpiring(OidcToken event) async {
+    final refreshToken = event.refreshToken;
+    if (refreshToken == null) {
+      return;
+    }
+    OidcUser? newUser;
+    //try getting a new token.
+    try {
+      final tokenResponse = await OidcEndpoints.token(
+        tokenEndpoint: discoveryDocument.tokenEndpoint!,
+        credentials: clientCredentials,
+        client: httpClient,
+        headers: settings.extraTokenHeaders,
+        request: OidcTokenRequest.refreshToken(
+          refreshToken: refreshToken,
+          clientId: clientCredentials.clientId,
+          clientSecret: clientCredentials.clientSecret,
+          extra: settings.extraTokenParameters,
+          scope: settings.scope,
+        ),
+      );
+      newUser = await _createUserFromToken(
+        token: OidcToken.fromResponse(tokenResponse),
+        nonce: null,
+      );
+    } catch (e) {
+      //swallow errors on fail, but unload the event manager.
+      _tokenEvents.unload();
+    }
+    _logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
+  }
+
+  void _handleTokenExpired(OidcToken event) {}
+
+  /// This function validates that a user claims
+  Future<OidcUser?> _validateAndSaveUser(OidcUser user) async {
+    final errors = user.parsedIdToken.claims
         .validate(
           clientId: clientCredentials.clientId,
           issuer: discoveryDocument.issuer,
           expiryTolerance: settings.expiryTolerance,
         )
         .toList();
-    if (errors.isEmpty) {
-      await store.setMany(
-        OidcStoreNamespace.secureTokens,
-        values: {
-          OidcConstants_AuthParameters.idToken: user.idToken,
-          OidcConstants_Store.currentUserMetadata:
-              jsonEncode(user.metadata.toJson()),
-        },
+    if (user.parsedIdToken.claims.subject == null) {
+      errors.add(
+        JoseException('id token is missing a `sub` claim.'),
       );
-      _userSubject.add(user);
+    }
+    if (user.parsedIdToken.claims.issuedAt == null) {
+      errors.add(
+        JoseException('id token is missing an `iat` claim.'),
+      );
+    }
+    if (errors.isEmpty) {
+      final userInfoEP = discoveryDocument.userinfoEndpoint;
+
+      if (userInfoEP != null) {
+        final userInfoResp = await OidcEndpoints.userInfo(
+          userInfoEndpoint: userInfoEP,
+          accessToken: user.token.accessToken!,
+        );
+
+        _logger.info('UserInfo response: ${userInfoResp.src}');
+        if (userInfoResp.sub != null &&
+            userInfoResp.sub != user.claims.subject) {
+          errors.add(
+            const OidcException("UserInfo didn't return the same subject."),
+          );
+        }
+      }
+    }
+
+    if (errors.isEmpty) {
+      //get user info:
+
+      await _saveUser(user);
       return user;
     } else {
       for (final element in errors) {
-        _logger.fine(
-          'found a JWT, but failed the validation test',
+        _logger.warning(
+          'found a JWT, but failed the validation test: $element',
           element,
           StackTrace.current,
         );
@@ -561,81 +686,97 @@ class OidcUserManager {
     );
   }
 
-  /// Loads and verifies the idToken, accessToken and refreshToken
+  /// Loads and verifies the tokens.
   Future<void> _loadCachedTokens() async {
     final usedKeys = <String>{
-      OidcConstants_AuthParameters.idToken,
-      OidcConstants_Store.currentUserMetadata,
+      OidcConstants_Store.currentToken,
+      OidcConstants_Store.currentUserAttributes,
     };
 
     final tokens = await store.getMany(
       OidcStoreNamespace.secureTokens,
       keys: usedKeys,
     );
-    final idToken = tokens[OidcConstants_AuthParameters.idToken];
-    final rawMetadata = tokens[OidcConstants_Store.currentUserMetadata];
-    if (idToken == null || rawMetadata == null) {
+    final rawToken = tokens[OidcConstants_Store.currentToken];
+    final rawAttributes = tokens[OidcConstants_Store.currentUserAttributes];
+    if (rawToken == null) {
       return;
     }
-    final decodedMetadata = jsonDecode(rawMetadata) as Map<String, dynamic>;
-    // final parsedMetadata = OidcUserMetadata.fromJson(decodedMetadata);
-    OidcTokenResponse? tokenResponse;
+    final decodedAttributes = rawAttributes == null
+        ? null
+        : jsonDecode(rawAttributes) as Map<String, dynamic>;
+    final decodedToken = jsonDecode(rawToken) as Map<String, dynamic>;
+    OidcToken? token;
     try {
-      tokenResponse = OidcTokenResponse.fromJson({
-        OidcConstants_AuthParameters.idToken: idToken,
-        ...decodedMetadata,
-      });
+      token = OidcToken.fromJson(decodedToken);
     } catch (e) {
+      // remove invalid tokens, so that they don't get used again.
       await store.removeMany(
         OidcStoreNamespace.secureTokens,
         keys: usedKeys,
       );
     }
-    if (tokenResponse != null) {
-      await _handleTokenResponse(
-        response: tokenResponse,
+    if (token != null) {
+      await _createUserFromToken(
+        token: token,
+        // nonce is only checked for new tokens.
         nonce: null,
-        refDate: OidcInternalUtilities.dateTimeFromJson(
-          tokens[OidcConstants_Store.expiresInReferenceDate],
-        ),
+        attributes: decodedAttributes,
       );
     }
   }
 
-  Future<void> _loadStateResult() async {
+  /// Loads the current state, and checks if it has a result.
+  ///
+  /// if this returns `true`, a result has been found, and there is no need to
+  /// load cached tokens.
+  Future<bool> _loadStateResult() async {
     final stateKey = await store.getCurrentState();
     if (stateKey == null) {
-      return;
+      return false;
     }
     final stateRaw = await store.getStateData(stateKey);
     if (stateRaw == null) {
-      return;
+      return false;
     }
     final stateResponseRaw = await store.getStateResponseData(stateKey);
     if (stateResponseRaw == null) {
-      return;
+      return false;
     }
     final stateResponseUrl = Uri.tryParse(stateResponseRaw);
     if (stateResponseUrl == null) {
-      return;
+      return false;
     }
-    final stateData = OidcState.fromStorageString(stateRaw);
-    switch (stateData) {
-      case OidcAuthorizeState():
-        final resp = await OidcEndpoints.parseAuthorizeResponse(
-          responseUri: stateResponseUrl,
-        );
-        await _handleSuccessfulAuthResponse(
-          response: resp,
-          grantType: resp.code == null
-              ? OidcConstants_GrantType.implicit
-              : OidcConstants_GrantType.authorizationCode,
-        );
-      case OidcEndSessionState():
-        final resp =
-            OidcEndSessionResponse.fromJson(stateResponseUrl.queryParameters);
-        await _handEndSessionResponse(result: resp);
-      default:
+    try {
+      final stateData = OidcState.fromStorageString(stateRaw);
+      switch (stateData) {
+        case OidcAuthorizeState():
+          final resp = await OidcEndpoints.parseAuthorizeResponse(
+            responseUri: stateResponseUrl,
+          );
+          await _handleSuccessfulAuthResponse(
+            response: resp,
+            grantType: resp.code == null
+                ? OidcConstants_GrantType.implicit
+                : OidcConstants_GrantType.authorizationCode,
+          );
+          return true;
+        case OidcEndSessionState():
+          final resp =
+              OidcEndSessionResponse.fromJson(stateResponseUrl.queryParameters);
+          await _handEndSessionResponse(result: resp);
+          return true;
+        default:
+          return false;
+      }
+    } finally {
+      //ALWAYS remove the state response and the state after they are done processing.
+      await store.removeStateResponseData(stateKey);
+      await store.setStateData(
+        state: stateKey,
+        stateData: null,
+      );
+      await store.setCurrentState(null);
     }
   }
 
@@ -643,9 +784,14 @@ class OidcUserManager {
   bool get didInit => _hasInit;
   bool _hasInit = false;
 
+  final _toDispose = <StreamSubscription<dynamic>>[];
+
   /// Initializes the user manager, this also gets the [discoveryDocument] if it
   /// wasn't provided.
   Future<void> init() async {
+    if (_hasInit) {
+      return;
+    }
     try {
       _hasInit = true;
       await store.init();
@@ -655,10 +801,20 @@ class OidcUserManager {
         keyStore.addKeySetUrl(jwksUri);
       }
       //get the authorization response
-      await _loadStateResult();
+      final didLoadStateResult = await _loadStateResult();
 
-      //load cached tokens if they exist.
-      await _loadCachedTokens();
+      if (!didLoadStateResult) {
+        //load cached tokens if they exist.
+        await _loadCachedTokens();
+      }
+      //start listening to token events, if the user enabled them.
+
+      _toDispose
+        ..add(_userSubject.listen(
+          (value) => _listenToTokenRefreshIfSupported(_tokenEvents, value),
+        ))
+        ..add(_tokenEvents.expiring.listen(_handleTokenExpiring))
+        ..add(_tokenEvents.expired.listen(_handleTokenExpired));
     } catch (e) {
       _hasInit = false;
       rethrow;
@@ -667,6 +823,8 @@ class OidcUserManager {
 
   /// Disposes the resources used by this class.
   Future<void> dispose() async {
+    await _tokenEvents.dispose();
     await _userSubject.close();
+    await Future.wait(_toDispose.map((e) => e.cancel()));
   }
 }

@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:oidc/oidc.dart';
-import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
 
 class AuthPage extends StatefulWidget {
@@ -62,13 +61,42 @@ class _AuthPageState extends State<AuthPage> {
           const Text('Resource owner grant'),
           TextField(
             controller: userNameController,
+            decoration: const InputDecoration(
+              labelText: 'username',
+            ),
           ),
           TextField(
             controller: passwordController,
+            decoration: const InputDecoration(
+              labelText: 'password',
+            ),
           ),
           ElevatedButton(
-            onPressed: () {
-              // TODO(ahmednfwela): add password login.
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                final result = await app_state.currentManager.loginPassword(
+                  username: userNameController.text,
+                  password: passwordController.text,
+                );
+
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'loginPassword returned user id: ${result?.uid}',
+                    ),
+                  ),
+                );
+              } catch (e) {
+                app_state.exampleLogger.severe(e.toString());
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'loginAuthorizationCodeFlow failed!',
+                    ),
+                  ),
+                );
+              }
             },
             child: const Text('login with Resource owner grant'),
           ),
@@ -99,7 +127,7 @@ class _AuthPageState extends State<AuthPage> {
               final messenger = ScaffoldMessenger.of(context);
               try {
                 final result =
-                    await app_state.manager.loginAuthorizationCodeFlow(
+                    await app_state.currentManager.loginAuthorizationCodeFlow(
                   originalUri: parsedOriginalUri ?? Uri.parse('/'),
                   //store any arbitrary data, here we store the authorization
                   //start time.
@@ -140,7 +168,7 @@ class _AuthPageState extends State<AuthPage> {
               final messenger = ScaffoldMessenger.of(context);
 
               // ignore: deprecated_member_use
-              final result = await app_state.manager.loginImplicitFlow(
+              final result = await app_state.currentManager.loginImplicitFlow(
                 responseType: OidcConstants_AuthorizationEndpoint_ResponseType
                     .idToken_Token,
                 originalUri: parsedOriginalUri ?? Uri.parse('/'),

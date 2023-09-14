@@ -156,4 +156,10 @@ extension OidcStoreExt on OidcStore {
               key: state,
               value: stateData,
             );
+
+  /// Gets the stateData (value) of a [state] (key).
+  Future<void> removeStateResponseData(String state) => setStateData(
+        state: '$state-response',
+        stateData: null,
+      );
 }

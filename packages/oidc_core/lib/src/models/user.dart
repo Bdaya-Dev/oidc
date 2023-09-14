@@ -1,39 +1,66 @@
-import 'package:jose/jose.dart';
+import 'package:jose_plus/jose.dart';
+import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 
-/// A user is a verified JWT id_token, with some
-/// metadata (like access_token and refresh_token).
+final _logger = Logger('Oidc.User');
+
+/// A user is a verified JWT id_token, with an optional access_token.
 class OidcUser {
   ///
-  const OidcUser({
+  OidcUser._({
     required this.idToken,
-    required this.parsedToken,
-    this.metadata = const OidcUserMetadata.empty(),
+    required this.parsedIdToken,
+    required this.token,
+    required this.attributes,
+    required this.keystore,
+    required this.allowedAlgorithms,
   });
 
-  /// Creates a OidcUser from an encoded idToken.
+  /// Creates a OidcUser from an encoded id_token passed via [token].
   ///
   /// You can verify the idToken by passing the [keystore] parameter.
   ///
-  /// You can also pass optional [metadata] that will get stored with the user.
+  /// You can also pass optional [attributes] that will get stored
+  /// with the user.
   static Future<OidcUser> fromIdToken({
-    required String idToken,
-    OidcUserMetadata? metadata,
+    required OidcToken token,
     JsonWebKeyStore? keystore,
     List<String>? allowedAlgorithms,
+    Map<String, dynamic>? attributes,
   }) async {
-    final token = keystore == null
-        ? JsonWebToken.unverified(idToken)
-        : await JsonWebToken.decodeAndVerify(
-            idToken,
-            keystore,
-            allowedArguments: allowedAlgorithms,
-          );
+    final idToken = token.idToken;
+    if (idToken == null) {
+      throw const OidcException(
+        "Server didn't return the id_token.",
+      );
+    }
+    JsonWebToken webToken;
+    if (keystore == null) {
+      webToken = JsonWebToken.unverified(idToken);
+    } else {
+      try {
+        webToken = await JsonWebToken.decodeAndVerify(
+          idToken,
+          keystore,
+          allowedArguments: allowedAlgorithms,
+        );
+      } catch (e, st) {
+        _logger.severe(
+          'Failed to verify id_token, using unverified instead.',
+          e,
+          st,
+        );
+        webToken = JsonWebToken.unverified(idToken);
+      }
+    }
 
-    return OidcUser(
+    return OidcUser._(
       idToken: idToken,
-      parsedToken: token,
-      metadata: metadata ?? const OidcUserMetadata.empty(),
+      parsedIdToken: webToken,
+      token: token,
+      attributes: attributes ?? const {},
+      allowedAlgorithms: allowedAlgorithms,
+      keystore: keystore,
     );
   }
 
@@ -41,10 +68,10 @@ class OidcUser {
   final String idToken;
 
   /// The parsed jwt token
-  final JsonWebToken parsedToken;
+  final JsonWebToken parsedIdToken;
 
   /// The claims that were decoded from the idToken
-  JsonWebTokenClaims get claims => parsedToken.claims;
+  JsonWebTokenClaims get claims => parsedIdToken.claims;
 
   /// The user Id
   String? get uid => claims.subject;
@@ -52,6 +79,70 @@ class OidcUser {
   /// The user Id, but if it's null, it will throw.
   String get uidRequired => uid!;
 
-  /// Extra metadata for the user
-  final OidcUserMetadata metadata;
+  /// The current token the user is holding.
+  final OidcToken token;
+
+  /// The keystore that was passed from [fromIdToken] (if any).
+  final JsonWebKeyStore? keystore;
+
+  /// The allowedAlgorithms that were passed from [fromIdToken] (if any).
+  final List<String>? allowedAlgorithms;
+
+  /// immutable custom attributes that are user-defined.
+  ///
+  /// these MUST be json encodable.
+  final Map<String, dynamic> attributes;
+
+  /// if an id_token exists in the [newToken], it will be re-verified.
+  Future<OidcUser> replaceToken(OidcToken newToken) async {
+    final idToken = newToken.idToken ?? this.idToken;
+
+    JsonWebToken webToken;
+    if (idToken != this.idToken) {
+      final keystore = this.keystore;
+      webToken = keystore == null
+          ? JsonWebToken.unverified(idToken)
+          : await JsonWebToken.decodeAndVerify(
+              idToken,
+              keystore,
+              allowedArguments: allowedAlgorithms,
+            );
+    } else {
+      webToken = parsedIdToken;
+    }
+
+    return OidcUser._(
+      idToken: idToken,
+      parsedIdToken: webToken,
+      token: newToken,
+      attributes: attributes,
+      allowedAlgorithms: allowedAlgorithms,
+      keystore: keystore,
+    );
+  }
+
+  OidcUser setAttributes(Map<String, dynamic> attributes) {
+    return OidcUser._(
+      idToken: idToken,
+      parsedIdToken: parsedIdToken,
+      attributes: {
+        ...this.attributes,
+        ...attributes,
+      },
+      token: token,
+      allowedAlgorithms: allowedAlgorithms,
+      keystore: keystore,
+    );
+  }
+
+  OidcUser clearAttributes() {
+    return OidcUser._(
+      idToken: idToken,
+      parsedIdToken: parsedIdToken,
+      attributes: const {},
+      token: token,
+      allowedAlgorithms: allowedAlgorithms,
+      keystore: keystore,
+    );
+  }
 }

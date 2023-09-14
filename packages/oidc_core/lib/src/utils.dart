@@ -44,6 +44,31 @@ class OidcInternalUtilities {
     return int.tryParse(res.toString());
   }
 
+  static Duration? durationFromJson(dynamic json) {
+    if (json == null) {
+      return null;
+    }
+    if (json is int) {
+      return Duration(seconds: json);
+    }
+    final seconds = int.tryParse(json.toString());
+    if (seconds == null) {
+      return null;
+    }
+    return Duration(seconds: seconds);
+  }
+
+  static int? durationToJson(Duration? value) {
+    return value?.inSeconds;
+  }
+
+  static List<String>? splitSpaceDelimitedStringNullable(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    return splitSpaceDelimitedString(value);
+  }
+
   static List<String> splitSpaceDelimitedString(Object? value) {
     if (value == null) {
       return [];
@@ -71,12 +96,9 @@ class OidcInternalUtilities {
     return value.toIso8601String();
   }
 
-  static DateTime? dateTimeFromJson(dynamic rawValue) {
-    if (rawValue == null) {
-      return null;
-    }
+  static DateTime dateTimeFromJsonRequired(dynamic rawValue) {
     if (rawValue is String) {
-      return DateTime.tryParse(rawValue);
+      return DateTime.parse(rawValue);
     } else if (rawValue is int) {
       return DateTime.fromMillisecondsSinceEpoch(
         rawValue,
@@ -86,6 +108,13 @@ class OidcInternalUtilities {
       return rawValue;
     }
     throw ArgumentError.value(rawValue, "Value can't be converted to DateTime");
+  }
+
+  static DateTime? dateTimeFromJson(dynamic rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+    return dateTimeFromJsonRequired(rawValue);
   }
 
   static const commonConverters = <JsonConverter<dynamic, dynamic>>[

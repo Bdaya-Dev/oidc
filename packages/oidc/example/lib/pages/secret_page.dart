@@ -60,7 +60,7 @@ class _SecretPageState extends State<SecretPage> {
             ),
             ElevatedButton(
               onPressed: () async {
-                await app_state.manager.logout(
+                await app_state.currentManager.logout(
                   //after logout, go back to home
                   originalUri: Uri.parse('/'),
                   options: OidcPlatformSpecificOptions(
@@ -72,6 +72,12 @@ class _SecretPageState extends State<SecretPage> {
               },
               child: const Text('Logout'),
             ),
+            ElevatedButton(
+              onPressed: () async {
+                await app_state.currentManager.forgetUser();
+              },
+              child: const Text('Forget User'),
+            ),
             const Divider(),
             Text('user id: ${user.uid}'),
             const Divider(),
@@ -79,7 +85,7 @@ class _SecretPageState extends State<SecretPage> {
             const Divider(),
             Text('id token: ${user.idToken}'),
             const Divider(),
-            Text('metadata: ${user.metadata.toJson()}'),
+            Text('token: ${user.token.toJson()}'),
           ],
         ),
       ),

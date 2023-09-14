@@ -8,7 +8,6 @@ part 'resp.g.dart';
 @JsonSerializable(
   createFactory: true,
   createToJson: false,
-  converters: OidcInternalUtilities.commonConverters,
   constructor: '_',
 )
 class OidcTokenResponse extends JsonBasedResponse {
@@ -16,11 +15,10 @@ class OidcTokenResponse extends JsonBasedResponse {
     required super.src,
     this.tokenType,
     this.accessToken,
-    this.scope = const [],
+    this.scope,
     this.idToken,
     this.refreshToken,
     this.expiresIn,
-    this.expiresAt,
   });
 
   factory OidcTokenResponse.fromJson(Map<String, dynamic> src) =>
@@ -28,9 +26,9 @@ class OidcTokenResponse extends JsonBasedResponse {
 
   @JsonKey(
     name: OidcConstants_AuthParameters.scope,
-    fromJson: OidcInternalUtilities.splitSpaceDelimitedString,
+    fromJson: OidcInternalUtilities.splitSpaceDelimitedStringNullable,
   )
-  final List<String> scope;
+  final List<String>? scope;
 
   /// OPTIONAL.
   ///
@@ -65,7 +63,7 @@ class OidcTokenResponse extends JsonBasedResponse {
   /// via other means or document the default value.
   @JsonKey(
     name: OidcConstants_AuthParameters.expiresIn,
-    readValue: OidcInternalUtilities.readDurationSeconds,
+    fromJson: OidcInternalUtilities.durationFromJson,
   )
   final Duration? expiresIn;
 
@@ -75,11 +73,4 @@ class OidcTokenResponse extends JsonBasedResponse {
   /// the grant passed in the corresponding token request.
   @JsonKey(name: OidcConstants_AuthParameters.refreshToken)
   final String? refreshToken;
-
-  /// NOT WITHIN SPEC, but some Identity Providers include this.
-  @JsonKey(
-    name: 'expires_at',
-    fromJson: OidcInternalUtilities.dateTimeFromJson,
-  )
-  final DateTime? expiresAt;
 }

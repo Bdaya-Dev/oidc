@@ -1,4 +1,4 @@
-import 'package:jose/jose.dart';
+import 'package:jose_plus/jose.dart';
 
 ///
 class OidcIdTokenVerificationOptions {

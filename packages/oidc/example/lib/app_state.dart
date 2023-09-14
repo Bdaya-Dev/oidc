@@ -5,7 +5,6 @@ import 'package:bdaya_shared_value/bdaya_shared_value.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/oidc.dart';
-import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
 
 //This file represents a global state, which is bad
@@ -15,7 +14,11 @@ import 'package:oidc_default_store/oidc_default_store.dart';
 //and put these in a service.
 final exampleLogger = Logger('oidc.example');
 
-final manager = OidcUserManager.lazy(
+
+/// Gets the current manager used in the example. 
+OidcUserManager get currentManager => duendoManager;
+
+final duendoManager = OidcUserManager.lazy(
   discoveryDocumentUri: OidcUtils.getWellKnownUriFromBase(
     Uri.parse('https://demo.duendesoftware.com'),
   ),
@@ -31,6 +34,9 @@ final manager = OidcUserManager.lazy(
   // keyStore: JsonWebKeyStore(),
   settings: OidcUserManagerSettings(
     uiLocales: ['ar'],
+    refreshBefore: (token) {
+      return const Duration(minutes: 10);
+    },
     // scopes supported by the provider and needed by the client.
     scope: ['openid', 'profile', 'email', 'offline_access', 'api'],
     postLogoutRedirectUri: kIsWeb
@@ -62,15 +68,53 @@ final manager = OidcUserManager.lazy(
                 : Uri(),
   ),
 );
+final certificationManager = OidcUserManager.lazy(
+  discoveryDocumentUri: OidcUtils.getWellKnownUriFromBase(
+    Uri.parse('https://www.certification.openid.net/test/a/oidc_dart/'),
+  ),
+  // this is a public client,
+  // so we use [OidcClientAuthentication.none] constructor.
+  clientCredentials: const OidcClientAuthentication.clientSecretBasic(
+    clientId: 'my_web_client',
+    clientSecret: 'my_web_client_secret',
+  ),
+  store: OidcDefaultStore(
+      // useSessionStorageForSessionNamespaceOnWeb: true,
+      ),
+
+  // keyStore: JsonWebKeyStore(),
+  settings: OidcUserManagerSettings(
+    uiLocales: ['ar', 'en'],
+    refreshBefore: (token) {
+      return const Duration(minutes: 10);
+    },
+    // scopes supported by the provider and needed by the client.
+    scope: ['openid'],
+    postLogoutRedirectUri: kIsWeb
+        ? Uri.parse('http://localhost:22433/redirect.html')
+        : Platform.isAndroid
+            ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
+            : Platform.isWindows || Platform.isLinux
+                ? Uri.parse('http://localhost:0')
+                : null,
+    redirectUri: kIsWeb
+        ? Uri.parse('http://localhost:22433/redirect.html')
+        : Platform.isAndroid
+            ? Uri.parse('com.bdayadev.oidc.example:/oauth2redirect')
+            : Platform.isWindows || Platform.isLinux
+                ? Uri.parse('http://localhost:0')
+                : Uri(),
+  ),
+);
 final initMemoizer = AsyncMemoizer<void>();
 Future<void> initApp() {
   return initMemoizer.runOnce(() async {
-    manager.userChanges().listen((event) {
+    currentManager.userChanges().listen((event) {
       cachedAuthedUser.$ = event;
       exampleLogger.info('User changed: ${event?.claims.toJson()}');
     });
 
-    await manager.init();
+    await currentManager.init();
   });
 }
 

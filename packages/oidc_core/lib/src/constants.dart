@@ -639,12 +639,13 @@ class OidcConstants_AuthorizeRequest_CodeChallengeMethod {
 class OidcConstants_Store {
   static const expiresAt = 'expiresAt';
   static const expiresInReferenceDate = 'expiresInReferenceDate';
-  static const currentUserMetadata = 'currentUser';
+  static const currentUserAttributes = 'userAttributes';
   static const originalUri = 'original_uri';
   static const operationDiscriminator = 'operationDiscriminator';
 
   static const options = 'options';
   static const extraTokenParams = 'extraTokenParams';
+  static const currentToken = 'currentToken';
   // static const latestToken = 'latest';
   // static const idToken = 'id_token';
   // static const accessToken = 'access_token';
