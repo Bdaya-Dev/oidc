@@ -1,4 +1,5 @@
 name: oidc
+repository: https://github.com/Bdaya-Dev/oidc
 packages:
   - packages/*
   - packages/*/example
