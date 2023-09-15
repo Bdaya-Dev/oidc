@@ -24,6 +24,7 @@ class OidcUser {
   /// with the user.
   static Future<OidcUser> fromIdToken({
     required OidcToken token,
+    bool strictVerification = false,
     JsonWebKeyStore? keystore,
     List<String>? allowedAlgorithms,
     Map<String, dynamic>? attributes,
@@ -45,6 +46,9 @@ class OidcUser {
           allowedArguments: allowedAlgorithms,
         );
       } catch (e, st) {
+        if (strictVerification) {
+          rethrow;
+        }
         _logger.severe(
           'Failed to verify id_token, using unverified instead.',
           e,

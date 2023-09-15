@@ -69,6 +69,11 @@ class OidcConstants_Scopes {
   static const phone = 'phone';
 }
 
+class OidcConstants_JWTClaims {
+  ///	Session ID
+  static const sid = 'sid';
+}
+
 class OidcConstants_AuthParameters {
   /// authorization request, token request
   static const clientId = 'client_id';
@@ -646,6 +651,9 @@ class OidcConstants_Store {
   static const options = 'options';
   static const extraTokenParams = 'extraTokenParams';
   static const currentToken = 'currentToken';
+
+  static const requestType = 'requestType';
+  static const frontChannelLogout = 'front-channel-logout';
   // static const latestToken = 'latest';
   // static const idToken = 'id_token';
   // static const accessToken = 'access_token';

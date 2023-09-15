@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:html';
+import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
+import 'package:rxdart/rxdart.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 final _logger = Logger('Oidc.OidcWeb');
@@ -132,5 +134,78 @@ class OidcWeb extends OidcPlatform {
       return null;
     }
     return OidcEndSessionResponse.fromJson(respUri.queryParameters);
+  }
+
+  @override
+  Stream<OidcFrontChannelLogoutIncomingRequest>
+      listenToFrontChannelLogoutRequests(
+    Uri listenOn,
+    OidcFrontChannelRequestListeningOptions options,
+  ) {
+    final logger = Logger('Oidc.OidcWeb.listenToFrontChannelLogoutRequests');
+    final channel = BroadcastChannel(options.web.broadcastChannel);
+    return channel.onMessage
+        .map<OidcFrontChannelLogoutIncomingRequest?>((event) {
+          final data = event.data;
+          if (data is! String) {
+            logger.finer('Received data: $data');
+            return null;
+          }
+          final uri = Uri.tryParse(data);
+          if (uri == null) {
+            logger.finer('Parsed Received data: $uri');
+            return null;
+          }
+          //listening on empty path, will listen on all paths.
+          if (listenOn.pathSegments.isNotEmpty) {
+            logger.finer(
+              'listenOn has a path segment (${listenOn.path}), checking if it matches the input data.',
+            );
+            if (!listEquals(uri.pathSegments, listenOn.pathSegments)) {
+              logger.finer(
+                'listenOn has a different path segment (${listenOn.path}), than data (${uri.path}), '
+                'skipping the event.',
+              );
+              // the paths don't match
+              return null;
+            }
+          }
+          if (listenOn.hasQuery) {
+            logger.finer(
+              'listenOn has a query segment (${listenOn.query}), checking if it matches the input data.',
+            );
+            // check if every queryParameter in listenOn is the same in uri
+            if (!listenOn.queryParameters.entries.every(
+              (element) => uri.queryParameters[element.key] == element.value,
+            )) {
+              logger.finer(
+                'listenOn has a different query segment (${listenOn.query}), than data (${uri.query}), '
+                'skipping the event.',
+              );
+              return null;
+            }
+          } else {
+            logger.finer(
+              'listenOn has NO query segment, checking if data contains requestType=front-channel-logout by default.',
+            );
+            //by default, if no query parameter exists, check that
+            // requestType=front-channel-logout
+            if (uri.queryParameters[OidcConstants_Store.requestType] !=
+                OidcConstants_Store.frontChannelLogout) {
+              logger.finer(
+                'data has no requestType=front-channel-logout in its query segment (${uri.query}), '
+                'skipping the event.',
+              );
+              return null;
+            }
+          }
+          logger.fine('successfully matched data ($uri)');
+          return OidcFrontChannelLogoutIncomingRequest.fromJson(
+            uri.queryParameters,
+          );
+        })
+        .whereNotNull()
+        //close the broadcast channel when the user cancels the stream.
+        .doOnCancel(channel.close);
   }
 }

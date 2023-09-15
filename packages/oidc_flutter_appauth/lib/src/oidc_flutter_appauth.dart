@@ -109,4 +109,13 @@ mixin OidcFlutterAppauth on OidcPlatform {
       if (resp.state != null) OidcConstants_AuthParameters.state: resp.state,
     });
   }
+
+  @override
+  Stream<OidcFrontChannelLogoutIncomingRequest>
+      listenToFrontChannelLogoutRequests(
+    Uri listenOn,
+    OidcFrontChannelRequestListeningOptions options,
+  ) {
+    return const Stream.empty();
+  }
 }

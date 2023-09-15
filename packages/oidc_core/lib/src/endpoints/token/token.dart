@@ -32,10 +32,13 @@ class OidcToken {
   factory OidcToken.fromResponse(
     OidcTokenResponse response, {
     DateTime? creationTime,
+    Duration? overrideExpiresIn,
   }) {
     creationTime ??= DateTime.now().toUtc();
     return OidcToken.fromJson({
       ...response.src,
+      if (overrideExpiresIn != null)
+        OidcConstants_AuthParameters.expiresIn: overrideExpiresIn.inSeconds,
       OidcConstants_Store.expiresInReferenceDate:
           creationTime.toIso8601String(),
     });

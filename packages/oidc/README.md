@@ -1,10 +1,11 @@
 # oidc
 
-> The Most comprehensive OpenId Connect (OIDC) + OAuth 2.0 Package in dart.
-
 [![codecov](https://codecov.io/github/Bdaya-Dev/oidc/graph/badge.svg?token=HSEDM6I7TH)](https://codecov.io/github/Bdaya-Dev/oidc)
 [![style: very good analysis][very_good_analysis_badge]][very_good_analysis_link]
 [![License: MIT][license_badge]][license_link]
+
+
+> The Most comprehensive OpenId Connect (OIDC) + OAuth 2.0 Package in dart.
 
 
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -117,10 +118,11 @@ class OidcUserManager {
     await _cleanUpStore(toDelete: {
       OidcStoreNamespace.session,
       OidcStoreNamespace.state,
+      OidcStoreNamespace.stateResponse,
       OidcStoreNamespace.secureTokens,
     });
     final doc = discoveryDocument;
-    options ??= const OidcPlatformSpecificOptions();
+    options ??= settings.options ?? const OidcPlatformSpecificOptions();
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
@@ -183,8 +185,12 @@ class OidcUserManager {
       client: httpClient,
       credentials: clientCredentials,
     );
+
     return _createUserFromToken(
-      token: OidcToken.fromResponse(tokenResp),
+      token: OidcToken.fromResponse(
+        tokenResp,
+        overrideExpiresIn: settings.getExpiresIn?.call(tokenResp),
+      ),
       nonce: null,
     );
   }
@@ -261,9 +267,13 @@ class OidcUserManager {
   /// NOTE: this is different than [logout], since this method doesn't initiate
   /// any logout flows.
   Future<void> forgetUser() async {
-    await _cleanUpStore(toDelete: {
-      OidcStoreNamespace.state,
+    await store.remove(
       OidcStoreNamespace.session,
+      key: OidcConstants_AuthParameters.nonce,
+    );
+    await _cleanUpStore(toDelete: {
+      OidcStoreNamespace.stateResponse,
+      OidcStoreNamespace.request,
       OidcStoreNamespace.secureTokens,
     });
     _userSubject.add(null);
@@ -334,25 +344,32 @@ class OidcUserManager {
       await forgetUser();
       return;
     }
-    await store.setCurrentState(null);
     await _handEndSessionResponse(result: result);
   }
 
   Future<void> _handEndSessionResponse({
     required OidcEndSessionResponse result,
   }) async {
-    //found result!
-    final resState = result.state;
-    if (resState == null) {
-      _logAndThrow("Didn't receive state, even though it was sent.");
-    }
-    final resStateData = await store.getStateData(resState);
-    if (resStateData == null) {
-      _logAndThrow("Didn't receive correct state value.");
-    }
-    final parsedState = OidcState.fromStorageString(resStateData);
-    if (parsedState is! OidcEndSessionState) {
-      _logAndThrow('received wrong state type.');
+    final currentState = await store.getCurrentState();
+    if (currentState != null) {
+      try {
+        //found result!
+        final resState = result.state;
+        if (resState == null) {
+          _logAndThrow("Didn't receive state, even though it was sent.");
+        }
+        final resStateData = await store.getStateData(resState);
+        if (resStateData == null) {
+          _logAndThrow("Didn't receive correct state value.");
+        }
+        final parsedState = OidcState.fromStorageString(resStateData);
+        await store.setStateData(state: resState, stateData: null);
+        if (parsedState is! OidcEndSessionState) {
+          _logAndThrow('received wrong state type.');
+        }
+      } finally {
+        await store.setCurrentState(null);
+      }
     }
     //if all state checks are successful, do logout.
     await forgetUser();
@@ -386,10 +403,15 @@ class OidcUserManager {
     }
     if (grantType == OidcConstants_GrantType.implicit) {
       final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
+
       if (implicitTokenResponse.accessToken != null ||
           implicitTokenResponse.idToken != null) {
         return _createUserFromToken(
-          token: OidcToken.fromResponse(implicitTokenResponse),
+          token: OidcToken.fromResponse(
+            implicitTokenResponse,
+            overrideExpiresIn:
+                settings.getExpiresIn?.call(implicitTokenResponse),
+          ),
           nonce: stateData.nonce,
         );
       }
@@ -415,13 +437,15 @@ class OidcUserManager {
         codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
         extra: stateData.extraTokenParams,
         clientId: clientCredentials.clientId,
-        clientSecret: clientCredentials.clientSecret,
         code: code,
       ),
       client: httpClient,
     );
     return _createUserFromToken(
-      token: OidcToken.fromResponse(tokenResp),
+      token: OidcToken.fromResponse(
+        tokenResp,
+        overrideExpiresIn: settings.getExpiresIn?.call(tokenResp),
+      ),
       nonce: stateData.nonce,
     );
   }
@@ -448,6 +472,7 @@ class OidcUserManager {
             discoveryDocument.tokenEndpointAuthSigningAlgValuesSupported,
         keystore: keyStore,
         attributes: attributes,
+        strictVerification: settings.strictJwtVerification,
       );
     } else {
       newUser = await currentUser.replaceToken(token);
@@ -526,7 +551,10 @@ class OidcUserManager {
         ),
       );
       newUser = await _createUserFromToken(
-        token: OidcToken.fromResponse(tokenResponse),
+        token: OidcToken.fromResponse(
+          tokenResponse,
+          overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
+        ),
         nonce: null,
       );
     } catch (e) {
@@ -593,6 +621,7 @@ class OidcUserManager {
         toDelete: {
           OidcStoreNamespace.session,
           OidcStoreNamespace.state,
+          OidcStoreNamespace.stateResponse,
           OidcStoreNamespace.secureTokens,
         },
       );
@@ -780,6 +809,31 @@ class OidcUserManager {
     }
   }
 
+  /// returns true if ther was a logout request.
+  Future<bool> _loadLogoutRequests() async {
+    final request = await store.getCurrentFrontChannelLogoutRequest();
+    if (request == null) {
+      return false;
+    }
+    final requestUri = Uri.tryParse(request);
+    if (requestUri == null) {
+      return false;
+    }
+    final requestType =
+        requestUri.queryParameters[OidcConstants_Store.requestType];
+    if (requestType != OidcConstants_Store.frontChannelLogout) {
+      return false;
+    }
+    //
+    final issuer = requestUri.queryParameters[OidcConstants_AuthParameters.iss];
+    final sid = requestUri.queryParameters[OidcConstants_JWTClaims.sid];
+    if (issuer != null && sid != null) {
+      //validate something ?
+    }
+    await forgetUser();
+    return true;
+  }
+
   /// true if [init] has been called with no exceptions.
   bool get didInit => _hasInit;
   bool _hasInit = false;
@@ -800,13 +854,23 @@ class OidcUserManager {
       if (jwksUri != null) {
         keyStore.addKeySetUrl(jwksUri);
       }
-      //get the authorization response
-      final didLoadStateResult = await _loadStateResult();
-
-      if (!didLoadStateResult) {
-        //load cached tokens if they exist.
-        await _loadCachedTokens();
+      if (!await _loadLogoutRequests()) {
+        //no logout requests.
+        if (!await _loadStateResult()) {
+          //no state results.
+          await _loadCachedTokens();
+        }
       }
+      final frontChannelLogoutUri = settings.frontChannelLogoutUri;
+      if (frontChannelLogoutUri != null) {
+        _toDispose.add(
+          OidcFlutter.listenToFrontChannelLogoutRequests(
+            listenTo: frontChannelLogoutUri,
+            options: settings.frontChannelRequestListeningOptions,
+          ).listen(_handleFrontChannelLogoutRequest),
+        );
+      }
+
       //start listening to token events, if the user enabled them.
 
       _toDispose
@@ -826,5 +890,26 @@ class OidcUserManager {
     await _tokenEvents.dispose();
     await _userSubject.close();
     await Future.wait(_toDispose.map((e) => e.cancel()));
+  }
+
+  Future<void> _handleFrontChannelLogoutRequest(
+    OidcFrontChannelLogoutIncomingRequest event,
+  ) async {
+    // wait for a random time, to avoid potential race condition between
+    // multiple tabs that try to handle the same request.
+    await Future<void>.delayed(Duration(milliseconds: Random().nextInt(500)));
+    final request = await store.getCurrentFrontChannelLogoutRequest();
+    if (request == null) {
+      //someone else handled the request.
+      return;
+    } else {
+      //first quickly remove the request, so that no one else handles it.
+      await store.remove(
+        OidcStoreNamespace.request,
+        key: OidcConstants_Store.frontChannelLogout,
+      );
+      //forget the user.
+      await forgetUser();
+    }
   }
 }

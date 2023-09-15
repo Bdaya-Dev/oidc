@@ -54,4 +54,19 @@ class OidcFlutter {
       );
     }
   }
+
+  /// Listens to incoming front channel logout requests.
+  ///
+  /// [listenTo] parameter determines which path should be listened for to receive
+  /// the request.
+  ///
+  /// on windows/linux/macosx this starts a server on the same prt
+  static Stream<OidcFrontChannelLogoutIncomingRequest>
+      listenToFrontChannelLogoutRequests({
+    required Uri listenTo,
+    OidcFrontChannelRequestListeningOptions options =
+        const OidcFrontChannelRequestListeningOptions(),
+  }) {
+    return _platform.listenToFrontChannelLogoutRequests(listenTo, options);
+  }
 }

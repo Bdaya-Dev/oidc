@@ -57,6 +57,10 @@ class OidcClientAuthentication {
   final String? clientAssertion;
 
   String? getAuthorizationHeader() {
+    if (location !=
+        OidcConstants_ClientAuthenticationMethods.clientSecretBasic) {
+      return null;
+    }
     if (clientSecret == null) {
       return null;
     }

@@ -160,4 +160,14 @@ mixin OidcDesktop on OidcPlatform {
     // wait for a response from the server listener.
     return OidcEndSessionResponse.fromJson(responseUri.queryParameters);
   }
+
+  @override
+  Stream<OidcFrontChannelLogoutIncomingRequest>
+      listenToFrontChannelLogoutRequests(
+    Uri listenOn,
+    OidcFrontChannelRequestListeningOptions options,
+  ) {
+    // TODO: listen to loopback
+    return const Stream.empty();
+  }
 }

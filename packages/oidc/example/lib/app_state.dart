@@ -14,8 +14,7 @@ import 'package:oidc_default_store/oidc_default_store.dart';
 //and put these in a service.
 final exampleLogger = Logger('oidc.example');
 
-
-/// Gets the current manager used in the example. 
+/// Gets the current manager used in the example.
 OidcUserManager get currentManager => duendoManager;
 
 final duendoManager = OidcUserManager.lazy(
@@ -33,10 +32,12 @@ final duendoManager = OidcUserManager.lazy(
 
   // keyStore: JsonWebKeyStore(),
   settings: OidcUserManagerSettings(
+    frontChannelLogoutUri: Uri(path: 'redirect.html'),
     uiLocales: ['ar'],
     refreshBefore: (token) {
       return const Duration(minutes: 10);
     },
+
     // scopes supported by the provider and needed by the client.
     scope: ['openid', 'profile', 'email', 'offline_access', 'api'],
     postLogoutRedirectUri: kIsWeb
@@ -68,44 +69,10 @@ final duendoManager = OidcUserManager.lazy(
                 : Uri(),
   ),
 );
-final certificationManager = OidcUserManager.lazy(
-  discoveryDocumentUri: OidcUtils.getWellKnownUriFromBase(
-    Uri.parse('https://www.certification.openid.net/test/a/oidc_dart/'),
-  ),
-  // this is a public client,
-  // so we use [OidcClientAuthentication.none] constructor.
-  clientCredentials: const OidcClientAuthentication.clientSecretBasic(
-    clientId: 'my_web_client',
-    clientSecret: 'my_web_client_secret',
-  ),
-  store: OidcDefaultStore(
-      // useSessionStorageForSessionNamespaceOnWeb: true,
-      ),
 
-  // keyStore: JsonWebKeyStore(),
-  settings: OidcUserManagerSettings(
-    uiLocales: ['ar', 'en'],
-    refreshBefore: (token) {
-      return const Duration(minutes: 10);
-    },
-    // scopes supported by the provider and needed by the client.
-    scope: ['openid'],
-    postLogoutRedirectUri: kIsWeb
-        ? Uri.parse('http://localhost:22433/redirect.html')
-        : Platform.isAndroid
-            ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
-            : Platform.isWindows || Platform.isLinux
-                ? Uri.parse('http://localhost:0')
-                : null,
-    redirectUri: kIsWeb
-        ? Uri.parse('http://localhost:22433/redirect.html')
-        : Platform.isAndroid
-            ? Uri.parse('com.bdayadev.oidc.example:/oauth2redirect')
-            : Platform.isWindows || Platform.isLinux
-                ? Uri.parse('http://localhost:0')
-                : Uri(),
-  ),
-);
+
+///===========================
+
 final initMemoizer = AsyncMemoizer<void>();
 Future<void> initApp() {
   return initMemoizer.runOnce(() async {

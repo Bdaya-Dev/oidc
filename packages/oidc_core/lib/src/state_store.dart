@@ -12,8 +12,17 @@ enum OidcStoreNamespace {
   /// since the html page has no access to the `OidcStore` object.
   ///
   /// the key MUST be in the format:
-  /// `oidc-state-{key}`
+  /// `oidc.state.{key}`
   state('state'),
+
+  /// Stores state responses.
+  ///
+  /// on web, the key MUST be in the format:
+  /// `oidc.response.state.{key}`
+  stateResponse('response.state'),
+
+  /// Stores requests (mainly frontchannel logout).
+  request('request'),
 
   /// Stores discovery documents as json
   discoveryDocument('discoveryDocument'),
@@ -88,8 +97,14 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
 
   /// Gets the stateData (value) of a [state] (key).
   Future<String?> getStateResponseData(String state) => get(
-        OidcStoreNamespace.state,
-        key: '$state-response',
+        OidcStoreNamespace.stateResponse,
+        key: state,
+      );
+
+  /// Gets the current
+  Future<String?> getCurrentFrontChannelLogoutRequest() => get(
+        OidcStoreNamespace.request,
+        key: OidcConstants_Store.frontChannelLogout,
       );
 }
 
@@ -157,9 +172,27 @@ extension OidcStoreExt on OidcStore {
               value: stateData,
             );
 
+  /// Sets the [stateData] (value) of a [state] (key).
+  ///
+  /// if [stateData] (value) is null, the [state] (key) will be removed.
+  Future<void> setStateResponseData({
+    required String state,
+    required String? stateData,
+  }) =>
+      stateData == null
+          ? remove(
+              OidcStoreNamespace.stateResponse,
+              key: state,
+            )
+          : set(
+              OidcStoreNamespace.stateResponse,
+              key: state,
+              value: stateData,
+            );
+
   /// Gets the stateData (value) of a [state] (key).
   Future<void> removeStateResponseData(String state) => setStateData(
-        state: '$state-response',
+        state: state,
         stateData: null,
       );
 }

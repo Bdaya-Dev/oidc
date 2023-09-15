@@ -8,10 +8,10 @@ environment:
 
 dependencies:
   crypto: ^3.0.3
-  jose_plus: ^0.3.4
+  jose_plus: ^0.4.1
   http: ^1.1.0
   json_annotation: ^4.8.1
-  uuid: ">=3.0.7 <5.0.0"
+  uuid: "^4.0.0"
   meta: ^1.9.1
   nonce: ^1.2.0
   logging: ^1.2.0

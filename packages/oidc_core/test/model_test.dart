@@ -67,8 +67,7 @@ void main() {
             //shifting input shifts output
             expect(
               obj.calculateExpiresAt(
-                overrideCreationTime:
-                    createdAt.add(const Duration(seconds: 5)),
+                overrideCreationTime: createdAt.add(const Duration(seconds: 5)),
               ),
               createdAt.add(const Duration(seconds: 5 + expiresInSeconds)),
             );

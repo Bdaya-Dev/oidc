@@ -1,8 +1,7 @@
 // coverage:ignore-file
 import 'package:oidc_core/oidc_core.dart';
+import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-
-import 'models/authorize_options.dart';
 
 /// The interface that implementations of oidc must implement.
 ///
@@ -46,6 +45,13 @@ abstract class OidcPlatform extends PlatformInterface {
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
   );
+
+  /// Listens to incoming front channel logout requests.
+  Stream<OidcFrontChannelLogoutIncomingRequest>
+      listenToFrontChannelLogoutRequests(
+    Uri listenOn,
+    OidcFrontChannelRequestListeningOptions options,
+  );
 }
 
 /// an implementation of [OidcPlatform] that throws [UnimplementedError].
@@ -64,6 +70,15 @@ class NoOpOidcPlatform extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Stream<OidcFrontChannelLogoutIncomingRequest>
+      listenToFrontChannelLogoutRequests(
+    Uri listenOn,
+    OidcFrontChannelRequestListeningOptions options,
   ) {
     throw UnimplementedError();
   }

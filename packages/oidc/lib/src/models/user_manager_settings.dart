@@ -1,5 +1,6 @@
 import 'package:oidc/oidc.dart';
 
+/// The callback used to determine the `expiring` duration.
 typedef OidcRefreshBeforeCallback = Duration? Function(OidcToken token);
 
 /// The default refreshBefore function, which refreshes 1 minute before the token expires.
@@ -27,14 +28,33 @@ class OidcUserManagerSettings {
     this.extraTokenParameters,
     this.postLogoutRedirectUri,
     this.options,
+    this.frontChannelLogoutUri,
+    this.frontChannelRequestListeningOptions =
+        const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
+    this.strictJwtVerification = false,
+    this.getExpiresIn,
   });
+
+  /// whether JWTs are strictly verified.
+  final bool strictJwtVerification;
 
   /// see [OidcAuthorizeRequest.redirectUri].
   final Uri redirectUri;
 
   /// see [OidcEndSessionRequest.postLogoutRedirectUri].
   final Uri? postLogoutRedirectUri;
+
+  /// the uri of the front channel logout flow.
+  /// this Uri MUST be registered with the OP first.
+  /// the OP will call this Uri when it wants to logout the user.
+  final Uri? frontChannelLogoutUri;
+
+  /// The options to use when listening to platform channels.
+  ///
+  /// [frontChannelLogoutUri] must be set for this to work.
+  final OidcFrontChannelRequestListeningOptions
+      frontChannelRequestListeningOptions;
 
   /// see [OidcAuthorizeRequest.scope].
   final List<String> scope;
@@ -74,6 +94,9 @@ class OidcUserManagerSettings {
   /// - if `Duration(minutes: 1)` is returned (default), it will refresh the token 1 minute before it expires.
   /// - if `null` is returned, automatic refresh is disabled.
   final OidcRefreshBeforeCallback? refreshBefore;
+
+  /// overrides a token's expires_in value.
+  final Duration? Function(OidcTokenResponse tokenResponse)? getExpiresIn;
 
   /// platform-specific options.
   final OidcPlatformSpecificOptions? options;
