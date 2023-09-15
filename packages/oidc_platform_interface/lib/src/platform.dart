@@ -47,6 +47,7 @@ abstract class OidcPlatform extends PlatformInterface {
   );
 
   /// Listens to incoming front channel logout requests.
+  /// returns an empty stream on non-supported platforms.
   Stream<OidcFrontChannelLogoutIncomingRequest>
       listenToFrontChannelLogoutRequests(
     Uri listenOn,
@@ -64,7 +65,7 @@ class NoOpOidcPlatform extends OidcPlatform {
   ) {
     throw UnimplementedError();
   }
-
+  
   @override
   Future<OidcEndSessionResponse?> getEndSessionResponse(
     OidcProviderMetadata metadata,
