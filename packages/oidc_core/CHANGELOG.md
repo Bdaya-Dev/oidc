@@ -1,3 +1,9 @@
+## 0.4.0
+
+> Note: This release has breaking changes.
+
+ - **BREAKING** **CHANGE**: all packages.
+
 ## 0.3.2
 
  - **FEAT**: support logout.

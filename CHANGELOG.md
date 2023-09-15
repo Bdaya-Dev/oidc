@@ -3,6 +3,88 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2023-09-15
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v0.3.0`](#oidc---v030)
+ - [`oidc_android` - `v0.3.0`](#oidc_android---v030)
+ - [`oidc_core` - `v0.4.0`](#oidc_core---v040)
+ - [`oidc_default_store` - `v0.2.0`](#oidc_default_store---v020)
+ - [`oidc_desktop` - `v0.2.0`](#oidc_desktop---v020)
+ - [`oidc_flutter_appauth` - `v0.2.0`](#oidc_flutter_appauth---v020)
+ - [`oidc_ios` - `v0.3.0`](#oidc_ios---v030)
+ - [`oidc_linux` - `v0.3.0`](#oidc_linux---v030)
+ - [`oidc_loopback_listener` - `v0.2.0`](#oidc_loopback_listener---v020)
+ - [`oidc_macos` - `v0.3.0`](#oidc_macos---v030)
+ - [`oidc_platform_interface` - `v0.3.0`](#oidc_platform_interface---v030)
+ - [`oidc_web` - `v0.3.0`](#oidc_web---v030)
+ - [`oidc_windows` - `v0.3.0`](#oidc_windows---v030)
+
+Packages with other changes:
+
+ - There are no other changes in this release.
+
+---
+
+#### `oidc` - `v0.3.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_android` - `v0.3.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_core` - `v0.4.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_default_store` - `v0.2.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_desktop` - `v0.2.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_flutter_appauth` - `v0.2.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_ios` - `v0.3.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_linux` - `v0.3.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_loopback_listener` - `v0.2.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_macos` - `v0.3.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_platform_interface` - `v0.3.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+ - **BREAKING** **CHANGE**: new platform interface.
+
+#### `oidc_web` - `v0.3.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+#### `oidc_windows` - `v0.3.0`
+
+ - **BREAKING** **CHANGE**: all packages.
+
+
 ## 2023-09-12
 
 ### Changes

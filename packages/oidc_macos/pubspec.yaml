@@ -1,6 +1,6 @@
 name: oidc_macos
 description: MacOS implementation of the oidc plugin
-version: 0.2.1
+version: 0.3.0
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_macos
 environment:
   sdk: ">=2.19.0 <4.0.0"
@@ -18,9 +18,9 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_appauth: ^6.0.2
-  oidc_core: ^0.3.2
-  oidc_flutter_appauth: ^0.1.1
-  oidc_platform_interface: ^0.2.1
+  oidc_core: ^0.4.0
+  oidc_flutter_appauth: ^0.2.0
+  oidc_platform_interface: ^0.3.0
 
 dev_dependencies:
   flutter_test:
