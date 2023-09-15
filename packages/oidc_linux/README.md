@@ -2,7 +2,7 @@
 
 [![style: very good analysis][very_good_analysis_badge]][very_good_analysis_link]
 
-The linux implementation of `oidc`.
+The linux implementation of `package:oidc`.
 
 ## Usage
 

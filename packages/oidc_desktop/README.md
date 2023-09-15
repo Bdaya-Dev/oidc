@@ -4,7 +4,9 @@
 [![Powered by Mason](https://img.shields.io/endpoint?url=https%3A%2F%2Ftinyurl.com%2Fmason-badge)](https://github.com/felangel/mason)
 [![License: MIT][license_badge]][license_link]
 
-Base Implementation for oidc_* desktop plugins (mainly windows/linux)
+Base Implementation for `oidc_*` desktop plugins (mainly windows/linux).
+
+This relies on [oidc_loopback_listener](https://pub.dev/packages/oidc_loopback_listener).
 
 ## Installation 💻
 
@@ -22,14 +24,6 @@ Install it:
 ```sh
 flutter packages get
 ```
-
----
-
-## Continuous Integration 🤖
-
-Oidc Desktop comes with a built-in [GitHub Actions workflow][github_actions_link] powered by [Very Good Workflows][very_good_workflows_link] but you can also add your preferred CI/CD solution.
-
-Out of the box, on each pull request and push, the CI `formats`, `lints`, and `tests` the code. This ensures the code remains consistent and behaves correctly as you add functionality or make changes. The project uses [Very Good Analysis][very_good_analysis_link] for a strict set of analysis options used by our team. Code coverage is enforced using the [Very Good Workflows][very_good_coverage_link].
 
 ---
 

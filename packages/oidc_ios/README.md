@@ -2,11 +2,11 @@
 
 [![style: very good analysis][very_good_analysis_badge]][very_good_analysis_link]
 
-The ios implementation of `oidc`.
+The ios implementation of `package:oidc`.
 
 ## Usage
 
-This package is [endorsed][endorsed_link], which means you can simply use `oidc`
+This package is [endorsed][endorsed_link], which means you can simply use `package:oidc`
 normally. This package will be automatically included in your app when you do.
 
 [endorsed_link]: https://flutter.dev/docs/development/packages-and-plugins/developing-packages#endorsed-federated-plugin
