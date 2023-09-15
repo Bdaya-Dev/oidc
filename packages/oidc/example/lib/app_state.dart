@@ -70,7 +70,6 @@ final duendoManager = OidcUserManager.lazy(
   ),
 );
 
-
 ///===========================
 
 final initMemoizer = AsyncMemoizer<void>();
