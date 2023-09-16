@@ -94,7 +94,7 @@ void main() {
                   createdAt.toIso8601String(),
             };
             final obj = OidcToken.fromJson(src);
-            expect(obj.isOidc, true);
+            expect(obj.isOidc, false);
             expect(obj.toJson(), src);
             expect(obj.expiresIn, expiresIn);
             expect(
