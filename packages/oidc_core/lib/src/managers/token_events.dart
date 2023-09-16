@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:clock/clock.dart';
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
 import 'package:oidc_core/oidc_core.dart';
