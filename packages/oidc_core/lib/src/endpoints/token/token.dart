@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
 
@@ -34,7 +35,7 @@ class OidcToken {
     DateTime? creationTime,
     Duration? overrideExpiresIn,
   }) {
-    creationTime ??= DateTime.now().toUtc();
+    creationTime ??= clock.now().toUtc();
     return OidcToken.fromJson({
       ...response.src,
       if (overrideExpiresIn != null)
@@ -116,7 +117,7 @@ class OidcToken {
     DateTime? now,
     DateTime? overrideCreationTime,
   }) {
-    now ??= DateTime.now().toUtc();
+    now ??= clock.now().toUtc();
 
     final expiresIn = this.expiresIn;
     if (expiresIn == null) {
@@ -149,7 +150,7 @@ class OidcToken {
     DateTime? overrideCreationTime,
     Duration tolerance = const Duration(minutes: 1),
   }) {
-    now ??= DateTime.now().toUtc();
+    now ??= clock.now().toUtc();
     final expAt = calculateExpiresAt(
       overrideCreationTime: overrideCreationTime,
     );

@@ -568,35 +568,38 @@ class OidcUserManager {
 
   /// This function validates that a user claims
   Future<OidcUser?> _validateAndSaveUser(OidcUser user) async {
-    final errors = user.parsedIdToken.claims
+    var actualUser = user;
+    final errors = actualUser.parsedIdToken.claims
         .validate(
           clientId: clientCredentials.clientId,
           issuer: discoveryDocument.issuer,
           expiryTolerance: settings.expiryTolerance,
         )
         .toList();
-    if (user.parsedIdToken.claims.subject == null) {
+    if (actualUser.parsedIdToken.claims.subject == null) {
       errors.add(
         JoseException('id token is missing a `sub` claim.'),
       );
     }
-    if (user.parsedIdToken.claims.issuedAt == null) {
+    if (actualUser.parsedIdToken.claims.issuedAt == null) {
       errors.add(
         JoseException('id token is missing an `iat` claim.'),
       );
     }
+    OidcUserInfoResponse? userInfoResp;
+
     if (errors.isEmpty) {
       final userInfoEP = discoveryDocument.userinfoEndpoint;
 
       if (userInfoEP != null) {
-        final userInfoResp = await OidcEndpoints.userInfo(
+        userInfoResp = await OidcEndpoints.userInfo(
           userInfoEndpoint: userInfoEP,
-          accessToken: user.token.accessToken!,
+          accessToken: actualUser.token.accessToken!,
         );
 
         _logger.info('UserInfo response: ${userInfoResp.src}');
         if (userInfoResp.sub != null &&
-            userInfoResp.sub != user.claims.subject) {
+            userInfoResp.sub != actualUser.claims.subject) {
           errors.add(
             const OidcException("UserInfo didn't return the same subject."),
           );
@@ -606,9 +609,11 @@ class OidcUserManager {
 
     if (errors.isEmpty) {
       //get user info:
-
-      await _saveUser(user);
-      return user;
+      if (userInfoResp != null) {
+        actualUser = actualUser.withUserInfo(userInfoResp.src);
+      }
+      await _saveUser(actualUser);
+      return actualUser;
     } else {
       for (final element in errors) {
         _logger.warning(

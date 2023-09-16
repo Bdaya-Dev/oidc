@@ -24,7 +24,7 @@ final duendoManager = OidcUserManager.lazy(
   // this is a public client,
   // so we use [OidcClientAuthentication.none] constructor.
   clientCredentials: const OidcClientAuthentication.none(
-    clientId: 'interactive.public',
+    clientId: 'interactive.public.short',
   ),
   store: OidcDefaultStore(
       // useSessionStorageForSessionNamespaceOnWeb: true,
@@ -35,7 +35,7 @@ final duendoManager = OidcUserManager.lazy(
     frontChannelLogoutUri: Uri(path: 'redirect.html'),
     uiLocales: ['ar'],
     refreshBefore: (token) {
-      return const Duration(minutes: 10);
+      return const Duration(seconds: 1);
     },
 
     // scopes supported by the provider and needed by the client.
@@ -77,7 +77,9 @@ Future<void> initApp() {
   return initMemoizer.runOnce(() async {
     currentManager.userChanges().listen((event) {
       cachedAuthedUser.$ = event;
-      exampleLogger.info('User changed: ${event?.claims.toJson()}');
+      exampleLogger.info(
+        'User changed: ${event?.claims.toJson()}, info: ${event?.userInfo}',
+      );
     });
 
     await currentManager.init();

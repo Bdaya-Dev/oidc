@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:logging/logging.dart';
+import 'package:meta/meta.dart';
 import 'package:oidc_core/oidc_core.dart';
 
 class OidcTokenEventsManager {
@@ -8,6 +9,7 @@ class OidcTokenEventsManager {
     this.getExpiringNotificationTime,
   });
 
+  @visibleForTesting
   static final logger = Logger('Oidc.TokenEventsManager');
 
   Timer? _expiringTimer;
@@ -25,7 +27,6 @@ class OidcTokenEventsManager {
     //first, remove any previous timers.
     unload();
     logger.finest('Loading token started');
-
     //calculate a new expires_in based on the current time.
     final expiresInFromNow = token.calculateExpiresInFromNow();
     if (expiresInFromNow == null) {
