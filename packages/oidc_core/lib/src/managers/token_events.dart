@@ -28,9 +28,8 @@ class OidcTokenEventsManager {
     //first, remove any previous timers.
     unload();
     logger.finest('Loading token started');
-    final now = clock.now();
     //calculate a new expires_in based on the current time.
-    final expiresInFromNow = token.calculateExpiresInFromNow(now: now);
+    final expiresInFromNow = token.calculateExpiresInFromNow();
     if (expiresInFromNow == null) {
       logger.finest('expiresInFromNow is null, no timer will be started.');
       // there is no way to determine when will it expire.
