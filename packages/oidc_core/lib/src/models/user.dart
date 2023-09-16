@@ -14,6 +14,7 @@ class OidcUser {
     required this.attributes,
     required this.keystore,
     required this.allowedAlgorithms,
+    required this.userInfo,
   });
 
   /// Creates a OidcUser from an encoded id_token passed via [token].
@@ -65,6 +66,7 @@ class OidcUser {
       attributes: attributes ?? const {},
       allowedAlgorithms: allowedAlgorithms,
       keystore: keystore,
+      userInfo: const {},
     );
   }
 
@@ -97,6 +99,20 @@ class OidcUser {
   /// these MUST be json encodable.
   final Map<String, dynamic> attributes;
 
+  final Map<String, dynamic> userInfo;
+
+  OidcUser withUserInfo(Map<String, dynamic> userInfo) {
+    return OidcUser._(
+      idToken: idToken,
+      parsedIdToken: parsedIdToken,
+      token: token,
+      attributes: attributes,
+      keystore: keystore,
+      allowedAlgorithms: allowedAlgorithms,
+      userInfo: userInfo,
+    );
+  }
+
   /// if an id_token exists in the [newToken], it will be re-verified.
   Future<OidcUser> replaceToken(OidcToken newToken) async {
     final idToken = newToken.idToken ?? this.idToken;
@@ -122,6 +138,7 @@ class OidcUser {
       attributes: attributes,
       allowedAlgorithms: allowedAlgorithms,
       keystore: keystore,
+      userInfo: userInfo,
     );
   }
 
@@ -136,6 +153,7 @@ class OidcUser {
       token: token,
       allowedAlgorithms: allowedAlgorithms,
       keystore: keystore,
+      userInfo: userInfo,
     );
   }
 
@@ -147,6 +165,7 @@ class OidcUser {
       token: token,
       allowedAlgorithms: allowedAlgorithms,
       keystore: keystore,
+      userInfo: userInfo,
     );
   }
 }
