@@ -101,7 +101,7 @@ jobs:
         run: flutter test integration_test -d iPhone
 
   linux:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     if: true # TODO: Integration tests are flaky, see https://github.com/VeryGoodOpenSource/very_good_flutter_plugin/issues/79
 
     defaults:
