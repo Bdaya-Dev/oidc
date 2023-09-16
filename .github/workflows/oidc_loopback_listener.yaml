@@ -6,15 +6,15 @@ concurrency:
 
 on:
   pull_request:
-    # paths:
-    #   - ".github/workflows/oidc_loopback_listener.yaml"
-    #   - "packages/oidc_loopback_listener/**"
+    paths:
+      - ".github/workflows/oidc_loopback_listener.yaml"
+      - "packages/oidc_loopback_listener/**"
   push:
     branches:
       - main
-    # paths:
-    #   - ".github/workflows/oidc_loopback_listener.yaml"
-    #   - "packages/oidc_loopback_listener/**"
+    paths:
+      - ".github/workflows/oidc_loopback_listener.yaml"
+      - "packages/oidc_loopback_listener/**"
 
 jobs:
   build:
