@@ -20,7 +20,7 @@ jobs:
 
   build:
     name: build
-    uses: ./.github/workflows/dart_package.yaml
+    uses: ./.github/workflows/flutter_package.yaml
     with:
       working_directory: packages/oidc_core
       min_coverage: 0

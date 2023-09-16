@@ -69,7 +69,9 @@ jobs:
         uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{inputs.dart_sdk}}
-      - uses: bluefireteam/melos-action@v1
+
+      - name: 📦 Install Dependencies
+        run: dart pub get
 
       - name: ⚙️ Run Setup
         if: "${{inputs.setup != ''}}"
