@@ -65,7 +65,7 @@ class NoOpOidcPlatform extends OidcPlatform {
   ) {
     throw UnimplementedError();
   }
-  
+
   @override
   Future<OidcEndSessionResponse?> getEndSessionResponse(
     OidcProviderMetadata metadata,
