@@ -25,7 +25,7 @@ jobs:
 
   android:
     runs-on: macos-latest
-    if: false # TODO: Integration tests are flaky, see https://github.com/VeryGoodOpenSource/very_good_flutter_plugin/issues/79
+    if: true # TODO: Integration tests are flaky, see https://github.com/VeryGoodOpenSource/very_good_flutter_plugin/issues/79
 
     defaults:
       run:
@@ -42,6 +42,9 @@ jobs:
 
       - name: Flutter Doctor
         run: flutter doctor -v
+
+      - name: Install Melos
+        uses: bluefireteam/melos-action@v1
 
       - name: AVD Cache
         uses: actions/cache@v3
@@ -62,7 +65,7 @@ jobs:
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
 
-      - name: Integration Tests
+      - name: E2E Tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
@@ -84,6 +87,9 @@ jobs:
       - name: Flutter Doctor
         run: flutter doctor -v
 
+      - name: Install Melos
+        uses: bluefireteam/melos-action@v1
+
       - name: Start Simulator
         # Start an iPhone simulator
         run: |
@@ -96,7 +102,7 @@ jobs:
 
   linux:
     runs-on: ubuntu-18.04
-    if: false # TODO: Integration tests are flaky, see https://github.com/VeryGoodOpenSource/very_good_flutter_plugin/issues/79
+    if: true # TODO: Integration tests are flaky, see https://github.com/VeryGoodOpenSource/very_good_flutter_plugin/issues/79
 
     defaults:
       run:
@@ -118,12 +124,15 @@ jobs:
       - name: Flutter Doctor
         run: flutter doctor -v
 
+      - name: Install Melos
+        uses: bluefireteam/melos-action@v1
+
       - name: Integration Tests
         run: xvfb-run flutter test integration_test -d linux
 
   macos:
     runs-on: macos-latest
-    if: false # TODO: Macos tests are flaky, see https://github.com/VeryGoodOpenSource/very_good_flutter_plugin/issues/79
+    if: true # TODO: Macos tests are flaky, see https://github.com/VeryGoodOpenSource/very_good_flutter_plugin/issues/79
 
     defaults:
       run:
@@ -136,10 +145,13 @@ jobs:
 
       - name: Enable desktop support
         run: flutter config --enable-macos-desktop
-
+      
       - name: Flutter Doctor
         run: flutter doctor -v
 
+      - name: Install Melos
+        uses: bluefireteam/melos-action@v1
+        
       - name: Integration Tests
         run: flutter test integration_test -d macos
 
@@ -157,6 +169,10 @@ jobs:
 
       - name: Flutter Doctor
         run: flutter doctor -v
+
+      - name: Install Melos
+        uses: bluefireteam/melos-action@v1
+      
       - name: Run Chromedriver
         run: |
           git clone https://github.com/Bdaya-Dev/web_installers --branch new-chromedriver-urls
@@ -185,6 +201,9 @@ jobs:
 
       - name: Flutter Doctor
         run: flutter doctor -v
+
+      - name: Install Melos
+        uses: bluefireteam/melos-action@v1
 
       - name: Integration Tests
         run: flutter test integration_test -d windows

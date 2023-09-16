@@ -23,7 +23,7 @@ on:
       flutter_version:
         required: false
         type: string
-        default: "3.13.1"
+        default: "3.13.2"
       min_coverage:
         required: false
         type: number
@@ -80,12 +80,11 @@ jobs:
           channel: ${{inputs.flutter_channel}}
           cache: true
           cache-key: flutter-:os:-:channel:-:version:-:arch:-:hash:-${{ hashFiles('**/pubspec.lock') }}
-
       - name: 📦 Install Dependencies
         run: |
           flutter pub global activate very_good_cli
           very_good --analytics false
-          very_good packages get --recursive --ignore=${{inputs.package_get_excludes}}
+      - uses: bluefireteam/melos-action@v1
 
       - name: ⚙️ Run Setup
         if: "${{inputs.setup != ''}}"
