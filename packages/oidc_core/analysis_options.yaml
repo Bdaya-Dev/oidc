@@ -10,6 +10,7 @@ linter:
     require_trailing_commas: false
     always_use_package_imports: false
     public_member_api_docs: false
+    lines_longer_than_80_chars: false
     # deprecated_member_use_from_same_package: false
 # Uncomment the following section to specify additional rules.
 

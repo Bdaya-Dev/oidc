@@ -134,34 +134,30 @@ class OidcToken {
   /// Returns true if access token expired or is about to expire.
   bool isAccessTokenExpired({
     DateTime? now,
-    DateTime? referenceDate,
+    DateTime? overrideCreationTime,
   }) {
-    now ??= DateTime.now().toUtc();
-    final refreshTime = calculateExpiresAt(
-      overrideCreationTime: referenceDate ?? now,
-    )?.difference(now);
-    if (refreshTime == null) {
-      return true;
-    }
-    return refreshTime.isNegative;
+    return isAccessTokenAboutToExpire(
+      now: now,
+      overrideCreationTime: overrideCreationTime,
+      tolerance: Duration.zero,
+    );
   }
 
   /// Returns true if access token expired or is about to expire.
   bool isAccessTokenAboutToExpire({
     DateTime? now,
-    DateTime? referenceDate,
+    DateTime? overrideCreationTime,
     Duration tolerance = const Duration(minutes: 1),
   }) {
     now ??= DateTime.now().toUtc();
     final expAt = calculateExpiresAt(
-      overrideCreationTime: referenceDate ?? now,
+      overrideCreationTime: overrideCreationTime,
     );
-    var refreshTime = expAt?.difference(now);
+    final refreshTime = expAt?.difference(now);
     if (refreshTime == null) {
       return true;
     }
-    refreshTime -= tolerance;
-    return refreshTime.isNegative;
+    return refreshTime < tolerance;
   }
 
   /// Calculates the expirey date of the access token from [expiresIn] and

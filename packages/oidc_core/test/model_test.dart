@@ -16,18 +16,53 @@ void main() {
     });
     group('OidcUserMetadata', () {
       //1 jan 2023 at 1 PM utc
-      final now = DateTime.utc(2023, 1, 1, 13, 0);
-      const expiresInSeconds = 3600;
-      final refDates =
-          <(DateTime createdAt, bool isAboutToExpire, bool isExpired)>[
-        (DateTime.utc(2023, 1, 1, 12, 0), true, false),
-        (DateTime.utc(2023, 1, 1, 12, 2), false, false),
-        (DateTime.utc(2023, 1, 1, 11, 59), true, true),
+
+      final pastCreationTime = DateTime.utc(2023, 1, 1, 10, 0);
+      final now = DateTime.utc(2023, 1, 1, 11, 0);
+      //issued tokens expire in 1 hour from creation time.
+      const expiresInBase = Duration(hours: 1);
+      //isAboutToExpire tolerance.
+      const tolerance = Duration(minutes: 5);
+      final refDates = <_TokenDateTest>[
+        _TokenDateTest(
+          creationTime: pastCreationTime,
+          //expires after 1 hour, 10 minutes
+          expiresIn: expiresInBase + tolerance * 2,
+          tolerance: tolerance,
+          isAboutToExpire: false,
+          isExpired: false,
+        ),
+        _TokenDateTest(
+          creationTime: pastCreationTime,
+          //expires after 1 hour, 2.5 minutes
+          expiresIn: expiresInBase + tolerance ~/ 2,
+          tolerance: tolerance,
+          isAboutToExpire: true,
+          isExpired: false,
+        ),
+        _TokenDateTest(
+          creationTime: pastCreationTime,
+          //expires after 1 hour
+          expiresIn: expiresInBase,
+          tolerance: tolerance,
+          isAboutToExpire: true,
+          isExpired: false,
+        ),
+        _TokenDateTest(
+          creationTime: pastCreationTime,
+          //expires after 59 minutes
+          expiresIn: expiresInBase - const Duration(seconds: 1),
+          tolerance: tolerance,
+          isAboutToExpire: true,
+          isExpired: true,
+        ),
+        //created in the future
       ];
       for (final referenceDateEntry in refDates) {
-        final createdAt = referenceDateEntry.$1;
-        final isAboutToExpire = referenceDateEntry.$2;
-        final isExpired = referenceDateEntry.$3;
+        final createdAt = referenceDateEntry.creationTime;
+        final isAboutToExpire = referenceDateEntry.isAboutToExpire;
+        final isExpired = referenceDateEntry.isExpired;
+        final expiresIn = referenceDateEntry.expiresIn;
         group('(referenceDate: $createdAt)', () {
           test('empty', () {
             final obj = OidcToken(creationTime: createdAt);
@@ -38,7 +73,7 @@ void main() {
             );
             expect(
               obj.calculateExpiresAt(overrideCreationTime: createdAt),
-              createdAt,
+              isNull,
             );
             expect(
               obj.isAccessTokenAboutToExpire(now: now),
@@ -54,29 +89,37 @@ void main() {
               OidcConstants_AuthParameters.accessToken: 'TlBN45jURg',
               OidcConstants_AuthParameters.tokenType: 'Bearer',
               OidcConstants_AuthParameters.refreshToken: '9yNOxJtZa5',
-              OidcConstants_AuthParameters.expiresIn: expiresInSeconds,
-              OidcConstants_Store.expiresInReferenceDate: createdAt,
+              OidcConstants_AuthParameters.expiresIn: expiresIn.inSeconds,
+              OidcConstants_Store.expiresInReferenceDate:
+                  createdAt.toIso8601String(),
             };
             final obj = OidcToken.fromJson(src);
             expect(obj.toJson(), src);
-            expect(obj.expiresIn, const Duration(seconds: expiresInSeconds));
+            expect(obj.expiresIn, expiresIn);
             expect(
               obj.calculateExpiresAt(),
-              createdAt.add(const Duration(seconds: expiresInSeconds)),
+              createdAt.add(expiresIn),
             );
             //shifting input shifts output
             expect(
               obj.calculateExpiresAt(
                 overrideCreationTime: createdAt.add(const Duration(seconds: 5)),
               ),
-              createdAt.add(const Duration(seconds: 5 + expiresInSeconds)),
+              createdAt.add(
+                expiresIn + const Duration(seconds: 5),
+              ),
             );
             expect(
-              obj.isAccessTokenAboutToExpire(now: now),
+              obj.isAccessTokenAboutToExpire(
+                now: now,
+                tolerance: tolerance,
+              ),
               isAboutToExpire,
             );
             expect(
-              obj.isAccessTokenExpired(now: now),
+              obj.isAccessTokenExpired(
+                now: now,
+              ),
               isExpired,
             );
           });
@@ -84,4 +127,21 @@ void main() {
       }
     });
   });
+}
+
+class _TokenDateTest {
+  const _TokenDateTest({
+    required this.isAboutToExpire,
+    required this.isExpired,
+    required this.creationTime,
+    required this.expiresIn,
+    required this.tolerance,
+  });
+
+  final DateTime creationTime;
+  final Duration expiresIn;
+  final Duration tolerance;
+
+  final bool isAboutToExpire;
+  final bool isExpired;
 }
