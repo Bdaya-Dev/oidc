@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:clock/clock.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:uuid/uuid.dart';
@@ -22,7 +23,7 @@ class OidcState {
     DateTime? createdAt,
     this.data,
   })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now();
+        createdAt = createdAt ?? clock.now();
 
   ///
   factory OidcState.fromStorageString(String storageString) {
@@ -70,7 +71,7 @@ class OidcState {
     required OidcStore store,
     required Duration age,
   }) async {
-    final cutoff = DateTime.now().toUtc().subtract(age);
+    final cutoff = clock.now().toUtc().subtract(age);
     final keys = await store.getAllKeys(OidcStoreNamespace.state);
     for (final key in keys) {
       final item = await store.get(OidcStoreNamespace.state, key: key);

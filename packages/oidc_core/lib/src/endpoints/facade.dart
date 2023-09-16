@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
 import 'package:nonce/nonce.dart';
 import 'package:oidc_core/oidc_core.dart';
@@ -115,7 +116,7 @@ class OidcEndpoints {
     final nonce = Nonce.generate(32, Random.secure());
     final stateData = OidcAuthorizeState(
       id: const Uuid().v4(),
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
       codeVerifier: codeVerifier,
       codeChallenge: codeChallenge,
       redirectUri: input.redirectUri,
@@ -187,7 +188,7 @@ class OidcEndpoints {
     final nonce = Nonce.generate(32, Random.secure());
     final stateData = OidcAuthorizeState(
       id: const Uuid().v4(),
-      createdAt: DateTime.now(),
+      createdAt: clock.now(),
       codeVerifier: null,
       codeChallenge: null,
       redirectUri: input.redirectUri,
