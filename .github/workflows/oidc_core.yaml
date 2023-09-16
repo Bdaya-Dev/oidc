@@ -19,7 +19,7 @@ on:
 jobs:
 
   build:
-    name: Dart Package workflow
+    name: build
     uses: ./.github/workflows/dart_package.yaml
     with:
       working_directory: packages/oidc_core
