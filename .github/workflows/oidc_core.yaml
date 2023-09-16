@@ -25,7 +25,8 @@ jobs:
       working_directory: packages/oidc_core
       min_coverage: 80
       custom_tests: |
-        pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$'
+        dart pub global activate remove_from_coverage
+        dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$'
 
 
   pana:
