@@ -26,7 +26,7 @@ class _SecretPageState extends State<SecretPage> {
     final mobilePlatforms = [
       TargetPlatform.android,
       TargetPlatform.iOS,
-      TargetPlatform.fuchsia
+      TargetPlatform.fuchsia,
     ];
     return Scaffold(
       body: Padding(

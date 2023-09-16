@@ -78,7 +78,8 @@ Future<void> initApp() {
     currentManager.userChanges().listen((event) {
       cachedAuthedUser.$ = event;
       exampleLogger.info(
-          'User changed: ${event?.claims.toJson()}, info: ${event?.userInfo}');
+        'User changed: ${event?.claims.toJson()}, info: ${event?.userInfo}',
+      );
     });
 
     await currentManager.init();

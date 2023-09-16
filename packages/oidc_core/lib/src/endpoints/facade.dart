@@ -5,7 +5,6 @@ import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
 import 'package:nonce/nonce.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_core/src/endpoints/userinfo/response.dart';
 import 'package:uuid/uuid.dart';
 
 const _authorizationHeaderKey = 'Authorization';
