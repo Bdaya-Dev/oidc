@@ -6,15 +6,15 @@ concurrency:
 
 on:
   pull_request:
-    # paths:
-    #   - ".github/workflows/oidc_android.yaml"
-    #   - "packages/oidc_android/**"
+    paths:
+      - ".github/workflows/oidc_android.yaml"
+      - "packages/oidc_android/**"
   push:
     branches:
       - main
-    # paths:
-    #   - ".github/workflows/oidc_android.yaml"
-    #   - "packages/oidc_android/**"
+    paths:
+      - ".github/workflows/oidc_android.yaml"
+      - "packages/oidc_android/**"
 
 jobs:
   build:

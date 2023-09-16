@@ -6,15 +6,15 @@ concurrency:
 
 on:
   pull_request:
-    # paths:
-    #   - ".github/workflows/oidc_macos.yaml"
-    #   - "packages/oidc_macos/**"
+    paths:
+      - ".github/workflows/oidc_macos.yaml"
+      - "packages/oidc_macos/**"
   push:
     branches:
       - main
-    # paths:
-    #   - ".github/workflows/oidc_macos.yaml"
-    #   - "packages/oidc_macos/**"
+    paths:
+      - ".github/workflows/oidc_macos.yaml"
+      - "packages/oidc_macos/**"
 
 jobs:
   build:
