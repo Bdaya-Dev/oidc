@@ -1,3 +1,8 @@
+## 0.4.1
+
+ - **FEAT**: add response form userInfo endpoint to the user object.
+ - **FEAT**: use package:clock for better testing.
+
 ## 0.4.0+1
 
  - **FIX**: token date calculations.

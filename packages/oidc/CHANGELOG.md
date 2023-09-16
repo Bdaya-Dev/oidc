@@ -1,3 +1,7 @@
+## 0.3.1
+
+ - **FEAT**: add response form userInfo endpoint to the user object.
+
 ## 0.3.0+1
 
  - Update a dependency to the latest release.

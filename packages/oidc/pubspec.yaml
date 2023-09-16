@@ -1,6 +1,6 @@
 name: oidc
 description: A comprehensive OpenIdConnect package
-version: 0.3.0+1
+version: 0.3.1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc
 
 environment:
@@ -26,14 +26,14 @@ dependencies:
   flutter:
     sdk: flutter
   # Endorsed packages
-  oidc_android: ^0.3.0+1
-  oidc_core: ^0.4.0+1
-  oidc_ios: ^0.3.0+1
-  oidc_linux: ^0.3.0+1
-  oidc_macos: ^0.3.0+1
-  oidc_platform_interface: ^0.3.0+1
-  oidc_web: ^0.3.0+1
-  oidc_windows: ^0.3.0+1
+  oidc_android: ^0.3.0+2
+  oidc_core: ^0.4.1
+  oidc_ios: ^0.3.0+2
+  oidc_linux: ^0.3.0+2
+  oidc_macos: ^0.3.0+2
+  oidc_platform_interface: ^0.3.0+2
+  oidc_web: ^0.3.0+2
+  oidc_windows: ^0.3.0+2
   # ====================
   http: ^1.1.0
   jose_plus: ^0.4.1
