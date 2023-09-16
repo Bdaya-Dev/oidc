@@ -47,11 +47,7 @@ on:
       working_directory:
         required: false
         type: string
-        default: "."      
-      package_get_excludes:
-        required: false
-        type: string
-        default: "!*"
+        default: "."
       run_tests:
         required: false
         type: boolean
