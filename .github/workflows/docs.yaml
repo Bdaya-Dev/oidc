@@ -1,5 +1,5 @@
 # Simple workflow for deploying static content to GitHub Pages
-name: Deploy doctave to Pages
+name: Deploy MkDocs to Pages
 
 on:
   # Runs on pushes targeting the default branch
@@ -37,6 +37,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Deploy MkDocs
-        uses: mhausenblas/mkdocs-deploy-gh-pages@1.26
+        uses: mhausenblas/mkdocs-deploy-gh-pages@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}          
