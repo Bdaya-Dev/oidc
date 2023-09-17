@@ -1,0 +1,25 @@
+site_name: Oidc Docs
+site_description: 'Docs for package:oidc in dart'
+site_author: 'Bdaya Development'
+docs_dir: docs/
+repo_name: 'bdaya-dev/oidc'
+repo_url: 'https://github.com/bdaya-dev/oidc'
+nav:
+    - Introduction: index.md
+    - 'package:oidc': 
+      - 'Getting Started': oidc-getting-started.md
+      - 'Usage': oidc-usage.md
+    - 'package:oidc_core': oidc_core.md
+    - 'package:oidc_default_store': oidc_default_store.md
+theme:
+  name: 'material'
+markdown_extensions:
+  - pymdownx.highlight:
+      use_pygments: true
+      anchor_linenums: true
+  - pymdownx.snippets
+  - pymdownx.superfences 
+  - pymdownx.betterem
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji 
+      emoji_generator: !!python/name:materialx.emoji.to_svg

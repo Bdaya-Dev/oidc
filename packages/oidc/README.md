@@ -36,7 +36,7 @@ dart pub add oidc oidc_default_store
 
 ## Usage 🛠️
 
-Read the **[wiki](https://github.com/Bdaya-Dev/oidc/wiki)**.
+Read the **[wiki](https://bdaya-dev.github.io/oidc/)**.
 
 
 ## Features 📚
@@ -58,8 +58,9 @@ Read the **[wiki](https://github.com/Bdaya-Dev/oidc/wiki)**.
 - [RP Initiated logout][rp_logout_link].
 - [Front-Channel Logout][frontchannel_logout_link].
 - [Authorization code grant][auth_code_link] with [PKCE](pkce_link).
-- [Resource Owner Password Credentials Grant](https://www.rfc-editor.org/rfc/rfc6749#section-1.3.3)
+- [Resource Owner Password Credentials Grant](https://www.rfc-editor.org/rfc/rfc6749#section-1.3.3).
 - Automatic [Refresh Token](https://oauth.net/2/grant-types/refresh-token/) rotation.
+- [OAuth 2.0 For Native Apps](https://datatracker.ietf.org/doc/html/rfc8252)
  
 ### WIP Specs
 

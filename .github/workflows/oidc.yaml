@@ -44,7 +44,7 @@ jobs:
         run: flutter doctor -v
 
       - name: Install Melos
-        uses: bluefireteam/melos-action@v1
+        uses: bluefireteam/melos-action@v2
 
       - name: AVD Cache
         uses: actions/cache@v3
@@ -88,7 +88,7 @@ jobs:
         run: flutter doctor -v
 
       - name: Install Melos
-        uses: bluefireteam/melos-action@v1
+        uses: bluefireteam/melos-action@v2
 
       - name: Start Simulator
         # Start an iPhone simulator
@@ -123,7 +123,7 @@ jobs:
         run: flutter doctor -v
 
       - name: Install Melos
-        uses: bluefireteam/melos-action@v1
+        uses: bluefireteam/melos-action@v2
 
       - name: Integration Tests
         run: xvfb-run flutter test integration_test -d linux
@@ -148,7 +148,7 @@ jobs:
         run: flutter doctor -v
 
       - name: Install Melos
-        uses: bluefireteam/melos-action@v1
+        uses: bluefireteam/melos-action@v2
         
       - name: Integration Tests
         run: flutter test integration_test -d macos
@@ -169,7 +169,7 @@ jobs:
         run: flutter doctor -v
 
       - name: Install Melos
-        uses: bluefireteam/melos-action@v1
+        uses: bluefireteam/melos-action@v2
       
       - name: Run Chromedriver
         run: |
@@ -185,7 +185,7 @@ jobs:
   windows:
     runs-on: windows-2019
     # Melos action does not work on windows: https://github.com/bluefireteam/melos-action/issues/5
-    if: false 
+    if: true 
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -202,7 +202,7 @@ jobs:
         run: flutter doctor -v
 
       - name: Install Melos
-        uses: bluefireteam/melos-action@v1
+        uses: bluefireteam/melos-action@v2
 
       - name: Integration Tests
         run: flutter test integration_test -d windows
