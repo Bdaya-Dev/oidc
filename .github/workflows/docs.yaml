@@ -8,13 +8,7 @@ on:
     paths:
       - ".github/workflows/docs.yaml"
       - "docs/**"
-      - mkdocs.yml
-  pull_request: 
-    branches: ["main"]
-    paths:
-      - ".github/workflows/docs.yaml"
-      - "docs/**"
-      - mkdocs.yml
+      - mkdocs.yml  
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
