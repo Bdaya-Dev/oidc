@@ -1,5 +1,5 @@
 name: oidc
-description: A comprehensive OpenIdConnect package
+description: A comprehensive OpenIdConnect plugin that works on all platforms (android, ios, windows, linux, web, macos)
 version: 0.3.1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc
 
