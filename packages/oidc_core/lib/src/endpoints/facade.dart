@@ -125,6 +125,7 @@ class OidcEndpoints {
       data: input.extraStateData,
       extraTokenParams: input.extraTokenParameters,
       options: input.options,
+      extraTokenHeaders: input.extraTokenHeaders,
     );
     //store the state
     if (store != null) {
@@ -197,6 +198,7 @@ class OidcEndpoints {
       options: input.options,
       data: input.extraStateData,
       extraTokenParams: null,
+      extraTokenHeaders: null,
     );
     if (store != null) {
       //store the state

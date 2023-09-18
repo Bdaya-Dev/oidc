@@ -22,6 +22,7 @@ class OidcSimpleAuthorizationCodeFlowRequest {
     this.extraStateData,
     this.extraParameters,
     this.extraTokenParameters,
+    this.extraTokenHeaders,
     this.options,
   });
 
@@ -37,6 +38,8 @@ class OidcSimpleAuthorizationCodeFlowRequest {
 
   /// see [OidcAuthorizeState.extraTokenParams]
   final Map<String, dynamic>? extraTokenParameters;
+  /// see [OidcAuthorizeState.extraTokenHeaders]
+  final Map<String, String>? extraTokenHeaders;
 
   /// Extra state data that will be persisted and roundtripped when the response
   /// is received.

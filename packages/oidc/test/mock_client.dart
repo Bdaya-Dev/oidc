@@ -14,13 +14,14 @@ Future<Response> _handleRequest(Request request) async {
   if (_eq.equals(url.pathSegments, ['.well-known', 'openid-configuration'])) {
     return Response(_googleProviderMetadata, 304);
   }
-  if (url.pathSegments.first == 'token') {    
+  if (url.pathSegments.first == 'token') {
     return Response(_tokenResponse, 200);
   }
   throw UnimplementedError(
     "Don't know how to handle the request ${request.url}",
   );
 }
+
 // cSpell: disable
 const _tokenResponse = '''
 {

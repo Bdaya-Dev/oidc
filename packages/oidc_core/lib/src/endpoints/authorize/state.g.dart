@@ -17,6 +17,10 @@ OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
       nonce: json['nonce'] as String,
       clientId: json['client_id'] as String,
       extraTokenParams: json['extraTokenParams'] as Map<String, dynamic>?,
+      extraTokenHeaders:
+          (json['extraTokenHeaders'] as Map<String, dynamic>?)?.map(
+        (k, e) => MapEntry(k, e as String),
+      ),
       options: json['options'] as Map<String, dynamic>?,
       id: json['id'] as String?,
       createdAt: _$JsonConverterFromJson<int, DateTime>(
@@ -30,6 +34,7 @@ Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
       'created_at': const OidcNumericDateConverter().toJson(instance.createdAt),
       'operationDiscriminator': instance.operationDiscriminator,
       'data': instance.data,
+      'extraTokenHeaders': instance.extraTokenHeaders,
       'extraTokenParams': instance.extraTokenParams,
       'options': instance.options,
       'code_challenge': instance.codeChallenge,

@@ -650,6 +650,7 @@ class OidcConstants_Store {
 
   static const options = 'options';
   static const extraTokenParams = 'extraTokenParams';
+  static const extraTokenHeaders = 'extraTokenHeaders';
   static const currentToken = 'currentToken';
 
   static const requestType = 'requestType';

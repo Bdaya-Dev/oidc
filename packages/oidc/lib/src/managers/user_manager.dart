@@ -112,6 +112,7 @@ class OidcUserManager {
     Duration? maxAgeOverride,
     Map<String, dynamic>? extraParameters,
     Map<String, dynamic>? extraTokenParameters,
+    Map<String, String>? extraTokenHeaders,
     OidcPlatformSpecificOptions? options,
   }) async {
     _ensureInit();
@@ -136,7 +137,14 @@ class OidcUserManager {
       idTokenHint: idTokenHintOverride ??
           (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
       loginHint: loginHint,
-      extraTokenParameters: extraTokenParameters,
+      extraTokenHeaders: {
+        ...?settings.extraTokenHeaders,
+        ...?extraTokenHeaders,
+      },
+      extraTokenParameters: {
+        ...?settings.extraTokenParameters,
+        ...?extraTokenParameters,
+      },
       extraParameters: {
         ...?settings.extraAuthenticationParameters,
         ...?extraParameters,
@@ -432,13 +440,14 @@ class OidcUserManager {
     final tokenResp = await OidcEndpoints.token(
       tokenEndpoint: tokenEndPoint,
       credentials: clientCredentials,
+      headers: stateData.extraTokenHeaders,
       request: OidcTokenRequest.authorizationCode(
         redirectUri: response.redirectUri ?? stateData.redirectUri,
         codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
-        extra: stateData.extraTokenParams,
+        extra: stateData.extraTokenParams,        
         clientId: clientCredentials.clientId,
         code: code,
-      ),
+      ),            
       client: httpClient,
     );
     return _createUserFromToken(

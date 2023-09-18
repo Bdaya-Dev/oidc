@@ -178,21 +178,136 @@ this is used for validating the JWT signature.
 
 ### Initialization
 
-after constructing the manager with the proper settings, you MUST call the `manager.init()` function, which will do the following:
-    
+After constructing the manager with the proper settings, you MUST call the `manager.init()` function, which will do the following:
+1. If the function has already been initialized (checked via the hasInit variable), it simply returns. This is because certain configurations and setups do not need, and should not be, repeated.
+2. initialize the passed store (calls `OidcStore.init()`)
+3. ensure that the discovery document has been retrieved (if the lazy constructor was used).
+4. if the discovery document contains a `jwks_uri` adds it the to the keystore.
+5. handle various state management tasks. It loads logout requests and state results (from samePage redirects), also attempts to load cached tokens if there are no state results or logout requests.
+6. Starts Listening to incoming Front Channel Logout requests.
+7. Starts listening to token expiry events for automatic refresh_token circulation.
 
 ### Login
 
-#### Auth code flow
+#### loginAuthorizationCodeFlow
 
-#### Implicit flow
+If you provided the [settings](#settings) earlier, there are no required parameters here, so you can just call `manager.loginAuthorizationCodeFlow()`.
+however there are some new parameters:
 
-#### Resource Owner Password flow
+- `originalUri`: mainly used for `samePage` navigation on web; this is the Uri the user will navigate to after they are redirected to the `redirect.html` page
+- `extraStateData`: arbitrary data that you want to persist in the state parameter, note that this MUST be json serializable.
+- `idTokenHintOverride`: pass an `id_token_hint`.
+- `includeIdTokenHintFromCurrentUser`: if true, will include the current `id_token` as the `idTokenHint` parameter.
+> Note that this is ignored if `idTokenHintOverride` is assigned.
+- if you pass `options` here and at the [settings](#settings), they WILL NOT get merged, and the options from the login request takes precedence. 
+- `extraParameters`: extra parameters that will get passed to the auth server as part of the request.
+    These ARE merged with `settings.extraAuthenticationParameters`.
+
+- `extraTokenParameters`: extra parameters that will get passed to the auth server when making the token request. These ARE merged with `settings.extraTokenParameters`.
+- `extraTokenHeaders`: extra parameters that will get passed to the auth server when making the token request. These ARE merged with `settings.extraTokenHeaders`.
+
+#### loginImplicitFlow
+
+Same parameters as `loginAuthorizationCodeFlow`, but you MUST specify the `responseType`.
+
+possible values are in `OidcConstants_AuthorizationEndpoint_ResponseType`:
+
+- `idToken`
+- `token`
+- `code`
+
+and any combination of them.
+
+!!! Warning
+    This flow is [deprecated](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics-23#name-implicit-grant) due to security concerns, and is only available for backward-compatibility with providers that don't support invoking the token endpoint without a client_secret (like [google](https://developers.google.com/identity/protocols/oauth2/javascript-implicit-flow)).
+
+#### loginPassword
+
+you only need to provide the `username` and the `password`.
+you can also pass `scopeOverride` to override the scopes from `settings.scopes`.
 
 ### Logout
 
+The word "Logout" can have different behaviors depending on the context:
+
+#### Forgetting the user
+
+- this is as simple as calling `forgetUser()` which will clear the cache, and unassign the `currentUser`.
+- this DOES NOT inform the identity provider that the user has logged out, nor revoke the token.
+
+!!! Note
+    A user that logs in after being forgotten, might not get prompted to enter their username/password again, keeping them in an infinite loop unable to change their credentials.
+
+    To counter this, you need to specify the `prompt` parameter when logging in (e.g. `prompt: ["login"]`), or logout from the Identity provider.
+
+#### Logging out from the identity provider.
+
+This can be done by calling `logout` with the following optional parameters:
+
+- `logoutHint`: can be the email/username or any documented value.
+- `postLogoutRedirectUriOverride`: if assigned, overrides the value passed in `settings.postLogoutRedirectUri`.
+- `originalUri`: mainly used for `samePage` navigation on web; this is the Uri the user will navigate to after they are redirected to the `redirect.html` page.
+- `extraStateData`: arbitrary data that you want to persist in the state parameter, note that this MUST be json serializable.
+- `uiLocalesOverride`: overrides the value passed in `settings.uiLocales`.
+- `options`: platform-specific navigation options, which are the same as `settings.options`.
+- `extraParameters`: extra parameters to pass to the logout request.
+
+### Listening to currentUser changes
+
+Whenever a user logs in, logs out, or a token gets refreshed automatically, an event is added to the `userChanges()` stream.
+
+This is similar to firebase auth, and can be used to track the current session.
+
+You can also get access to the current authenticated user via `currentUser` property.
+
+### Dispose
+
+If you aren't maintaining a single instance of the `OidcUserManager` class, you might want to `dispose()` it when you are done with the instance.
+
+This will stop refreshing the tokens, and stop listening to logout requests.
+
+It will also raise a `done` event in the `userChanges()` stream.
+
 ## OidcFlutter
 
+The class `OidcFlutter` exposes static methods for the underlying platform implementations, if you don't want to use the `OidcUserManager` class.
+
+They are defined as such:
+
+```dart
+/// starts the authorization flow, and returns the response.
+///
+/// on android/ios/macos, if the `request.responseType` is set to anything other than `code`, it returns null.
+///
+/// NOTE: this DOES NOT do token exchange.
+///
+/// consider using [OidcEndpoints.getProviderMetadata] to get the [metadata] parameter if you don't have it.
+static Future<OidcAuthorizeResponse?> getPlatformAuthorizationResponse({
+    required OidcProviderMetadata metadata,
+    required OidcAuthorizeRequest request,
+    OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
+});
+
+/// starts the end session flow, and returns the response.
+///
+/// consider using [OidcEndpoints.getProviderMetadata] to get the [metadata] parameter if you don't have it.
+static Future<OidcEndSessionResponse?> getPlatformEndSessionResponse({
+    required OidcProviderMetadata metadata,
+    required OidcEndSessionRequest request,
+    OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
+});
+
+/// Listens to incoming front channel logout requests.
+///
+/// [listenTo] parameter determines which path should be listened for to receive
+/// the request.
+///
+/// on windows/linux/macosx this starts a server on the same prt
+static Stream<OidcFrontChannelLogoutIncomingRequest> listenToFrontChannelLogoutRequests({
+    required Uri listenTo,
+    OidcFrontChannelRequestListeningOptions options = const OidcFrontChannelRequestListeningOptions(),
+});
+```
 
 
 [http_link]: https://pub.dev/packages/http
