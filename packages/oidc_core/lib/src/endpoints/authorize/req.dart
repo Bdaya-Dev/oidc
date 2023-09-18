@@ -5,7 +5,7 @@ import 'package:oidc_core/src/models/json_based_object.dart';
 
 part 'req.g.dart';
 
-/// A class that descripes an /authorize request.
+/// A class that describes an /authorize request.
 ///
 /// Note: this class does NO special logic.
 @JsonSerializable(
@@ -148,7 +148,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   ///
   /// Space delimited, case sensitive list of ASCII string values that specifies
   ///  whether the Authorization Server prompts the End-User
-  /// for reauthentication and consent.
+  /// for re-authentication and consent.
   ///
   /// The defined values are in [OidcConstants_AuthorizeRequest_Prompt]
   ///

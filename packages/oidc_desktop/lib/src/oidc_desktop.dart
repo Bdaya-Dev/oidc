@@ -24,7 +24,7 @@ mixin OidcDesktop on OidcPlatform {
 
   /// starts a listener and gets a response Uri.
   ///
-  /// override this in mock implmentations.
+  /// override this in mock implementations.
   @protected
   Future<Uri?> startListenerAndGetUri({
     required Uri originalRedirectUri,
