@@ -38,6 +38,7 @@ class OidcSimpleAuthorizationCodeFlowRequest {
 
   /// see [OidcAuthorizeState.extraTokenParams]
   final Map<String, dynamic>? extraTokenParameters;
+
   /// see [OidcAuthorizeState.extraTokenHeaders]
   final Map<String, String>? extraTokenHeaders;
 

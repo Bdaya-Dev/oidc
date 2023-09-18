@@ -444,10 +444,10 @@ class OidcUserManager {
       request: OidcTokenRequest.authorizationCode(
         redirectUri: response.redirectUri ?? stateData.redirectUri,
         codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
-        extra: stateData.extraTokenParams,        
+        extra: stateData.extraTokenParams,
         clientId: clientCredentials.clientId,
         code: code,
-      ),            
+      ),
       client: httpClient,
     );
     return _createUserFromToken(
