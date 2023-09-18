@@ -657,7 +657,7 @@ class OidcUserManager {
   /// First gets the cached discoveryDocument if any
   /// (based on discoveryDocumentUri).
   ///
-  /// Then trys to get it from the network.
+  /// Then tries to get it from the network.
   Future<void> _ensureDiscoveryDocument() async {
     final uri = discoveryDocumentUri;
 
@@ -814,7 +814,7 @@ class OidcUserManager {
     }
   }
 
-  /// returns true if ther was a logout request.
+  /// returns true if there was a logout request.
   Future<bool> _loadLogoutRequests() async {
     final request = await store.getCurrentFrontChannelLogoutRequest();
     if (request == null) {

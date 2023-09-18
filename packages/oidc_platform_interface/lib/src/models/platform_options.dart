@@ -107,7 +107,7 @@ enum OidcPlatformSpecificOptions_Web_NavigationMode {
   /// 5. the app receives the postMessage, and finishes the flow.
   newPage,
 
-  /// RECOMMENDED
+  /// NOT RECOMMENDED, since some browsers block popups.
   ///
   /// 1. Navigate to the Uri using a popup.
   /// 2. the redirect Uri should be /redirect.html

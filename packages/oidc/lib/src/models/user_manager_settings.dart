@@ -24,7 +24,7 @@ class OidcUserManagerSettings {
     this.acrValues,
     this.maxAge,
     this.extraAuthenticationParameters,
-    this.expiryTolerance = Duration.zero,
+    this.expiryTolerance = const Duration(minutes: 1),
     this.extraTokenParameters,
     this.postLogoutRedirectUri,
     this.options,

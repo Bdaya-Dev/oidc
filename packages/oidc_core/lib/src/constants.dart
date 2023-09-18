@@ -569,7 +569,7 @@ class OidcConstants_AuthorizationEndpoint_ResponseType {
   static const String none = 'none';
 }
 
-/// The display options defind by the spec.
+/// The display options defined by the spec.
 class OidcConstants_AuthorizeRequest_Display {
   /// The Authorization Server SHOULD display the authentication and consent UI
   /// consistent with a full User Agent page view.
@@ -594,7 +594,7 @@ class OidcConstants_AuthorizeRequest_Display {
   static const String wap = 'wap';
 }
 
-/// The prompt options defind by the spec
+/// The prompt options defined by the spec
 class OidcConstants_AuthorizeRequest_Prompt {
   /// The Authorization Server MUST NOT display any authentication or consent
   /// user interface pages.

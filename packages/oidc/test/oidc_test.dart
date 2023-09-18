@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:oidc/oidc.dart';
 // import 'package:oidc/oidc.dart';
-import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 class MockOidcPlatform extends Mock
