@@ -35,6 +35,7 @@
         "TODO.*"
     ],
     "ignorePaths": [
-        ".github"
+        ".github",
+        "mkdocs.yml"
     ]
 }
