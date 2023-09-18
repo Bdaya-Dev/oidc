@@ -78,8 +78,7 @@ jobs:
           cache-key: flutter-:os:-:channel:-:version:-:arch:-:hash:-${{ hashFiles('**/pubspec.lock') }}
       - name: 📦 Install Dependencies
         run: |
-          flutter pub global activate very_good_cli
-          very_good --analytics false
+          flutter pub global activate very_good_cli          
       - uses: bluefireteam/melos-action@v2
 
       - name: ⚙️ Run Setup
