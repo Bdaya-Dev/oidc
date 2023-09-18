@@ -15,7 +15,7 @@ This is a Mono repo of multiple packages:
  - [oidc](packages/oidc/README.md): builds on top of `oidc_core`, and adds platform-specific parts, this also contains the `UserManager` class.
  - [oidc_default_store](packages/oidc_default_store/README.md): the default `OidcStore` store implementation.
 
-Make sure you read each of their documentations for extra information.
+Make sure you read the [![Static Badge](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/) for extra information.
 
 ## Code Coverage graph
 

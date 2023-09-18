@@ -6,6 +6,8 @@
 
 A generic server that listens on loopback address for an authorization response.
 
+Make sure you read the [![Wiki](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/) for extra information.
+
 ## Installation 💻
 
 **❗ In order to start using Oidc Loopback Listener you must have the [Dart SDK][dart_install_link] installed on your machine.**

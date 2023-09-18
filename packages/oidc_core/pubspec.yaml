@@ -3,7 +3,7 @@ description: A dart package containing models and helpers for OpenId Connect spe
 version: 0.4.1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_core
 topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
-
+homepage: https://bdaya-dev.github.io/oidc/
 environment:
   sdk: ^3.1.0
 

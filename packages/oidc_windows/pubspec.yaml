@@ -2,7 +2,7 @@ name: oidc_windows
 description: Windows implementation of the oidc plugin
 version: 0.3.0+2
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_windows
-
+homepage: https://bdaya-dev.github.io/oidc/
 environment:
   sdk: ">=2.19.0 <4.0.0"
   flutter: ">=3.7.0"

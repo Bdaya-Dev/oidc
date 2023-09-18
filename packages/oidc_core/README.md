@@ -7,6 +7,8 @@
 
 An [OpenId Connect RP (Relying Party)][spec_link] package for dart, which exposes basic models and functionality defined by the OIDC standard.
 
+Make sure you read the [![Wiki](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/) for extra information.
+
 ## Introduction
 
 This package only requires dart, and can be used in all platforms.

@@ -2,7 +2,7 @@ name: oidc_loopback_listener
 description: A server that listens on loopback address for an authorization response
 version: 0.2.0
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_loopback_listener
-
+homepage: https://bdaya-dev.github.io/oidc/
 environment:
   sdk: ">=3.0.0 <4.0.0"
 dependencies:

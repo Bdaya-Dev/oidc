@@ -2,7 +2,7 @@ name: oidc_desktop
 description: Base Implementation for oidc_* desktop plugins (mainly windows/linux)
 version: 0.2.0+2
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_flutter_appauth
-
+homepage: https://bdaya-dev.github.io/oidc/
 environment:
   sdk: ">=3.0.0 <4.0.0"
   flutter: ">=3.10.0"

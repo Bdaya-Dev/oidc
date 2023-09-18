@@ -9,6 +9,8 @@
 
 An [OpenId Connect RP (Relying Party)][spec_link] plugin for flutter.
 
+Make sure you read the [![Wiki](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/) for extra information.
+
 ## Table Of Contents <!-- omit from toc -->
 
 - [Introduction ✨](#introduction-)
