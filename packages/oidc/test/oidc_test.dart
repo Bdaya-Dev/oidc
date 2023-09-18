@@ -47,7 +47,7 @@ void main() {
           //or
           discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
             Uri.parse('https://example.com'),
-          ),          
+          ),
           clientCredentials: const OidcClientAuthentication.none(
             clientId: 'my_client_id',
           ),

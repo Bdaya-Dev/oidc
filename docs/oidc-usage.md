@@ -22,7 +22,7 @@ you have two ways to construct it, depending on the availability of the [Discove
                 'https://server.example.com/connect/authorize',
             'token_endpoint': 'https://server.example.com/connect/token',
             //...other metadata
-        }),      
+        }),
         //...other parameters.
     );
     ```
