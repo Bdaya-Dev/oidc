@@ -1,3 +1,5 @@
+## 0.5.0
+
 ## 0.4.1
 
  - **FEAT**: add response form userInfo endpoint to the user object.
