@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:oidc/oidc.dart';
 // import 'package:oidc/oidc.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -19,8 +20,44 @@ void main() {
       OidcPlatform.instance = oidcPlatform;
     });
 
-    group('description', () {
-      test('description', () {});
+    group('OidcUserManager', () {
+      test('with document', () {
+        final manager = OidcUserManager(
+          discoveryDocument: OidcProviderMetadata.fromJson({
+            'issuer': 'https://server.example.com',
+            'authorization_endpoint':
+                'https://server.example.com/connect/authorize',
+            'token_endpoint': 'https://server.example.com/connect/token',
+            //...other metadata
+          }),
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'my_client_id',
+          ),
+          store: OidcMemoryStore() /* or OidcDefaultStore() */,
+          settings: OidcUserManagerSettings(
+            redirectUri: Uri.parse('http://example.com/redirect.html'),
+          ),
+          //other optional parameters.
+        );
+      });
+      test('lazy', () {
+        final manager = OidcUserManager.lazy(
+          // discoveryDocumentUri:
+          //     Uri.parse('https://example.com/.well-known/openid-configuration'),
+          //or
+          discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
+            Uri.parse('https://example.com'),
+          ),          
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'my_client_id',
+          ),
+          store: OidcMemoryStore() /* or OidcDefaultStore() */,
+          settings: OidcUserManagerSettings(
+            redirectUri: Uri.parse('http://example.com/redirect.html'),
+          ),
+          //other optional parameters.
+        );
+      });
     });
     // group('getPlatformName', () {
     //   test('returns correct name when platform implementation exists',

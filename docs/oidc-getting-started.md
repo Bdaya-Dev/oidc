@@ -15,7 +15,7 @@ dart pub add oidc oidc_default_store
 
 every platform you support has its own configuration and set up.
 
-for Android, IOS, Macos, The current implemenetation relies on the [appauth SDK](https://appauth.io/) made by openid themselves, we use it via [![flutter_appauth][flutter_appauth_image]][flutter_appauth_link].
+for Android, IOS, Macos, The current implementation relies on the [appauth SDK](https://appauth.io/) made by openid themselves, we use it via [![flutter_appauth][flutter_appauth_image]][flutter_appauth_link].
 
 we also rely on [![flutter_secure_storage][flutter_secure_storage_image]][flutter_secure_storage_link] in our `oidc_default_store` implementation, to encrypt the stored access tokens.
 
@@ -135,7 +135,7 @@ for web, you need a separate html page to be delivered with your app, which will
 
 you can get the page from the example project:
 
-https://github.com/Bdaya-Dev/oidc/blob/main/packages/oidc/example/web/redirect.html
+[redirect.html](https://github.com/Bdaya-Dev/oidc/blob/main/packages/oidc/example/web/redirect.html)
 
 it doesn't matter where you put the page and what you call it, but it MUST be delivered from your redirect_uri
 
@@ -161,6 +161,8 @@ Note how `frontChannelLogoutUri` needs `requestType=front-channel-logout` for th
 you will have to register these urls with the openid provider first, depending on your configuration.
 
 also the html page is completely customizable, but it's preferred to leave the javascript part as is, since it's well-integrated with the plugin.
+
+[Read more](oidc-usage.md)
 
 ### flutter_secure_storage setup for web
 

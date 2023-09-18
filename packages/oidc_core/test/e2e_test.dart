@@ -5,7 +5,7 @@ import 'mock_client.dart';
 
 void main() async {
   final serverUri = Uri.parse('http://accounts.google.com');
-  final wellKnownUrl = OidcUtils.getWellKnownUriFromBase(serverUri);
+  final wellKnownUrl = OidcUtils.getOpenIdConfigWellKnownUri(serverUri);
   group('E2E', () {
     final client = createMockOidcClient();
     test('fetch discovery', () async {

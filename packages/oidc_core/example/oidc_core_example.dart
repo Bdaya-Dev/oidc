@@ -6,7 +6,7 @@ void main() async {
   final idp = Uri.parse('https://demo.duendesoftware.com/');
 
   final parsedMetadata = await OidcEndpoints.getProviderMetadata(
-    OidcUtils.getWellKnownUriFromBase(idp),
+    OidcUtils.getOpenIdConfigWellKnownUri(idp),
   );
 
   print(parsedMetadata);

@@ -18,7 +18,7 @@ final exampleLogger = Logger('oidc.example');
 OidcUserManager get currentManager => duendoManager;
 
 final duendoManager = OidcUserManager.lazy(
-  discoveryDocumentUri: OidcUtils.getWellKnownUriFromBase(
+  discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
     Uri.parse('https://demo.duendesoftware.com'),
   ),
   // this is a public client,
