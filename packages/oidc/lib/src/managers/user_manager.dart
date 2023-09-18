@@ -698,7 +698,10 @@ class OidcUserManager {
     }
 
     try {
-      _discoveryDocument = await OidcEndpoints.getProviderMetadata(uri);
+      _discoveryDocument = await OidcEndpoints.getProviderMetadata(
+        uri,
+        client: httpClient,
+      );
     } catch (e, st) {
       //maybe there is no internet.
       if (_discoveryDocument == null) {
