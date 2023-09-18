@@ -1,7 +1,7 @@
 // coverage:ignore-file
 // ignore_for_file: camel_case_types, lines_longer_than_80_chars
 //==========================================================================================================
-// This file was colelcted from https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml  ||
+// This file was collected from https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml  ||
 //==========================================================================================================
 
 ///
@@ -278,10 +278,10 @@ class OidcConstants_AuthParameters {
   static const nonce2 = 'nonce2';
 
   /// client-rs request
-  static const aceClientRecipientid = 'ace_client_recipientid';
+  static const aceClientRecipientId = 'ace_client_recipientid';
 
   /// rs-client response
-  static const aceServerRecipientid = 'ace_server_recipientid';
+  static const aceServerRecipientId = 'ace_server_recipientid';
 
   /// token request
   static const reqCnf = 'req_cnf';
@@ -569,7 +569,7 @@ class OidcConstants_AuthorizationEndpoint_ResponseType {
   static const String none = 'none';
 }
 
-/// The display options defind by the spec.
+/// The display options defined by the spec.
 class OidcConstants_AuthorizeRequest_Display {
   /// The Authorization Server SHOULD display the authentication and consent UI
   /// consistent with a full User Agent page view.
@@ -594,7 +594,7 @@ class OidcConstants_AuthorizeRequest_Display {
   static const String wap = 'wap';
 }
 
-/// The prompt options defind by the spec
+/// The prompt options defined by the spec
 class OidcConstants_AuthorizeRequest_Prompt {
   /// The Authorization Server MUST NOT display any authentication or consent
   /// user interface pages.
@@ -609,7 +609,7 @@ class OidcConstants_AuthorizeRequest_Prompt {
   /// This can be used as a method to check for existing authentication and/or consent.
   static const String none = 'none';
 
-  /// The Authorization Server SHOULD prompt the End-User for reauthentication.
+  /// The Authorization Server SHOULD prompt the End-User for re-authentication.
   /// If it cannot reauthenticate the End-User, it MUST return an error,
   /// typically login_required.
   static const String login = 'login';
@@ -650,6 +650,7 @@ class OidcConstants_Store {
 
   static const options = 'options';
   static const extraTokenParams = 'extraTokenParams';
+  static const extraTokenHeaders = 'extraTokenHeaders';
   static const currentToken = 'currentToken';
 
   static const requestType = 'requestType';

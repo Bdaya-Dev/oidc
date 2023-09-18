@@ -1,0 +1,41 @@
+{
+    "version": "0.2",
+    "$schema": "https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json",
+    
+    "dictionaryDefinitions": [
+        {
+            "name": "vgv_allowed",
+            "path": "https://raw.githubusercontent.com/verygoodopensource/very_good_dictionaries/main/allowed.txt",
+            "description": "Allowed VGV Spellings"
+        },
+        {
+            "name": "vgv_forbidden",
+            "path": "https://raw.githubusercontent.com/verygoodopensource/very_good_dictionaries/main/forbidden.txt",
+            "description": "Forbidden VGV Spellings"
+        },
+        {
+            "name": "custom-dictionary",
+            "path": "./.cspell/custom-dictionary.txt",
+            "addWords": true
+        }
+    ],
+    "dictionaries": [
+        "vgv_allowed",
+        "vgv_forbidden",
+        "custom-dictionary"
+    ],
+    "language": "en",
+    "useGitignore": true,
+    "files": [
+        "**.md",
+        "**.dart",
+        "!**.g.dart"
+    ],
+    "ignoreRegExpList": [
+        "TODO.*"
+    ],
+    "ignorePaths": [
+        ".github",
+        "mkdocs.yml"
+    ]
+}

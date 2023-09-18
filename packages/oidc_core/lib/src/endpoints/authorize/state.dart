@@ -20,6 +20,7 @@ class OidcAuthorizeState extends OidcState {
     required this.nonce,
     required this.clientId,
     required this.extraTokenParams,
+    required this.extraTokenHeaders,
     required this.options,
     super.id,
     super.createdAt,
@@ -33,6 +34,8 @@ class OidcAuthorizeState extends OidcState {
   factory OidcAuthorizeState.fromJson(Map<String, dynamic> src) =>
       _$OidcAuthorizeStateFromJson(src);
 
+  @JsonKey(name: OidcConstants_Store.extraTokenHeaders)
+  final Map<String, String>? extraTokenHeaders;
   @JsonKey(name: OidcConstants_Store.extraTokenParams)
   final Map<String, dynamic>? extraTokenParams;
 

@@ -112,6 +112,7 @@ class OidcUserManager {
     Duration? maxAgeOverride,
     Map<String, dynamic>? extraParameters,
     Map<String, dynamic>? extraTokenParameters,
+    Map<String, String>? extraTokenHeaders,
     OidcPlatformSpecificOptions? options,
   }) async {
     _ensureInit();
@@ -136,7 +137,14 @@ class OidcUserManager {
       idTokenHint: idTokenHintOverride ??
           (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
       loginHint: loginHint,
-      extraTokenParameters: extraTokenParameters,
+      extraTokenHeaders: {
+        ...?settings.extraTokenHeaders,
+        ...?extraTokenHeaders,
+      },
+      extraTokenParameters: {
+        ...?settings.extraTokenParameters,
+        ...?extraTokenParameters,
+      },
       extraParameters: {
         ...?settings.extraAuthenticationParameters,
         ...?extraParameters,
@@ -432,6 +440,7 @@ class OidcUserManager {
     final tokenResp = await OidcEndpoints.token(
       tokenEndpoint: tokenEndPoint,
       credentials: clientCredentials,
+      headers: stateData.extraTokenHeaders,
       request: OidcTokenRequest.authorizationCode(
         redirectUri: response.redirectUri ?? stateData.redirectUri,
         codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
@@ -657,7 +666,7 @@ class OidcUserManager {
   /// First gets the cached discoveryDocument if any
   /// (based on discoveryDocumentUri).
   ///
-  /// Then trys to get it from the network.
+  /// Then tries to get it from the network.
   Future<void> _ensureDiscoveryDocument() async {
     final uri = discoveryDocumentUri;
 
@@ -698,7 +707,10 @@ class OidcUserManager {
     }
 
     try {
-      _discoveryDocument = await OidcEndpoints.getProviderMetadata(uri);
+      _discoveryDocument = await OidcEndpoints.getProviderMetadata(
+        uri,
+        client: httpClient,
+      );
     } catch (e, st) {
       //maybe there is no internet.
       if (_discoveryDocument == null) {
@@ -814,7 +826,7 @@ class OidcUserManager {
     }
   }
 
-  /// returns true if ther was a logout request.
+  /// returns true if there was a logout request.
   Future<bool> _loadLogoutRequests() async {
     final request = await store.getCurrentFrontChannelLogoutRequest();
     if (request == null) {

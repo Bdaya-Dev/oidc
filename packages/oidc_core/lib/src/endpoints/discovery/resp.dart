@@ -5,7 +5,7 @@ import 'package:oidc_core/src/models/json_based_object.dart';
 
 part 'resp.g.dart';
 
-/// The "OpenID Provider Metadata" as standaraized by the spec https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+/// The "OpenID Provider Metadata" as standardized by the spec https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 /// This also includes some metadata that are defined by other extensions
 ///
 /// see https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml

@@ -34,7 +34,7 @@ enum OidcDefaultStoreWebSessionManagementLocation {
 ///     - we use [SharedPreferences] for other platforms
 /// - for the [OidcStoreNamespace.state] namespace
 ///     - we use `package:universal_html` + `localStorage` for web.
-///       this is a MUST and other implementations can't change this behaviour, for the `samePage` navigation mode to work.
+///       this is a MUST and other implementations can't change this behavior, for the `samePage` navigation mode to work.
 /// - [SharedPreferences] for all other operations.
 ///
 /// {@endtemplate}

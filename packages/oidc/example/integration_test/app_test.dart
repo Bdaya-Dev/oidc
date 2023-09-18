@@ -11,6 +11,7 @@ void main() {
   group('E2E', () {
     testWidgets('manager initializes correctly', (tester) async {
       app.main();
+      expect(app_state.currentManager.didInit, false);
       await tester.pumpAndSettle();
       expect(app_state.currentManager.didInit, true);
       // await tester.tap(find.text('Get Platform Name'));

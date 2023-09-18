@@ -15,10 +15,10 @@ import 'package:oidc_default_store/oidc_default_store.dart';
 final exampleLogger = Logger('oidc.example');
 
 /// Gets the current manager used in the example.
-OidcUserManager get currentManager => duendoManager;
+OidcUserManager get currentManager => duendeManager;
 
-final duendoManager = OidcUserManager.lazy(
-  discoveryDocumentUri: OidcUtils.getWellKnownUriFromBase(
+final duendeManager = OidcUserManager.lazy(
+  discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
     Uri.parse('https://demo.duendesoftware.com'),
   ),
   // this is a public client,
@@ -54,7 +54,7 @@ final duendoManager = OidcUserManager.lazy(
         // for debugging in flutter, you must run this app with --web-port 22433
         ? Uri.parse('http://localhost:22433/redirect.html')
         : Platform.isAndroid
-            // scheme: reverse domain name notation of your pacakge name.
+            // scheme: reverse domain name notation of your package name.
             // path: anything.
             ? Uri.parse('com.bdayadev.oidc.example:/oauth2redirect')
             : Platform.isWindows || Platform.isLinux

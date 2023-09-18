@@ -4,7 +4,7 @@ import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_macos/oidc_macos.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
-import 'duendo_discovery.dart';
+import 'duende_discovery.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

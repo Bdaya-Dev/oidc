@@ -4,7 +4,7 @@ import 'package:oidc_core/oidc_core.dart';
 
 part 'token.g.dart';
 
-/// Represents a persistable token.
+/// Represents a serializable token.
 ///
 /// The only thing required for this token is its [creationTime], which
 /// represents the reference date of the [expiresIn] duration.
@@ -161,7 +161,7 @@ class OidcToken {
     return refreshTime < tolerance;
   }
 
-  /// Calculates the expirey date of the access token from [expiresIn] and
+  /// Calculates the expiry date of the access token from [expiresIn] and
   /// [overrideCreationTime].
   DateTime? calculateExpiresAt({DateTime? overrideCreationTime}) {
     final expiresIn = this.expiresIn;

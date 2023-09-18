@@ -64,7 +64,7 @@ Read the **[wiki](https://bdaya-dev.github.io/oidc/)**.
  
 ### WIP Specs
 
-- [Dynamic Client Registeration](https://openid.net/specs/openid-connect-registration-1_0.html)
+- [Dynamic Client Registration](https://openid.net/specs/openid-connect-registration-1_0.html)
 - [Session Management](https://openid.net/specs/openid-connect-session-1_0.html)
 
 

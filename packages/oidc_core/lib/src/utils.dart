@@ -126,7 +126,7 @@ class OidcInternalUtilities {
 /// Utilities for the Oidc spec
 class OidcUtils {
   /// Takes a base Url and adds /.well-known/openid-configuration to it
-  static Uri getWellKnownUriFromBase(Uri base) {
+  static Uri getOpenIdConfigWellKnownUri(Uri base) {
     return base.replace(
       pathSegments: [
         ...base.pathSegments,
