@@ -34,7 +34,7 @@ class OidcState {
       case OidcConstants_OperationDiscriminators.endSession:
         return OidcEndSessionState.fromJson(src);
       default:
-        throw const OidcException('unkown state type.');
+        throw const OidcException('unknown state type.');
     }
   }
 

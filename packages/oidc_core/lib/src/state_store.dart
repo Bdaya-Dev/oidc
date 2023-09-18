@@ -3,7 +3,7 @@
 import 'package:oidc_core/oidc_core.dart';
 
 enum OidcStoreNamespace {
-  /// Stores ephermal information, such as the current state id and nonce.
+  /// Stores ephemeral information, such as the current state id and nonce.
   session('session'),
 
   /// Stores states.
