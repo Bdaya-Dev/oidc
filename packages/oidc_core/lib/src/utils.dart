@@ -119,7 +119,7 @@ class OidcInternalUtilities {
 
   static const commonConverters = <JsonConverter<dynamic, dynamic>>[
     OidcNumericDateConverter(),
-    OidcDurationSecondsConverter()
+    OidcDurationSecondsConverter(),
   ];
 }
 

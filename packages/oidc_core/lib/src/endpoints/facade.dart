@@ -13,7 +13,6 @@ const _formUrlEncoded = 'application/x-www-form-urlencoded';
 /// Helper class for dart-based openid connect clients.
 class OidcEndpoints {
   static T _handleResponse<T>({
-    required Uri uri,
     required T Function(Map<String, dynamic> response) mapper,
     required http.Request request,
     required http.Response response,
@@ -27,7 +26,7 @@ class OidcEndpoints {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       if (body.containsKey(OidcConstants_AuthParameters.error)) {
         throw OidcException(
-          'Error returned from the endpoint: $uri',
+          'Error returned from the endpoint: ${request.url}',
           errorResponse: OidcErrorResponse.fromJson(body),
           extra: commonExtra,
         );
@@ -37,7 +36,7 @@ class OidcEndpoints {
       rethrow;
     } catch (e, st) {
       throw OidcException(
-        'Failed to handle the response from endpoint: $uri',
+        'Failed to handle the response from endpoint: ${request.url}',
         internalException: e,
         internalStackTrace: st,
         extra: commonExtra,
@@ -257,7 +256,6 @@ class OidcEndpoints {
       mapper: OidcProviderMetadata.fromJson,
       request: req,
       response: resp,
-      uri: wellKnownUri,
     );
   }
 
@@ -361,7 +359,6 @@ class OidcEndpoints {
       request: req,
     );
     return _handleResponse(
-      uri: tokenEndpoint,
       mapper: OidcTokenResponse.fromJson,
       response: resp,
       request: req,
@@ -388,8 +385,48 @@ class OidcEndpoints {
       request: req,
     );
     return _handleResponse(
-      uri: userInfoEndpoint,
       mapper: OidcUserInfoResponse.fromJson,
+      response: resp,
+      request: req,
+    );
+  }
+
+  /// Sends a device authorization request.
+  /// 
+  /// this adapts: [rfc8628](https://datatracker.ietf.org/doc/html/rfc8628)
+  ///
+  /// if [credentials] is set to null, it's up to the caller how to authenticate
+  /// the request; either via [headers] or [extraBodyFields].
+  static Future<OidcDeviceAuthorizationResponse> deviceAuthorization({
+    required Uri deviceAuthorizationEndpoint,
+    required OidcDeviceAuthorizationRequest request,
+    OidcClientAuthentication? credentials,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extraBodyFields,
+    http.Client? client,
+  }) async {
+    final authHeader = credentials?.getAuthorizationHeader();
+    final authBodyParams = credentials?.getBodyParameters();
+    final req = _prepareRequest(
+      method: OidcConstants_RequestMethod.post,
+      uri: deviceAuthorizationEndpoint,
+      headers: {
+        if (authHeader != null) _authorizationHeaderKey: authHeader,
+        ...?headers,
+      },
+      contentType: _formUrlEncoded,
+      bodyFields: {
+        ...request.toMap(),
+        if (authHeader == null) ...?authBodyParams,
+        ...?extraBodyFields,
+      },
+    );
+    final resp = await OidcInternalUtilities.sendWithClient(
+      client: client,
+      request: req,
+    );
+    return _handleResponse(
+      mapper: OidcDeviceAuthorizationResponse.fromJson,
       response: resp,
       request: req,
     );

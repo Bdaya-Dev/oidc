@@ -1,20 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
 
-///
-class OidcUriJsonConverter extends JsonConverter<Uri, String> {
-  /// Creates a UriJsonConverter
-  const OidcUriJsonConverter();
-
-  @override
-  Uri fromJson(String json) {
-    return Uri.parse(json);
-  }
-
-  @override
-  String toJson(Uri object) {
-    return object.toString();
-  }
-}
 
 ///
 class OidcNumericDateConverter extends JsonConverter<DateTime, int> {
