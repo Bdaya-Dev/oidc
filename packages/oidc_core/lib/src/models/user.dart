@@ -29,6 +29,7 @@ class OidcUser {
     JsonWebKeyStore? keystore,
     List<String>? allowedAlgorithms,
     Map<String, dynamic>? attributes,
+    Map<String, dynamic>? userInfo,
   }) async {
     final idToken = token.idToken;
     if (idToken == null) {
@@ -66,7 +67,7 @@ class OidcUser {
       attributes: attributes ?? const {},
       allowedAlgorithms: allowedAlgorithms,
       keystore: keystore,
-      userInfo: const {},
+      userInfo: userInfo ?? const {},
     );
   }
 
