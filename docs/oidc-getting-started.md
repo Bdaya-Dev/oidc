@@ -188,8 +188,8 @@ Works out of the box.
 
 [Source](https://pub.dev/packages/flutter_secure_storage#configure-linux-version)
 
-also see these issues: 
-https://github.com/mogol/flutter_secure_storage/issues/545
+also see these issues: [flutter_secure_storage#545](https://github.com/mogol/flutter_secure_storage/issues/545)
+
 
 You need `libsecret-1-dev` and `libjsoncpp-dev` on your machine to build the project, and `libsecret-1-0` and `libjsoncpp1` to run the application (add it as a dependency after packaging your app). If you using snapcraft to build the project use the following:
 ```yml

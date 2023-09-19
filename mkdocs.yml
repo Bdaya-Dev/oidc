@@ -12,6 +12,19 @@ nav:
     - 'package:oidc_core': oidc_core.md
     - 'package:oidc_default_store': oidc_default_store.md
 theme:
+  palette: 
+    # Palette toggle for dark mode
+    - scheme: slate
+      media: "(prefers-color-scheme: light)"
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - scheme: default
+      media: "(prefers-color-scheme: dark)"
+      toggle:
+        icon: material/brightness-7 
+        name: Switch to dark mode
   name: 'material'
 markdown_extensions:
   - admonition

@@ -38,8 +38,31 @@ dart pub add oidc oidc_default_store
 
 ## Usage 🛠️
 
-Read the **[wiki](https://bdaya-dev.github.io/oidc/)**.
+After following the [Getting Started](https://bdaya-dev.github.io/oidc/oidc-getting-started/) steps, it's as easy as:
 
+```dart
+//1. create the manager:
+final manager = OidcUserManager.lazy(
+    discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
+        Uri.parse('https://server.example.com'),
+    ),
+    // TODO: add other settings
+);
+
+//2. init()
+await manager.init();
+
+//3. listen to user changes
+manager.userChanges().listen((user) {
+  print('currentUser changed to $user');
+});
+
+//4. login
+final newUser = await manager.loginAuthorizationCodeFlow();
+
+//5. logout
+await manager.logout();
+```
 
 ## Features 📚
 
