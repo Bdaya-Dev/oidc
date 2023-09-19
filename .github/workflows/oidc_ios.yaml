@@ -12,9 +12,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/oidc_ios.yaml"
-      - "packages/oidc_ios/**"
 
 jobs:
   build:

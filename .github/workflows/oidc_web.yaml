@@ -12,12 +12,7 @@ on:
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/oidc_web.yaml"
-      - "packages/oidc_web/**"
-    # paths:
       
-
 jobs:
   build:
     uses: ./.github/workflows/flutter_package.yaml
