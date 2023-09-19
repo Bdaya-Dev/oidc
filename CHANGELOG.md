@@ -3,6 +3,59 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2023-09-19
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_core` - `v0.5.0+1`](#oidc_core---v0501)
+ - [`oidc` - `v0.4.0+1`](#oidc---v0401)
+ - [`oidc_android` - `v0.3.0+4`](#oidc_android---v0304)
+ - [`oidc_default_store` - `v0.2.0+4`](#oidc_default_store---v0204)
+ - [`oidc_desktop` - `v0.2.0+4`](#oidc_desktop---v0204)
+ - [`oidc_flutter_appauth` - `v0.2.0+4`](#oidc_flutter_appauth---v0204)
+ - [`oidc_linux` - `v0.3.0+4`](#oidc_linux---v0304)
+ - [`oidc_ios` - `v0.3.0+4`](#oidc_ios---v0304)
+ - [`oidc_macos` - `v0.3.0+4`](#oidc_macos---v0304)
+ - [`oidc_platform_interface` - `v0.3.0+4`](#oidc_platform_interface---v0304)
+ - [`oidc_web` - `v0.3.0+4`](#oidc_web---v0304)
+ - [`oidc_windows` - `v0.3.0+4`](#oidc_windows---v0304)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc` - `v0.4.0+1`
+ - `oidc_android` - `v0.3.0+4`
+ - `oidc_default_store` - `v0.2.0+4`
+ - `oidc_desktop` - `v0.2.0+4`
+ - `oidc_flutter_appauth` - `v0.2.0+4`
+ - `oidc_linux` - `v0.3.0+4`
+ - `oidc_ios` - `v0.3.0+4`
+ - `oidc_macos` - `v0.3.0+4`
+ - `oidc_platform_interface` - `v0.3.0+4`
+ - `oidc_web` - `v0.3.0+4`
+ - `oidc_windows` - `v0.3.0+4`
+
+---
+
+#### `oidc_core` - `v0.5.0+1`
+
+ - **FIX**: added `userInfo` to `fromIdToken`.
+ - **DOCS**: added oidc_core docs and updated example.
+
+# Change Log
+
+All notable changes to this project will be documented in this file.
+See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
+
 ## 2023-09-18
 
 ### Changes

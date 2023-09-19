@@ -1,3 +1,8 @@
+## 0.5.0+1
+
+ - **FIX**: added `userInfo` to `fromIdToken`.
+ - **DOCS**: added oidc_core docs and updated example.
+
 ## 0.5.0
 
 ## 0.4.1
