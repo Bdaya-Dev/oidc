@@ -1,6 +1,6 @@
 name: oidc_default_store
 description: The default OidcStore implementation for package:oidc
-version: 0.2.0+4
+version: 0.2.0+5
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_default_store
 homepage: https://bdaya-dev.github.io/oidc/
 environment:
@@ -13,7 +13,7 @@ dependencies:
     sdk: flutter
   flutter_secure_storage: ^9.0.0
   logging: ^1.2.0
-  oidc_core: ^0.5.0+1
+  oidc_core: ^0.5.1
   shared_preferences: ^2.2.1
   universal_html: ^2.2.3
 dev_dependencies:

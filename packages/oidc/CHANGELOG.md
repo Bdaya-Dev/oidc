@@ -1,3 +1,8 @@
+## 0.4.1
+
+ - **FIX**: mac os and ios.
+ - **FEAT**: added device authorization endpoint.
+
 ## 0.4.0+2
 
  - **DOCS**: fix PKCE link.

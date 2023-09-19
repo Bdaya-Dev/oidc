@@ -1,3 +1,7 @@
+## 0.5.1
+
+ - **FEAT**: added device authorization endpoint.
+
 ## 0.5.0+1
 
  - **FIX**: added `userInfo` to `fromIdToken`.

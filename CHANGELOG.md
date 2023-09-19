@@ -15,6 +15,58 @@ Packages with breaking changes:
 
 Packages with other changes:
 
+ - [`oidc` - `v0.4.1`](#oidc---v041)
+ - [`oidc_core` - `v0.5.1`](#oidc_core---v051)
+ - [`oidc_android` - `v0.3.0+5`](#oidc_android---v0305)
+ - [`oidc_default_store` - `v0.2.0+5`](#oidc_default_store---v0205)
+ - [`oidc_flutter_appauth` - `v0.2.0+5`](#oidc_flutter_appauth---v0205)
+ - [`oidc_desktop` - `v0.2.0+5`](#oidc_desktop---v0205)
+ - [`oidc_ios` - `v0.3.0+5`](#oidc_ios---v0305)
+ - [`oidc_linux` - `v0.3.0+5`](#oidc_linux---v0305)
+ - [`oidc_macos` - `v0.3.0+5`](#oidc_macos---v0305)
+ - [`oidc_platform_interface` - `v0.3.0+5`](#oidc_platform_interface---v0305)
+ - [`oidc_windows` - `v0.3.0+5`](#oidc_windows---v0305)
+ - [`oidc_web` - `v0.3.0+5`](#oidc_web---v0305)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_android` - `v0.3.0+5`
+ - `oidc_default_store` - `v0.2.0+5`
+ - `oidc_flutter_appauth` - `v0.2.0+5`
+ - `oidc_desktop` - `v0.2.0+5`
+ - `oidc_ios` - `v0.3.0+5`
+ - `oidc_linux` - `v0.3.0+5`
+ - `oidc_macos` - `v0.3.0+5`
+ - `oidc_platform_interface` - `v0.3.0+5`
+ - `oidc_windows` - `v0.3.0+5`
+ - `oidc_web` - `v0.3.0+5`
+
+---
+
+#### `oidc` - `v0.4.1`
+
+ - **FIX**: mac os and ios.
+ - **FEAT**: added device authorization endpoint.
+
+#### `oidc_core` - `v0.5.1`
+
+ - **FEAT**: added device authorization endpoint.
+
+
+## 2023-09-19
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
  - [`oidc` - `v0.4.0+2`](#oidc---v0402)
 
 ---
