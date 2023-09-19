@@ -6,7 +6,7 @@
 
 The default `OidcStore` implementation for `package:oidc`, using [flutter_secure_storage](https://github.com/mogol/flutter_secure_storage) and [shared_preferences](https://pub.dev/packages/shared_preferences)
 
-Make sure you read the [![Wiki](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/) for extra information.
+Make sure you read the [![Wiki](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/oidc_default_store/) for extra information.
 
 ## Installation 💻
 

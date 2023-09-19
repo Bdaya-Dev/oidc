@@ -6,7 +6,7 @@
 
 A generic server that listens on loopback address for an authorization response.
 
-Make sure you read the [![Wiki](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/) for extra information.
+Make sure you read the [![Wiki](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/oidc_loopback_listener/) for extra information.
 
 ## Installation 💻
 
