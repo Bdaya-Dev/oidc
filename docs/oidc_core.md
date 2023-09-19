@@ -140,4 +140,5 @@ Contains methods that help you implement the OIDC spec yourself.
 - `parseAuthorizeResponse`: parses the uri that you get from the authorization flow, and returns useful information.
 - `token`: sends a request to the `/token` endpoint.
 - `userInfo`: sends a request to the `/userinfo` endpoint.
+- `deviceAuthorization`: sends a request to the device authorization endpoint.
 
