@@ -11,6 +11,7 @@ nav:
       - 'Usage': oidc-usage.md
     - 'package:oidc_core': oidc_core.md
     - 'package:oidc_default_store': oidc_default_store.md
+    - 'package:oidc_loopback_listener': oidc_loopback_listener.md
 theme:
   palette: 
     # Palette toggle for dark mode
