@@ -102,7 +102,7 @@ just do `flutter run` from your terminal (not IDE) once, and it will ask you to 
 ## iOS/macOS
 
 ### AppAuth setup
-Append the following to your `ios/Info.plist` file
+Append the following to your `ios/Info.plist` and `macos/Info.plist` file
 
 ```xml
 <key>CFBundleURLTypes</key>

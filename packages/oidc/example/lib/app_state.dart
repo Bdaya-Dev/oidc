@@ -42,7 +42,7 @@ final duendeManager = OidcUserManager.lazy(
     scope: ['openid', 'profile', 'email', 'offline_access', 'api'],
     postLogoutRedirectUri: kIsWeb
         ? Uri.parse('http://localhost:22433/redirect.html')
-        : Platform.isAndroid
+        : Platform.isAndroid || Platform.isIOS || Platform.isMacOS
             ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
             : Platform.isWindows || Platform.isLinux
                 ? Uri.parse('http://localhost:0')
@@ -53,7 +53,7 @@ final duendeManager = OidcUserManager.lazy(
         //
         // for debugging in flutter, you must run this app with --web-port 22433
         ? Uri.parse('http://localhost:22433/redirect.html')
-        : Platform.isAndroid
+        : Platform.isIOS || Platform.isMacOS || Platform.isAndroid
             // scheme: reverse domain name notation of your package name.
             // path: anything.
             ? Uri.parse('com.bdayadev.oidc.example:/oauth2redirect')
