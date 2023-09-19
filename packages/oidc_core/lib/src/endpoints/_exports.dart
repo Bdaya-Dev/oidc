@@ -1,4 +1,5 @@
 export 'authorize/_exports.dart';
+export 'device_authorization/_exports.dart';
 export 'discovery/_exports.dart';
 export 'end_session/_exports.dart';
 export 'facade.dart';

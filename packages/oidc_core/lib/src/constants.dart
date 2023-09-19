@@ -126,6 +126,18 @@ class OidcConstants_AuthParameters {
   /// token request
   static const username = 'username';
 
+  /// device authorization grant
+  static const verificationUri = 'verification_uri';
+
+  /// device authorization grant
+  static const verificationUriComplete = 'verification_uri_complete';
+
+  /// device authorization grant
+  static const interval = 'interval';
+
+  /// device authorization grant
+  static const userCode = 'user_code';
+
   /// token request
   static const password = 'password';
 

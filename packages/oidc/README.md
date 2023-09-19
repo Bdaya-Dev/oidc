@@ -86,6 +86,8 @@ await manager.logout();
 - [Resource Owner Password Credentials Grant](https://www.rfc-editor.org/rfc/rfc6749#section-1.3.3).
 - Automatic [Refresh Token](https://oauth.net/2/grant-types/refresh-token/) rotation.
 - [OAuth 2.0 For Native Apps](https://datatracker.ietf.org/doc/html/rfc8252)
+- [OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
+
  
 ### WIP Specs
 

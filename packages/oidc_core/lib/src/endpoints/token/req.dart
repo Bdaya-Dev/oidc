@@ -28,6 +28,7 @@ class OidcTokenRequest extends JsonBasedRequest {
     this.redirectUri,
     this.refreshToken,
     this.scope,
+    this.deviceCode,
     super.extra,
   });
 
@@ -42,6 +43,7 @@ class OidcTokenRequest extends JsonBasedRequest {
         username = null,
         password = null,
         assertion = null,
+        deviceCode = null,
         audience = null,
         subjectTokenType = null,
         subjectToken = null,
@@ -60,6 +62,7 @@ class OidcTokenRequest extends JsonBasedRequest {
         codeVerifier = null,
         redirectUri = null,
         username = null,
+        deviceCode = null,
         password = null,
         assertion = null,
         code = null,
@@ -81,6 +84,7 @@ class OidcTokenRequest extends JsonBasedRequest {
         codeVerifier = null,
         redirectUri = null,
         assertion = null,
+        deviceCode = null,
         audience = null,
         subjectTokenType = null,
         subjectToken = null,
@@ -105,6 +109,7 @@ class OidcTokenRequest extends JsonBasedRequest {
         actorToken = null,
         refreshToken = null,
         username = null,
+        deviceCode = null,
         password = null;
 
   OidcTokenRequest.saml2({
@@ -115,6 +120,27 @@ class OidcTokenRequest extends JsonBasedRequest {
     super.extra,
   })  : grantType = OidcConstants_GrantType.saml2Bearer,
         code = null,
+        codeVerifier = null,
+        redirectUri = null,
+        audience = null,
+        subjectTokenType = null,
+        subjectToken = null,
+        actorTokenType = null,
+        actorToken = null,
+        refreshToken = null,
+        username = null,
+        password = null,
+        deviceCode = null;
+
+  OidcTokenRequest.deviceCode({
+    required String this.deviceCode,
+    this.clientId,
+    this.clientSecret,
+    this.scope,
+    super.extra,
+  })  : grantType = OidcConstants_GrantType.deviceCode,
+        code = null,
+        assertion = null,
         codeVerifier = null,
         redirectUri = null,
         audience = null,
@@ -168,6 +194,9 @@ class OidcTokenRequest extends JsonBasedRequest {
   final String? actorTokenType;
   @JsonKey(name: OidcConstants_AuthParameters.actorToken)
   final String? actorToken;
+
+  @JsonKey(name: OidcConstants_AuthParameters.deviceCode)
+  final String? deviceCode;
 
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
   final Uri? redirectUri;
