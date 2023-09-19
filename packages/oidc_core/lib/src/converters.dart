@@ -1,6 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
 
-
 ///
 class OidcNumericDateConverter extends JsonConverter<DateTime, int> {
   ///

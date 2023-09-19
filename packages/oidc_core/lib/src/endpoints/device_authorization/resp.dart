@@ -23,7 +23,7 @@ class OidcDeviceAuthorizationResponse extends JsonBasedResponse {
   ///
   factory OidcDeviceAuthorizationResponse.fromJson(Map<String, dynamic> src) =>
       _$OidcDeviceAuthorizationResponseFromJson(src);
-      
+
   @JsonKey(name: OidcConstants_AuthParameters.deviceCode)
   final String deviceCode;
 

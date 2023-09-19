@@ -392,7 +392,7 @@ class OidcEndpoints {
   }
 
   /// Sends a device authorization request.
-  /// 
+  ///
   /// this adapts: [rfc8628](https://datatracker.ietf.org/doc/html/rfc8628)
   ///
   /// if [credentials] is set to null, it's up to the caller how to authenticate
