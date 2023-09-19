@@ -15,6 +15,31 @@ Packages with breaking changes:
 
 Packages with other changes:
 
+ - [`oidc` - `v0.4.0+2`](#oidc---v0402)
+
+---
+
+#### `oidc` - `v0.4.0+2`
+
+ - **DOCS**: fix PKCE link.
+
+# Change Log
+
+All notable changes to this project will be documented in this file.
+See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
+
+## 2023-09-19
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
  - [`oidc_core` - `v0.5.0+1`](#oidc_core---v0501)
  - [`oidc` - `v0.4.0+1`](#oidc---v0401)
  - [`oidc_android` - `v0.3.0+4`](#oidc_android---v0304)

@@ -1,3 +1,7 @@
+## 0.4.0+2
+
+ - **DOCS**: fix PKCE link.
+
 ## 0.4.0+1
 
  - Update a dependency to the latest release.
