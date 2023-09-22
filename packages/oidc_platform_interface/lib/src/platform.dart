@@ -38,7 +38,7 @@ abstract class OidcPlatform extends PlatformInterface {
     OidcPlatformSpecificOptions options,
   );
 
-  /// Returns the authorization response.
+  /// Returns the end session response for an RP initiated logout request.
   /// may throw an [OidcException].
   Future<OidcEndSessionResponse?> getEndSessionResponse(
     OidcProviderMetadata metadata,
@@ -53,6 +53,12 @@ abstract class OidcPlatform extends PlatformInterface {
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions options,
   );
+
+  /// starts monitoring the session status.
+  Stream<OidcMonitorSessionResult> monitorSessionStatus({
+    required Uri checkSessionIframe,
+    required OidcMonitorSessionStatusRequest request,
+  });
 }
 
 /// an implementation of [OidcPlatform] that throws [UnimplementedError].
@@ -81,6 +87,14 @@ class NoOpOidcPlatform extends OidcPlatform {
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions options,
   ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Stream<OidcMonitorSessionResult> monitorSessionStatus({
+    required Uri checkSessionIframe,
+    required OidcMonitorSessionStatusRequest request,
+  }) {
     throw UnimplementedError();
   }
 }

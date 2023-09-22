@@ -170,4 +170,12 @@ mixin OidcDesktop on OidcPlatform {
     // TODO(ahmednfwela): listen to loopback
     return const Stream.empty();
   }
+
+  @override
+  Stream<OidcMonitorSessionResult> monitorSessionStatus({
+    required Uri checkSessionIframe,
+    required OidcMonitorSessionStatusRequest request,
+  }) {
+    return const Stream.empty();
+  }
 }

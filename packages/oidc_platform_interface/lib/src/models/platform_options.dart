@@ -115,6 +115,9 @@ enum OidcPlatformSpecificOptions_Web_NavigationMode {
   /// 4. the page should close itself
   /// 5. the app receives the postMessage, and finishes the flow.
   popup,
+
+  /// NOT RECOMMENDED for user interaction.
+  hiddenIFrame,
 }
 
 ///
@@ -127,6 +130,7 @@ class OidcPlatformSpecificOptions_Web {
     this.popupWidth = 700,
     this.popupHeight = 750,
     this.broadcastChannel = defaultBroadcastChannel,
+    this.hiddenIframeTimeout = const Duration(seconds: 10),
   });
 
   /// The default broadcast channel to use.
@@ -145,4 +149,9 @@ class OidcPlatformSpecificOptions_Web {
   ///
   /// defaults to [defaultBroadcastChannel].
   final String broadcastChannel;
+
+  /// the amount of time to wait before considering the request failed when using [OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame].
+  /// 
+  /// default is 10 seconds
+  final Duration hiddenIframeTimeout;
 }

@@ -1,3 +1,5 @@
+// ignore_for_file: cascade_invocations
+
 import 'dart:async';
 import 'dart:html';
 import 'package:flutter/foundation.dart';
@@ -29,6 +31,20 @@ class OidcWeb extends OidcPlatform {
     return windowOpts;
   }
 
+  IFrameElement _createHiddenIframe() {
+    final res = (window.document.createElement('iframe') as IFrameElement)
+      ..width = '0'
+      ..height = '0'
+      ..hidden = true
+      ..style.visibility = 'hidden'
+      ..style.position = 'fixed'
+      ..style.left = '-1000px'
+      ..style.top = '0';
+    final body = window.document.getElementsByTagName('body').first;
+    body.append(res);
+    return res;
+  }
+
   Future<Uri?> _getResponseUri({
     required OidcPlatformSpecificOptions_Web options,
     required Uri uri,
@@ -47,16 +63,15 @@ class OidcWeb extends OidcPlatform {
       c.complete(parsed);
     });
     try {
-      //
-      if (!await canLaunchUrl(uri)) {
-        _logger.warning(
-          "Couldn't launch the request url: $uri, this might be a false positive.",
-        );
-      }
-
       //first prepare
       switch (options.navigationMode) {
         case OidcPlatformSpecificOptions_Web_NavigationMode.samePage:
+          //
+          if (!await canLaunchUrl(uri)) {
+            _logger.warning(
+              "Couldn't launch the request url: $uri, this might be a false positive.",
+            );
+          }
           if (!await launchUrl(
             uri,
             webOnlyWindowName: '_self',
@@ -66,6 +81,12 @@ class OidcWeb extends OidcPlatform {
           // return null, since this mode can't be awaited.
           return null;
         case OidcPlatformSpecificOptions_Web_NavigationMode.newPage:
+          //
+          if (!await canLaunchUrl(uri)) {
+            _logger.warning(
+              "Couldn't launch the request url: $uri, this might be a false positive.",
+            );
+          }
           if (!await launchUrl(
             uri,
             webOnlyWindowName: '_blank',
@@ -83,6 +104,19 @@ class OidcWeb extends OidcPlatform {
             windowOpts,
           );
           return await c.future;
+        case OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame:
+          final iframe = _createHiddenIframe();
+          iframe.src = uri.toString();
+          final emptyUri = Uri();
+          final res = await c.future.timeout(
+            options.hiddenIframeTimeout,
+            onTimeout: () => emptyUri,
+          );
+          iframe.remove();
+          if (res == emptyUri) {
+            return null;
+          }
+          return res;
       }
     } finally {
       await sub.cancel();
@@ -101,6 +135,17 @@ class OidcWeb extends OidcPlatform {
         "The OpenId Provider doesn't provide '${OidcConstants_ProviderMetadata.authorizationEndpoint}'",
       );
     }
+    final isNonePrompt =
+        request.prompt?.contains(OidcConstants_AuthorizeRequest_Prompt.none) ??
+            false;
+    if (options.web.navigationMode ==
+            OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame &&
+        !isNonePrompt) {
+      throw const OidcException(
+        'hidden iframe can only be used with "none" prompt, '
+        'since it prohibits user interaction',
+      );
+    }
     final respUri = await _getResponseUri(
       options: options.web,
       uri: request.generateUri(endpoint),
@@ -110,6 +155,7 @@ class OidcWeb extends OidcPlatform {
     }
     return OidcEndpoints.parseAuthorizeResponse(
       responseUri: respUri,
+      responseMode: request.responseMode,
     );
   }
 
@@ -208,4 +254,53 @@ class OidcWeb extends OidcPlatform {
         //close the broadcast channel when the user cancels the stream.
         .doOnCancel(channel.close);
   }
+
+  @override
+  Stream<OidcMonitorSessionResult> monitorSessionStatus({
+    required Uri checkSessionIframe,
+    required OidcMonitorSessionStatusRequest request,
+  }) {
+    return const Stream.empty();
+    // IFrameElement? iframe;
+    // final sc = StreamController<OidcMonitorSessionResult>(
+    //   onListen: () async {
+    //     //start the session iframe
+    //     iframe = await _startSessionIframe(checkSessionIframe, request);
+    //   },
+    //   onCancel: () {
+    //     //stop the session iframe
+    //     if (iframe != null) {
+    //       _stopSessionIframe(iframe!);
+    //     }
+    //   },
+    // );
+    // return sc.stream;
+  }
+
+  Future<IFrameElement> _startSessionIframe(
+    Uri checkSessionIframe,
+    OidcMonitorSessionStatusRequest request,
+  ) async {
+    final origin = checkSessionIframe.origin;
+    final res = IFrameElement();
+    //source: https://github.com/authts/oidc-client-ts/blob/main/src/CheckSessionIFrame.ts#L9
+    res.style.visibility = 'hidden';
+    res.style.position = 'fixed';
+    res.style.left = '-1000px';
+    res.style.top = '0';
+    res.style.width = '0';
+    res.style.height = '0';
+    res.style.src = checkSessionIframe.toString();
+    final iframeLoadedFuture = res.onLoad.first;
+    final body = window.document.getElementsByTagName('body').first;
+    body.append(res);
+    window.addEventListener('message', _messageReceived, false);
+    return res;
+  }
+
+  void _stopSessionIframe(IFrameElement element) {
+    element.remove();
+  }
+
+  void _messageReceived(Event event) {}
 }

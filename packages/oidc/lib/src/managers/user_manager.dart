@@ -390,8 +390,11 @@ class OidcUserManager {
     final receivedStateKey = response.state;
     if (receivedStateKey == null) {
       _logAndThrow(
-          "Server didn't return state parameter, even though it was sent.");
+        "Server didn't return state parameter, even though it was sent.",
+      );
     }
+    //remove the state response since we already handled it.
+    await store.setStateResponseData(state: receivedStateKey, stateData: null);
     final currentStateKey = await store.getCurrentState();
     if (currentStateKey != receivedStateKey) {
       _logAndThrow('Server sent an older or different state parameter.');
@@ -407,8 +410,11 @@ class OidcUserManager {
     }
     final stateData = OidcState.fromStorageString(stateDataStr);
     if (stateData is! OidcAuthorizeState) {
+      await store.setCurrentState(null);
+      await store.setStateData(state: receivedStateKey, stateData: null);
       _logAndThrow('received wrong state type.');
     }
+
     if (grantType == OidcConstants_GrantType.implicit) {
       final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
 
@@ -573,7 +579,9 @@ class OidcUserManager {
     _logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
   }
 
-  void _handleTokenExpired(OidcToken event) {}
+  void _handleTokenExpired(OidcToken event) {
+    //TODO: reauthorize with prompt none ?
+  }
 
   /// This function validates that a user claims
   Future<OidcUser?> _validateAndSaveUser(OidcUser user) async {
@@ -928,5 +936,18 @@ class OidcUserManager {
       //forget the user.
       await forgetUser();
     }
+  }
+
+  ///
+  Future<OidcUser?> reAuthorizeUser() {
+    return loginAuthorizationCodeFlow(
+      promptOverride: ['none'],
+      options: const OidcPlatformSpecificOptions(
+        web: OidcPlatformSpecificOptions_Web(
+          navigationMode:
+              OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame,
+        ),
+      ),
+    );
   }
 }
