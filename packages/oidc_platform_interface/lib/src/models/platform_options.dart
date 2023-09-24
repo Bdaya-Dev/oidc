@@ -151,7 +151,7 @@ class OidcPlatformSpecificOptions_Web {
   final String broadcastChannel;
 
   /// the amount of time to wait before considering the request failed when using [OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame].
-  /// 
+  ///
   /// default is 10 seconds
   final Duration hiddenIframeTimeout;
 }

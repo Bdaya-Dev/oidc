@@ -1,4 +1,3 @@
-
 import 'package:async/async.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_android/oidc_android.dart';
