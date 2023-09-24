@@ -15,7 +15,10 @@ class OidcUser {
     required this.keystore,
     required this.allowedAlgorithms,
     required this.userInfo,
-  });
+  }) : aggregatedClaims = {
+          ...parsedIdToken.claims.toJson(),
+          ...userInfo,
+        };
 
   /// Creates a OidcUser from an encoded id_token passed via [token].
   ///
@@ -100,7 +103,11 @@ class OidcUser {
   /// these MUST be json encodable.
   final Map<String, dynamic> attributes;
 
+  /// The userInfo response.
   final Map<String, dynamic> userInfo;
+
+  /// Combines claims from id_token and userinfo response.
+  final Map<String, dynamic> aggregatedClaims;
 
   OidcUser withUserInfo(Map<String, dynamic> userInfo) {
     return OidcUser._(

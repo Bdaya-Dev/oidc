@@ -1,0 +1,4 @@
+enum OidcUserInfoAccessTokenLocations {
+  authorizationHeader,
+  formParameter,
+}

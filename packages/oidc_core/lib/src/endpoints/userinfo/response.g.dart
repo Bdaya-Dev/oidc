@@ -22,6 +22,13 @@ OidcUserInfoResponse _$OidcUserInfoResponseFromJson(
           : OidcInternalUtilities.splitSpaceDelimitedString(json['aud']),
       exp: _$JsonConverterFromJson<int, DateTime>(
           json['exp'], const OidcNumericDateConverter().fromJson),
+      claimNames: (json['_claim_names'] as Map<String, dynamic>?)?.map(
+        (k, e) => MapEntry(k, e as String),
+      ),
+      claimSources: (json['_claim_sources'] as Map<String, dynamic>?)?.map(
+        (k, e) =>
+            MapEntry(k, OidcClaimSource.fromJson(e as Map<String, dynamic>)),
+      ),
     );
 
 Value? _$JsonConverterFromJson<Json, Value>(
