@@ -56,8 +56,22 @@ class _SecretPageState extends State<SecretPage> {
               ElevatedButton(
                 onPressed: () async {
                   try {
-                    final res =
-                        await app_state.currentManager.reAuthorizeUser();
+                    final res = await app_state.currentManager
+                        .loginAuthorizationCodeFlow(
+                      // you can change scope too!
+                      scopeOverride: [
+                        ...app_state.currentManager.settings.scope,
+                        'api',
+                      ],
+                      promptOverride: ['none'],
+                      options: const OidcPlatformSpecificOptions(
+                        web: OidcPlatformSpecificOptions_Web(
+                          navigationMode:
+                              OidcPlatformSpecificOptions_Web_NavigationMode
+                                  .hiddenIFrame,
+                        ),
+                      ),
+                    );
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -65,6 +79,10 @@ class _SecretPageState extends State<SecretPage> {
                               Text('silently authorized user! ${res?.uid}'),
                         ),
                       );
+                    }
+                  } on OidcException catch (e) {
+                    if (e.errorResponse != null) {
+                      await app_state.currentManager.forgetUser();
                     }
                   } catch (e, st) {
                     app_state.exampleLogger

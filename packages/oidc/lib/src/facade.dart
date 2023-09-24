@@ -5,6 +5,18 @@ import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 class OidcFlutter {
   static OidcPlatform get _platform => OidcPlatform.instance;
 
+  /// Returns a stream that creates a hidden iframe every time you listen to it.
+  ///
+  /// The hidden iframe starts listening to session status if it's supported.
+  static Stream<OidcMonitorSessionResult> monitorSessionStatus({
+    required Uri checkSessionIframe,
+    required OidcMonitorSessionStatusRequest request,
+  }) =>
+      _platform.monitorSessionStatus(
+        checkSessionIframe: checkSessionIframe,
+        request: request,
+      );
+
   /// starts the authorization flow, and returns the response.
   ///
   /// on android/ios/macos, if the `request.responseType` is set to anything other than `code`, it returns null.
@@ -23,6 +35,8 @@ class OidcFlutter {
         request,
         options,
       );
+    } on OidcException {
+      rethrow;
     } catch (e, st) {
       throw OidcException(
         'Failed to authorize user',

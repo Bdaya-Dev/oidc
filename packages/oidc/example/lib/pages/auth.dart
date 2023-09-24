@@ -92,7 +92,7 @@ class _AuthPageState extends State<AuthPage> {
                 messenger.showSnackBar(
                   const SnackBar(
                     content: Text(
-                      'loginAuthorizationCodeFlow failed!',
+                      'loginPassword failed!',
                     ),
                   ),
                 );
@@ -152,9 +152,9 @@ class _AuthPageState extends State<AuthPage> {
               } catch (e) {
                 app_state.exampleLogger.severe(e.toString());
                 messenger.showSnackBar(
-                  const SnackBar(
+                  SnackBar(
                     content: Text(
-                      'loginAuthorizationCodeFlow failed!',
+                      'loginAuthorizationCodeFlow failed! ${e is OidcException ? e.message : ""}',
                     ),
                   ),
                 );
@@ -185,7 +185,7 @@ class _AuthPageState extends State<AuthPage> {
               messenger.showSnackBar(
                 SnackBar(
                   content: Text(
-                    'loginAuthorizationCodeFlow returned user id: ${result?.uid}',
+                    'loginImplicitFlow returned user id: ${result?.uid}',
                   ),
                 ),
               );

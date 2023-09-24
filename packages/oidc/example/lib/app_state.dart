@@ -39,7 +39,7 @@ final duendeManager = OidcUserManager.lazy(
     },
 
     // scopes supported by the provider and needed by the client.
-    scope: ['openid', 'profile', 'email', 'offline_access', 'api'],
+    scope: ['openid', 'profile', 'email', 'offline_access'],
     postLogoutRedirectUri: kIsWeb
         ? Uri.parse('http://localhost:22433/redirect.html')
         : Platform.isAndroid || Platform.isIOS || Platform.isMacOS

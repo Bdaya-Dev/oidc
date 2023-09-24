@@ -34,6 +34,8 @@ class OidcUserManagerSettings {
     this.refreshBefore = defaultRefreshBefore,
     this.strictJwtVerification = false,
     this.getExpiresIn,
+    this.sessionStatusCheckInterval = const Duration(seconds: 5),
+    this.sessionStatusCheckStopIfErrorReceived = true,
   });
 
   /// whether JWTs are strictly verified.
@@ -100,4 +102,14 @@ class OidcUserManagerSettings {
 
   /// platform-specific options.
   final OidcPlatformSpecificOptions? options;
+
+  /// when using the oidc session management specification, how often do you want to ask the server for user status.
+  ///
+  /// default is 5 seconds.
+  final Duration sessionStatusCheckInterval;
+
+  /// if the OP sends us an "error" responses when checking for status, it's pointless to ask for status after it.
+  ///
+  /// by default this is true.
+  final bool sessionStatusCheckStopIfErrorReceived;
 }
