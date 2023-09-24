@@ -29,6 +29,7 @@ class OidcUserManagerSettings {
     this.postLogoutRedirectUri,
     this.options,
     this.frontChannelLogoutUri,
+    this.userInfoSettings = const OidcUserInfoSettings(),
     this.frontChannelRequestListeningOptions =
         const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
@@ -37,6 +38,9 @@ class OidcUserManagerSettings {
     this.sessionStatusCheckInterval = const Duration(seconds: 5),
     this.sessionStatusCheckStopIfErrorReceived = true,
   });
+
+  /// Settings to control using the user_info endpoint.
+  final OidcUserInfoSettings userInfoSettings;
 
   /// whether JWTs are strictly verified.
   final bool strictJwtVerification;
@@ -112,4 +116,36 @@ class OidcUserManagerSettings {
   ///
   /// by default this is true.
   final bool sessionStatusCheckStopIfErrorReceived;
+}
+
+///
+class OidcUserInfoSettings {
+  ///
+  const OidcUserInfoSettings({
+    this.accessTokenLocation =
+        OidcUserInfoAccessTokenLocations.authorizationHeader,
+    this.requestMethod = OidcConstants_RequestMethod.get,
+    this.sendUserInfoRequest = true,
+    this.followDistributedClaims = true,
+    this.getAccessTokenForDistributedSource,
+  });
+
+  /// Where to put the access token.
+  final OidcUserInfoAccessTokenLocations accessTokenLocation;
+
+  /// Request method to use (POST/GET).
+  final String requestMethod;
+
+  /// Whether to send the user info request.
+  ///
+  /// true by default.
+  final bool sendUserInfoRequest;
+
+  /// Whether to try to follow and resolve Distributed Claims or not.
+  final bool followDistributedClaims;
+
+  /// this function gets called whenever there is an endpoint with no access token,
+  /// to try and get the access token.
+  final Future<String?> Function(String, Uri)?
+      getAccessTokenForDistributedSource;
 }

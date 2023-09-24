@@ -659,13 +659,13 @@ class OidcUserManager {
   /// This function validates that a user claims
   Future<OidcUser?> _validateAndSaveUser(OidcUser user) async {
     var actualUser = user;
-    final errors = actualUser.parsedIdToken.claims
-        .validate(
-          clientId: clientCredentials.clientId,
-          issuer: discoveryDocument.issuer,
-          expiryTolerance: settings.expiryTolerance,
-        )
-        .toList();
+    final errors = <Exception>[
+      ...actualUser.parsedIdToken.claims.validate(
+        clientId: clientCredentials.clientId,
+        issuer: discoveryDocument.issuer,
+        expiryTolerance: settings.expiryTolerance,
+      ),
+    ];
     if (actualUser.parsedIdToken.claims.subject == null) {
       errors.add(
         JoseException('id token is missing a `sub` claim.'),
@@ -680,12 +680,20 @@ class OidcUserManager {
 
     if (errors.isEmpty) {
       final userInfoEP = discoveryDocument.userinfoEndpoint;
-
-      if (userInfoEP != null) {
+      if (settings.userInfoSettings.sendUserInfoRequest && userInfoEP != null) {
         userInfoResp = await OidcEndpoints.userInfo(
           userInfoEndpoint: userInfoEP,
           accessToken: actualUser.token.accessToken!,
+          requestMethod: settings.userInfoSettings.requestMethod,
+          tokenLocation: settings.userInfoSettings.accessTokenLocation,
           client: httpClient,
+          allowedAlgorithms:
+              discoveryDocument.userinfoSigningAlgValuesSupported,
+          followDistributedClaims:
+              settings.userInfoSettings.followDistributedClaims,
+          getAccessTokenForDistributedSource:
+              settings.userInfoSettings.getAccessTokenForDistributedSource,
+          keyStore: keyStore,
         );
 
         _logger.info('UserInfo response: ${userInfoResp.src}');
@@ -832,26 +840,23 @@ class OidcUserManager {
     if (rawToken == null) {
       return;
     }
-    final decodedAttributes = rawAttributes == null
-        ? null
-        : jsonDecode(rawAttributes) as Map<String, dynamic>;
-    final decodedToken = jsonDecode(rawToken) as Map<String, dynamic>;
-    OidcToken? token;
     try {
-      token = OidcToken.fromJson(decodedToken);
-    } catch (e) {
-      // remove invalid tokens, so that they don't get used again.
-      await store.removeMany(
-        OidcStoreNamespace.secureTokens,
-        keys: usedKeys,
-      );
-    }
-    if (token != null) {
+      final decodedAttributes = rawAttributes == null
+          ? null
+          : jsonDecode(rawAttributes) as Map<String, dynamic>;
+      final decodedToken = jsonDecode(rawToken) as Map<String, dynamic>;
+      final token = OidcToken.fromJson(decodedToken);
       await _createUserFromToken(
         token: token,
         // nonce is only checked for new tokens.
         nonce: null,
         attributes: decodedAttributes,
+      );
+    } catch (e) {
+      // remove invalid tokens, so that they don't get used again.
+      await store.removeMany(
+        OidcStoreNamespace.secureTokens,
+        keys: usedKeys,
       );
     }
   }
