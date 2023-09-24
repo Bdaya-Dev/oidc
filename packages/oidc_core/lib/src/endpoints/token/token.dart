@@ -25,6 +25,7 @@ class OidcToken {
     this.expiresIn,
     this.refreshToken,
     this.extra,
+    this.sessionState,
   });
 
   factory OidcToken.fromJson(Map<String, dynamic> src) =>
@@ -32,6 +33,7 @@ class OidcToken {
 
   factory OidcToken.fromResponse(
     OidcTokenResponse response, {
+    required String? sessionState,
     DateTime? creationTime,
     Duration? overrideExpiresIn,
   }) {
@@ -42,6 +44,8 @@ class OidcToken {
         OidcConstants_AuthParameters.expiresIn: overrideExpiresIn.inSeconds,
       OidcConstants_Store.expiresInReferenceDate:
           creationTime.toIso8601String(),
+      if (sessionState != null)
+        OidcConstants_AuthParameters.sessionState: sessionState,
     });
   }
 
@@ -105,6 +109,10 @@ class OidcToken {
     disallowNullValue: true,
   )
   final DateTime creationTime;
+
+  /// The received session state.
+  @JsonKey(name: OidcConstants_AuthParameters.sessionState)
+  final String? sessionState;
 
   @JsonKey(
     includeFromJson: true,

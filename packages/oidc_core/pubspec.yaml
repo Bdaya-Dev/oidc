@@ -9,7 +9,7 @@ environment:
 
 dependencies:
   crypto: ^3.0.3
-  jose_plus: ^0.4.1
+  jose_plus: ^0.4.2
   http: ^1.1.0
   json_annotation: ^4.8.1
   uuid: "^4.0.0"

@@ -3,7 +3,7 @@
 import 'package:oidc_core/oidc_core.dart';
 
 enum OidcStoreNamespace {
-  /// Stores ephemeral information, such as the current state id and nonce.
+  /// Stores ephemeral information, such as the current state id.
   session('session'),
 
   /// Stores states.
@@ -27,7 +27,7 @@ enum OidcStoreNamespace {
   /// Stores discovery documents as json
   discoveryDocument('discoveryDocument'),
 
-  /// Identity Tokens, Access tokens, or any other tokens that require
+  /// Identity Tokens, Access tokens, or any other token that requires
   /// secure storage.
   secureTokens('secureTokens');
 
@@ -78,14 +78,14 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
   }
 
   /// Gets the current state from the session namespace.
-  Future<String?> getCurrentState() => get(
-        OidcStoreNamespace.session,
-        key: OidcConstants_AuthParameters.state,
-      );
+  // Future<String?> getCurrentState() => get(
+  //       OidcStoreNamespace.session,
+  //       key: OidcConstants_AuthParameters.state,
+  //     );
 
   /// Gets the current nonce from the session namespace.
   Future<String?> getCurrentNonce() => get(
-        OidcStoreNamespace.session,
+        OidcStoreNamespace.secureTokens,
         key: OidcConstants_AuthParameters.nonce,
       );
 
@@ -106,6 +106,30 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
         OidcStoreNamespace.request,
         key: OidcConstants_Store.frontChannelLogout,
       );
+
+  Future<Map<String, ({String stateData, String stateResponse})>>
+      getStatesWithResponses() async {
+    final responseKeys = await getAllKeys(OidcStoreNamespace.stateResponse);
+    if (responseKeys.isEmpty) {
+      return {};
+    }
+    final allResponses =
+        await getMany(OidcStoreNamespace.stateResponse, keys: responseKeys);
+    if (allResponses.isEmpty) {
+      return {};
+    }
+    final allData = await getMany(
+      OidcStoreNamespace.state,
+      keys: allResponses.keys.toSet(),
+    );
+    allResponses.removeWhere((key, value) => !allData.containsKey(key));
+    return allResponses.map(
+      (key, value) => MapEntry(
+        key,
+        (stateData: allData[key]!, stateResponse: value),
+      ),
+    );
+  }
 }
 
 extension OidcStoreExt on OidcStore {
@@ -129,27 +153,27 @@ extension OidcStoreExt on OidcStore {
   /// Sets the current state from the session namespace.
   ///
   /// Sending null will remove the key.
-  Future<void> setCurrentState(String? state) => state == null
-      ? remove(
-          OidcStoreNamespace.session,
-          key: OidcConstants_AuthParameters.state,
-        )
-      : set(
-          OidcStoreNamespace.session,
-          key: OidcConstants_AuthParameters.state,
-          value: state,
-        );
+  // Future<void> setCurrentState(String? state) => state == null
+  //     ? remove(
+  //         OidcStoreNamespace.session,
+  //         key: OidcConstants_AuthParameters.state,
+  //       )
+  //     : set(
+  //         OidcStoreNamespace.session,
+  //         key: OidcConstants_AuthParameters.state,
+  //         value: state,
+  //       );
 
   /// Sets the current state from the session namespace.
   ///
   /// Sending null will remove the key.
   Future<void> setCurrentNonce(String? nonce) => nonce == null
       ? remove(
-          OidcStoreNamespace.session,
+          OidcStoreNamespace.secureTokens,
           key: OidcConstants_AuthParameters.nonce,
         )
       : set(
-          OidcStoreNamespace.session,
+          OidcStoreNamespace.secureTokens,
           key: OidcConstants_AuthParameters.nonce,
           value: nonce,
         );
@@ -195,4 +219,17 @@ extension OidcStoreExt on OidcStore {
         state: state,
         stateData: null,
       );
+
+  /// Gets the current
+  Future<void> setCurrentFrontChannelLogoutRequest(String? value) =>
+      value == null
+          ? remove(
+              OidcStoreNamespace.request,
+              key: OidcConstants_Store.frontChannelLogout,
+            )
+          : set(
+              OidcStoreNamespace.request,
+              key: OidcConstants_Store.frontChannelLogout,
+              value: value,
+            );
 }

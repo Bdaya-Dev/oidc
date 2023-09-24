@@ -17,18 +17,14 @@ class OidcEndpoints {
     required http.Request request,
     required http.Response response,
   }) {
-    final commonExtra = {
-      OidcConstants_Exception.request: request,
-      OidcConstants_Exception.response: response,
-      OidcConstants_Exception.statusCode: response.statusCode,
-    };
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       if (body.containsKey(OidcConstants_AuthParameters.error)) {
-        throw OidcException(
-          'Error returned from the endpoint: ${request.url}',
-          errorResponse: OidcErrorResponse.fromJson(body),
-          extra: commonExtra,
+        final resp = OidcErrorResponse.fromJson(body);
+        throw OidcException.serverError(
+          errorResponse: resp,
+          rawRequest: request,
+          rawResponse: response,
         );
       }
       return mapper(body);
@@ -39,7 +35,8 @@ class OidcEndpoints {
         'Failed to handle the response from endpoint: ${request.url}',
         internalException: e,
         internalStackTrace: st,
-        extra: commonExtra,
+        rawRequest: request,
+        rawResponse: response,
       );
     }
   }
@@ -133,7 +130,7 @@ class OidcEndpoints {
         stateData: stateData.toStorageString(),
       );
       // store the current state and nonce.
-      await store.setCurrentState(stateData.id);
+      // await store.setCurrentState(stateData.id);
       await store.setCurrentNonce(nonce);
     }
 
@@ -206,7 +203,7 @@ class OidcEndpoints {
         stateData: stateData.toStorageString(),
       );
       // store the current state and nonce.
-      await store.setCurrentState(stateData.id);
+      // await store.setCurrentState(stateData.id);
       await store.setCurrentNonce(nonce);
     }
 
@@ -259,26 +256,13 @@ class OidcEndpoints {
     );
   }
 
-  /// parses the Uri from an /authorize response.
-  ///
-  /// if [responseMode] is assigned, it's used to determine the
-  /// response location; it can either be:
-  /// - `query` (in authorization code flow)
-  /// - `fragment` (in implicit flow).
-  ///
-  /// if [responseMode] is null, [resolveResponseModeByKey] (`state` by default)
-  /// is used to dynamically determine the response location,
-  /// where it would first look in the query parameters, then look in
-  /// the fragment parameters if it didn't find the key.
-  ///
-  /// if [responseMode] wasn't assigned a proper value, or if it wasn't resolved
-  /// , an [OidcException] is raised explaining the error.
-  static Future<OidcAuthorizeResponse> parseAuthorizeResponse({
+  /// takes an input response uri from the /authorize endpoint, and gets the parameters from it.
+  static ({Map<String, dynamic> parameters, String responseMode})
+      resolveAuthorizeResponseParameters({
     required Uri responseUri,
     String? responseMode,
     String? resolveResponseModeByKey,
-    Map<String, dynamic>? overrides,
-  }) async {
+  }) {
     String resolvedResponseMode;
     Map<String, String> parameters;
     if (responseMode != null) {
@@ -299,7 +283,9 @@ class OidcEndpoints {
       final key =
           resolveResponseModeByKey ?? OidcConstants_AuthParameters.state;
 
-      if (responseUri.queryParameters.containsKey(key)) {
+      if (responseUri.queryParameters.containsKey(key) ||
+          responseUri.queryParameters
+              .containsKey(OidcConstants_AuthParameters.error)) {
         parameters = responseUri.queryParameters;
         resolvedResponseMode =
             OidcConstants_AuthorizeRequest_ResponseMode.query;
@@ -319,11 +305,53 @@ class OidcEndpoints {
       }
     }
 
-    return OidcAuthorizeResponse.fromJson({
+    return (
+      parameters: {
+        ...parameters,
+        OidcConstants_AuthParameters.responseMode: resolvedResponseMode,
+      },
+      responseMode: resolvedResponseMode
+    );
+  }
+
+  /// parses the Uri from an /authorize response.
+  ///
+  /// if [responseMode] is assigned, it's used to determine the
+  /// response location; it can either be:
+  /// - `query` (in authorization code flow)
+  /// - `fragment` (in implicit flow).
+  ///
+  /// if [responseMode] is null, [resolveResponseModeByKey] (`state` by default)
+  /// is used to dynamically determine the response location,
+  /// where it would first look in the query parameters, then look in
+  /// the fragment parameters if it didn't find the key.
+  ///
+  /// if [responseMode] wasn't assigned a proper value, or if it wasn't resolved
+  /// , an [OidcException] is raised explaining the error.
+  static Future<OidcAuthorizeResponse> parseAuthorizeResponse({
+    required Uri responseUri,
+    String? responseMode,
+    String? resolveResponseModeByKey,
+    Map<String, dynamic>? overrides,
+  }) async {
+    final (:parameters, responseMode: resolvedResponseMode) =
+        resolveAuthorizeResponseParameters(
+      responseUri: responseUri,
+      resolveResponseModeByKey: resolveResponseModeByKey,
+      responseMode: responseMode,
+    );
+
+    final p = {
       ...parameters,
       OidcConstants_AuthParameters.responseMode: resolvedResponseMode,
       ...?overrides,
-    });
+    };
+    if (parameters.containsKey(OidcConstants_AuthParameters.error)) {
+      throw OidcException.serverError(
+        errorResponse: OidcErrorResponse.fromJson(p),
+      );
+    }
+    return OidcAuthorizeResponse.fromJson(p);
   }
 
   /// Sends a token exchange request.

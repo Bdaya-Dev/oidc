@@ -22,6 +22,7 @@ OidcToken _$OidcTokenFromJson(Map<String, dynamic> json) {
     expiresIn: OidcInternalUtilities.durationFromJson(json['expires_in']),
     refreshToken: json['refresh_token'] as String?,
     extra: _readExtra(json, 'extra') as Map<String, dynamic>?,
+    sessionState: json['session_state'] as String?,
   );
 }
 
@@ -33,6 +34,7 @@ const _$OidcTokenFieldMap = <String, String>{
   'expiresIn': 'expires_in',
   'refreshToken': 'refresh_token',
   'creationTime': 'expiresInReferenceDate',
+  'sessionState': 'session_state',
 };
 
 Map<String, dynamic> _$OidcTokenToJson(OidcToken instance) {
@@ -54,5 +56,6 @@ Map<String, dynamic> _$OidcTokenToJson(OidcToken instance) {
   writeNotNull('refresh_token', instance.refreshToken);
   writeNotNull('expiresInReferenceDate',
       OidcInternalUtilities.dateTimeToJson(instance.creationTime));
+  writeNotNull('session_state', instance.sessionState);
   return val;
 }

@@ -19,6 +19,7 @@ class OidcTokenResponse extends JsonBasedResponse {
     this.idToken,
     this.refreshToken,
     this.expiresIn,
+    this.sessionState,
   });
 
   factory OidcTokenResponse.fromJson(Map<String, dynamic> src) =>
@@ -73,4 +74,8 @@ class OidcTokenResponse extends JsonBasedResponse {
   /// the grant passed in the corresponding token request.
   @JsonKey(name: OidcConstants_AuthParameters.refreshToken)
   final String? refreshToken;
+
+  /// The session state used in the session management spec.
+  @JsonKey(name: OidcConstants_AuthParameters.sessionState)
+  final String? sessionState;
 }

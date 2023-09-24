@@ -135,7 +135,11 @@ class OidcUser {
     return OidcUser._(
       idToken: idToken,
       parsedIdToken: webToken,
-      token: newToken,
+      token: OidcToken.fromJson({
+        // keep old data and override the new data.
+        ...token.toJson(),
+        ...newToken.toJson(),
+      }),
       attributes: attributes,
       allowedAlgorithms: allowedAlgorithms,
       keystore: keystore,
