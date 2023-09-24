@@ -85,7 +85,8 @@ final certificationManager = OidcUserManager.lazy(
     scope: ['profile', 'email'],
     redirectUri: Uri.parse('http://localhost:22433/redirect.html'),
     frontChannelLogoutUri: Uri.parse(
-        'http://localhost:22433/redirect.html?requestType=front-channel-logout'),
+      'http://localhost:22433/redirect.html?requestType=front-channel-logout',
+    ),
     postLogoutRedirectUri: Uri.parse('http://localhost:22433/redirect.html'),
     userInfoSettings: const OidcUserInfoSettings(
       accessTokenLocation: OidcUserInfoAccessTokenLocations.formParameter,

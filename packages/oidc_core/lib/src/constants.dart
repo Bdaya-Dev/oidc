@@ -79,7 +79,6 @@ class OidcConstants_JWTClaims {
   /// Used for distributed claims.
   static const endpoint = 'endpoint';
 
-
   /// `_claim_names` https://openid.net/specs/openid-connect-core-1_0.html#AggregatedDistributedClaims
   static const claimNames = '_claim_names';
 
@@ -322,7 +321,6 @@ class OidcConstants_AuthParameters {
 
   /// authorization request
   static const dpopJkt = 'dpop_jkt';
-
 }
 
 class OidcConstants_ProviderMetadata {
