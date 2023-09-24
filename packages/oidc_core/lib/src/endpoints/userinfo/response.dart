@@ -20,6 +20,8 @@ class OidcUserInfoResponse extends JsonBasedResponse {
     this.iss,
     this.aud = const [],
     this.exp,
+    this.claimNames,
+    this.claimSources,
   });
 
   /// Parses OidcUserInfoResponse from json object.
@@ -104,4 +106,17 @@ class OidcUserInfoResponse extends JsonBasedResponse {
   /// The "jti" value is a case-sensitive string.
   @JsonKey(name: OidcConstants_AuthParameters.jti)
   final String? jti;
+
+  /// JSON object whose member names are the Claim Names for
+  /// the Aggregated and Distributed Claims.
+  ///
+  /// The member values are references to the member names in the `_claim_sources`
+  /// member from which the actual Claim Values can be retrieved.
+  @JsonKey(name: OidcConstants_JWTClaims.claimNames)
+  final Map<String, String>? claimNames;
+
+  /// JSON object whose member names are referenced by the member values of the `_claim_names` member.
+  /// The member values contain sets of Aggregated Claims or reference locations for Distributed Claims.
+  @JsonKey(name: OidcConstants_JWTClaims.claimSources)
+  final Map<String, OidcClaimSource>? claimSources;
 }
