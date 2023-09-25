@@ -24,6 +24,20 @@ class OidcFrontChannelLogoutIncomingRequest extends JsonBasedResponse {
   @JsonKey(name: OidcConstants_AuthParameters.iss)
   final Uri? iss;
 
+  /// OPTIONAL.
+  ///
+  /// Session ID - String identifier for a Session.
+  ///
+  /// This represents a Session of a User Agent or device for a logged-in
+  /// End-User at an RP.
+  ///
+  /// Different sid values are used to identify distinct sessions at an OP.
+  ///
+  /// The sid value need only be unique in the context of a particular issuer.
+  ///
+  /// Its contents are opaque to the RP.
+  ///
+  /// Its syntax is the same as an OAuth 2.0 Client Identifier.
   @JsonKey(name: OidcConstants_JWTClaims.sid)
   final String? sid;
 }

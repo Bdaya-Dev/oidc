@@ -16,4 +16,5 @@ OidcTokenResponse _$OidcTokenResponseFromJson(Map<String, dynamic> json) =>
       idToken: json['id_token'] as String?,
       refreshToken: json['refresh_token'] as String?,
       expiresIn: OidcInternalUtilities.durationFromJson(json['expires_in']),
+      sessionState: json['session_state'] as String?,
     );

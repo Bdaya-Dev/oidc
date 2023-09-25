@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
+import 'package:jose_plus/jose.dart';
 import 'package:nonce/nonce.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:uuid/uuid.dart';
@@ -17,18 +18,14 @@ class OidcEndpoints {
     required http.Request request,
     required http.Response response,
   }) {
-    final commonExtra = {
-      OidcConstants_Exception.request: request,
-      OidcConstants_Exception.response: response,
-      OidcConstants_Exception.statusCode: response.statusCode,
-    };
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
       if (body.containsKey(OidcConstants_AuthParameters.error)) {
-        throw OidcException(
-          'Error returned from the endpoint: ${request.url}',
-          errorResponse: OidcErrorResponse.fromJson(body),
-          extra: commonExtra,
+        final resp = OidcErrorResponse.fromJson(body);
+        throw OidcException.serverError(
+          errorResponse: resp,
+          rawRequest: request,
+          rawResponse: response,
         );
       }
       return mapper(body);
@@ -39,7 +36,8 @@ class OidcEndpoints {
         'Failed to handle the response from endpoint: ${request.url}',
         internalException: e,
         internalStackTrace: st,
-        extra: commonExtra,
+        rawRequest: request,
+        rawResponse: response,
       );
     }
   }
@@ -133,7 +131,7 @@ class OidcEndpoints {
         stateData: stateData.toStorageString(),
       );
       // store the current state and nonce.
-      await store.setCurrentState(stateData.id);
+      // await store.setCurrentState(stateData.id);
       await store.setCurrentNonce(nonce);
     }
 
@@ -206,7 +204,7 @@ class OidcEndpoints {
         stateData: stateData.toStorageString(),
       );
       // store the current state and nonce.
-      await store.setCurrentState(stateData.id);
+      // await store.setCurrentState(stateData.id);
       await store.setCurrentNonce(nonce);
     }
 
@@ -259,26 +257,13 @@ class OidcEndpoints {
     );
   }
 
-  /// parses the Uri from an /authorize response.
-  ///
-  /// if [responseMode] is assigned, it's used to determine the
-  /// response location; it can either be:
-  /// - `query` (in authorization code flow)
-  /// - `fragment` (in implicit flow).
-  ///
-  /// if [responseMode] is null, [resolveResponseModeByKey] (`state` by default)
-  /// is used to dynamically determine the response location,
-  /// where it would first look in the query parameters, then look in
-  /// the fragment parameters if it didn't find the key.
-  ///
-  /// if [responseMode] wasn't assigned a proper value, or if it wasn't resolved
-  /// , an [OidcException] is raised explaining the error.
-  static Future<OidcAuthorizeResponse> parseAuthorizeResponse({
+  /// takes an input response uri from the /authorize endpoint, and gets the parameters from it.
+  static ({Map<String, dynamic> parameters, String responseMode})
+      resolveAuthorizeResponseParameters({
     required Uri responseUri,
     String? responseMode,
     String? resolveResponseModeByKey,
-    Map<String, dynamic>? overrides,
-  }) async {
+  }) {
     String resolvedResponseMode;
     Map<String, String> parameters;
     if (responseMode != null) {
@@ -299,7 +284,9 @@ class OidcEndpoints {
       final key =
           resolveResponseModeByKey ?? OidcConstants_AuthParameters.state;
 
-      if (responseUri.queryParameters.containsKey(key)) {
+      if (responseUri.queryParameters.containsKey(key) ||
+          responseUri.queryParameters
+              .containsKey(OidcConstants_AuthParameters.error)) {
         parameters = responseUri.queryParameters;
         resolvedResponseMode =
             OidcConstants_AuthorizeRequest_ResponseMode.query;
@@ -319,11 +306,53 @@ class OidcEndpoints {
       }
     }
 
-    return OidcAuthorizeResponse.fromJson({
+    return (
+      parameters: {
+        ...parameters,
+        OidcConstants_AuthParameters.responseMode: resolvedResponseMode,
+      },
+      responseMode: resolvedResponseMode
+    );
+  }
+
+  /// parses the Uri from an /authorize response.
+  ///
+  /// if [responseMode] is assigned, it's used to determine the
+  /// response location; it can either be:
+  /// - `query` (in authorization code flow)
+  /// - `fragment` (in implicit flow).
+  ///
+  /// if [responseMode] is null, [resolveResponseModeByKey] (`state` by default)
+  /// is used to dynamically determine the response location,
+  /// where it would first look in the query parameters, then look in
+  /// the fragment parameters if it didn't find the key.
+  ///
+  /// if [responseMode] wasn't assigned a proper value, or if it wasn't resolved
+  /// , an [OidcException] is raised explaining the error.
+  static Future<OidcAuthorizeResponse> parseAuthorizeResponse({
+    required Uri responseUri,
+    String? responseMode,
+    String? resolveResponseModeByKey,
+    Map<String, dynamic>? overrides,
+  }) async {
+    final (:parameters, responseMode: resolvedResponseMode) =
+        resolveAuthorizeResponseParameters(
+      responseUri: responseUri,
+      resolveResponseModeByKey: resolveResponseModeByKey,
+      responseMode: responseMode,
+    );
+
+    final p = {
       ...parameters,
       OidcConstants_AuthParameters.responseMode: resolvedResponseMode,
       ...?overrides,
-    });
+    };
+    if (parameters.containsKey(OidcConstants_AuthParameters.error)) {
+      throw OidcException.serverError(
+        errorResponse: OidcErrorResponse.fromJson(p),
+      );
+    }
+    return OidcAuthorizeResponse.fromJson(p);
   }
 
   /// Sends a token exchange request.
@@ -368,27 +397,168 @@ class OidcEndpoints {
   static Future<OidcUserInfoResponse> userInfo({
     required Uri userInfoEndpoint,
     required String accessToken,
+    String requestMethod = OidcConstants_RequestMethod.get,
+    OidcUserInfoAccessTokenLocations tokenLocation =
+        OidcUserInfoAccessTokenLocations.authorizationHeader,
+    bool followDistributedClaims = true,
+    JsonWebKeyStore? keyStore,
+    List<String>? allowedAlgorithms,
     Map<String, String>? headers,
     http.Client? client,
+    Future<String?> Function(String, Uri)? getAccessTokenForDistributedSource,
   }) async {
+    if (tokenLocation == OidcUserInfoAccessTokenLocations.formParameter &&
+        requestMethod != OidcConstants_RequestMethod.post) {
+      throw const OidcException(
+        'to send access_token as a form parameter, the request method MUST be post.',
+      );
+    }
     final req = _prepareRequest(
-      method: OidcConstants_RequestMethod.get,
+      method: requestMethod,
       uri: userInfoEndpoint,
       headers: {
-        _authorizationHeaderKey: 'Bearer $accessToken',
+        if (tokenLocation ==
+            OidcUserInfoAccessTokenLocations.authorizationHeader)
+          _authorizationHeaderKey: 'Bearer $accessToken',
         ...?headers,
       },
+      bodyFields:
+          tokenLocation == OidcUserInfoAccessTokenLocations.formParameter
+              ? {
+                  OidcConstants_AuthParameters.accessToken: accessToken,
+                }
+              : null,
     );
 
     final resp = await OidcInternalUtilities.sendWithClient(
       client: client,
       request: req,
     );
-    return _handleResponse(
-      mapper: OidcUserInfoResponse.fromJson,
-      response: resp,
-      request: req,
-    );
+    const applicationJson = 'application/json';
+    const applicationJwt = 'application/jwt';
+
+    final contentTypeRaw = resp.headers['Content-Type'] ?? applicationJson;
+    final contentTypeParts = contentTypeRaw.split(';');
+    final contentType = contentTypeParts.firstOrNull;
+    OidcUserInfoResponse ret;
+    if (contentType == applicationJwt) {
+      JsonWebToken jwt;
+      if (keyStore != null) {
+        jwt = await JsonWebToken.decodeAndVerify(
+          resp.body,
+          keyStore,
+          allowedArguments: allowedAlgorithms,
+        );
+      } else {
+        jwt = JsonWebToken.unverified(resp.body);
+      }
+      ret = OidcUserInfoResponse.fromJson(jwt.claims.toJson());
+    } else {
+      //defaults to json
+      ret = _handleResponse(
+        mapper: OidcUserInfoResponse.fromJson,
+        response: resp,
+        request: req,
+      );
+    }
+    if (followDistributedClaims) {
+      ret = await userInfoFollowDistributedClaims(
+        response: ret,
+        client: client,
+        getAccessTokenFor: getAccessTokenForDistributedSource,
+      );
+    }
+    return ret;
+  }
+
+  /// follows instructions in the spec https://openid.net/specs/openid-connect-core-1_0.html#AggregatedDistributedClaims
+  /// to aggregate claims from multiple sources.
+  static Future<OidcUserInfoResponse> userInfoFollowDistributedClaims({
+    required OidcUserInfoResponse response,
+    Future<String?> Function(String source, Uri endpoint)? getAccessTokenFor,
+    http.Client? client,
+  }) async {
+    //
+    final claimNames = {...?response.claimNames};
+    final claimSources = {...?response.claimSources};
+    if (claimNames.isEmpty || claimSources.isEmpty) {
+      return response;
+    }
+    final neededSources = claimNames.values.toSet();
+    final availableSources = (Map.fromEntries(
+      neededSources.map((e) => MapEntry(e, claimSources[e])),
+    )..removeWhere((key, value) => value == null))
+        .cast<String, OidcClaimSource>();
+    if (availableSources.isEmpty) {
+      return response;
+    }
+    // maps source key, to its claims
+    final resolvedClaims = <String, Map<String, dynamic>>{};
+    for (final sourceEntry in availableSources.entries) {
+      final sourceKey = sourceEntry.key;
+      final targetMap = resolvedClaims[sourceKey] ??= <String, dynamic>{};
+      final sourceDesc = sourceEntry.value;
+      if (sourceDesc is OidcAggregatedClaimSource) {
+        final jwt = sourceDesc.jwt;
+        final parsedJwt = JsonWebToken.unverified(jwt);
+        targetMap.addEntries(
+          parsedJwt.claims
+              .toJson()
+              .entries
+              .where((element) => claimNames.containsKey(element.key)),
+        );
+      } else if (sourceDesc is OidcDistributedClaimSource) {
+        var accessToken = sourceDesc.accessToken;
+        accessToken ??=
+            await getAccessTokenFor?.call(sourceKey, sourceDesc.endpoint);
+
+        final request = http.Request(
+          OidcConstants_RequestMethod.get,
+          sourceDesc.endpoint,
+        );
+        if (accessToken != null) {
+          request.headers[_authorizationHeaderKey] = 'Bearer $accessToken';
+        }
+        final endpointResp = await OidcInternalUtilities.sendWithClient(
+          client: client,
+          request: request,
+        );
+        if (endpointResp.statusCode >= 200 && endpointResp.statusCode < 300) {
+          //success
+          JsonWebToken? parsedJwt;
+          try {
+            parsedJwt = JsonWebToken.unverified(endpointResp.body);
+          } catch (_) {
+            parsedJwt = null;
+          }
+          if (parsedJwt != null) {
+            targetMap.addEntries(
+              parsedJwt.claims
+                  .toJson()
+                  .entries
+                  .where((element) => claimNames.containsKey(element.key)),
+            );
+          }
+        } else {
+          continue;
+        }
+      } else {
+        continue;
+      }
+    }
+    final newClaims = {
+      ...response.src,
+    };
+    for (final claimEntry in claimNames.entries) {
+      final claimName = claimEntry.key;
+      final sourceKey = claimEntry.value;
+      final sourceResolved = resolvedClaims[sourceKey] ??= {};
+      final claimValue = sourceResolved[claimName];
+      if (claimValue != null) {
+        newClaims[claimName] = claimValue;
+      }
+    }
+    return OidcUserInfoResponse.fromJson(newClaims);
   }
 
   /// Sends a device authorization request.

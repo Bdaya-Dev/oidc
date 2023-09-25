@@ -92,6 +92,7 @@ class OidcState {
       if (remove) {
         //no need to await
         unawaited(store.remove(OidcStoreNamespace.state, key: key));
+        unawaited(store.remove(OidcStoreNamespace.stateResponse, key: key));
       }
     }
   }

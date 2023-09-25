@@ -72,6 +72,18 @@ class OidcConstants_Scopes {
 class OidcConstants_JWTClaims {
   ///	Session ID
   static const sid = 'sid';
+
+  /// Used for aggregated claims.
+  static const jwt = 'JWT';
+
+  /// Used for distributed claims.
+  static const endpoint = 'endpoint';
+
+  /// `_claim_names` https://openid.net/specs/openid-connect-core-1_0.html#AggregatedDistributedClaims
+  static const claimNames = '_claim_names';
+
+  /// `_claim_sources` https://openid.net/specs/openid-connect-core-1_0.html#AggregatedDistributedClaims
+  static const claimSources = '_claim_sources';
 }
 
 class OidcConstants_AuthParameters {

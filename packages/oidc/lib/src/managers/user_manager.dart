@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
-
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:jose_plus/jose.dart';
@@ -116,12 +114,6 @@ class OidcUserManager {
     OidcPlatformSpecificOptions? options,
   }) async {
     _ensureInit();
-    await _cleanUpStore(toDelete: {
-      OidcStoreNamespace.session,
-      OidcStoreNamespace.state,
-      OidcStoreNamespace.stateResponse,
-      OidcStoreNamespace.secureTokens,
-    });
     final doc = discoveryDocument;
     options ??= settings.options ?? const OidcPlatformSpecificOptions();
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
@@ -152,25 +144,19 @@ class OidcUserManager {
       maxAge: maxAgeOverride ?? settings.maxAge,
       options: _getOptions(options),
     );
+    // this function adds state, state data, nonce to the store
+    // the state/state data is only until we get a response (success or fail).
+    // the nonce is until the user logs out.
     final requestContainer =
         await OidcEndpoints.prepareAuthorizationCodeFlowRequest(
       input: simpleReq,
       metadata: doc,
       store: store,
     );
-
-    final response = await OidcFlutter.getPlatformAuthorizationResponse(
-      metadata: discoveryDocument,
+    return _tryGetAuthResponse(
+      grantType: OidcConstants_GrantType.authorizationCode,
       request: requestContainer.request,
       options: options,
-    );
-    if (response == null) {
-      return null;
-    }
-
-    return _handleSuccessfulAuthResponse(
-      response: response,
-      grantType: OidcConstants_GrantType.authorizationCode,
     );
   }
 
@@ -198,9 +184,50 @@ class OidcUserManager {
       token: OidcToken.fromResponse(
         tokenResp,
         overrideExpiresIn: settings.getExpiresIn?.call(tokenResp),
+        sessionState: null,
       ),
+      attributes: null,
       nonce: null,
     );
+  }
+
+  Future<OidcUser?> _tryGetAuthResponse({
+    required OidcAuthorizeRequest request,
+    required String grantType,
+    required OidcPlatformSpecificOptions options,
+  }) async {
+    try {
+      final response = await OidcFlutter.getPlatformAuthorizationResponse(
+        metadata: discoveryDocument,
+        request: request,
+        options: options,
+      );
+      if (response == null) {
+        return null;
+      }
+      final state = response.state;
+
+      //since we already have a response, remove it from the store.
+      if (state != null) {
+        await store.setStateResponseData(state: state, stateData: null);
+      }
+      return await _handleSuccessfulAuthResponse(
+        response: response,
+        grantType: grantType,
+      );
+    } on OidcException catch (e) {
+      //failed to authorize.
+      final response = e.errorResponse;
+      if (response == null) {
+        rethrow;
+      }
+      //if we have a response, remove it from the store.
+      final state = response.state;
+      if (state != null) {
+        await store.setStateResponseData(state: state, stateData: null);
+      }
+      rethrow;
+    }
   }
 
   ///
@@ -251,19 +278,10 @@ class OidcUserManager {
       metadata: doc,
       store: store,
     );
-
-    final response = await OidcFlutter.getPlatformAuthorizationResponse(
-      metadata: discoveryDocument,
+    return _tryGetAuthResponse(
       request: request,
-      options: options,
-    );
-    if (response == null) {
-      return null;
-    }
-
-    return _handleSuccessfulAuthResponse(
-      response: response,
       grantType: OidcConstants_GrantType.implicit,
+      options: options,
     );
   }
 
@@ -275,16 +293,12 @@ class OidcUserManager {
   /// NOTE: this is different than [logout], since this method doesn't initiate
   /// any logout flows.
   Future<void> forgetUser() async {
-    await store.remove(
-      OidcStoreNamespace.session,
-      key: OidcConstants_AuthParameters.nonce,
-    );
     await _cleanUpStore(toDelete: {
-      OidcStoreNamespace.stateResponse,
-      OidcStoreNamespace.request,
       OidcStoreNamespace.secureTokens,
     });
-    _userSubject.add(null);
+    if (currentUser != null) {
+      _userSubject.add(null);
+    }
   }
 
   /// Logs out the current user and calls [forgetUser] if successful.
@@ -307,7 +321,6 @@ class OidcUserManager {
     final postLogoutRedirectUri =
         postLogoutRedirectUriOverride ?? settings.postLogoutRedirectUri;
 
-    // final willComeBack = postLogoutRedirectUri != null;
     final stateData = postLogoutRedirectUri == null
         ? null
         : OidcEndSessionState(
@@ -321,7 +334,6 @@ class OidcUserManager {
         state: stateData.id,
         stateData: stateData.toStorageString(),
       );
-      await store.setCurrentState(stateData.id);
     }
     final resultFuture = OidcFlutter.getPlatformEndSessionResponse(
       metadata: doc,
@@ -352,37 +364,42 @@ class OidcUserManager {
       await forgetUser();
       return;
     }
-    await _handEndSessionResponse(result: result);
+    await _handleEndSessionResponse(result: result);
   }
 
-  Future<void> _handEndSessionResponse({
+  Future<void> _handleEndSessionResponse({
     required OidcEndSessionResponse result,
   }) async {
-    final currentState = await store.getCurrentState();
-    if (currentState != null) {
-      try {
-        //found result!
-        final resState = result.state;
-        if (resState == null) {
-          _logAndThrow("Didn't receive state, even though it was sent.");
-        }
-        final resStateData = await store.getStateData(resState);
-        if (resStateData == null) {
-          _logAndThrow("Didn't receive correct state value.");
-        }
-        final parsedState = OidcState.fromStorageString(resStateData);
-        await store.setStateData(state: resState, stateData: null);
-        if (parsedState is! OidcEndSessionState) {
-          _logAndThrow('received wrong state type.');
-        }
-      } finally {
-        await store.setCurrentState(null);
-      }
+    //found result!
+    final resState = result.state;
+    if (resState == null) {
+      await forgetUser();
+      return;
+    }
+    final resStateData = await store.getStateData(resState);
+    if (resStateData == null) {
+      _logAndThrow("Didn't receive correct state value.");
+    }
+    final parsedState = OidcState.fromStorageString(resStateData);
+    await store.setStateData(state: resState, stateData: null);
+    if (parsedState is! OidcEndSessionState) {
+      _logAndThrow('received wrong state type (${parsedState.runtimeType}).');
     }
     //if all state checks are successful, do logout.
     await forgetUser();
   }
 
+  /// You enter this function with an /authorize response.
+  ///
+  /// this function expects the [store] to still have
+  /// - current state
+  /// - state data
+  /// - nonce
+  ///
+  /// this function calls [_createUserFromToken] after validating the response,
+  /// and parsing the state.
+  ///
+  /// it also clears the store after it's done.
   Future<OidcUser?> _handleSuccessfulAuthResponse({
     required OidcAuthorizeResponse response,
     required String grantType,
@@ -390,73 +407,91 @@ class OidcUserManager {
     final receivedStateKey = response.state;
     if (receivedStateKey == null) {
       _logAndThrow(
-          "Server didn't return state parameter, even though it was sent.");
-    }
-    final currentStateKey = await store.getCurrentState();
-    if (currentStateKey != receivedStateKey) {
-      _logAndThrow('Server sent an older or different state parameter.');
-    }
-
-    final stateDataStr = await store.getStateData(receivedStateKey);
-    if (stateDataStr == null) {
-      await store.setCurrentState(null);
-      _logger.warning(
-        "Internal error, the session state wasn't cleared after the state was deleted.",
+        "Server didn't return state parameter, even though it was sent.",
       );
-      return null;
     }
-    final stateData = OidcState.fromStorageString(stateDataStr);
-    if (stateData is! OidcAuthorizeState) {
-      _logAndThrow('received wrong state type.');
-    }
-    if (grantType == OidcConstants_GrantType.implicit) {
-      final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
 
-      if (implicitTokenResponse.accessToken != null ||
-          implicitTokenResponse.idToken != null) {
-        return _createUserFromToken(
-          token: OidcToken.fromResponse(
+    try {
+      final stateDataStr = await store.getStateData(receivedStateKey);
+      if (stateDataStr == null) {
+        _logger.severe(
+          "Internal error, the session state wasn't cleared after the state was deleted.",
+        );
+        //don't throw here, since it's a bug.
+        return null;
+      }
+      final stateData = OidcState.fromStorageString(stateDataStr);
+      if (stateData is! OidcAuthorizeState) {
+        //impossible case.
+        _logAndThrow('received wrong state type (${stateData.runtimeType}).');
+      }
+
+      if (grantType == OidcConstants_GrantType.implicit) {
+        //implicit grant gets the token directly from the response.
+        final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
+        if (implicitTokenResponse.accessToken != null ||
+            implicitTokenResponse.idToken != null) {
+          final token = OidcToken.fromResponse(
             implicitTokenResponse,
             overrideExpiresIn:
                 settings.getExpiresIn?.call(implicitTokenResponse),
-          ),
-          nonce: stateData.nonce,
+            sessionState: response.sessionState,
+          );
+          return await _createUserFromToken(
+            token: token,
+            attributes: null,
+            nonce: stateData.nonce,
+          );
+        }
+      }
+
+      final tokenEndpoint = discoveryDocument.tokenEndpoint;
+      if (tokenEndpoint == null) {
+        _logAndThrow(
+          "This provider doesn't provide a token endpoint",
         );
       }
-    }
-    final doc = discoveryDocument;
-    final tokenEndPoint = doc.tokenEndpoint;
-    if (tokenEndPoint == null) {
-      _logAndThrow(
-        "This provider doesn't provide a token endpoint",
+      // an authorization code flow MUST have a code as a response,
+      // otherwise an OidcException should have been thrown before entering
+      // this function.
+      final code = response.code;
+      if (code == null) {
+        _logAndThrow(
+          "Server didn't send code even though the authorization code flow was used.",
+        );
+      }
+      //request the token.
+      final tokenResp = await OidcEndpoints.token(
+        tokenEndpoint: tokenEndpoint,
+        credentials: clientCredentials,
+        headers: stateData.extraTokenHeaders,
+        request: OidcTokenRequest.authorizationCode(
+          redirectUri: response.redirectUri ?? stateData.redirectUri,
+          codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
+          extra: stateData.extraTokenParams,
+          clientId: clientCredentials.clientId,
+          code: code,
+        ),
+        client: httpClient,
       );
-    }
-    final code = response.code;
-    if (code == null) {
-      _logAndThrow(
-        "Server didn't send code even though the authorization code flow was used.",
-      );
-    }
-    final tokenResp = await OidcEndpoints.token(
-      tokenEndpoint: tokenEndPoint,
-      credentials: clientCredentials,
-      headers: stateData.extraTokenHeaders,
-      request: OidcTokenRequest.authorizationCode(
-        redirectUri: response.redirectUri ?? stateData.redirectUri,
-        codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
-        extra: stateData.extraTokenParams,
-        clientId: clientCredentials.clientId,
-        code: code,
-      ),
-      client: httpClient,
-    );
-    return _createUserFromToken(
-      token: OidcToken.fromResponse(
+      final token = OidcToken.fromResponse(
         tokenResp,
         overrideExpiresIn: settings.getExpiresIn?.call(tokenResp),
-      ),
-      nonce: stateData.nonce,
-    );
+        sessionState: response.sessionState,
+      );
+      return await _createUserFromToken(
+        token: token,
+        nonce: stateData.nonce,
+        attributes: null,
+      );
+    } finally {
+      //remove the state + state response since we already handled it.
+      await store.setStateResponseData(
+        state: receivedStateKey,
+        stateData: null,
+      );
+      await store.setStateData(state: receivedStateKey, stateData: null);
+    }
   }
 
   /// Handles a token; either from cache, in which case the [nonce] will be null
@@ -470,7 +505,7 @@ class OidcUserManager {
   Future<OidcUser?> _createUserFromToken({
     required OidcToken token,
     required String? nonce,
-    Map<String, dynamic>? attributes,
+    required Map<String, dynamic>? attributes,
   }) async {
     final currentUser = this.currentUser;
     OidcUser newUser;
@@ -508,12 +543,54 @@ class OidcUserManager {
         OidcConstants_Store.currentUserAttributes: jsonEncode(user.attributes),
       },
     );
-    _userSubject.add(user);
+  }
+
+  StreamSubscription<OidcMonitorSessionResult>? _sessionSub;
+  void _listenToUserSessionIfSupported(OidcUser? user) {
+    _sessionSub?.cancel();
+    _sessionSub = null;
+    if (user == null) {
+      return;
+    }
+    final checkSessionIframe = discoveryDocument.checkSessionIframe;
+    final sessionState = user.token.sessionState;
+
+    if (checkSessionIframe == null || sessionState == null) {
+      _logger.info(
+        "can't "
+        'monitor user session due to lack of sessionState ($sessionState) or checkSessionIframe ($checkSessionIframe)',
+      );
+      return;
+    }
+    _logger.info('started monitoring user session');
+
+    _sessionSub ??= OidcFlutter.monitorSessionStatus(
+      checkSessionIframe: checkSessionIframe,
+      request: OidcMonitorSessionStatusRequest(
+        clientId: clientCredentials.clientId,
+        sessionState: sessionState,
+        interval: settings.sessionStatusCheckInterval,
+      ),
+    ).listen((event) {
+      switch (event) {
+        case OidcValidMonitorSessionResult(changed: final changed):
+          if (changed) {
+            _sessionSub?.cancel();
+            _reAuthorizeUser();
+          }
+        case OidcErrorMonitorSessionResult():
+          if (settings.sessionStatusCheckStopIfErrorReceived) {
+            _sessionSub?.cancel();
+          }
+        case OidcUnknownMonitorSessionResult():
+      }
+    });
   }
 
   late final _tokenEvents = OidcTokenEventsManager(
     getExpiringNotificationTime: settings.refreshBefore,
   );
+
   Future<void> _listenToTokenRefreshIfSupported(
     OidcTokenEventsManager tokenEventsManager,
     OidcUser? user,
@@ -563,8 +640,10 @@ class OidcUserManager {
         token: OidcToken.fromResponse(
           tokenResponse,
           overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
+          sessionState: event.sessionState,
         ),
         nonce: null,
+        attributes: null,
       );
     } catch (e) {
       //swallow errors on fail, but unload the event manager.
@@ -573,18 +652,20 @@ class OidcUserManager {
     _logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
   }
 
-  void _handleTokenExpired(OidcToken event) {}
+  void _handleTokenExpired(OidcToken event) {
+    forgetUser();
+  }
 
   /// This function validates that a user claims
   Future<OidcUser?> _validateAndSaveUser(OidcUser user) async {
     var actualUser = user;
-    final errors = actualUser.parsedIdToken.claims
-        .validate(
-          clientId: clientCredentials.clientId,
-          issuer: discoveryDocument.issuer,
-          expiryTolerance: settings.expiryTolerance,
-        )
-        .toList();
+    final errors = <Exception>[
+      ...actualUser.parsedIdToken.claims.validate(
+        clientId: clientCredentials.clientId,
+        issuer: discoveryDocument.issuer,
+        expiryTolerance: settings.expiryTolerance,
+      ),
+    ];
     if (actualUser.parsedIdToken.claims.subject == null) {
       errors.add(
         JoseException('id token is missing a `sub` claim.'),
@@ -599,11 +680,20 @@ class OidcUserManager {
 
     if (errors.isEmpty) {
       final userInfoEP = discoveryDocument.userinfoEndpoint;
-
-      if (userInfoEP != null) {
+      if (settings.userInfoSettings.sendUserInfoRequest && userInfoEP != null) {
         userInfoResp = await OidcEndpoints.userInfo(
           userInfoEndpoint: userInfoEP,
           accessToken: actualUser.token.accessToken!,
+          requestMethod: settings.userInfoSettings.requestMethod,
+          tokenLocation: settings.userInfoSettings.accessTokenLocation,
+          client: httpClient,
+          allowedAlgorithms:
+              discoveryDocument.userinfoSigningAlgValuesSupported,
+          followDistributedClaims:
+              settings.userInfoSettings.followDistributedClaims,
+          getAccessTokenForDistributedSource:
+              settings.userInfoSettings.getAccessTokenForDistributedSource,
+          keyStore: keyStore,
         );
 
         _logger.info('UserInfo response: ${userInfoResp.src}');
@@ -622,6 +712,7 @@ class OidcUserManager {
         actualUser = actualUser.withUserInfo(userInfoResp.src);
       }
       await _saveUser(actualUser);
+      _userSubject.add(actualUser);
       return actualUser;
     } else {
       for (final element in errors) {
@@ -631,12 +722,13 @@ class OidcUserManager {
           StackTrace.current,
         );
       }
-      await _cleanUpStore(
-        toDelete: {
-          OidcStoreNamespace.session,
-          OidcStoreNamespace.state,
-          OidcStoreNamespace.stateResponse,
-          OidcStoreNamespace.secureTokens,
+      await store.setCurrentNonce(null);
+      await store.removeMany(
+        OidcStoreNamespace.secureTokens,
+        keys: {
+          OidcConstants_Store.currentToken,
+          OidcConstants_Store.currentUserAttributes,
+          OidcConstants_AuthParameters.nonce,
         },
       );
     }
@@ -748,26 +840,23 @@ class OidcUserManager {
     if (rawToken == null) {
       return;
     }
-    final decodedAttributes = rawAttributes == null
-        ? null
-        : jsonDecode(rawAttributes) as Map<String, dynamic>;
-    final decodedToken = jsonDecode(rawToken) as Map<String, dynamic>;
-    OidcToken? token;
     try {
-      token = OidcToken.fromJson(decodedToken);
-    } catch (e) {
-      // remove invalid tokens, so that they don't get used again.
-      await store.removeMany(
-        OidcStoreNamespace.secureTokens,
-        keys: usedKeys,
-      );
-    }
-    if (token != null) {
+      final decodedAttributes = rawAttributes == null
+          ? null
+          : jsonDecode(rawAttributes) as Map<String, dynamic>;
+      final decodedToken = jsonDecode(rawToken) as Map<String, dynamic>;
+      final token = OidcToken.fromJson(decodedToken);
       await _createUserFromToken(
         token: token,
         // nonce is only checked for new tokens.
         nonce: null,
         attributes: decodedAttributes,
+      );
+    } catch (e) {
+      // remove invalid tokens, so that they don't get used again.
+      await store.removeMany(
+        OidcStoreNamespace.secureTokens,
+        keys: usedKeys,
       );
     }
   }
@@ -777,29 +866,27 @@ class OidcUserManager {
   /// if this returns `true`, a result has been found, and there is no need to
   /// load cached tokens.
   Future<bool> _loadStateResult() async {
-    final stateKey = await store.getCurrentState();
-    if (stateKey == null) {
+    final statesWithResponses = await store.getStatesWithResponses();
+    if (statesWithResponses.isEmpty) {
       return false;
     }
-    final stateRaw = await store.getStateData(stateKey);
-    if (stateRaw == null) {
-      return false;
-    }
-    final stateResponseRaw = await store.getStateResponseData(stateKey);
-    if (stateResponseRaw == null) {
-      return false;
-    }
-    final stateResponseUrl = Uri.tryParse(stateResponseRaw);
-    if (stateResponseUrl == null) {
-      return false;
-    }
-    try {
-      final stateData = OidcState.fromStorageString(stateRaw);
+
+    for (final entry in statesWithResponses.entries) {
+      final (stateData: stateDataRaw, stateResponse: stateResponseRaw) =
+          entry.value;
+
+      final stateResponseUrl = Uri.tryParse(stateResponseRaw);
+      if (stateResponseUrl == null) {
+        continue;
+      }
+
+      final stateData = OidcState.fromStorageString(stateDataRaw);
       switch (stateData) {
         case OidcAuthorizeState():
           final resp = await OidcEndpoints.parseAuthorizeResponse(
             responseUri: stateResponseUrl,
           );
+
           await _handleSuccessfulAuthResponse(
             response: resp,
             grantType: resp.code == null
@@ -810,20 +897,13 @@ class OidcUserManager {
         case OidcEndSessionState():
           final resp =
               OidcEndSessionResponse.fromJson(stateResponseUrl.queryParameters);
-          await _handEndSessionResponse(result: resp);
+          await _handleEndSessionResponse(result: resp);
           return true;
         default:
           return false;
       }
-    } finally {
-      //ALWAYS remove the state response and the state after they are done processing.
-      await store.removeStateResponseData(stateKey);
-      await store.setStateData(
-        state: stateKey,
-        stateData: null,
-      );
-      await store.setCurrentState(null);
     }
+    return false;
   }
 
   /// returns true if there was a logout request.
@@ -841,13 +921,11 @@ class OidcUserManager {
     if (requestType != OidcConstants_Store.frontChannelLogout) {
       return false;
     }
-    //
-    final issuer = requestUri.queryParameters[OidcConstants_AuthParameters.iss];
-    final sid = requestUri.queryParameters[OidcConstants_JWTClaims.sid];
-    if (issuer != null && sid != null) {
-      //validate something ?
-    }
-    await forgetUser();
+    await _handleFrontChannelLogoutRequest(
+      OidcFrontChannelLogoutIncomingRequest.fromJson(
+        requestUri.queryParameters,
+      ),
+    );
     return true;
   }
 
@@ -856,6 +934,12 @@ class OidcUserManager {
   bool _hasInit = false;
 
   final _toDispose = <StreamSubscription<dynamic>>[];
+  Future<void> _clearUnusedStates() async {
+    await OidcState.clearStaleState(
+      store: store,
+      age: const Duration(days: 1),
+    );
+  }
 
   /// Initializes the user manager, this also gets the [discoveryDocument] if it
   /// wasn't provided.
@@ -871,6 +955,7 @@ class OidcUserManager {
       if (jwksUri != null) {
         keyStore.addKeySetUrl(jwksUri);
       }
+      await _clearUnusedStates();
       if (!await _loadLogoutRequests()) {
         //no logout requests.
         if (!await _loadStateResult()) {
@@ -894,6 +979,7 @@ class OidcUserManager {
         ..add(_userSubject.listen(
           (value) => _listenToTokenRefreshIfSupported(_tokenEvents, value),
         ))
+        ..add(_userSubject.listen(_listenToUserSessionIfSupported))
         ..add(_tokenEvents.expiring.listen(_handleTokenExpiring))
         ..add(_tokenEvents.expired.listen(_handleTokenExpired));
     } catch (e) {
@@ -904,29 +990,57 @@ class OidcUserManager {
 
   /// Disposes the resources used by this class.
   Future<void> dispose() async {
+    await _sessionSub?.cancel();
     await _tokenEvents.dispose();
     await _userSubject.close();
     await Future.wait(_toDispose.map((e) => e.cancel()));
   }
 
   Future<void> _handleFrontChannelLogoutRequest(
-    OidcFrontChannelLogoutIncomingRequest event,
+    OidcFrontChannelLogoutIncomingRequest request,
   ) async {
-    // wait for a random time, to avoid potential race condition between
-    // multiple tabs that try to handle the same request.
-    await Future<void>.delayed(Duration(milliseconds: Random().nextInt(500)));
-    final request = await store.getCurrentFrontChannelLogoutRequest();
-    if (request == null) {
-      //someone else handled the request.
+    await store.remove(
+      OidcStoreNamespace.request,
+      key: OidcConstants_Store.frontChannelLogout,
+    );
+    final currentUser = this.currentUser;
+    if (currentUser == null) {
       return;
-    } else {
-      //first quickly remove the request, so that no one else handles it.
-      await store.remove(
-        OidcStoreNamespace.request,
-        key: OidcConstants_Store.frontChannelLogout,
+    }
+
+    //validate first.
+    if (request.iss != currentUser.parsedIdToken.claims.issuer ||
+        request.sid != currentUser.parsedIdToken.claims.sid) {
+      //invalid request, do nothing.
+      _logger.severe(
+        'Received a front channel logout request, but the issuer '
+        'or the session ids were different.',
       );
-      //forget the user.
-      await forgetUser();
+      return;
+    }
+    //forget the user.
+    await forgetUser();
+  }
+
+  ///
+  Future<OidcUser?> _reAuthorizeUser() async {
+    try {
+      final user = await loginAuthorizationCodeFlow(
+        promptOverride: ['none'],
+        options: const OidcPlatformSpecificOptions(
+          web: OidcPlatformSpecificOptions_Web(
+            navigationMode:
+                OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame,
+          ),
+        ),
+      );
+      return user;
+    } on OidcException catch (e) {
+      if (e.errorResponse != null) {
+        await forgetUser();
+        return null;
+      }
+      rethrow;
     }
   }
 }

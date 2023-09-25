@@ -98,7 +98,10 @@ Future<OidcUser> getUser() async {
   );
 
   print('Token received!');
-  final parsedToken = OidcToken.fromResponse(tokenResponse);
+  final parsedToken = OidcToken.fromResponse(
+    tokenResponse,
+    sessionState: parsedResponse.sessionState,
+  );
   OidcUser user = await OidcUser.fromIdToken(
     token: parsedToken,
     keystore: keystore,

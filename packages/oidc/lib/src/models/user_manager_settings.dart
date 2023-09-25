@@ -29,12 +29,18 @@ class OidcUserManagerSettings {
     this.postLogoutRedirectUri,
     this.options,
     this.frontChannelLogoutUri,
+    this.userInfoSettings = const OidcUserInfoSettings(),
     this.frontChannelRequestListeningOptions =
         const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
     this.strictJwtVerification = false,
     this.getExpiresIn,
+    this.sessionStatusCheckInterval = const Duration(seconds: 5),
+    this.sessionStatusCheckStopIfErrorReceived = true,
   });
+
+  /// Settings to control using the user_info endpoint.
+  final OidcUserInfoSettings userInfoSettings;
 
   /// whether JWTs are strictly verified.
   final bool strictJwtVerification;
@@ -100,4 +106,46 @@ class OidcUserManagerSettings {
 
   /// platform-specific options.
   final OidcPlatformSpecificOptions? options;
+
+  /// when using the oidc session management specification, how often do you want to ask the server for user status.
+  ///
+  /// default is 5 seconds.
+  final Duration sessionStatusCheckInterval;
+
+  /// if the OP sends us an "error" responses when checking for status, it's pointless to ask for status after it.
+  ///
+  /// by default this is true.
+  final bool sessionStatusCheckStopIfErrorReceived;
+}
+
+///
+class OidcUserInfoSettings {
+  ///
+  const OidcUserInfoSettings({
+    this.accessTokenLocation =
+        OidcUserInfoAccessTokenLocations.authorizationHeader,
+    this.requestMethod = OidcConstants_RequestMethod.get,
+    this.sendUserInfoRequest = true,
+    this.followDistributedClaims = true,
+    this.getAccessTokenForDistributedSource,
+  });
+
+  /// Where to put the access token.
+  final OidcUserInfoAccessTokenLocations accessTokenLocation;
+
+  /// Request method to use (POST/GET).
+  final String requestMethod;
+
+  /// Whether to send the user info request.
+  ///
+  /// true by default.
+  final bool sendUserInfoRequest;
+
+  /// Whether to try to follow and resolve Distributed Claims or not.
+  final bool followDistributedClaims;
+
+  /// this function gets called whenever there is an endpoint with no access token,
+  /// to try and get the access token.
+  final Future<String?> Function(String, Uri)?
+      getAccessTokenForDistributedSource;
 }

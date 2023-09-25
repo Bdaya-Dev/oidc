@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_redundant_argument_values
+
 import 'dart:io';
 
 import 'package:async/async.dart';
@@ -39,7 +41,7 @@ final duendeManager = OidcUserManager.lazy(
     },
 
     // scopes supported by the provider and needed by the client.
-    scope: ['openid', 'profile', 'email', 'offline_access', 'api'],
+    scope: ['openid', 'profile', 'email', 'offline_access'],
     postLogoutRedirectUri: kIsWeb
         ? Uri.parse('http://localhost:22433/redirect.html')
         : Platform.isAndroid || Platform.isIOS || Platform.isMacOS
@@ -69,6 +71,31 @@ final duendeManager = OidcUserManager.lazy(
                 : Uri(),
   ),
 );
+// final certificationManager = OidcUserManager.lazy(
+//   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
+//     Uri.parse('https://www.certification.openid.net/test/a/oidc_dart'),
+//   ),
+//   clientCredentials: const OidcClientAuthentication.clientSecretPost(
+//     clientId: 'my_web_client',
+//     clientSecret: 'my_web_client_secret',
+//   ),
+//   store: OidcDefaultStore(),
+//   settings: OidcUserManagerSettings(
+//     strictJwtVerification: true,
+//     scope: ['profile', 'email'],
+//     redirectUri: Uri.parse('http://localhost:22433/redirect.html'),
+//     frontChannelLogoutUri: Uri.parse(
+//       'http://localhost:22433/redirect.html?requestType=front-channel-logout',
+//     ),
+//     postLogoutRedirectUri: Uri.parse('http://localhost:22433/redirect.html'),
+//     userInfoSettings: const OidcUserInfoSettings(
+//       accessTokenLocation: OidcUserInfoAccessTokenLocations.formParameter,
+//       requestMethod: OidcConstants_RequestMethod.post,
+//       sendUserInfoRequest: true,
+//       followDistributedClaims: true,
+//     ),
+//   ),
+// );
 
 ///===========================
 

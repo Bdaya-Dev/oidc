@@ -52,6 +52,53 @@ class _SecretPageState extends State<SecretPage> {
                 },
                 child: const Text('back to home'),
               ),
+              const Divider(),
+              ElevatedButton(
+                onPressed: () async {
+                  try {
+                    final res = await app_state.currentManager
+                        .loginAuthorizationCodeFlow(
+                      // you can change scope too!
+                      scopeOverride: [
+                        ...app_state.currentManager.settings.scope,
+                        'api',
+                      ],
+                      promptOverride: ['none'],
+                      options: const OidcPlatformSpecificOptions(
+                        web: OidcPlatformSpecificOptions_Web(
+                          navigationMode:
+                              OidcPlatformSpecificOptions_Web_NavigationMode
+                                  .hiddenIFrame,
+                        ),
+                      ),
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content:
+                              Text('silently authorized user! ${res?.uid}'),
+                        ),
+                      );
+                    }
+                  } on OidcException catch (e) {
+                    if (e.errorResponse != null) {
+                      await app_state.currentManager.forgetUser();
+                    }
+                  } catch (e, st) {
+                    app_state.exampleLogger
+                        .severe('Failed to silently authorize user', e, st);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Failed to silently authorize user'),
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Reauthorize with prompt none'),
+              ),
+              const Divider(),
               DropdownButton<OidcPlatformSpecificOptions_Web_NavigationMode>(
                 hint: const Text('Web Navigation Mode'),
                 items: OidcPlatformSpecificOptions_Web_NavigationMode.values
