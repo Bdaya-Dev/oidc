@@ -87,12 +87,12 @@ await manager.logout();
 - Automatic [Refresh Token](https://oauth.net/2/grant-types/refresh-token/) rotation.
 - [OAuth 2.0 For Native Apps](https://datatracker.ietf.org/doc/html/rfc8252)
 - [OAuth 2.0 Device Authorization Grant](https://datatracker.ietf.org/doc/html/rfc8628)
+- [Session Management](https://openid.net/specs/openid-connect-session-1_0.html) (Web only)
 
  
 ### WIP Specs
 
 - [Dynamic Client Registration](https://openid.net/specs/openid-connect-registration-1_0.html)
-- [Session Management](https://openid.net/specs/openid-connect-session-1_0.html)
 
 
 --- 
