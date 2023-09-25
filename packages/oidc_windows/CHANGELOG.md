@@ -1,3 +1,7 @@
+## 0.3.1
+
+ - **FEAT**: implement the session management spec.
+
 ## 0.3.0+5
 
  - Update a dependency to the latest release.

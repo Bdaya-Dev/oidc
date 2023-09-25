@@ -1,3 +1,8 @@
+## 0.4.2
+
+ - **FIX**: incorrect state handling.
+ - **FEAT**: improve userInfo handling by adding `userInfoSettings` to `OidcUserManagerSettings`.
+
 ## 0.4.1
 
  - **FIX**: mac os and ios.

@@ -3,6 +3,70 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2023-09-25
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc_core` - `v0.6.0`](#oidc_core---v060)
+
+Packages with other changes:
+
+ - [`oidc` - `v0.4.2`](#oidc---v042)
+ - [`oidc_android` - `v0.3.1`](#oidc_android---v031)
+ - [`oidc_platform_interface` - `v0.3.1`](#oidc_platform_interface---v031)
+ - [`oidc_web` - `v0.3.1`](#oidc_web---v031)
+ - [`oidc_windows` - `v0.3.1`](#oidc_windows---v031)
+ - [`oidc_default_store` - `v0.2.0+6`](#oidc_default_store---v0206)
+ - [`oidc_desktop` - `v0.2.0+6`](#oidc_desktop---v0206)
+ - [`oidc_flutter_appauth` - `v0.2.0+6`](#oidc_flutter_appauth---v0206)
+ - [`oidc_ios` - `v0.3.0+6`](#oidc_ios---v0306)
+ - [`oidc_macos` - `v0.3.0+6`](#oidc_macos---v0306)
+ - [`oidc_linux` - `v0.3.0+6`](#oidc_linux---v0306)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_default_store` - `v0.2.0+6`
+ - `oidc_desktop` - `v0.2.0+6`
+ - `oidc_flutter_appauth` - `v0.2.0+6`
+ - `oidc_ios` - `v0.3.0+6`
+ - `oidc_macos` - `v0.3.0+6`
+ - `oidc_linux` - `v0.3.0+6`
+
+---
+
+#### `oidc_core` - `v0.6.0`
+
+ - **FEAT**: added claimNames and claimSources to OidcUserInfoResponse.
+ - **BREAKING** **CHANGE**: changed nonce to get stored in secureTokens namespace.
+
+#### `oidc` - `v0.4.2`
+
+ - **FIX**: incorrect state handling.
+ - **FEAT**: improve userInfo handling by adding `userInfoSettings` to `OidcUserManagerSettings`.
+
+#### `oidc_android` - `v0.3.1`
+
+ - **FEAT**: implement the session management spec.
+
+#### `oidc_platform_interface` - `v0.3.1`
+
+ - **FEAT**: implement the session management spec.
+
+#### `oidc_web` - `v0.3.1`
+
+ - **FEAT**: implement the session management spec.
+
+#### `oidc_windows` - `v0.3.1`
+
+ - **FEAT**: implement the session management spec.
+
+
 ## 2023-09-19
 
 ### Changes

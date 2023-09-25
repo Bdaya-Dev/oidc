@@ -1,3 +1,10 @@
+## 0.6.0
+
+> Note: This release has breaking changes.
+
+ - **FEAT**: added claimNames and claimSources to OidcUserInfoResponse.
+ - **BREAKING** **CHANGE**: changed nonce to get stored in secureTokens namespace.
+
 ## 0.5.1
 
  - **FEAT**: added device authorization endpoint.
