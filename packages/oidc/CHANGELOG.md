@@ -1,6 +1,6 @@
 ## 0.4.3
 
- - **FEAT**: add refreshToken to OidcUserManager.
+ - **FEAT**: add `refreshToken()` to `OidcUserManager`.
 
 ## 0.4.2
 
