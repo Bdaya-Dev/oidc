@@ -17,7 +17,7 @@ import 'package:oidc_default_store/oidc_default_store.dart';
 final exampleLogger = Logger('oidc.example');
 
 /// Gets the current manager used in the example.
-OidcUserManager get currentManager => duendeManager;
+OidcUserManager currentManager = duendeManager;
 
 final duendeManager = OidcUserManager.lazy(
   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(

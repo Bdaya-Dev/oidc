@@ -591,6 +591,58 @@ class OidcUserManager {
     getExpiringNotificationTime: settings.refreshBefore,
   );
 
+  /// Refreshes the token manually.
+  ///
+  /// If token can't be refreshed `null` will be returned.
+  ///
+  /// Token can be refreshed in the following cases:
+  /// 1. grant_types_supported MUST include refresh_token
+  /// 2. the [currentUser] MUST NOT be null
+  /// 3. the `currentUser.token` MUST include refreshToken
+  ///
+  /// If any of these conditions are not met, null is returned.
+  ///
+  /// An [OidcException] will be thrown if the server returns an error.
+  Future<OidcUser?> refreshToken({String? overrideRefreshToken}) async {
+    if (!discoveryDocument.grantTypesSupportedOrDefault
+        .contains(OidcConstants_GrantType.refreshToken)) {
+      //Server doesn't support refresh_token grant.
+      return null;
+    }
+    final user = currentUser;
+    if (user == null) {
+      return null;
+    }
+    final refreshToken = overrideRefreshToken ?? user.token.refreshToken;
+    if (refreshToken == null) {
+      // Can't refresh the access token anyway.
+      return null;
+    }
+
+    final tokenResponse = await OidcEndpoints.token(
+      tokenEndpoint: discoveryDocument.tokenEndpoint!,
+      credentials: clientCredentials,
+      client: httpClient,
+      headers: settings.extraTokenHeaders,
+      request: OidcTokenRequest.refreshToken(
+        refreshToken: refreshToken,
+        clientId: clientCredentials.clientId,
+        clientSecret: clientCredentials.clientSecret,
+        extra: settings.extraTokenParameters,
+        scope: settings.scope,
+      ),
+    );
+    return _createUserFromToken(
+      token: OidcToken.fromResponse(
+        tokenResponse,
+        overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
+        sessionState: user.token.sessionState,
+      ),
+      nonce: null,
+      attributes: null,
+    );
+  }
+
   Future<void> _listenToTokenRefreshIfSupported(
     OidcTokenEventsManager tokenEventsManager,
     OidcUser? user,

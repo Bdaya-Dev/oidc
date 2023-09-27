@@ -99,45 +99,96 @@ class _SecretPageState extends State<SecretPage> {
                 child: const Text('Reauthorize with prompt none'),
               ),
               const Divider(),
-              DropdownButton<OidcPlatformSpecificOptions_Web_NavigationMode>(
-                hint: const Text('Web Navigation Mode'),
-                items: OidcPlatformSpecificOptions_Web_NavigationMode.values
-                    .map(
-                      (e) => DropdownMenuItem(
-                        value: e,
-                        child: Text(e.name),
+              if (kIsWeb) ...[
+                Text(
+                  'Logout Web Navigation Mode',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<
+                      OidcPlatformSpecificOptions_Web_NavigationMode>(
+                    items: OidcPlatformSpecificOptions_Web_NavigationMode.values
+                        .map(
+                          (e) => DropdownMenuItem(
+                            value: e,
+                            child: Text(e.name),
+                          ),
+                        )
+                        .toList(),
+                    value: webNavigationMode,
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        webNavigationMode = value;
+                      });
+                    },
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await app_state.currentManager.logout(
+                      //after logout, go back to home
+                      originalUri: Uri.parse('/'),
+                      options: OidcPlatformSpecificOptions(
+                        web: OidcPlatformSpecificOptions_Web(
+                          navigationMode: webNavigationMode,
+                        ),
                       ),
-                    )
-                    .toList(),
-                value: webNavigationMode,
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    webNavigationMode = value;
-                  });
-                },
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  await app_state.currentManager.logout(
-                    //after logout, go back to home
-                    originalUri: Uri.parse('/'),
-                    options: OidcPlatformSpecificOptions(
-                      web: OidcPlatformSpecificOptions_Web(
-                        navigationMode: webNavigationMode,
-                      ),
-                    ),
-                  );
-                },
-                child: const Text('Logout'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  await app_state.currentManager.forgetUser();
-                },
-                child: const Text('Forget User'),
+                    );
+                  },
+                  child: const Text('Logout'),
+                ),
+                const Divider(),
+              ],
+              Wrap(
+                spacing: 8,
+                children: [
+                  ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        final res =
+                            await app_state.currentManager.refreshToken();
+                        if (res == null && context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'It is not possible to refresh the token.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Manually refreshed token!'),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'An error occurred trying to '
+                                'refresh the token',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: const Text('Refresh token manually'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () async {
+                      await app_state.currentManager.forgetUser();
+                    },
+                    child: const Text('Forget User'),
+                  ),
+                ],
               ),
               const Divider(),
               Text('user id: ${user.uid}'),
