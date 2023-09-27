@@ -260,6 +260,19 @@ This is similar to firebase auth, and can be used to track the current session.
 
 You can also get access to the current authenticated user via `currentUser` property.
 
+### Refreshing the token manually
+
+You can refresh the token manually by calling `manager.refreshToken()`.
+
+You can also override the refresh token `manager.refreshToken(overrideRefreshToken: 'my_refresh_token')`.
+
+It will either return `OidcUser` with the new token, `null` or throw an [OidcException].
+
+`null` is returned in the following cases:
+- The discovery document doesn't have `grant_types_supported` include `refresh_token` 
+- The current user is null.
+- The current user's refresh token is null.
+
 ### Dispose
 
 If you aren't maintaining a single instance of the `OidcUserManager` class, you might want to `dispose()` it when you are done with the instance.
