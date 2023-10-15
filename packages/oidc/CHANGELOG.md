@@ -1,6 +1,26 @@
 ## 0.5.0
 
- - separated session management settings into its own class, in `OidcUserManagerSettings.sessionManagementSettings` and disabled it by default.
+ - **BREAKING CHANGE**: separated session management settings into its own class, in `OidcUserManagerSettings.sessionManagementSettings` and disabled it by default.
+
+### Migration Guide
+
+before:
+```dart
+OidcUserManagerSettings(
+    sessionStatusCheckInterval: //...
+    sessionStatusCheckStopIfErrorReceived: //...
+)
+```
+after:
+```dart
+OidcUserManagerSettings(
+    sessionManagementSettings: OidcSessionManagementSettings(
+        enabled: true, // false by default.
+        interval: //...
+        stopIfErrorReceived: //...
+    )
+)
+```
 
 ## 0.4.3
 
