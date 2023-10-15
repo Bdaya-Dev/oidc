@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:jose_plus/jose.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/src/facade.dart';
+import 'package:oidc/src/models/event.dart';
 import 'package:oidc/src/models/user_manager_settings.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
@@ -72,8 +73,13 @@ class OidcUserManager {
 
   final _userSubject = BehaviorSubject<OidcUser?>.seeded(null);
 
+  final _eventsController = StreamController<OidcEvent>.broadcast();
+
   /// Gets a stream that reflects the current data of the user.
   Stream<OidcUser?> userChanges() => _userSubject.stream;
+
+  /// Gets a stream of events related to the current manager.
+  Stream<OidcEvent> events() => _eventsController.stream;
 
   /// The current authenticated user.
   OidcUser? get currentUser => _userSubject.valueOrNull;
@@ -296,7 +302,14 @@ class OidcUserManager {
     await _cleanUpStore(toDelete: {
       OidcStoreNamespace.secureTokens,
     });
+    final currentUser = this.currentUser;
     if (currentUser != null) {
+      _eventsController.add(
+        OidcPreLogoutEvent(
+          currentUser: currentUser,
+          at: DateTime.now(),
+        ),
+      );
       _userSubject.add(null);
     }
   }
@@ -351,6 +364,7 @@ class OidcUserManager {
     if (stateData == null) {
       // they won't come back with a result!
       await forgetUser();
+
       return;
     }
     final result = await resultFuture;
