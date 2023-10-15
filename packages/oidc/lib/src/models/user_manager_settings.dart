@@ -35,8 +35,7 @@ class OidcUserManagerSettings {
     this.refreshBefore = defaultRefreshBefore,
     this.strictJwtVerification = false,
     this.getExpiresIn,
-    this.sessionStatusCheckInterval = const Duration(seconds: 5),
-    this.sessionStatusCheckStopIfErrorReceived = true,
+    this.sessionManagementSettings = const OidcSessionManagementSettings(),
   });
 
   /// Settings to control using the user_info endpoint.
@@ -92,12 +91,15 @@ class OidcUserManagerSettings {
   /// see [OidcIdTokenVerificationOptions.expiryTolerance].
   final Duration expiryTolerance;
 
+  /// Settings related to the session management spec.
+  final OidcSessionManagementSettings sessionManagementSettings;
+
   /// How early the token gets refreshed.
   ///
   /// for example:
   ///
   /// - if `Duration.zero` is returned, the token gets refreshed once it's expired.
-  /// - if `Duration(minutes: 1)` is returned (default), it will refresh the token 1 minute before it expires.
+  /// - (default) if `Duration(minutes: 1)` is returned, it will refresh the token 1 minute before it expires.
   /// - if `null` is returned, automatic refresh is disabled.
   final OidcRefreshBeforeCallback? refreshBefore;
 
@@ -106,16 +108,6 @@ class OidcUserManagerSettings {
 
   /// platform-specific options.
   final OidcPlatformSpecificOptions? options;
-
-  /// when using the oidc session management specification, how often do you want to ask the server for user status.
-  ///
-  /// default is 5 seconds.
-  final Duration sessionStatusCheckInterval;
-
-  /// if the OP sends us an "error" responses when checking for status, it's pointless to ask for status after it.
-  ///
-  /// by default this is true.
-  final bool sessionStatusCheckStopIfErrorReceived;
 }
 
 ///
@@ -148,4 +140,29 @@ class OidcUserInfoSettings {
   /// to try and get the access token.
   final Future<String?> Function(String, Uri)?
       getAccessTokenForDistributedSource;
+}
+
+///
+class OidcSessionManagementSettings {
+  ///
+  const OidcSessionManagementSettings({
+    this.enabled = false,
+    this.interval = const Duration(seconds: 5),
+    this.stopIfErrorReceived = true,
+  });
+
+  /// pass `true` if you want to enable the session checking.
+  ///
+  /// default is false.
+  final bool enabled;
+
+  /// how often do you want to ask the server for user status.
+  ///
+  /// default is 5 seconds.
+  final Duration interval;
+
+  /// if the OP sends us an "error" responses when checking for status, it's pointless to ask for status after it.
+  ///
+  /// by default this is true.
+  final bool stopIfErrorReceived;
 }
