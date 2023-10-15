@@ -1,8 +1,6 @@
 ## 0.6.0+1
 
- - fixed docs link
-
- - **DOCS**: formatting.
+ - **DOCS**: fixed docs link.
 
 ## 0.6.0
 
