@@ -1,3 +1,7 @@
+## 0.5.0
+
+ - separated session management settings into its own class, in `OidcUserManagerSettings.sessionManagementSettings` and disabled it by default.
+
 ## 0.4.3
 
  - **FEAT**: add `refreshToken()` to `OidcUserManager`.
