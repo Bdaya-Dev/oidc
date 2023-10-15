@@ -11,6 +11,64 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 Packages with breaking changes:
 
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_core` - `v0.6.0+1`](#oidc_core---v0601)
+ - [`oidc` - `v0.5.0+1`](#oidc---v0501)
+ - [`oidc_android` - `v0.3.1+1`](#oidc_android---v0311)
+ - [`oidc_default_store` - `v0.2.0+7`](#oidc_default_store---v0207)
+ - [`oidc_desktop` - `v0.2.0+7`](#oidc_desktop---v0207)
+ - [`oidc_flutter_appauth` - `v0.2.0+7`](#oidc_flutter_appauth---v0207)
+ - [`oidc_ios` - `v0.3.0+7`](#oidc_ios---v0307)
+ - [`oidc_platform_interface` - `v0.3.1+1`](#oidc_platform_interface---v0311)
+ - [`oidc_linux` - `v0.3.0+7`](#oidc_linux---v0307)
+ - [`oidc_macos` - `v0.3.0+7`](#oidc_macos---v0307)
+ - [`oidc_web` - `v0.3.1+1`](#oidc_web---v0311)
+ - [`oidc_windows` - `v0.3.1+1`](#oidc_windows---v0311)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_android` - `v0.3.1+1`
+ - `oidc_default_store` - `v0.2.0+7`
+ - `oidc_desktop` - `v0.2.0+7`
+ - `oidc_flutter_appauth` - `v0.2.0+7`
+ - `oidc_ios` - `v0.3.0+7`
+ - `oidc_platform_interface` - `v0.3.1+1`
+ - `oidc_linux` - `v0.3.0+7`
+ - `oidc_macos` - `v0.3.0+7`
+ - `oidc_web` - `v0.3.1+1`
+ - `oidc_windows` - `v0.3.1+1`
+
+---
+
+#### `oidc_core` - `v0.6.0+1`
+
+ - fixed docs link
+
+ - **DOCS**: formatting.
+
+#### `oidc` - `v0.5.0+1`
+
+ - **DOCS**: added `sessionManagementSettings` to the wiki.
+ - **DOCS**: add how to use accesstoken to the wiki.
+
+# Change Log
+
+All notable changes to this project will be documented in this file.
+See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
+
+## 2023-10-15
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
  - [`oidc` - `v0.5.0`](#oidc---v050)
 
 ---

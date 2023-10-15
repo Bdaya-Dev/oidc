@@ -1,3 +1,9 @@
+## 0.6.0+1
+
+ - fixed docs link
+
+ - **DOCS**: formatting.
+
 ## 0.6.0
 
 > Note: This release has breaking changes.

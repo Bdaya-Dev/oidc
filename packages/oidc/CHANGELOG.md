@@ -1,3 +1,8 @@
+## 0.5.0+1
+
+ - **DOCS**: added `sessionManagementSettings` to the wiki.
+ - **DOCS**: add how to use accesstoken to the wiki.
+
 ## 0.5.0
 
  - **BREAKING CHANGE**: separated session management settings into its own class, in `OidcUserManagerSettings.sessionManagementSettings` and disabled it by default.
