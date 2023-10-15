@@ -1,5 +1,8 @@
 # Using the Package <!-- omit from toc -->
 
+[![package:oidc_core][package_image]][package_link]
+
+
 Note that you don't need to use this package if you are using the `OidcUserManager` from `package:oidc`, but it's useful to learn about it.
 
 you can check the [CLI example](https://github.com/Bdaya-Dev/oidc/blob/main/packages/oidc_core/example/oidc_core_example.dart), showing how to use this package to implement the auth code flow in a CLI environment.
@@ -142,3 +145,6 @@ Contains methods that help you implement the OIDC spec yourself.
 - `userInfo`: sends a request to the `/userinfo` endpoint.
 - `deviceAuthorization`: sends a request to the device authorization endpoint.
 
+
+[package_link]: https://pub.dev/packages/oidc_core
+[package_image]: https://img.shields.io/badge/package-oidc__core-0175C2?logo=dart&logoColor=white

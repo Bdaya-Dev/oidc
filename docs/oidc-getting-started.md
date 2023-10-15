@@ -1,5 +1,7 @@
 # Getting started <!-- omit from toc -->
 
+[![package:oidc][package_image]][package_link]
+
 This document shows how to setup `package:oidc` for the first time.
 
 you can check the [example project](https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc/example) for the final result.
@@ -212,6 +214,8 @@ Apart from `libsecret` you also need a keyring service, for that you need either
 
 - by default, due to its many configuration points, if the plugin fails to read/write using `flutter_secure_storage`, it will fall back to [shared_preferences](https://pub.dev/packages/shared_preferences), which is NOT secure.
 
+[package_link]: https://pub.dev/packages/oidc
+[package_image]: https://img.shields.io/badge/package-oidc-0175C2?logo=dart&logoColor=white
 
 [flutter_secure_storage_link]: https://pub.dev/packages/flutter_secure_storage
 [flutter_secure_storage_image]: https://img.shields.io/badge/package-flutter__secure__storage-0175C2?logo=dart&logoColor=white
