@@ -1,7 +1,6 @@
-# Using the plugin  <!-- omit from toc -->
+# Using the plugin 
 
 all the classes that are exposed by this plugin start with `Oidc*`.
-
 
 ## OidcUserManager
 
@@ -121,6 +120,11 @@ settings to control the behavior of the instance.
     by default, this is a function that returns `Duration(minutes: 1)` for every token, which means that all tokens are refreshed 1 minute before they expire.
 
 - `Duration? Function(OidcTokenResponse tokenResponse)? getExpiresIn`: a function that overrides a token's expires_in value, it's not recommended to change this, since it's only used for testing.
+
+- `OidcSessionManagementSettings sessionManagementSettings`: contains settings for the session management spec:
+    - `bool enabled`: (default false) whether to enable checking the session.
+    - `Duration interval`: (default 5 minutes) how often to check the current user session.
+    - `bool stopIfErrorReceived`: (default true) whether to stop checking the current user session if the OP sends an `error` message.
 
 - `OidcPlatformSpecificOptions? options`: platform specific options to control auth requests:
     - `bool allowInsecureConnections`: Whether to allow non-HTTPS endpoints; for `android` 🤖 platform only.
@@ -321,6 +325,7 @@ static Stream<OidcFrontChannelLogoutIncomingRequest> listenToFrontChannelLogoutR
     OidcFrontChannelRequestListeningOptions options = const OidcFrontChannelRequestListeningOptions(),
 });
 ```
+
 
 
 [http_link]: https://pub.dev/packages/http

@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2023-10-15
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v0.5.0`](#oidc---v050)
+
+---
+
+#### `oidc` - `v0.5.0`
+
+ - **BREAKING CHANGE**: separated session management settings into its own class, in `OidcUserManagerSettings.sessionManagementSettings` and disabled it by default.
+
 ## 2023-09-27
 
 ### Changes

@@ -554,7 +554,9 @@ class OidcUserManager {
     }
     final checkSessionIframe = discoveryDocument.checkSessionIframe;
     final sessionState = user.token.sessionState;
-
+    if (!settings.sessionManagementSettings.enabled) {
+      return;
+    }
     if (checkSessionIframe == null || sessionState == null) {
       _logger.info(
         "can't "
@@ -569,7 +571,7 @@ class OidcUserManager {
       request: OidcMonitorSessionStatusRequest(
         clientId: clientCredentials.clientId,
         sessionState: sessionState,
-        interval: settings.sessionStatusCheckInterval,
+        interval: settings.sessionManagementSettings.interval,
       ),
     ).listen((event) {
       switch (event) {
@@ -579,7 +581,7 @@ class OidcUserManager {
             _reAuthorizeUser();
           }
         case OidcErrorMonitorSessionResult():
-          if (settings.sessionStatusCheckStopIfErrorReceived) {
+          if (settings.sessionManagementSettings.stopIfErrorReceived) {
             _sessionSub?.cancel();
           }
         case OidcUnknownMonitorSessionResult():

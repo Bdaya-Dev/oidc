@@ -9,6 +9,7 @@ nav:
     - 'package:oidc': 
       - 'Getting Started': oidc-getting-started.md
       - 'Usage': oidc-usage.md
+      - 'Access token usage': 'oidc-usage-accesstoken.md'
     - 'package:oidc_core': oidc_core.md
     - 'package:oidc_default_store': oidc_default_store.md
     - 'package:oidc_loopback_listener': oidc_loopback_listener.md
