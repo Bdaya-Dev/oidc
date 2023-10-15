@@ -61,6 +61,7 @@ A serializable token.
 This contains information about the `access_token`/`id_token` that was received from the `/token` endpoint.
 
 Token properties are:
+
 - `creationTime`: when the token was created.
 - `scope`: scopes that this token allows.
 - `accessToken`: The issued access token. This is used to request resources from the server.
