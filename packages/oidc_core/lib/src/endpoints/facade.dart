@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -126,13 +127,19 @@ class OidcEndpoints {
     );
     //store the state
     if (store != null) {
-      await store.setStateData(
-        state: stateData.id,
-        stateData: stateData.toStorageString(),
+      unawaited(
+        Future.wait(
+          [
+            store.setStateData(
+              state: stateData.id,
+              stateData: stateData.toStorageString(),
+            ),
+            // store the current state and nonce.
+            // await store.setCurrentState(stateData.id);
+            store.setCurrentNonce(nonce),
+          ],
+        ),
       );
-      // store the current state and nonce.
-      // await store.setCurrentState(stateData.id);
-      await store.setCurrentNonce(nonce);
     }
 
     final supportsOpenIdScope =
