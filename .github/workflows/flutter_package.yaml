@@ -79,7 +79,7 @@ jobs:
       - name: 📦 Install Dependencies
         run: |
           flutter pub global activate very_good_cli          
-      - uses: bluefireteam/melos-action@v2
+      - uses: bluefireteam/melos-action@v3
 
       - name: ⚙️ Run Setup
         if: "${{inputs.setup != ''}}"
