@@ -17,6 +17,18 @@
             ],
         },
         {
+            "name": "example web server",
+            "cwd": "packages/oidc/example",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "-d",
+                "web-server",
+                "--web-port",
+                "22433"
+            ],
+        },
+        {
             "name": "example",
             "cwd": "packages/oidc/example",
             "request": "launch",
