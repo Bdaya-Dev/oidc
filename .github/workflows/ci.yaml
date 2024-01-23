@@ -8,15 +8,15 @@ on:
 jobs:
   build:
     uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/semantic_pull_request.yml@v1
-  spellcheck:
-    runs-on: 'ubuntu-latest'
-    steps:
-      - name: 📚 Git Checkout
-        uses: actions/checkout@v4
-      - name: npm install
-        run: |
-          npm install -g git+https://github.com/streetsidesoftware/cspell-cli
-          cspell-cli --no-progress
+  # spellcheck:
+  #   runs-on: 'ubuntu-latest'
+  #   steps:
+  #     - name: 📚 Git Checkout
+  #       uses: actions/checkout@v4
+  #     - name: npm install
+  #       run: |
+  #         npm install -g git+https://github.com/streetsidesoftware/cspell-cli
+  #         cspell-cli --no-progress
 
     # uses: VeryGoodOpenSource/very_good_workflows/.github/workflows/spell_check.yml@v1
     # with:

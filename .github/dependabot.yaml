@@ -4,48 +4,48 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc/example"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_platform_interface"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_core"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_loopback_listener"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_android"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_ios"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_linux"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_macos"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_web"
     schedule:
-      interval: "daily"
+      interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_windows"
     schedule:
-      interval: "daily"
+      interval: "monthly"

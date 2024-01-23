@@ -264,6 +264,32 @@ This is similar to firebase auth, and can be used to track the current session.
 
 You can also get access to the current authenticated user via `currentUser` property.
 
+### Listening to events
+
+Events are an advanced form of user changes, since they occur in more places than the `currentUser` stream, and help the developer hook into every flow.
+
+for example you might want to make an API call before logging out the user, then you would do:
+
+```dart
+manager.events().listen((event) {
+  switch (event) {
+    case OidcPreLogoutEvent(:final currentUser):
+      // make an api call with the currentUser.
+      break;
+    default:
+  }
+});
+```
+
+### OidcEvent
+
+The base class for all events, this contains an `at` property that stores when the event occurred.
+
+### OidcPreLogoutEvent
+
+Occurs before a user is forgotten, either via `forgetUser()` or via `logout()`.
+
+
 ### Refreshing the token manually
 
 You can refresh the token manually by calling `manager.refreshToken()`.
