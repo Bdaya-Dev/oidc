@@ -615,7 +615,7 @@ class OidcUserManager {
       return null;
     }
     
-    final refreshToken = currentUser?.token.refreshToken ?? overrideRefreshToken;
+    final refreshToken = overrideRefreshToken ?? currentUser?.token.refreshToken;
     if (refreshToken == null) {
       // Can't refresh the access token anyway.
       return null;
