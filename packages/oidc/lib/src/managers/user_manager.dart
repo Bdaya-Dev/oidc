@@ -305,10 +305,7 @@ class OidcUserManager {
     final currentUser = this.currentUser;
     if (currentUser != null) {
       _eventsController.add(
-        OidcPreLogoutEvent(
-          currentUser: currentUser,
-          at: DateTime.now(),
-        ),
+        OidcPreLogoutEvent.now(currentUser: currentUser),
       );
       _userSubject.add(null);
     }
@@ -1061,6 +1058,7 @@ class OidcUserManager {
     await _sessionSub?.cancel();
     await _tokenEvents.dispose();
     await _userSubject.close();
+    await _eventsController.close();
     await Future.wait(_toDispose.map((e) => e.cancel()));
   }
 

@@ -7,6 +7,9 @@ abstract class OidcEvent {
     required this.at,
   });
 
+  /// Creates an event whose [at] is now.
+  OidcEvent.now() : at = DateTime.now();
+
   /// when the event occurred.
   final DateTime at;
 }
@@ -21,4 +24,9 @@ class OidcPreLogoutEvent extends OidcEvent {
     required this.currentUser,
     required super.at,
   });
+
+  ///
+  OidcPreLogoutEvent.now({
+    required this.currentUser,
+  }) : super.now();
 }
