@@ -606,16 +606,16 @@ class OidcUserManager {
   ///
   /// An [OidcException] will be thrown if the server returns an error.
   Future<OidcUser?> refreshToken({String? overrideRefreshToken}) async {
-
     _ensureInit();
-    
+
     if (!discoveryDocument.grantTypesSupportedOrDefault
         .contains(OidcConstants_GrantType.refreshToken)) {
       //Server doesn't support refresh_token grant.
       return null;
     }
-    
-    final refreshToken = overrideRefreshToken ?? currentUser?.token.refreshToken;
+
+    final refreshToken =
+        overrideRefreshToken ?? currentUser?.token.refreshToken;
     if (refreshToken == null) {
       // Can't refresh the access token anyway.
       return null;
