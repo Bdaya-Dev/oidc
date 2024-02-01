@@ -47,7 +47,7 @@ jobs:
         uses: bluefireteam/melos-action@v3
 
       - name: AVD Cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: avd-cache
         with:
           path: |
