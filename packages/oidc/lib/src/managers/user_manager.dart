@@ -102,6 +102,7 @@ class OidcUserManager {
   /// [originalUri] is the uri you want to be redirected to after authentication is done,
   /// if null, it defaults to `redirectUri`.
   Future<OidcUser?> loginAuthorizationCodeFlow({
+    OidcProviderMetadata? discoveryDocumentOverride,
     Uri? redirectUriOverride,
     Uri? originalUri,
     List<String>? scopeOverride,
@@ -120,7 +121,8 @@ class OidcUserManager {
     OidcPlatformSpecificOptions? options,
   }) async {
     _ensureInit();
-    final doc = discoveryDocument;
+    final discoveryDocument =
+        discoveryDocumentOverride ?? this.discoveryDocument;
     options ??= settings.options ?? const OidcPlatformSpecificOptions();
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
       clientId: clientCredentials.clientId,
@@ -156,13 +158,14 @@ class OidcUserManager {
     final requestContainer =
         await OidcEndpoints.prepareAuthorizationCodeFlowRequest(
       input: simpleReq,
-      metadata: doc,
+      metadata: discoveryDocument,
       store: store,
     );
     return _tryGetAuthResponse(
       grantType: OidcConstants_GrantType.authorizationCode,
       request: requestContainer.request,
       options: options,
+      metadata: discoveryDocument,
     );
   }
 
@@ -171,7 +174,10 @@ class OidcUserManager {
     required String username,
     required String password,
     List<String>? scopeOverride,
+    OidcProviderMetadata? discoveryDocumentOverride,
   }) async {
+    final discoveryDocument =
+        discoveryDocumentOverride ?? this.discoveryDocument;
     final tokenResp = await OidcEndpoints.token(
       tokenEndpoint: discoveryDocument.tokenEndpoint!,
       request: OidcTokenRequest.password(
@@ -194,6 +200,7 @@ class OidcUserManager {
       ),
       attributes: null,
       nonce: null,
+      metadata: discoveryDocument,
     );
   }
 
@@ -201,10 +208,11 @@ class OidcUserManager {
     required OidcAuthorizeRequest request,
     required String grantType,
     required OidcPlatformSpecificOptions options,
+    required OidcProviderMetadata metadata,
   }) async {
     try {
       final response = await OidcFlutter.getPlatformAuthorizationResponse(
-        metadata: discoveryDocument,
+        metadata: metadata,
         request: request,
         options: options,
       );
@@ -220,6 +228,7 @@ class OidcUserManager {
       return await _handleSuccessfulAuthResponse(
         response: response,
         grantType: grantType,
+        metadata: metadata,
       );
     } on OidcException catch (e) {
       //failed to authorize.
@@ -240,6 +249,7 @@ class OidcUserManager {
   @Deprecated('Implicit flow is deprecated due to security reasons.')
   Future<OidcUser?> loginImplicitFlow({
     required List<String> responseType,
+    OidcProviderMetadata? discoveryDocumentOverride,
     Uri? redirectUriOverride,
     Uri? originalUri,
     List<String>? scopeOverride,
@@ -256,7 +266,7 @@ class OidcUserManager {
     OidcPlatformSpecificOptions? options,
   }) async {
     _ensureInit();
-    final doc = discoveryDocument;
+    final doc = discoveryDocumentOverride ?? discoveryDocument;
     options ??= const OidcPlatformSpecificOptions();
     final simpleReq = OidcSimpleImplicitFlowRequest(
       responseType: responseType,
@@ -288,6 +298,7 @@ class OidcUserManager {
       request: request,
       grantType: OidcConstants_GrantType.implicit,
       options: options,
+      metadata: doc,
     );
   }
 
@@ -320,9 +331,11 @@ class OidcUserManager {
     Uri? originalUri,
     dynamic extraStateData,
     List<String>? uiLocalesOverride,
+    OidcProviderMetadata? discoveryDocumentOverride,
   }) async {
     _ensureInit();
-    final doc = discoveryDocument;
+    final discoveryDocument =
+        discoveryDocumentOverride ?? this.discoveryDocument;
     options ??= const OidcPlatformSpecificOptions();
     final currentUser = this.currentUser;
     if (currentUser == null) {
@@ -346,7 +359,7 @@ class OidcUserManager {
       );
     }
     final resultFuture = OidcFlutter.getPlatformEndSessionResponse(
-      metadata: doc,
+      metadata: discoveryDocument,
       request: OidcEndSessionRequest(
         clientId: clientCredentials.clientId,
         postLogoutRedirectUri: postLogoutRedirectUri,
@@ -414,6 +427,7 @@ class OidcUserManager {
   Future<OidcUser?> _handleSuccessfulAuthResponse({
     required OidcAuthorizeResponse response,
     required String grantType,
+    required OidcProviderMetadata metadata,
   }) async {
     final receivedStateKey = response.state;
     if (receivedStateKey == null) {
@@ -452,11 +466,12 @@ class OidcUserManager {
             token: token,
             attributes: null,
             nonce: stateData.nonce,
+            metadata: metadata,
           );
         }
       }
 
-      final tokenEndpoint = discoveryDocument.tokenEndpoint;
+      final tokenEndpoint = metadata.tokenEndpoint;
       if (tokenEndpoint == null) {
         _logAndThrow(
           "This provider doesn't provide a token endpoint",
@@ -494,6 +509,7 @@ class OidcUserManager {
         token: token,
         nonce: stateData.nonce,
         attributes: null,
+        metadata: metadata,
       );
     } finally {
       //remove the state + state response since we already handled it.
@@ -517,14 +533,14 @@ class OidcUserManager {
     required OidcToken token,
     required String? nonce,
     required Map<String, dynamic>? attributes,
+    required OidcProviderMetadata metadata,
   }) async {
     final currentUser = this.currentUser;
     OidcUser newUser;
     if (currentUser == null) {
       newUser = await OidcUser.fromIdToken(
         token: token,
-        allowedAlgorithms:
-            discoveryDocument.tokenEndpointAuthSigningAlgValuesSupported,
+        allowedAlgorithms: metadata.tokenEndpointAuthSigningAlgValuesSupported,
         keystore: keyStore,
         attributes: attributes,
         strictVerification: settings.strictJwtVerification,
@@ -543,7 +559,7 @@ class OidcUserManager {
         'Server returned a wrong id_token nonce, might be a replay attack.',
       );
     }
-    return _validateAndSaveUser(newUser);
+    return _validateAndSaveUser(user: newUser, metadata: metadata);
   }
 
   Future<void> _saveUser(OidcUser user) async {
@@ -616,9 +632,12 @@ class OidcUserManager {
   /// If any of these conditions are not met, null is returned.
   ///
   /// An [OidcException] will be thrown if the server returns an error.
-  Future<OidcUser?> refreshToken({String? overrideRefreshToken}) async {
+  Future<OidcUser?> refreshToken(
+      {String? overrideRefreshToken,
+      OidcProviderMetadata? discoveryDocumentOverride}) async {
     _ensureInit();
-
+    final discoveryDocument =
+        discoveryDocumentOverride ?? this.discoveryDocument;
     if (!discoveryDocument.grantTypesSupportedOrDefault
         .contains(OidcConstants_GrantType.refreshToken)) {
       //Server doesn't support refresh_token grant.
@@ -646,14 +665,14 @@ class OidcUserManager {
       ),
     );
     return _createUserFromToken(
-      token: OidcToken.fromResponse(
-        tokenResponse,
-        overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
-        sessionState: currentUser?.token.sessionState,
-      ),
-      nonce: null,
-      attributes: null,
-    );
+        token: OidcToken.fromResponse(
+          tokenResponse,
+          overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
+          sessionState: currentUser?.token.sessionState,
+        ),
+        nonce: null,
+        attributes: null,
+        metadata: discoveryDocument);
   }
 
   Future<void> _listenToTokenRefreshIfSupported(
@@ -709,6 +728,7 @@ class OidcUserManager {
         ),
         nonce: null,
         attributes: null,
+        metadata: discoveryDocument,
       );
     } catch (e) {
       //swallow errors on fail, but unload the event manager.
@@ -722,12 +742,15 @@ class OidcUserManager {
   }
 
   /// This function validates that a user claims
-  Future<OidcUser?> _validateAndSaveUser(OidcUser user) async {
+  Future<OidcUser?> _validateAndSaveUser({
+    required OidcUser user,
+    required OidcProviderMetadata metadata,
+  }) async {
     var actualUser = user;
     final errors = <Exception>[
       ...actualUser.parsedIdToken.claims.validate(
         clientId: clientCredentials.clientId,
-        issuer: discoveryDocument.issuer,
+        issuer: metadata.issuer,
         expiryTolerance: settings.expiryTolerance,
       ),
     ];
@@ -744,7 +767,7 @@ class OidcUserManager {
     OidcUserInfoResponse? userInfoResp;
 
     if (errors.isEmpty) {
-      final userInfoEP = discoveryDocument.userinfoEndpoint;
+      final userInfoEP = metadata.userinfoEndpoint;
       if (settings.userInfoSettings.sendUserInfoRequest && userInfoEP != null) {
         userInfoResp = await OidcEndpoints.userInfo(
           userInfoEndpoint: userInfoEP,
@@ -752,8 +775,7 @@ class OidcUserManager {
           requestMethod: settings.userInfoSettings.requestMethod,
           tokenLocation: settings.userInfoSettings.accessTokenLocation,
           client: httpClient,
-          allowedAlgorithms:
-              discoveryDocument.userinfoSigningAlgValuesSupported,
+          allowedAlgorithms: metadata.userinfoSigningAlgValuesSupported,
           followDistributedClaims:
               settings.userInfoSettings.followDistributedClaims,
           getAccessTokenForDistributedSource:
@@ -813,6 +835,10 @@ class OidcUserManager {
   OidcProviderMetadata get discoveryDocument {
     _ensureInit();
     return _discoveryDocument!;
+  }
+
+  set discoveryDocument(OidcProviderMetadata value) {
+    _discoveryDocument = value;
   }
 
   OidcProviderMetadata? _discoveryDocument;
@@ -916,6 +942,7 @@ class OidcUserManager {
         // nonce is only checked for new tokens.
         nonce: null,
         attributes: decodedAttributes,
+        metadata: discoveryDocument,
       );
     } catch (e) {
       // remove invalid tokens, so that they don't get used again.
@@ -957,6 +984,7 @@ class OidcUserManager {
             grantType: resp.code == null
                 ? OidcConstants_GrantType.implicit
                 : OidcConstants_GrantType.authorizationCode,
+            metadata: discoveryDocument,
           );
           return true;
         case OidcEndSessionState():

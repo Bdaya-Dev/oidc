@@ -281,11 +281,11 @@ manager.events().listen((event) {
 });
 ```
 
-### OidcEvent
+#### OidcEvent
 
 The base class for all events, this contains an `at` property that stores when the event occurred.
 
-### OidcPreLogoutEvent
+#### OidcPreLogoutEvent
 
 Occurs before a user is forgotten, either via `forgetUser()` or via `logout()`.
 
@@ -299,9 +299,44 @@ You can also override the refresh token `manager.refreshToken(overrideRefreshTok
 It will either return `OidcUser` with the new token, `null` or throw an [OidcException].
 
 `null` is returned in the following cases:
+
 - The discovery document doesn't have `grant_types_supported` include `refresh_token` 
 - The current user is null.
 - The current user's refresh token is null.
+
+### Overriding the discovery document
+
+There are cases where you want to change some properties in the retrieved discovery document, either permanently, or for a specific method.
+
+e.g., you might want to have a register and a login button where the register button overrides the discovery document's `authorizationEndpoint` parameter, but the login button uses the idp provided value.
+
+We use [package:copy_with_extension_gen](https://pub.dev/packages/copy_with_extension_gen) to generate `copyWith` extension methods to help consumers override specific parts of the `OidcProviderMetadata` discovery document.
+
+#### Permanent override
+
+You can do that via the `discoveryDocument` setter in `OidcUserManager`, e.g.
+
+```dart
+final userManager = OidcUserManager.lazy(/*...*/);
+await userManager.init();
+userManager.discoveryDocument = userManager.discoveryDocument.copyWith(/*...*/);
+```
+
+#### Per-method override
+
+You can pass the `OidcProviderMetadata? discoveryDocumentOverride` parameter in some methods.
+
+Example:
+
+```dart
+final userManager = OidcUserManager.lazy(/*...*/);
+await userManager.init();
+await userManager.loginAuthorizationCodeFlow(
+    discoveryDocumentOverride: userManager.discoveryDocument.copyWith(
+        authorizationEndpoint: "https://idp.com/register", //change to register url instead of login
+    )
+);
+```
 
 ### Dispose
 

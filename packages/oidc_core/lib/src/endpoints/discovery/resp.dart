@@ -1,3 +1,4 @@
+import 'package:copy_with_extension/copy_with_extension.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
 
@@ -10,9 +11,11 @@ part 'resp.g.dart';
 ///
 /// see https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml
 @JsonSerializable(
-    createToJson: false,
-    converters: OidcInternalUtilities.commonConverters,
-    constructor: '_')
+  createToJson: false,
+  converters: OidcInternalUtilities.commonConverters,
+  constructor: '_',
+)
+@CopyWith(constructor: '_')
 class OidcProviderMetadata extends JsonBasedResponse {
   const OidcProviderMetadata._({
     required super.src,
