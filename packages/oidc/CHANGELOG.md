@@ -1,3 +1,8 @@
+## 0.5.1
+
+ - **FEAT**: Support overriding the discovery document.
+ - **FEAT**: added `events` stream to `OidcUserManager`.
+
 ## 0.5.0+1
 
  - **DOCS**: added `sessionManagementSettings` to the wiki.
