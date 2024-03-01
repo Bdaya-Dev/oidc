@@ -1,3 +1,7 @@
+## 0.6.1
+
+ - **FEAT**: Support overriding the discovery document.
+
 ## 0.6.0+1
 
  - **DOCS**: fixed docs link.
