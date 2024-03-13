@@ -58,7 +58,8 @@ mixin OidcDesktop on OidcPlatform {
     final uri = endpoint.replace(
       queryParameters: {
         ...endpoint.queryParameters,
-        ...requestParameters,
+        // ignore: invalid_use_of_internal_member
+        ...OidcInternalUtilities.serializeQueryParameters(requestParameters),
         // override the redirect uri.
         redirectUriKey: originalRedirectUri.toString(),
       },
@@ -66,15 +67,12 @@ mixin OidcDesktop on OidcPlatform {
 
     if (!await canLaunchUrl(uri)) {
       logger.warning(
-        "Couldn't launch the $logRequestDesc request url: $uri, "
-        'this might be a false positive.',
+        'Might not be able to launch the $logRequestDesc request url: $uri',
       );
     }
 
     // launch the uri
-    if (!await launchUrl(uri)) {
-      return null;
-    }
+    await launchUrl(uri);
 
     // wait for a response from the server listener.
     final responseUri = await responseUriFuture;
