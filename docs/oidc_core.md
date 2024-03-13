@@ -123,6 +123,7 @@ this is done using these functions:
 Most of the errors thrown by this library are of type `OidcException`.
 
 it contains the following properties:
+
 - `message`: a message that describes the error.
 - `errorResponse`: the error response coming from the auth server, if it exists.
 - `internalException` and `internalStackTrace`, if this error contains other internal errors.
