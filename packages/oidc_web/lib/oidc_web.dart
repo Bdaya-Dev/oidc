@@ -94,33 +94,18 @@ class OidcWeb extends OidcPlatform {
       switch (options.navigationMode) {
         case OidcPlatformSpecificOptions_Web_NavigationMode.samePage:
           //
-          if (!await canLaunchUrl(uri)) {
-            _logger.warning(
-              "Couldn't launch the request url: $uri, this might be a false positive.",
-            );
-          }
-          if (!await launchUrl(
+          await launchUrl(
             uri,
             webOnlyWindowName: '_self',
-          )) {
-            _logger.severe("Couldn't launch the request url: $uri");
-          }
+          );
           // return null, since this mode can't be awaited.
           return null;
         case OidcPlatformSpecificOptions_Web_NavigationMode.newPage:
           //
-          if (!await canLaunchUrl(uri)) {
-            _logger.warning(
-              "Couldn't launch the request url: $uri, this might be a false positive.",
-            );
-          }
-          if (!await launchUrl(
+          await launchUrl(
             uri,
             webOnlyWindowName: '_blank',
-          )) {
-            _logger.severe("Couldn't launch the request url: $uri");
-            return null;
-          }
+          );
           //listen to response uri.
           return await c.future;
         case OidcPlatformSpecificOptions_Web_NavigationMode.popup:

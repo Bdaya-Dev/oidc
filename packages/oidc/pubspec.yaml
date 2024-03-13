@@ -28,7 +28,7 @@ dependencies:
     sdk: flutter
   # Endorsed packages
   oidc_android: ^0.3.1+1
-  oidc_core: ^0.6.1
+  oidc_core: ^0.6.2
   oidc_ios: ^0.3.0+7
   oidc_linux: ^0.3.0+7
   oidc_macos: ^0.3.0+7

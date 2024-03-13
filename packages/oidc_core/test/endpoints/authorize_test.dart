@@ -2,6 +2,25 @@ import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
 
 void main() {
+  group('Authorize Request', () {
+    test('basic parameters', () {
+      final request = OidcAuthorizeRequest(
+        clientId: 'abc',
+        redirectUri: Uri.parse('https://example.com/redirect'),
+        maxAge: const Duration(seconds: 20),
+        scope: [OidcConstants_Scopes.openid],
+        responseType: [OidcConstants_AuthorizationEndpoint_ResponseType.code],
+      );
+
+      final url = request
+          .generateUri(Uri.parse('https://auth.example.com/authorize?tid=123'));
+
+      expect(
+        url.toString(),
+        'https://auth.example.com/authorize?tid=123&scope=openid&response_type=code&client_id=abc&redirect_uri=https%3A%2F%2Fexample.com%2Fredirect&max_age=20',
+      );
+    });
+  });
   group('resolveAuthorizeResponseParameters', () {
     test('fragment', () {
       //cspell: disable

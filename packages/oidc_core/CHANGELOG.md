@@ -1,3 +1,8 @@
+## 0.6.2
+
+ - **FIX**: Serialize query parameters.
+ - **FIX**: Removed false positive warnings that came from url_launcher
+
 ## 0.6.1
 
  - **FEAT**: Support overriding the discovery document.

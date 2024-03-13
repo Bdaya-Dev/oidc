@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   json_annotation: ^4.8.1
-  oidc_core: ^0.6.1
+  oidc_core: ^0.6.2
   plugin_platform_interface: ^2.1.0
 
 dev_dependencies:
