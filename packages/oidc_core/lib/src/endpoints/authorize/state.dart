@@ -36,6 +36,7 @@ class OidcAuthorizeState extends OidcState {
 
   @JsonKey(name: OidcConstants_Store.extraTokenHeaders)
   final Map<String, String>? extraTokenHeaders;
+
   @JsonKey(name: OidcConstants_Store.extraTokenParams)
   final Map<String, dynamic>? extraTokenParams;
 
