@@ -28,7 +28,7 @@ class OidcEndSessionState extends OidcState {
   factory OidcEndSessionState.fromJson(Map<String, dynamic> src) =>
       _$OidcEndSessionStateFromJson(src);
 
-  @JsonKey(name: 'options')
+  @JsonKey(name: OidcConstants_Store.options)
   final Map<String, dynamic>? options;
 
   @JsonKey(name: OidcConstants_AuthParameters.postLogoutRedirectUri)
