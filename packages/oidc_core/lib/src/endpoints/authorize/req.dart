@@ -286,7 +286,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   Uri generateUri(Uri authorizationEndpoint) => authorizationEndpoint.replace(
         queryParameters: {
           ...authorizationEndpoint.queryParameters,
-          ...toMap(),
+          ...OidcInternalUtilities.serializeQueryParameters(toMap()),
         },
       );
 }

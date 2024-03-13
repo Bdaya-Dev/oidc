@@ -125,7 +125,7 @@ class OidcEndSessionRequest extends JsonBasedRequest {
   Uri generateUri(Uri endpoint) => endpoint.replace(
         queryParameters: {
           ...endpoint.queryParameters,
-          ...toMap(),
+          ...OidcInternalUtilities.serializeQueryParameters(toMap()),
         },
       );
 }
