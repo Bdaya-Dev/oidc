@@ -48,7 +48,8 @@ Packages with dependency updates only:
 
 #### `oidc_core` - `v0.6.2`
 
- - **FIX**: serialize query parameters.
+ - **FIX**: Serialize query parameters.
+ - **FIX**: Removed false positive warnings that came from url_launcher
 
 # Change Log
 
