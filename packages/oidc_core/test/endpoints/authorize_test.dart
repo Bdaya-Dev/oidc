@@ -14,7 +14,7 @@ void main() {
 
       final url = request
           .generateUri(Uri.parse('https://auth.example.com/authorize?tid=123'));
-          
+
       expect(
         url.toString(),
         'https://auth.example.com/authorize?tid=123&scope=openid&response_type=code&client_id=abc&redirect_uri=https%3A%2F%2Fexample.com%2Fredirect&max_age=20',
