@@ -121,6 +121,23 @@ class OidcInternalUtilities {
     OidcNumericDateConverter(),
     OidcDurationSecondsConverter(),
   ];
+
+  static Map<String, Object> serializeQueryParameters(Map<String, Object?> input) {
+    final result = <String, Object>{};
+    for (final element in input.entries) {
+      final k = element.key;
+      final v = element.value;
+      if (v == null) {
+        continue;
+      }
+      if (v is Iterable) {
+        result[k] = v.map((e) => e.toString()).toList();
+      } else {
+        result[k] = v.toString();
+      }
+    }
+    return result;
+  }
 }
 
 /// Utilities for the Oidc spec
