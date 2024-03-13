@@ -1,3 +1,7 @@
+## 0.6.2
+
+ - **FIX**: serialize query parameters.
+
 ## 0.6.1
 
  - **FEAT**: Support overriding the discovery document.
