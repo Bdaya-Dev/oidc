@@ -9,9 +9,8 @@
             "cwd": "packages/oidc/example",
             "request": "launch",
             "type": "dart",
+            "deviceId": "chrome",
             "args": [
-                "-d",
-                "chrome",
                 "--web-port",
                 "22433"
             ],
@@ -21,9 +20,8 @@
             "cwd": "packages/oidc/example",
             "request": "launch",
             "type": "dart",
+            "deviceId": "web-server",
             "args": [
-                "-d",
-                "web-server",
                 "--web-port",
                 "22433"
             ],
