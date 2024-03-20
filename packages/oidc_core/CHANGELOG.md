@@ -1,3 +1,9 @@
+## 0.6.3
+
+ - Updated docs and example
+
+ - **FIX**: Attempt to refresh expired tokens instead of throwing them away.
+
 ## 0.6.2
 
  - **FIX**: Serialize query parameters.

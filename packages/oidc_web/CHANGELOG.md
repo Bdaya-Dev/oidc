@@ -1,3 +1,7 @@
+## 0.3.1+2
+
+ - **FIX**: false positive warning when launching urls removed.
+
 ## 0.3.1+1
 
  - Update a dependency to the latest release.

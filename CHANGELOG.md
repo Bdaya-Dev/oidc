@@ -3,6 +3,71 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2024-03-20
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_core` - `v0.6.3`](#oidc_core---v063)
+ - [`oidc` - `v0.5.2`](#oidc---v052)
+ - [`oidc_desktop` - `v0.2.0+8`](#oidc_desktop---v0208)
+ - [`oidc_web` - `v0.3.1+2`](#oidc_web---v0312)
+ - [`oidc_android` - `v0.3.1+2`](#oidc_android---v0312)
+ - [`oidc_default_store` - `v0.2.0+8`](#oidc_default_store---v0208)
+ - [`oidc_flutter_appauth` - `v0.2.0+8`](#oidc_flutter_appauth---v0208)
+ - [`oidc_ios` - `v0.3.0+8`](#oidc_ios---v0308)
+ - [`oidc_linux` - `v0.3.0+8`](#oidc_linux---v0308)
+ - [`oidc_macos` - `v0.3.0+8`](#oidc_macos---v0308)
+ - [`oidc_platform_interface` - `v0.3.1+2`](#oidc_platform_interface---v0312)
+ - [`oidc_windows` - `v0.3.1+2`](#oidc_windows---v0312)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_android` - `v0.3.1+2`
+ - `oidc_default_store` - `v0.2.0+8`
+ - `oidc_flutter_appauth` - `v0.2.0+8`
+ - `oidc_ios` - `v0.3.0+8`
+ - `oidc_linux` - `v0.3.0+8`
+ - `oidc_macos` - `v0.3.0+8`
+ - `oidc_platform_interface` - `v0.3.1+2`
+ - `oidc_windows` - `v0.3.1+2`
+
+---
+
+#### `oidc_core` - `v0.6.3`
+
+ - Updated docs and example
+
+ - **FIX**: Attempt to refresh expired tokens instead of throwing them away.
+
+#### `oidc` - `v0.5.2`
+
+ - Updated docs and example
+
+ - **FIX**: Attempt to refresh expired tokens instead of throwing them away.
+
+#### `oidc_desktop` - `v0.2.0+8`
+
+ - **FIX**: false positive warning when launching urls removed.
+
+#### `oidc_web` - `v0.3.1+2`
+
+ - **FIX**: false positive warning when launching urls removed.
+
+# Change Log
+
+All notable changes to this project will be documented in this file.
+See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
+
 ## 2024-03-13
 
 ### Changes

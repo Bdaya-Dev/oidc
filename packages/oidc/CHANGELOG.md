@@ -1,3 +1,9 @@
+## 0.5.2
+
+ - Updated docs and example
+
+ - **FIX**: Attempt to refresh expired tokens instead of throwing them away.
+
 ## 0.5.1
 
  - **FEAT**: Support overriding the discovery document.
