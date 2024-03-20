@@ -37,13 +37,14 @@ dependencies:
   oidc_windows: ^0.3.1+1
   # ====================
   http: ^1.1.0
-  jose_plus: ^0.4.3
+  jose_plus: ^0.4.4
   retry: ^3.1.2
   rxdart: ^0.27.7
   logging: ^1.2.0
   json_annotation: ^4.8.1
   nonce: ^1.2.0
   uuid: ^4.0.0
+  clock: ^1.1.1
 
 dev_dependencies:
   build_runner: ^2.4.6

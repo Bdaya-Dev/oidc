@@ -183,13 +183,15 @@ this is used for validating the JWT signature.
 ### Initialization
 
 After constructing the manager with the proper settings, you MUST call the `manager.init()` function, which will do the following:
-1. If the function has already been initialized (checked via the hasInit variable), it simply returns. This is because certain configurations and setups do not need, and should not be, repeated.
+
+1. If the function has already been initialized (checked via the hasInit variable), it simply returns. This is because certain configurations and setups do not need to be repeated.
 2. initialize the passed store (calls `OidcStore.init()`)
 3. ensure that the discovery document has been retrieved (if the lazy constructor was used).
 4. if the discovery document contains a `jwks_uri` adds it the to the keystore.
 5. handle various state management tasks. It loads logout requests and state results (from samePage redirects), also attempts to load cached tokens if there are no state results or logout requests.
-6. Starts Listening to incoming Front Channel Logout requests.
-7. Starts listening to token expiry events for automatic refresh_token circulation.
+6. If the loaded token has expired and a refresh token exists, it attempts to refresh it, otherwise the token will be removed form the store.
+7. Starts Listening to incoming Front Channel Logout requests.
+8. Starts listening to token expiry events for automatic `refresh_token` circulation.
 
 ### Login
 

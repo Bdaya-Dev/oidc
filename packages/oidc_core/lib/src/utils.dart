@@ -141,6 +141,13 @@ class OidcInternalUtilities {
   }
 }
 
+extension OidcDateTime on DateTime {
+  int get secondsSinceEpoch => millisecondsSinceEpoch ~/ 1000;
+  static DateTime fromSecondsSinceEpoch(int seconds) {
+    return DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+  }
+}
+
 /// Utilities for the Oidc spec
 class OidcUtils {
   /// Takes a base Url and adds /.well-known/openid-configuration to it
