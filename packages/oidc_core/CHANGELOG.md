@@ -1,8 +1,7 @@
 ## 0.6.3
 
- - Updated docs and example
-
- - **FIX**: Attempt to refresh expired tokens instead of throwing them away.
+ - **DEPS**: Use `jose_plus: ^0.4.4` which uses [package:clock](https://pub.dev/packages/clock) JWT validation to simplify testing.
+ - **FEAT**: Added `OidcDateTime` extension which contains `secondsSinceEpoch` and `fromSecondsSinceEpoch` helper methods
 
 ## 0.6.2
 

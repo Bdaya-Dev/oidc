@@ -45,15 +45,20 @@ Packages with dependency updates only:
 
 #### `oidc_core` - `v0.6.3`
 
- - Updated docs and example
+ - **DEPS**: Use `jose_plus: ^0.4.4` which uses [package:clock](https://pub.dev/packages/clock) JWT validation to simplify testing.
+ - **FEAT**: Added `OidcDateTime` extension which contains `secondsSinceEpoch` and `fromSecondsSinceEpoch` helper methods
 
- - **FIX**: Attempt to refresh expired tokens instead of throwing them away.
 
 #### `oidc` - `v0.5.2`
 
- - Updated docs and example
 
- - **FIX**: Attempt to refresh expired tokens instead of throwing them away.
+ - **FEAT**: Use [package:clock](https://pub.dev/packages/clock) to get the current time instead of `DateTime.now()` to simplify testing.
+ - **FIX**: Attempt to refresh expired tokens on initialization instead of throwing them away.
+   - Now your users will have to login less.
+   - This works only when there is a refresh token available.
+   - Doesn't work with silent authorization (e.g. implicit auth and `prompt: none`).
+ - **DOCS**: Updated docs and example.
+ - **DEPS**: Use `jose_plus: ^0.4.4` which uses [package:clock](https://pub.dev/packages/clock) as well for JWT validation.
 
 #### `oidc_desktop` - `v0.2.0+8`
 
