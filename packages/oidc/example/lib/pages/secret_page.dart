@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -199,7 +201,7 @@ class _SecretPageState extends State<SecretPage> {
               const Divider(),
               Text('id token: ${user.idToken}'),
               const Divider(),
-              Text('token: ${user.token.toJson()}'),
+              Text('token: ${jsonEncode(user.token.toJson())}'),
             ],
           ),
         ),

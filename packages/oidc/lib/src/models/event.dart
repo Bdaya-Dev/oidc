@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:oidc_core/oidc_core.dart';
 
 /// Represents an arbitrary event.
@@ -8,7 +9,7 @@ abstract class OidcEvent {
   });
 
   /// Creates an event whose [at] is now.
-  OidcEvent.now() : at = DateTime.now();
+  OidcEvent.now() : at = clock.now();
 
   /// when the event occurred.
   final DateTime at;

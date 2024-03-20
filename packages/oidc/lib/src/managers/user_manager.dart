@@ -534,6 +534,7 @@ class OidcUserManager {
     required String? nonce,
     required Map<String, dynamic>? attributes,
     required OidcProviderMetadata metadata,
+    bool validateAndSave = true,
   }) async {
     final currentUser = this.currentUser;
     OidcUser newUser;
@@ -559,7 +560,11 @@ class OidcUserManager {
         'Server returned a wrong id_token nonce, might be a replay attack.',
       );
     }
-    return _validateAndSaveUser(user: newUser, metadata: metadata);
+    if (validateAndSave) {
+      return _validateAndSaveUser(user: newUser, metadata: metadata);
+    } else {
+      return newUser;
+    }
   }
 
   Future<void> _saveUser(OidcUser user) async {
@@ -665,14 +670,15 @@ class OidcUserManager {
       ),
     );
     return _createUserFromToken(
-        token: OidcToken.fromResponse(
-          tokenResponse,
-          overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
-          sessionState: currentUser?.token.sessionState,
-        ),
-        nonce: null,
-        attributes: null,
-        metadata: discoveryDocument);
+      token: OidcToken.fromResponse(
+        tokenResponse,
+        overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
+        sessionState: currentUser?.token.sessionState,
+      ),
+      nonce: null,
+      attributes: null,
+      metadata: discoveryDocument,
+    );
   }
 
   Future<void> _listenToTokenRefreshIfSupported(
@@ -741,29 +747,38 @@ class OidcUserManager {
     forgetUser();
   }
 
+  List<Exception> _validateUser({
+    required OidcUser user,
+    required OidcProviderMetadata metadata,
+  }) {
+    final errors = <Exception>[
+      ...user.parsedIdToken.claims.validate(
+        clientId: clientCredentials.clientId,
+        issuer: metadata.issuer,
+        expiryTolerance: settings.expiryTolerance,
+      ),
+    ];
+    if (user.parsedIdToken.claims.subject == null) {
+      errors.add(
+        JoseException('id token is missing a `sub` claim.'),
+      );
+    }
+    if (user.parsedIdToken.claims.issuedAt == null) {
+      errors.add(
+        JoseException('id token is missing an `iat` claim.'),
+      );
+    }
+
+    return errors;
+  }
+
   /// This function validates that a user claims
   Future<OidcUser?> _validateAndSaveUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
   }) async {
     var actualUser = user;
-    final errors = <Exception>[
-      ...actualUser.parsedIdToken.claims.validate(
-        clientId: clientCredentials.clientId,
-        issuer: metadata.issuer,
-        expiryTolerance: settings.expiryTolerance,
-      ),
-    ];
-    if (actualUser.parsedIdToken.claims.subject == null) {
-      errors.add(
-        JoseException('id token is missing a `sub` claim.'),
-      );
-    }
-    if (actualUser.parsedIdToken.claims.issuedAt == null) {
-      errors.add(
-        JoseException('id token is missing an `iat` claim.'),
-      );
-    }
+    final errors = _validateUser(user: actualUser, metadata: metadata);
     OidcUserInfoResponse? userInfoResp;
 
     if (errors.isEmpty) {
@@ -804,7 +819,7 @@ class OidcUserManager {
     } else {
       for (final element in errors) {
         _logger.warning(
-          'found a JWT, but failed the validation test: $element',
+          'Found a JWT, but failed the validation test: $element',
           element,
           StackTrace.current,
         );
@@ -931,19 +946,47 @@ class OidcUserManager {
     if (rawToken == null) {
       return;
     }
+
     try {
       final decodedAttributes = rawAttributes == null
           ? null
           : jsonDecode(rawAttributes) as Map<String, dynamic>;
       final decodedToken = jsonDecode(rawToken) as Map<String, dynamic>;
       final token = OidcToken.fromJson(decodedToken);
-      await _createUserFromToken(
+      final metadata = discoveryDocument;
+      var loadedUser = await _createUserFromToken(
         token: token,
         // nonce is only checked for new tokens.
         nonce: null,
         attributes: decodedAttributes,
-        metadata: discoveryDocument,
+        metadata: metadata,
+        validateAndSave: false,
       );
+      if (loadedUser != null) {
+        final validationErrors = _validateUser(
+          user: loadedUser,
+          metadata: metadata,
+        );
+        final idTokenNeedsRefresh = validationErrors
+            .whereType<JoseException>()
+            .any((element) => element.message.startsWith('JWT expired'));
+        if (token.refreshToken != null &&
+            (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
+          loadedUser =
+              await refreshToken(overrideRefreshToken: token.refreshToken);
+        }
+        if (loadedUser != null) {
+          loadedUser = await _validateAndSaveUser(
+            user: loadedUser,
+            metadata: metadata,
+          );
+        }
+      }
+
+      if (loadedUser == null) {
+        _logAndThrow(
+            'Found a cached token, but the user could not be created or validated');
+      }
     } catch (e) {
       // remove invalid tokens, so that they don't get used again.
       await store.removeMany(
