@@ -4,7 +4,9 @@ import 'package:oidc/oidc.dart';
 
 const kAuthorizationHeader = 'Authorization';
 void _tryAppendAccessToken(
-    OidcUserManager userManager, Map<String, dynamic> headers) {
+  OidcUserManager userManager,
+  Map<String, dynamic> headers,
+) {
   if (headers.containsKey(kAuthorizationHeader)) {
     // do nothing if header already exists.
     return;

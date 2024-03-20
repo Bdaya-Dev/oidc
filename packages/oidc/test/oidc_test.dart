@@ -5,10 +5,8 @@ import 'dart:convert';
 import 'package:clock/clock.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart';
-import 'package:http/testing.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:oidc/oidc.dart';
-// import 'package:oidc/oidc.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'mock_client.dart';
@@ -77,7 +75,7 @@ void main() {
         expect(manager.discoveryDocumentUri, isNotNull);
       });
       group('loadCachedToken', () {
-        final tokenCreatedAt = DateTime.utc(2024, 03, 01);
+        final tokenCreatedAt = DateTime.utc(2024, 03);
         final tokenCreatedAtClock = Clock.fixed(tokenCreatedAt);
         late Clock nowClock;
         // The idToken is created
