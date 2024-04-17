@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/http.dart';
 import 'package:jose_plus/jose.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/src/facade.dart';
@@ -744,7 +745,7 @@ class OidcUserManager {
   }
 
   void _handleTokenExpired(OidcToken event) {
-    forgetUser();
+    //forgetUser();
   }
 
   List<Exception> _validateUser({
@@ -963,6 +964,8 @@ class OidcUserManager {
         validateAndSave: false,
       );
       if (loadedUser != null) {
+        await _saveUser(loadedUser);
+        _userSubject.add(loadedUser);
         final validationErrors = _validateUser(
           user: loadedUser,
           metadata: metadata,
@@ -987,6 +990,8 @@ class OidcUserManager {
         _logAndThrow(
             'Found a cached token, but the user could not be created or validated');
       }
+    } on ClientException catch (clientException) {
+      // add a var noNetwork that say
     } catch (e) {
       // remove invalid tokens, so that they don't get used again.
       await store.removeMany(
@@ -1117,7 +1122,8 @@ class OidcUserManager {
         ))
         ..add(_userSubject.listen(_listenToUserSessionIfSupported))
         ..add(_tokenEvents.expiring.listen(_handleTokenExpiring))
-        ..add(_tokenEvents.expired.listen(_handleTokenExpired));
+        //..add(_tokenEvents.expired.listen(_handleTokenExpired));
+        ..add(_tokenEvents.expired.listen(_handleTokenExpiring));
     } catch (e) {
       _hasInit = false;
       rethrow;
