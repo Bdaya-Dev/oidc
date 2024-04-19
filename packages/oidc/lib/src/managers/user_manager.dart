@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/http.dart';
 import 'package:jose_plus/jose.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/src/facade.dart';
@@ -990,7 +989,7 @@ class OidcUserManager {
         _logAndThrow(
             'Found a cached token, but the user could not be created or validated');
       }
-    } on ClientException catch (clientException) {
+    } on http.ClientException catch (clientException) {
       // add a var noNetwork that say
     } catch (e) {
       // remove invalid tokens, so that they don't get used again.
