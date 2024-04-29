@@ -250,11 +250,19 @@ class OidcEndpoints {
       client: client,
       request: req,
     );
-    return _handleResponse(
+    if(resp.statusCode >= 200 && resp.statusCode < 300) {
+      return _handleResponse(
       mapper: OidcProviderMetadata.fromJson,
       request: req,
       response: resp,
     );
+    } else {
+      throw OidcException(
+        'Failed to handle the response from endpoint: ${req.url}',
+        rawRequest: req,
+        rawResponse: resp,
+      );
+    }
   }
 
   /// takes an input response uri from the /authorize endpoint, and gets the parameters from it.
