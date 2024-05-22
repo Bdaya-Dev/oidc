@@ -48,7 +48,7 @@ class OidcWeb extends OidcPlatform {
           ..id = iframeId
           ..width = '0'
           ..height = '0'
-          ..hidden = true as JSAny
+          ..hidden = true.toJS
           ..style.visibility = 'hidden'
           ..style.position = 'fixed'
           ..style.left = '-1000px'
@@ -386,8 +386,8 @@ class OidcWeb extends OidcPlatform {
             }
             const space = ' ';
             cw.postMessage(
-              '${request.clientId}$space${request.sessionState}' as JSAny,
-              checkSessionIframe.origin as JSAny,
+              '${request.clientId}$space${request.sessionState}'.toJS,
+              checkSessionIframe.origin.toJS,
             );
           } catch (e, st) {
             timerSub?.cancel();
