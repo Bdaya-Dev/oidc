@@ -1,13 +1,14 @@
 // ignore_for_file: cascade_invocations, avoid_redundant_argument_values
 
 import 'dart:async';
-import 'dart:html';
+import 'dart:js_interop';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:web/web.dart' as html;
 
 final _logger = Logger('Oidc.OidcWeb');
 
@@ -21,35 +22,37 @@ class OidcWeb extends OidcPlatform {
   String _calculatePopupOptions(OidcPlatformSpecificOptions_Web web) {
     final h = web.popupHeight;
     final w = web.popupWidth;
-    final top =
-        (window.outerHeight - h) / 2 + (window.screen?.available.top ?? 0);
-    final left =
-        (window.outerWidth - w) / 2 + (window.screen?.available.left ?? 0);
+
+    final top = (html.window.outerHeight - h) / 2 + (html.window.screenTop);
+    final left = (html.window.outerWidth - w) / 2 + (html.window.screenLeft);
 
     final windowOpts =
         'width=$w,height=$h,toolbar=no,location=no,directories=no,status=no,menubar=no,copyhistory=no&top=$top,left=$left';
     return windowOpts;
   }
 
-  BodyElement _getBody() =>
-      window.document.getElementsByTagName('body').first as BodyElement;
-  IFrameElement _createHiddenIframe({
+  html.HTMLBodyElement _getBody() =>
+      html.window.document.getElementsByTagName('body').item(0)!
+          as html.HTMLBodyElement;
+
+  html.HTMLIFrameElement _createHiddenIframe({
     required String iframeId,
     bool appendToDocument = true,
   }) {
-    final prev = window.document.getElementById(iframeId);
+    final prev = html.window.document.getElementById(iframeId);
     if (prev != null) {
       prev.remove();
     }
-    final res = (window.document.createElement('iframe') as IFrameElement)
-      ..id = iframeId
-      ..width = '0'
-      ..height = '0'
-      ..hidden = true
-      ..style.visibility = 'hidden'
-      ..style.position = 'fixed'
-      ..style.left = '-1000px'
-      ..style.top = '0';
+    final res =
+        (html.window.document.createElement('iframe') as html.HTMLIFrameElement)
+          ..id = iframeId
+          ..width = '0'
+          ..height = '0'
+          ..hidden = true as JSAny
+          ..style.visibility = 'hidden'
+          ..style.position = 'fixed'
+          ..style.left = '-1000px'
+          ..style.top = '0';
     if (appendToDocument) {
       final body = _getBody();
       body.append(res);
@@ -62,14 +65,16 @@ class OidcWeb extends OidcPlatform {
     required Uri uri,
     required String? state,
   }) async {
-    final channel = BroadcastChannel(options.broadcastChannel);
+    final channel = html.BroadcastChannel(options.broadcastChannel);
     final c = Completer<Uri>();
-    final sub = channel.onMessage.listen((event) {
+
+    final eventFunc = (html.MessageEvent event) {
       final data = event.data;
-      if (data is! String) {
+
+      if (data == null || data is! String) {
         return;
       }
-      final parsed = Uri.tryParse(data);
+      final parsed = Uri.tryParse(data as String);
       if (parsed == null) {
         return;
       }
@@ -88,7 +93,10 @@ class OidcWeb extends OidcPlatform {
         }
       }
       c.complete(parsed);
-    });
+    }.toJS;
+
+    channel.addEventListener('message', eventFunc);
+
     try {
       //first prepare
       switch (options.navigationMode) {
@@ -110,7 +118,7 @@ class OidcWeb extends OidcPlatform {
           return await c.future;
         case OidcPlatformSpecificOptions_Web_NavigationMode.popup:
           final windowOpts = _calculatePopupOptions(options);
-          window.open(
+          html.window.open(
             uri.toString(),
             'oidc_auth_popup',
             windowOpts,
@@ -135,7 +143,7 @@ class OidcWeb extends OidcPlatform {
           return res;
       }
     } finally {
-      await sub.cancel();
+      channel.removeEventListener('message', eventFunc);
     }
   }
 
@@ -207,70 +215,90 @@ class OidcWeb extends OidcPlatform {
     OidcFrontChannelRequestListeningOptions options,
   ) {
     final logger = Logger('Oidc.OidcWeb.listenToFrontChannelLogoutRequests');
-    final channel = BroadcastChannel(options.web.broadcastChannel);
-    return channel.onMessage
-        .map<OidcFrontChannelLogoutIncomingRequest?>((event) {
-          final data = event.data;
-          if (data is! String) {
-            logger.finer('Received data: $data');
-            return null;
-          }
-          final uri = Uri.tryParse(data);
-          if (uri == null) {
-            logger.finer('Parsed Received data: $uri');
-            return null;
-          }
-          //listening on empty path, will listen on all paths.
-          if (listenOn.pathSegments.isNotEmpty) {
-            logger.finer(
-              'listenOn has a path segment (${listenOn.path}), checking if it matches the input data.',
-            );
-            if (!listEquals(uri.pathSegments, listenOn.pathSegments)) {
-              logger.finer(
-                'listenOn has a different path segment (${listenOn.path}), than data (${uri.path}), '
-                'skipping the event.',
-              );
-              // the paths don't match
-              return null;
-            }
-          }
-          if (listenOn.hasQuery) {
-            logger.finer(
-              'listenOn has a query segment (${listenOn.query}), checking if it matches the input data.',
-            );
-            // check if every queryParameter in listenOn is the same in uri
-            if (!listenOn.queryParameters.entries.every(
-              (element) => uri.queryParameters[element.key] == element.value,
-            )) {
-              logger.finer(
-                'listenOn has a different query segment (${listenOn.query}), than data (${uri.query}), '
-                'skipping the event.',
-              );
-              return null;
-            }
-          } else {
-            logger.finer(
-              'listenOn has NO query segment, checking if data contains requestType=front-channel-logout by default.',
-            );
-            //by default, if no query parameter exists, check that
-            // requestType=front-channel-logout
-            if (uri.queryParameters[OidcConstants_Store.requestType] !=
-                OidcConstants_Store.frontChannelLogout) {
-              logger.finer(
-                'data has no requestType=front-channel-logout in its query segment (${uri.query}), '
-                'skipping the event.',
-              );
-              return null;
-            }
-          }
-          logger.fine('successfully matched data ($uri)');
-          return OidcFrontChannelLogoutIncomingRequest.fromJson(
-            uri.queryParameters,
+    final channel = html.BroadcastChannel(options.web.broadcastChannel);
+
+    StreamController<OidcFrontChannelLogoutIncomingRequest>? sc;
+
+    final messageEvent = (html.MessageEvent event) {
+      final streamController = sc;
+      if (streamController == null) {
+        _logger.warning(
+          'ignoring received message; '
+          'streamController is null ? ${streamController == null}; ',
+        );
+        return;
+      }
+
+      final data = event.data;
+      if (data == null || data is! String) {
+        logger.finer('Received data: $data');
+        return null;
+      }
+      final uri = Uri.tryParse(data as String);
+      if (uri == null) {
+        logger.finer('Parsed Received data: $uri');
+        return null;
+      }
+      //listening on empty path, will listen on all paths.
+      if (listenOn.pathSegments.isNotEmpty) {
+        logger.finer(
+          'listenOn has a path segment (${listenOn.path}), checking if it matches the input data.',
+        );
+        if (!listEquals(uri.pathSegments, listenOn.pathSegments)) {
+          logger.finer(
+            'listenOn has a different path segment (${listenOn.path}), than data (${uri.path}), '
+            'skipping the event.',
           );
-        })
-        .whereNotNull()
-        //close the broadcast channel when the user cancels the stream.
-        .doOnCancel(channel.close);
+          // the paths don't match
+          return null;
+        }
+      }
+      if (listenOn.hasQuery) {
+        logger.finer(
+          'listenOn has a query segment (${listenOn.query}), checking if it matches the input data.',
+        );
+        // check if every queryParameter in listenOn is the same in uri
+        if (!listenOn.queryParameters.entries.every(
+          (element) => uri.queryParameters[element.key] == element.value,
+        )) {
+          logger.finer(
+            'listenOn has a different query segment (${listenOn.query}), than data (${uri.query}), '
+            'skipping the event.',
+          );
+          return null;
+        }
+      } else {
+        logger.finer(
+          'listenOn has NO query segment, checking if data contains requestType=front-channel-logout by default.',
+        );
+        //by default, if no query parameter exists, check that
+        // requestType=front-channel-logout
+        if (uri.queryParameters[OidcConstants_Store.requestType] !=
+            OidcConstants_Store.frontChannelLogout) {
+          logger.finer(
+            'data has no requestType=front-channel-logout in its query segment (${uri.query}), '
+            'skipping the event.',
+          );
+          return null;
+        }
+      }
+      logger.fine('successfully matched data ($uri)');
+      final result = OidcFrontChannelLogoutIncomingRequest.fromJson(
+        uri.queryParameters,
+      );
+      streamController.add(result);
+    }.toJS;
+
+    sc = StreamController<OidcFrontChannelLogoutIncomingRequest>(
+      onListen: () {
+        channel.addEventListener('message', messageEvent);
+      },
+      onCancel: () {
+        channel.removeEventListener('message', messageEvent);
+      },
+    );
+
+    return sc.stream;
   }
 
   @override
@@ -280,16 +308,17 @@ class OidcWeb extends OidcPlatform {
   }) {
     StreamController<OidcMonitorSessionResult>? sc;
     StreamSubscription<int>? timerSub;
-    StreamSubscription<MessageEvent>? messageSub;
+    StreamSubscription<html.MessageEvent>? messageSub;
     // Timer? timer;
 
     const iframeId = 'oidc-session-management-iframe';
-    void onMessageReceived(Event event) {
-      if (event is! MessageEvent) {
+    void onMessageReceived(html.Event event) {
+      if (event is! html.MessageEvent) {
         return;
       }
       final streamController = sc;
-      final iframe = document.getElementById(iframeId) as IFrameElement?;
+      final iframe =
+          html.document.getElementById(iframeId) as html.HTMLIFrameElement?;
       final eventOrigin = event.origin;
       if (iframe == null ||
           streamController == null ||
@@ -322,7 +351,7 @@ class OidcWeb extends OidcPlatform {
         default:
           _logger.warning('Received unknown iframe message: $eventData');
           streamController
-              .add(OidcUnknownMonitorSessionResult(data: eventData));
+              .add(OidcUnknownMonitorSessionResult(data: eventData.toString()));
       }
     }
 
@@ -337,7 +366,7 @@ class OidcWeb extends OidcPlatform {
         body.append(iframe);
         await onloadFuture;
         //start the session iframe
-        messageSub = window.onMessage.listen(onMessageReceived);
+        messageSub = html.window.onMessage.listen(onMessageReceived);
 
         //send message to iframe
         await timerSub?.cancel();
@@ -346,8 +375,8 @@ class OidcWeb extends OidcPlatform {
           request.interval,
           (computationCount) => computationCount,
         ).startWith(-1).listen((event) {
-          final iframe = document.getElementById(iframeId);
-          if (iframe is! IFrameElement) {
+          final iframe = html.document.getElementById(iframeId);
+          if (iframe is! html.HTMLIFrameElement) {
             return;
           }
           try {
@@ -357,8 +386,8 @@ class OidcWeb extends OidcPlatform {
             }
             const space = ' ';
             cw.postMessage(
-              '${request.clientId}$space${request.sessionState}',
-              checkSessionIframe.origin,
+              '${request.clientId}$space${request.sessionState}' as JSAny,
+              checkSessionIframe.origin as JSAny,
             );
           } catch (e, st) {
             timerSub?.cancel();
@@ -370,7 +399,7 @@ class OidcWeb extends OidcPlatform {
         //stop the session iframe
         timerSub?.cancel();
         messageSub?.cancel();
-        document.getElementById(iframeId)?.remove();
+        html.document.getElementById(iframeId)?.remove();
       },
       onPause: () {
         timerSub?.pause();
