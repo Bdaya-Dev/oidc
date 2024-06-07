@@ -334,7 +334,7 @@ class OidcDefaultStore implements OidcStore {
   }
 }
 
-extension _IterableMapEntryPure on Iterable<MapEntry<String, String?>> {
+extension on Iterable<MapEntry<String, String?>> {
   Map<String, String> purify() {
     return Map.fromEntries(where((element) => element.value != null))
         .cast<String, String>();
