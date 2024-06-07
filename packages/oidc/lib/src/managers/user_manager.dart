@@ -25,9 +25,10 @@ class OidcUserManager extends OidcUserManagerBase {
 
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
-      OidcProviderMetadata metadata,
-      OidcAuthorizeRequest request,
-      OidcPlatformSpecificOptions options) {
+    OidcProviderMetadata metadata,
+    OidcAuthorizeRequest request,
+    OidcPlatformSpecificOptions options,
+  ) {
     return OidcFlutter.getPlatformAuthorizationResponse(
       metadata: metadata,
       request: request,
