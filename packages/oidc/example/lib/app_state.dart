@@ -28,9 +28,7 @@ final duendeManager = OidcUserManager.lazy(
   clientCredentials: const OidcClientAuthentication.none(
     clientId: 'interactive.public.short',
   ),
-  store: OidcDefaultStore(
-      // useSessionStorageForSessionNamespaceOnWeb: true,
-      ),
+  store: OidcDefaultStore(),
 
   // keyStore: JsonWebKeyStore(),
   settings: OidcUserManagerSettings(

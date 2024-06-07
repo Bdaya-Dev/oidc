@@ -1,3 +1,4 @@
+import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_flutter_appauth/oidc_flutter_appauth.dart';
 
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';

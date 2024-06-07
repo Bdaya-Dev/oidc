@@ -1,19 +1,5 @@
-import 'package:clock/clock.dart';
 import 'package:oidc_core/oidc_core.dart';
-
-/// Represents an arbitrary event.
-abstract class OidcEvent {
-  ///
-  const OidcEvent({
-    required this.at,
-  });
-
-  /// Creates an event whose [at] is now.
-  OidcEvent.now() : at = clock.now();
-
-  /// when the event occurred.
-  final DateTime at;
-}
+import 'event.dart';
 
 /// An event that gets raised before the user is forgotten.
 class OidcPreLogoutEvent extends OidcEvent {

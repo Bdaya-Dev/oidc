@@ -1,16 +1,29 @@
-// ignore_for_file: cascade_invocations, avoid_redundant_argument_values
+//cspell: disable
 
 import 'dart:async';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 import 'package:oidc_web_core/oidc_web_core.dart';
 
-/// The flutter web implementation of [OidcPlatform], which depends on [OidcWebCore].
-class OidcWeb extends OidcPlatform {
-  /// Registers this class as the default instance of [OidcPlatform]
-  static void registerWith([Object? registrar]) {
-    OidcPlatform.instance = OidcWeb();
-  }
+/// Pure dart implementation of OidcUserManagerBase that uses package:web and
+/// is independant of flutter.
+class OidcUserManagerWeb extends OidcUserManagerBase {
+  OidcUserManagerWeb.lazy({
+    required super.discoveryDocumentUri,
+    required super.clientCredentials,
+    required super.store,
+    required super.settings,
+    super.httpClient,
+    super.keyStore,
+  }) : super.lazy();
+
+  OidcUserManagerWeb({
+    required super.discoveryDocument,
+    required super.clientCredentials,
+    required super.store,
+    required super.settings,
+    super.httpClient,
+    super.keyStore,
+  }) : super();
 
   static const _coreInstance = OidcWebCore();
 
@@ -19,13 +32,29 @@ class OidcWeb extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
-  ) async {
+  ) {
     return _coreInstance.getAuthorizationResponse(
       metadata,
       request,
       options.web,
     );
   }
+
+  @override
+  Future<OidcEndSessionResponse?> getEndSessionResponse(
+    OidcProviderMetadata metadata,
+    OidcEndSessionRequest request,
+    OidcPlatformSpecificOptions options,
+  ) {
+    return _coreInstance.getEndSessionResponse(
+      metadata,
+      request,
+      options.web,
+    );
+  }
+
+  @override
+  final bool isWeb = true;
 
   @override
   Stream<OidcFrontChannelLogoutIncomingRequest>
@@ -47,18 +76,6 @@ class OidcWeb extends OidcPlatform {
     return _coreInstance.monitorSessionStatus(
       checkSessionIframe: checkSessionIframe,
       request: request,
-    );
-  }
-
-  @override
-  Future<OidcEndSessionResponse?> getEndSessionResponse(
-      OidcProviderMetadata metadata,
-      OidcEndSessionRequest request,
-      OidcPlatformSpecificOptions options) {
-    return _coreInstance.getEndSessionResponse(
-      metadata,
-      request,
-      options.web,
     );
   }
 }

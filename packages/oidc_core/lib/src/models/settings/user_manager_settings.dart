@@ -1,4 +1,7 @@
-import 'package:oidc/oidc.dart';
+import 'package:oidc_core/oidc_core.dart';
+
+import 'front_channel_request_options.dart';
+import 'platform_options.dart';
 
 /// The callback used to determine the `expiring` duration.
 typedef OidcRefreshBeforeCallback = Duration? Function(OidcToken token);

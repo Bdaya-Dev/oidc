@@ -5,7 +5,6 @@ import 'dart:js_interop';
 import 'package:collection/collection.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_web_core/src/models/options.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:web/web.dart';
 
@@ -16,7 +15,7 @@ class OidcWebCore {
   /// {@macro oidc_web_core}
   const OidcWebCore();
 
-  String _calculatePopupOptions(OidcPlatformSpecificOptions_WebCore options) {
+  String _calculatePopupOptions(OidcPlatformSpecificOptions_Web options) {
     final h = options.popupHeight;
     final w = options.popupWidth;
     //  html.window.screen.available.top;
@@ -53,7 +52,7 @@ class OidcWebCore {
   }
 
   Future<Uri?> _getResponseUri({
-    required OidcPlatformSpecificOptions_WebCore options,
+    required OidcPlatformSpecificOptions_Web options,
     required Uri uri,
     required String? state,
   }) async {
@@ -90,17 +89,17 @@ class OidcWebCore {
     try {
       //first prepare
       switch (options.navigationMode) {
-        case OidcPlatformSpecificOptions_WebCore_NavigationMode.samePage:
+        case OidcPlatformSpecificOptions_Web_NavigationMode.samePage:
           //
           window.location.assign(uri.toString());
           // return null, since this mode can't be awaited.
           return null;
-        case OidcPlatformSpecificOptions_WebCore_NavigationMode.newPage:
+        case OidcPlatformSpecificOptions_Web_NavigationMode.newPage:
           //
           window.open(uri.toString(), '_blank');
           //listen to response uri.
           return await c.future;
-        case OidcPlatformSpecificOptions_WebCore_NavigationMode.popup:
+        case OidcPlatformSpecificOptions_Web_NavigationMode.popup:
           final windowOpts = _calculatePopupOptions(options);
           window.open(
             uri.toString(),
@@ -108,7 +107,7 @@ class OidcWebCore {
             windowOpts,
           );
           return await c.future;
-        case OidcPlatformSpecificOptions_WebCore_NavigationMode.hiddenIFrame:
+        case OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame:
           const iframeId = 'oidc-session-management-iframe';
           final iframe = _createHiddenIframe(iframeId: iframeId);
           iframe.src = uri.toString();
@@ -133,7 +132,7 @@ class OidcWebCore {
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
-    OidcPlatformSpecificOptions_WebCore options,
+    OidcPlatformSpecificOptions_Web options,
   ) async {
     final endpoint = metadata.authorizationEndpoint;
     if (endpoint == null) {
@@ -145,7 +144,7 @@ class OidcWebCore {
         request.prompt?.contains(OidcConstants_AuthorizeRequest_Prompt.none) ??
             false;
     if (options.navigationMode ==
-            OidcPlatformSpecificOptions_WebCore_NavigationMode.hiddenIFrame &&
+            OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame &&
         !isNonePrompt) {
       throw const OidcException(
         'hidden iframe can only be used with "none" prompt, '
@@ -171,7 +170,7 @@ class OidcWebCore {
   Future<OidcEndSessionResponse?> getEndSessionResponse(
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
-    OidcPlatformSpecificOptions_WebCore options,
+    OidcPlatformSpecificOptions_Web options,
   ) async {
     final endpoint = metadata.endSessionEndpoint;
     if (endpoint == null) {
@@ -196,7 +195,7 @@ class OidcWebCore {
   Stream<OidcFrontChannelLogoutIncomingRequest>
       listenToFrontChannelLogoutRequests(
     Uri listenOn,
-    OidcFrontChannelRequestListeningOptions_WebCore options,
+    OidcFrontChannelRequestListeningOptions_Web options,
   ) {
     final logger =
         Logger('Oidc.OidcWebCore.listenToFrontChannelLogoutRequests');
