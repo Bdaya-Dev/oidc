@@ -1,6 +1,8 @@
 // ignore_for_file: avoid_print, omit_local_variable_types
 
 import 'package:oidc_core/oidc_core.dart';
+
+// Check this file to see how the user manager is implemented
 import 'cli_user_manager.dart';
 
 // This example shows how to use the authorization code flow using

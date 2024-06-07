@@ -1,10 +1,10 @@
 name: oidc_web_core
-description: Core web package for oidc
+description: dart web package for oidc protocol
 version: 0.1.0+1
 
 
 environment:
-  sdk: ^3.4.0
+  sdk: ^3.1.0
 
 dependencies:
   collection: ^1.18.0
