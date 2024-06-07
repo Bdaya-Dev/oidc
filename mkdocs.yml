@@ -5,13 +5,17 @@ docs_dir: docs/
 repo_name: 'bdaya-dev/oidc'
 repo_url: 'https://github.com/bdaya-dev/oidc'
 nav:
-    - Introduction: index.md
+    - 'Introduction': index.md
     - 'package:oidc': 
       - 'Getting Started': oidc-getting-started.md
       - 'Usage': oidc-usage.md
       - 'Access token usage': 'oidc-usage-accesstoken.md'
     - 'package:oidc_core': oidc_core.md
-    - 'package:oidc_default_store': oidc_default_store.md
+    - 'package:oidc_web_core': oidc_web_core.md
+    - 'OidcStore':
+      - 'package:oidc_web_store': oidc_web_store.md
+      - 'package:oidc_default_store': oidc_default_store.md
+      - 'OidcMemoryStore': oidc_memory_store.md
     - 'package:oidc_loopback_listener': oidc_loopback_listener.md
 theme:
   palette: 
@@ -38,5 +42,5 @@ markdown_extensions:
   - pymdownx.superfences 
   - pymdownx.betterem
   - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji 
-      emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
