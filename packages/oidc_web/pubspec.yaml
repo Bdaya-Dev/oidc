@@ -20,12 +20,10 @@ dependencies:
     sdk: flutter
   flutter_web_plugins:
     sdk: flutter
-  js: '>=0.6.6 <1.0.0'
-  logging: ^1.2.0
+
   oidc_core: ^0.6.3
   oidc_platform_interface: ^0.3.1+2
-  rxdart: ^0.27.7
-  url_launcher: ^6.1.14
+  oidc_web_core: ^0.1.0+1
 
 dev_dependencies:
   flutter_test:
