@@ -96,7 +96,7 @@ mixin OidcDesktop on OidcPlatform {
     final authEndpoint = metadata.authorizationEndpoint;
     if (authEndpoint == null) {
       throw const OidcException(
-        "The OpenId Provider doesn't provide the authorizationEndpoint",
+        "The OpenId Provider doesn't provide '${OidcConstants_ProviderMetadata.authorizationEndpoint}'",
       );
     }
     final redirectUriCompleter = Completer<Uri>();
@@ -131,7 +131,7 @@ mixin OidcDesktop on OidcPlatform {
     final endSessionEndpoint = metadata.endSessionEndpoint;
     if (endSessionEndpoint == null) {
       throw const OidcException(
-        "The OpenId Provider doesn't provide the authorizationEndpoint",
+        "The OpenId Provider doesn't provide '${OidcConstants_ProviderMetadata.endSessionEndpoint}'",
       );
     }
 
