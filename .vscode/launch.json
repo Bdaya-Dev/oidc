@@ -5,6 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "example web core",
+            "cwd": "packages/oidc_web_core/example",
+            "request": "launch",
+            "type": "dart",
+            "deviceId": "chrome",
+            "program": "web",
+            "args": [
+                "web:22433"
+            ],
+        },
+        {
             "name": "example web",
             "cwd": "packages/oidc/example",
             "request": "launch",
