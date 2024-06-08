@@ -1,4 +1,4 @@
-name: oidc_core
+name: oidc_web_core
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -94,7 +94,7 @@ jobs:
 
       - name: 🧪 Run Tests        
         if: ${{ inputs.run_tests }}
-        run: very_good test -j ${{inputs.concurrency}} ${{(inputs.test_recursion && '--recursive') || ''}} ${{(inputs.test_optimization && '--optimization') || '--no-optimization'}} --coverage --test-randomize-ordering-seed random
+        run: dart test -j ${{inputs.concurrency}} ${{(inputs.test_recursion && '--recursive') || ''}} ${{(inputs.test_optimization && '--optimization') || '--no-optimization'}} --coverage --test-randomize-ordering-seed random
         
       - name: 🧪 Run Custom Tests        
         if: "${{inputs.custom_tests != ''}}"
