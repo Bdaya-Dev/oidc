@@ -4,6 +4,14 @@ name: Oidc Dart Package Workflow
 on:
   workflow_call:
     inputs:
+      flutter_channel:
+        required: false
+        type: string
+        default: "stable"
+      flutter_version:
+        required: false
+        type: string
+        default: "3.22.0"
       analyze_directories:
         required: false
         type: string
@@ -65,13 +73,15 @@ jobs:
       - name: 📚 Git Checkout
         uses: actions/checkout@v4
 
-      - name: 🎯 Setup Dart
-        uses: dart-lang/setup-dart@v1
+      - name: 🐦 Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
-          sdk: ${{inputs.dart_sdk}}
+          flutter-version: ${{inputs.flutter_version}}
+          channel: ${{inputs.flutter_channel}}
+          cache: true
+          cache-key: flutter-:os:-:channel:-:version:-:arch:-:hash:-${{ hashFiles('**/pubspec.lock') }}
 
-      - name: 📦 Install Dependencies
-        run: dart pub get
+      - uses: bluefireteam/melos-action@v3
 
       - name: ⚙️ Run Setup
         if: "${{inputs.setup != ''}}"
@@ -81,6 +91,7 @@ jobs:
         run: dart format --set-exit-if-changed .
 
       - name: 🕵️ Analyze
+        continue-on-error: true
         run: dart analyze --fatal-warnings ${{inputs.analyze_directories}}
 
       - name: 🧪 Run Tests

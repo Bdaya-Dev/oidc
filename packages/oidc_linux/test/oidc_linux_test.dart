@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_linux/oidc_linux.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 

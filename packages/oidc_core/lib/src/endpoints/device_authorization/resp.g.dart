@@ -17,7 +17,7 @@ OidcDeviceAuthorizationResponse _$OidcDeviceAuthorizationResponseFromJson(
           ? null
           : Uri.parse(json['verification_uri_complete'] as String),
       expiresIn: const OidcDurationSecondsConverter()
-          .fromJson(json['expires_in'] as int),
+          .fromJson((json['expires_in'] as num).toInt()),
       interval: _$JsonConverterFromJson<int, Duration>(
           json['interval'], const OidcDurationSecondsConverter().fromJson),
     );

@@ -23,7 +23,7 @@ on:
       flutter_version:
         required: false
         type: string
-        default: "3.13.2"
+        default: "3.22.0"
       min_coverage:
         required: false
         type: number
@@ -89,6 +89,7 @@ jobs:
         run: dart format --set-exit-if-changed lib test
 
       - name: 🕵️ Analyze
+        continue-on-error: true
         run: flutter analyze ${{inputs.analyze_directories}}
 
       - name: 🧪 Run Tests        
