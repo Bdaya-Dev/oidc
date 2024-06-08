@@ -84,11 +84,11 @@ you can use [![package:jose_plus][jose_plus_image]][jose_plus_link] to help you.
 
 #### store
 
-an instance of `OidcStore`, we provide 2 types of stores out of the box, depending on your use case:
+an instance of `OidcStore`, we provide 3 types of stores out of the box, depending on your use case:
 
 1. `OidcMemoryStore` from [package:oidc_core](oidc_core.md); which stores the auth state in memory (good for CLI apps or during testing).
 2. `OidcDefaultStore` from [package:oidc_default_store](oidc_default_store.md); which persists the auth state on disk or `localStorage` on web, And tries to encrypt the data if possible.
-
+3. `OidcWebStore` from [package:oidc_web_core](oidc_web_core.md); which persists the auth state on `localStorage`/`session_storage` on web.
 #### settings
 
 settings to control the behavior of the instance.
