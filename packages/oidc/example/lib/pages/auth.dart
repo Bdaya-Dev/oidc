@@ -82,7 +82,7 @@ class _AuthPageState extends State<AuthPage> {
                     username: userNameController.text,
                     password: passwordController.text,
                   );
-        
+
                   messenger.showSnackBar(
                     SnackBar(
                       content: Text(
@@ -169,7 +169,7 @@ class _AuthPageState extends State<AuthPage> {
             ElevatedButton(
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
-        
+
                 // ignore: deprecated_member_use
                 final result = await app_state.currentManager.loginImplicitFlow(
                   responseType: OidcConstants_AuthorizationEndpoint_ResponseType
@@ -181,7 +181,8 @@ class _AuthPageState extends State<AuthPage> {
                 );
                 if (kIsWeb &&
                     webNavigationMode ==
-                        OidcPlatformSpecificOptions_Web_NavigationMode.samePage) {
+                        OidcPlatformSpecificOptions_Web_NavigationMode
+                            .samePage) {
                   //in samePage navigation, you can't know the result here.
                   return;
                 }
