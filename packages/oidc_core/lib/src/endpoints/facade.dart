@@ -20,10 +20,18 @@ class OidcEndpoints {
   }) {
     try {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
+
       if (body.containsKey(OidcConstants_AuthParameters.error)) {
         final resp = OidcErrorResponse.fromJson(body);
         throw OidcException.serverError(
           errorResponse: resp,
+          rawRequest: request,
+          rawResponse: response,
+        );
+      }
+      if (!(response.statusCode >= 200 && response.statusCode < 400)) {
+        throw OidcException(
+          'Failed to handle the response from endpoint (status code ${response.statusCode}): ${request.url}',
           rawRequest: request,
           rawResponse: response,
         );
