@@ -76,7 +76,7 @@ Future<Response> _handleRequest(
   final url = request.url;
 
   if (_eq.equals(url.pathSegments, ['.well-known', 'openid-configuration'])) {
-    return Response(jsonEncode(mockProviderMetadata), 304);
+    return Response(jsonEncode(mockProviderMetadata), 200);
   }
   if (url.pathSegments.first == 'token') {
     final tokenResp = createMockTokenResponse(
