@@ -56,143 +56,147 @@ class _AuthPageState extends State<AuthPage> {
       appBar: AppBar(
         title: const Text('Auth page'),
       ),
-      body: ListView(
-        children: [
-          const Text('Resource owner grant'),
-          TextField(
-            controller: userNameController,
-            decoration: const InputDecoration(
-              labelText: 'username',
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: ListView(
+          children: [
+            const Text('Resource owner grant'),
+            TextField(
+              controller: userNameController,
+              decoration: const InputDecoration(
+                labelText: 'username',
+              ),
             ),
-          ),
-          TextField(
-            controller: passwordController,
-            decoration: const InputDecoration(
-              labelText: 'password',
+            TextField(
+              controller: passwordController,
+              decoration: const InputDecoration(
+                labelText: 'password',
+              ),
             ),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                final result = await app_state.currentManager.loginPassword(
-                  username: userNameController.text,
-                  password: passwordController.text,
-                );
-
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'loginPassword returned user id: ${result?.uid}',
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  final result = await app_state.currentManager.loginPassword(
+                    username: userNameController.text,
+                    password: passwordController.text,
+                  );
+        
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'loginPassword returned user id: ${result?.uid}',
+                      ),
                     ),
-                  ),
-                );
-              } catch (e) {
-                app_state.exampleLogger.severe(e.toString());
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'loginPassword failed!',
+                  );
+                } catch (e) {
+                  app_state.exampleLogger.severe(e.toString());
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'loginPassword failed!',
+                      ),
                     ),
-                  ),
-                );
-              }
-            },
-            child: const Text('login with Resource owner grant'),
-          ),
-          const Divider(),
-          DropdownButton<OidcPlatformSpecificOptions_Web_NavigationMode>(
-            hint: const Text('Web Navigation Mode'),
-            items: OidcPlatformSpecificOptions_Web_NavigationMode.values
-                .map(
-                  (e) => DropdownMenuItem(
-                    value: e,
-                    child: Text(e.name),
-                  ),
-                )
-                .toList(),
-            value: webNavigationMode,
-            onChanged: (value) {
-              if (value == null) {
-                return;
-              }
-              setState(() {
-                webNavigationMode = value;
-              });
-            },
-          ),
-          const Divider(),
-          ElevatedButton(
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                final result =
-                    await app_state.currentManager.loginAuthorizationCodeFlow(
+                  );
+                }
+              },
+              child: const Text('login with Resource owner grant'),
+            ),
+            const Divider(),
+            DropdownButton<OidcPlatformSpecificOptions_Web_NavigationMode>(
+              hint: const Text('Web Navigation Mode'),
+              items: OidcPlatformSpecificOptions_Web_NavigationMode.values
+                  .map(
+                    (e) => DropdownMenuItem(
+                      value: e,
+                      child: Text(e.name),
+                    ),
+                  )
+                  .toList(),
+              value: webNavigationMode,
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  webNavigationMode = value;
+                });
+              },
+            ),
+            const Divider(),
+            ElevatedButton(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  final result =
+                      await app_state.currentManager.loginAuthorizationCodeFlow(
+                    originalUri: parsedOriginalUri ?? Uri.parse('/'),
+                    //store any arbitrary data, here we store the authorization
+                    //start time.
+                    extraStateData: DateTime.now().toIso8601String(),
+                    options: _getOptions(),
+                    //NOTE: you can pass more parameters here.
+                  );
+                  if (kIsWeb &&
+                      webNavigationMode ==
+                          OidcPlatformSpecificOptions_Web_NavigationMode
+                              .samePage) {
+                    //in samePage navigation, you can't know the result here.
+                    return;
+                  }
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'loginAuthorizationCodeFlow returned user id: ${result?.uid}',
+                      ),
+                    ),
+                  );
+                } catch (e) {
+                  app_state.exampleLogger.severe(e.toString());
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'loginAuthorizationCodeFlow failed! ${e is OidcException ? e.message : ""}',
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Start Auth code flow'),
+            ),
+            const Divider(),
+            ElevatedButton(
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+        
+                // ignore: deprecated_member_use
+                final result = await app_state.currentManager.loginImplicitFlow(
+                  responseType: OidcConstants_AuthorizationEndpoint_ResponseType
+                      .idToken_Token,
                   originalUri: parsedOriginalUri ?? Uri.parse('/'),
                   //store any arbitrary data, here we store the authorization
                   //start time.
                   extraStateData: DateTime.now().toIso8601String(),
-                  options: _getOptions(),
-                  //NOTE: you can pass more parameters here.
                 );
                 if (kIsWeb &&
                     webNavigationMode ==
-                        OidcPlatformSpecificOptions_Web_NavigationMode
-                            .samePage) {
+                        OidcPlatformSpecificOptions_Web_NavigationMode.samePage) {
                   //in samePage navigation, you can't know the result here.
                   return;
                 }
                 messenger.showSnackBar(
                   SnackBar(
                     content: Text(
-                      'loginAuthorizationCodeFlow returned user id: ${result?.uid}',
+                      'loginImplicitFlow returned user id: ${result?.uid}',
                     ),
                   ),
                 );
-              } catch (e) {
-                app_state.exampleLogger.severe(e.toString());
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'loginAuthorizationCodeFlow failed! ${e is OidcException ? e.message : ""}',
-                    ),
-                  ),
-                );
-              }
-            },
-            child: const Text('Start Auth code flow'),
-          ),
-          const Divider(),
-          ElevatedButton(
-            onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-
-              // ignore: deprecated_member_use
-              final result = await app_state.currentManager.loginImplicitFlow(
-                responseType: OidcConstants_AuthorizationEndpoint_ResponseType
-                    .idToken_Token,
-                originalUri: parsedOriginalUri ?? Uri.parse('/'),
-                //store any arbitrary data, here we store the authorization
-                //start time.
-                extraStateData: DateTime.now().toIso8601String(),
-              );
-              if (kIsWeb &&
-                  webNavigationMode ==
-                      OidcPlatformSpecificOptions_Web_NavigationMode.samePage) {
-                //in samePage navigation, you can't know the result here.
-                return;
-              }
-              messenger.showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'loginImplicitFlow returned user id: ${result?.uid}',
-                  ),
-                ),
-              );
-            },
-            child: const Text('Start Implicit flow'),
-          ),
-        ],
+              },
+              child: const Text('Start Implicit flow'),
+            ),
+          ],
+        ),
       ),
     );
   }

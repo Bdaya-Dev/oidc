@@ -30,7 +30,7 @@
             var bc = new BroadcastChannel(redirectBroadcastChannel);
             bc.postMessage(window.location.toString());
             bc.close();
-
+            //The rest of this function handles same page redirects
             let dataSrc;
             dataSrc = new URLSearchParams(window.location.search);
             var state = dataSrc.get('state');
@@ -64,7 +64,6 @@
                 return;
             }
             if (webLaunchMode != 'samePage') {
-                window.close();
                 return;
             }
             const original_uri = parsedStateString.original_uri;

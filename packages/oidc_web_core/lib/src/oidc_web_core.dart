@@ -96,17 +96,27 @@ class OidcWebCore {
           return null;
         case OidcPlatformSpecificOptions_Web_NavigationMode.newPage:
           //
-          window.open(uri.toString(), '_blank');
+          final openedWindow = window.open(uri.toString(), '_blank');
+
           //listen to response uri.
-          return await c.future;
+          final res = await c.future;
+          if (openedWindow != null && !openedWindow.closed) {
+            openedWindow.close();
+          }
+          return res;
         case OidcPlatformSpecificOptions_Web_NavigationMode.popup:
           final windowOpts = _calculatePopupOptions(options);
-          window.open(
+          final openedWindow = window.open(
             uri.toString(),
             'oidc_auth_popup',
             windowOpts,
           );
-          return await c.future;
+
+          final res = await c.future;
+          if (openedWindow != null && !openedWindow.closed) {
+            openedWindow.close();
+          }
+          return res;
         case OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame:
           const iframeId = 'oidc-session-management-iframe';
           final iframe = _createHiddenIframe(iframeId: iframeId);
