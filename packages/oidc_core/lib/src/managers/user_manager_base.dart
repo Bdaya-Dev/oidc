@@ -138,9 +138,9 @@ abstract class OidcUserManagerBase {
   });
 
   @protected
-  OidcPlatformSpecificOptions getPlatformOptions(
-    [OidcPlatformSpecificOptions? optionsOverride,]
-  ) {
+  OidcPlatformSpecificOptions getPlatformOptions([
+    OidcPlatformSpecificOptions? optionsOverride,
+  ]) {
     return optionsOverride ??
         settings.options ??
         const OidcPlatformSpecificOptions();
