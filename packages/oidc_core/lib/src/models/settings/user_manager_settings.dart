@@ -33,6 +33,7 @@ class OidcUserManagerSettings {
     this.strictJwtVerification = false,
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
+    this.getIdToken
   });
 
   /// The default scopes
@@ -105,6 +106,13 @@ class OidcUserManagerSettings {
 
   /// overrides a token's expires_in value.
   final Duration? Function(OidcTokenResponse tokenResponse)? getExpiresIn;
+
+  /// pass this function to control how and idToken is fetched from a 
+  /// token response.
+  /// 
+  /// This can be used to trick the user manager into using a JWT access_token 
+  /// as an id_token for example.
+  final Future<String?> Function(OidcToken token)? getIdToken;
 
   /// platform-specific options.
   final OidcPlatformSpecificOptions? options;

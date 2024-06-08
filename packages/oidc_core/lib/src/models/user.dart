@@ -33,8 +33,9 @@ class OidcUser {
     List<String>? allowedAlgorithms,
     Map<String, dynamic>? attributes,
     Map<String, dynamic>? userInfo,
+    String? idTokenOverride,
   }) async {
-    final idToken = token.idToken;
+    final idToken = idTokenOverride ?? token.idToken;
     if (idToken == null) {
       throw const OidcException(
         "Server didn't return the id_token.",
@@ -122,8 +123,11 @@ class OidcUser {
   }
 
   /// if an id_token exists in the [newToken], it will be re-verified.
-  Future<OidcUser> replaceToken(OidcToken newToken) async {
-    final idToken = newToken.idToken ?? this.idToken;
+  Future<OidcUser> replaceToken(
+    OidcToken newToken, {
+    String? idTokenOverride,
+  }) async {
+    final idToken = idTokenOverride ?? newToken.idToken ?? this.idToken;
 
     JsonWebToken webToken;
     if (idToken != this.idToken) {

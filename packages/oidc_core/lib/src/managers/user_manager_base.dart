@@ -590,6 +590,7 @@ abstract class OidcUserManagerBase {
   }) async {
     final currentUser = this.currentUser;
     OidcUser newUser;
+    final idTokenOverride = await settings.getIdToken?.call(token);
     if (currentUser == null) {
       newUser = await OidcUser.fromIdToken(
         token: token,
@@ -597,9 +598,13 @@ abstract class OidcUserManagerBase {
         keystore: keyStore,
         attributes: attributes,
         strictVerification: settings.strictJwtVerification,
+        idTokenOverride: idTokenOverride,
       );
     } else {
-      newUser = await currentUser.replaceToken(token);
+      newUser = await currentUser.replaceToken(
+        token,
+        idTokenOverride: idTokenOverride,
+      );
       if (attributes != null) {
         newUser = newUser.setAttributes(attributes);
       }
