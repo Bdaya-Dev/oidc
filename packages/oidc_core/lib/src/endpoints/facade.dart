@@ -31,10 +31,10 @@ class OidcEndpoints {
       }
       if (!(response.statusCode >= 200 && response.statusCode < 300)) {
         throw OidcException(
-        'Failed to handle the response from endpoint (status code ${response.statusCode}): ${request.url}',
-        rawRequest: request,
-        rawResponse: response,
-      );
+          'Failed to handle the response from endpoint (status code ${response.statusCode}): ${request.url}',
+          rawRequest: request,
+          rawResponse: response,
+        );
       }
       return mapper(body);
     } on OidcException {
