@@ -1,0 +1,35 @@
+name: oidc_core
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/oidc_web_core.yaml"
+      - "packages/oidc_web_core/**"
+  push:
+    branches:
+      - main
+
+jobs:
+
+  build:
+    name: build
+    uses: ./.github/workflows/dart_package.yaml
+    with:
+      working_directory: packages/oidc_web_core
+      min_coverage: 0
+      platform: chrome
+      custom_tests: |
+        dart pub global activate remove_from_coverage
+        dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$'
+
+
+  pana:
+    uses: ./.github/workflows/pana.yaml
+    needs: build
+    with:
+      min_score: 100
+
