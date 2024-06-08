@@ -34,6 +34,7 @@ class OidcUserManager extends OidcUserManagerBase {
     return OidcFlutter.getPlatformAuthorizationResponse(
       metadata: metadata,
       request: request,
+      options: options,
     );
   }
 
@@ -46,6 +47,7 @@ class OidcUserManager extends OidcUserManagerBase {
     return OidcFlutter.getPlatformEndSessionResponse(
       metadata: metadata,
       request: request,
+      options: options,
     );
   }
 
