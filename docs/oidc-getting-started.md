@@ -12,7 +12,7 @@ after following this document, you can check the [Usage Document](oidc-usage.md)
 ## Adding dependencies
 
 ```sh
-dart pub add oidc oidc_default_store
+dart pub add oidc oidc_default_store oidc_core
 ```
 
 every platform you support has its own configuration and set up.

@@ -283,13 +283,6 @@ manager.events().listen((event) {
 });
 ```
 
-#### OidcEvent
-
-The base class for all events, this contains an `at` property that stores when the event occurred.
-
-#### OidcPreLogoutEvent
-
-Occurs before a user is forgotten, either via `forgetUser()` or via `logout()`.
 
 
 ### Refreshing the token manually

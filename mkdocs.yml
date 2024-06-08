@@ -13,9 +13,9 @@ nav:
     - 'package:oidc_core': oidc_core.md
     - 'package:oidc_web_core': oidc_web_core.md
     - 'OidcStore':
-      - 'package:oidc_web_store': oidc_web_store.md
       - 'package:oidc_default_store': oidc_default_store.md
       - 'OidcMemoryStore': oidc_memory_store.md
+      - 'OidcWebStore': oidc_web_store.md
     - 'package:oidc_loopback_listener': oidc_loopback_listener.md
 theme:
   palette: 
