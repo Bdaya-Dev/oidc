@@ -28,7 +28,7 @@ final duendeManager = OidcUserManagerWeb.lazy(
         // this url must be an actual html page.
         // see the file in /web/redirect.html for an example.
         //
-        // for debugging in flutter, you must run this app with --web-port 22433
+        // you must run this app with port 22433
         Uri.parse('http://127.0.0.1:22433/redirect.html'),
   ),
 );
