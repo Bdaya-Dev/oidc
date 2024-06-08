@@ -19,8 +19,8 @@ class OidcEndpoints {
     required http.Response response,
   }) {
     try {
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-
+      final body =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
       if (body.containsKey(OidcConstants_AuthParameters.error)) {
         final resp = OidcErrorResponse.fromJson(body);
         throw OidcException.serverError(
