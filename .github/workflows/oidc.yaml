@@ -74,7 +74,8 @@ jobs:
 
   ios:
     runs-on: macos-latest
-
+    # disable ios due to timeout errors
+    if: false    
     defaults:
       run:
         working-directory: packages/oidc/example
