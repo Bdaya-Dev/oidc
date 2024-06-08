@@ -137,8 +137,9 @@ abstract class OidcUserManagerBase {
     required OidcMonitorSessionStatusRequest request,
   });
 
-  OidcPlatformSpecificOptions getOptions(
-    OidcPlatformSpecificOptions? optionsOverride,
+  @protected
+  OidcPlatformSpecificOptions getPlatformOptions(
+    [OidcPlatformSpecificOptions? optionsOverride,]
   ) {
     return optionsOverride ??
         settings.options ??
@@ -171,7 +172,7 @@ abstract class OidcUserManagerBase {
     ensureInit();
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
-    options = getOptions(options);
+    options = getPlatformOptions(options);
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
@@ -385,7 +386,7 @@ abstract class OidcUserManagerBase {
     ensureInit();
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
-    options = getOptions(options);
+    options = getPlatformOptions(options);
     final currentUser = this.currentUser;
     if (currentUser == null) {
       return;
