@@ -137,6 +137,15 @@ abstract class OidcUserManagerBase {
     required OidcMonitorSessionStatusRequest request,
   });
 
+  @protected
+  OidcPlatformSpecificOptions getPlatformOptions([
+    OidcPlatformSpecificOptions? optionsOverride,
+  ]) {
+    return optionsOverride ??
+        settings.options ??
+        const OidcPlatformSpecificOptions();
+  }
+
   /// Attempts to login the user via the AuthorizationCodeFlow.
   ///
   /// [originalUri] is the uri you want to be redirected to after authentication is done,
@@ -163,7 +172,7 @@ abstract class OidcUserManagerBase {
     ensureInit();
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
-    options ??= settings.options ?? const OidcPlatformSpecificOptions();
+    options = getPlatformOptions(options);
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
@@ -377,7 +386,7 @@ abstract class OidcUserManagerBase {
     ensureInit();
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
-    options ??= const OidcPlatformSpecificOptions();
+    options = getPlatformOptions(options);
     final currentUser = this.currentUser;
     if (currentUser == null) {
       return;
