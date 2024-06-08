@@ -7,15 +7,7 @@ import 'package:oidc_web_core/oidc_web_core.dart';
 /// Pure dart implementation of OidcUserManagerBase that uses package:web and
 /// is independant of flutter.
 class OidcUserManagerWeb extends OidcUserManagerBase {
-  OidcUserManagerWeb.lazy({
-    required super.discoveryDocumentUri,
-    required super.clientCredentials,
-    required super.store,
-    required super.settings,
-    super.httpClient,
-    super.keyStore,
-  }) : super.lazy();
-
+  ///
   OidcUserManagerWeb({
     required super.discoveryDocument,
     required super.clientCredentials,
@@ -24,6 +16,16 @@ class OidcUserManagerWeb extends OidcUserManagerBase {
     super.httpClient,
     super.keyStore,
   }) : super();
+
+  ///
+  OidcUserManagerWeb.lazy({
+    required super.discoveryDocumentUri,
+    required super.clientCredentials,
+    required super.store,
+    required super.settings,
+    super.httpClient,
+    super.keyStore,
+  }) : super.lazy();
 
   static const _coreInstance = OidcWebCore();
 

@@ -11,7 +11,7 @@ dependencies:
   crypto: ^3.0.3
   jose_plus: ^0.4.4
   http: ^1.1.0
-  json_annotation: ^4.8.1
+  json_annotation: ^4.9.0
   uuid: "^4.0.0"
   meta: ^1.9.1
   nonce: ^1.2.0

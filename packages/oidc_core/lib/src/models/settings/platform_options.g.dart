@@ -111,7 +111,7 @@ Map<String, dynamic> _$OidcPlatformSpecificOptions_WebToJson(
         OidcPlatformSpecificOptions_Web instance) =>
     <String, dynamic>{
       'navigationMode': _$OidcPlatformSpecificOptions_Web_NavigationModeEnumMap[
-          instance.navigationMode]!,
+          instance.navigationMode],
       'popupWidth': instance.popupWidth,
       'popupHeight': instance.popupHeight,
       'broadcastChannel': instance.broadcastChannel,

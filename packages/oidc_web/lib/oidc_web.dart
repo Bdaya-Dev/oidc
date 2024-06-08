@@ -52,9 +52,10 @@ class OidcWeb extends OidcPlatform {
 
   @override
   Future<OidcEndSessionResponse?> getEndSessionResponse(
-      OidcProviderMetadata metadata,
-      OidcEndSessionRequest request,
-      OidcPlatformSpecificOptions options) {
+    OidcProviderMetadata metadata,
+    OidcEndSessionRequest request,
+    OidcPlatformSpecificOptions options,
+  ) {
     return _coreInstance.getEndSessionResponse(
       metadata,
       request,

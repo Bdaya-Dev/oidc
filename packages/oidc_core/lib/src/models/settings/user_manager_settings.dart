@@ -1,8 +1,5 @@
 import 'package:oidc_core/oidc_core.dart';
 
-import 'front_channel_request_options.dart';
-import 'platform_options.dart';
-
 /// The callback used to determine the `expiring` duration.
 typedef OidcRefreshBeforeCallback = Duration? Function(OidcToken token);
 
@@ -13,9 +10,6 @@ Duration? defaultRefreshBefore(OidcToken token) {
 
 ///
 class OidcUserManagerSettings {
-  /// The default scopes
-  static const defaultScopes = ['openid'];
-
   ///
   const OidcUserManagerSettings({
     required this.redirectUri,
@@ -40,6 +34,9 @@ class OidcUserManagerSettings {
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
   });
+
+  /// The default scopes
+  static const defaultScopes = ['openid'];
 
   /// Settings to control using the user_info endpoint.
   final OidcUserInfoSettings userInfoSettings;

@@ -5,15 +5,7 @@ import 'package:oidc_core/oidc_core.dart';
 
 /// The flutter implementation of OidcUserManagerBase
 class OidcUserManager extends OidcUserManagerBase {
-  OidcUserManager.lazy({
-    required super.discoveryDocumentUri,
-    required super.clientCredentials,
-    required super.store,
-    required super.settings,
-    super.httpClient,
-    super.keyStore,
-  }) : super.lazy();
-
+  ///
   OidcUserManager({
     required super.discoveryDocument,
     required super.clientCredentials,
@@ -22,6 +14,16 @@ class OidcUserManager extends OidcUserManagerBase {
     super.httpClient,
     super.keyStore,
   });
+  
+  ///
+  OidcUserManager.lazy({
+    required super.discoveryDocumentUri,
+    required super.clientCredentials,
+    required super.store,
+    required super.settings,
+    super.httpClient,
+    super.keyStore,
+  }) : super.lazy();
 
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(

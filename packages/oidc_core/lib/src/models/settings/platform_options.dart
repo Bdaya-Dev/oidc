@@ -1,5 +1,6 @@
 // coverage:ignore-file
 // ignore_for_file: camel_case_types, sort_constructors_first
+// ignore_for_file: unnecessary_null_checks
 
 import 'package:json_annotation/json_annotation.dart';
 

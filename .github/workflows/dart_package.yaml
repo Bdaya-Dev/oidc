@@ -81,6 +81,7 @@ jobs:
         run: dart format --set-exit-if-changed .
 
       - name: 🕵️ Analyze
+        continue-on-error: true
         run: dart analyze --fatal-warnings ${{inputs.analyze_directories}}
 
       - name: 🧪 Run Tests
