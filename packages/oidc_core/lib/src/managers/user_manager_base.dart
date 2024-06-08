@@ -84,6 +84,8 @@ abstract class OidcUserManagerBase {
     final ex = OidcException(
       message,
       extra: extra,
+      internalException: error,
+      internalStackTrace: stackTrace,
     );
     logger.severe(message, error ?? ex, stackTrace ?? StackTrace.current);
     throw ex;
@@ -699,9 +701,10 @@ abstract class OidcUserManagerBase {
   /// If any of these conditions are not met, null is returned.
   ///
   /// An [OidcException] will be thrown if the server returns an error.
-  Future<OidcUser?> refreshToken(
-      {String? overrideRefreshToken,
-      OidcProviderMetadata? discoveryDocumentOverride}) async {
+  Future<OidcUser?> refreshToken({
+    String? overrideRefreshToken,
+    OidcProviderMetadata? discoveryDocumentOverride,
+  }) async {
     ensureInit();
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
@@ -806,7 +809,9 @@ abstract class OidcUserManagerBase {
   }
 
   void _handleTokenExpired(OidcToken event) {
-    forgetUser();
+    if (!settings.keepExpiredTokens) {
+      forgetUser();
+    }
   }
 
   @protected
@@ -847,33 +852,43 @@ abstract class OidcUserManagerBase {
 
     if (errors.isEmpty) {
       final userInfoEP = metadata.userinfoEndpoint;
-      if (settings.userInfoSettings.sendUserInfoRequest && userInfoEP != null) {
-        userInfoResp = await OidcEndpoints.userInfo(
-          userInfoEndpoint: userInfoEP,
-          accessToken: actualUser.token.accessToken!,
-          requestMethod: settings.userInfoSettings.requestMethod,
-          tokenLocation: settings.userInfoSettings.accessTokenLocation,
-          client: httpClient,
-          allowedAlgorithms: metadata.userinfoSigningAlgValuesSupported,
-          followDistributedClaims:
-              settings.userInfoSettings.followDistributedClaims,
-          getAccessTokenForDistributedSource:
-              settings.userInfoSettings.getAccessTokenForDistributedSource,
-          keyStore: keyStore,
-        );
 
-        logger.info('UserInfo response: ${userInfoResp.src}');
-        if (userInfoResp.sub != null &&
-            userInfoResp.sub != actualUser.claims.subject) {
-          errors.add(
-            const OidcException("UserInfo didn't return the same subject."),
+      if (settings.userInfoSettings.sendUserInfoRequest && userInfoEP != null) {
+        try {
+          userInfoResp = await OidcEndpoints.userInfo(
+            userInfoEndpoint: userInfoEP,
+            accessToken: actualUser.token.accessToken!,
+            requestMethod: settings.userInfoSettings.requestMethod,
+            tokenLocation: settings.userInfoSettings.accessTokenLocation,
+            client: httpClient,
+            allowedAlgorithms: metadata.userinfoSigningAlgValuesSupported,
+            followDistributedClaims:
+                settings.userInfoSettings.followDistributedClaims,
+            getAccessTokenForDistributedSource:
+                settings.userInfoSettings.getAccessTokenForDistributedSource,
+            keyStore: keyStore,
           );
+
+          logger.info('UserInfo response: ${userInfoResp.src}');
+          if (userInfoResp.sub != null &&
+              userInfoResp.sub != actualUser.claims.subject) {
+            errors.add(
+              const OidcException("UserInfo didn't return the same subject."),
+            );
+          }
+        } catch (e, st) {
+          logger.severe('UserInfo endpoint threw an exception!', e, st);
         }
       }
     }
 
-    if (errors.isEmpty) {
-      //get user info:
+    if (errors.isEmpty ||
+        //keep going if the only error is that the token expired,
+        //and it's allowed in settings.
+        (settings.keepExpiredTokens &&
+            errors.every((e) =>
+                e is JoseException && e.message.startsWith('JWT expired.')))) {
+      // apply userinfo if present
       if (userInfoResp != null) {
         actualUser = actualUser.withUserInfo(userInfoResp.src);
       }
@@ -1035,10 +1050,20 @@ abstract class OidcUserManagerBase {
         final idTokenNeedsRefresh = validationErrors
             .whereType<JoseException>()
             .any((element) => element.message.startsWith('JWT expired'));
+
         if (token.refreshToken != null &&
             (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
-          loadedUser =
-              await refreshToken(overrideRefreshToken: token.refreshToken);
+          try {
+            loadedUser =
+                await refreshToken(overrideRefreshToken: token.refreshToken);
+          } catch (e) {
+            // An app might go offline during token refresh, so we consult the
+            // keepUnverifiedTokens setting to check whether this is an issue or
+            // not.
+            if (!settings.keepExpiredTokens) {
+              rethrow;
+            }
+          }
         }
         if (loadedUser != null) {
           loadedUser = await validateAndSaveUser(
@@ -1050,14 +1075,17 @@ abstract class OidcUserManagerBase {
 
       if (loadedUser == null) {
         logAndThrow(
-            'Found a cached token, but the user could not be created or validated');
+          'Found a cached token, but the user could not be created or validated',
+        );
       }
     } catch (e) {
-      // remove invalid tokens, so that they don't get used again.
-      await store.removeMany(
-        OidcStoreNamespace.secureTokens,
-        keys: usedKeys,
-      );
+      if (settings.keepUnverifiedTokens) {
+        // remove invalid tokens, so that they don't get used again.
+        await store.removeMany(
+          OidcStoreNamespace.secureTokens,
+          keys: usedKeys,
+        );
+      }
     }
   }
 
@@ -1241,7 +1269,9 @@ abstract class OidcUserManagerBase {
       return user;
     } on OidcException catch (e) {
       if (e.errorResponse != null) {
-        await forgetUser();
+        if (!settings.keepExpiredTokens) {
+          await forgetUser();
+        }
         return null;
       }
       rethrow;
