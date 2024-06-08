@@ -14,7 +14,7 @@ class OidcUserManager extends OidcUserManagerBase {
     super.httpClient,
     super.keyStore,
   });
-  
+
   ///
   OidcUserManager.lazy({
     required super.discoveryDocumentUri,
