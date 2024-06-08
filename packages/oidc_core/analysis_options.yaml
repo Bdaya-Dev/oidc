@@ -7,6 +7,8 @@ analyzer:
 
 linter:
   rules:
+    constant_identifier_names: false
+    non_constant_identifier_names: false
     require_trailing_commas: false
     always_use_package_imports: false
     public_member_api_docs: false

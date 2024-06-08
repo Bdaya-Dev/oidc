@@ -1,7 +1,10 @@
 // coverage:ignore-file
-// ignore_for_file: camel_case_types
+// ignore_for_file: camel_case_types, sort_constructors_first
+// ignore_for_file: unnecessary_null_checks
 
 import 'package:json_annotation/json_annotation.dart';
+
+part 'platform_options.g.dart';
 
 /// Represents flutter platform-specific options.
 @JsonSerializable()
@@ -39,6 +42,15 @@ class OidcPlatformSpecificOptions {
   /// Windows options.
   @JsonKey(name: 'windows')
   final OidcPlatformSpecificOptions_Native windows;
+
+  Map<String, dynamic> toJson() {
+    return _$OidcPlatformSpecificOptionsToJson(this);
+  }
+
+  factory OidcPlatformSpecificOptions.fromJson(
+    Map<String, dynamic> src,
+  ) =>
+      _$OidcPlatformSpecificOptionsFromJson(src);
 }
 
 ///
@@ -51,6 +63,15 @@ class OidcPlatformSpecificOptions_AppAuth_Android {
 
   ///
   final bool allowInsecureConnections;
+
+  Map<String, dynamic> toJson() {
+    return _$OidcPlatformSpecificOptions_AppAuth_AndroidToJson(this);
+  }
+
+  factory OidcPlatformSpecificOptions_AppAuth_Android.fromJson(
+    Map<String, dynamic> src,
+  ) =>
+      _$OidcPlatformSpecificOptions_AppAuth_AndroidFromJson(src);
 }
 
 ///
@@ -63,6 +84,15 @@ class OidcPlatformSpecificOptions_AppAuth_IosMacos {
 
   ///
   final bool preferEphemeralSession;
+
+  Map<String, dynamic> toJson() {
+    return _$OidcPlatformSpecificOptions_AppAuth_IosMacosToJson(this);
+  }
+
+  factory OidcPlatformSpecificOptions_AppAuth_IosMacos.fromJson(
+    Map<String, dynamic> src,
+  ) =>
+      _$OidcPlatformSpecificOptions_AppAuth_IosMacosFromJson(src);
 }
 
 ///
@@ -83,6 +113,15 @@ class OidcPlatformSpecificOptions_Native {
 
   /// What to return if a different path is used.
   final String? notFoundResponse;
+
+  Map<String, dynamic> toJson() {
+    return _$OidcPlatformSpecificOptions_NativeToJson(this);
+  }
+
+  factory OidcPlatformSpecificOptions_Native.fromJson(
+    Map<String, dynamic> src,
+  ) =>
+      _$OidcPlatformSpecificOptions_NativeFromJson(src);
 }
 
 /// The possible navigation modes to use for web.
@@ -129,7 +168,8 @@ class OidcPlatformSpecificOptions_Web {
         OidcPlatformSpecificOptions_Web_NavigationMode.newPage,
     this.popupWidth = 700,
     this.popupHeight = 750,
-    this.broadcastChannel = defaultBroadcastChannel,
+    this.broadcastChannel =
+        OidcPlatformSpecificOptions_Web.defaultBroadcastChannel,
     this.hiddenIframeTimeout = const Duration(seconds: 10),
   });
 
@@ -148,10 +188,20 @@ class OidcPlatformSpecificOptions_Web {
   /// The broadcast channel to use when receiving messages from the browser.
   ///
   /// defaults to [defaultBroadcastChannel].
+
   final String broadcastChannel;
 
   /// the amount of time to wait before considering the request failed when using [OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame].
   ///
   /// default is 10 seconds
   final Duration hiddenIframeTimeout;
+
+  Map<String, dynamic> toJson() {
+    return _$OidcPlatformSpecificOptions_WebToJson(this);
+  }
+
+  factory OidcPlatformSpecificOptions_Web.fromJson(
+    Map<String, dynamic> src,
+  ) =>
+      _$OidcPlatformSpecificOptions_WebFromJson(src);
 }

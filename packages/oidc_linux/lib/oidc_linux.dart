@@ -1,4 +1,5 @@
 import 'package:logging/logging.dart';
+import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_desktop/oidc_desktop.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 

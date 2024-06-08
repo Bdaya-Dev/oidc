@@ -1,11 +1,9 @@
-# Using the Package <!-- omit from toc -->
 
-[![package:oidc_core][package_image]][package_link]
+# [![package:oidc_core][package_image]][package_link]
 
+This is the core package written in pure dart, and maps the oidc spec to dart classes.
 
-Note that you don't need to use this package if you are using the `OidcUserManager` from `package:oidc`, but it's useful to learn about it.
-
-you can check the [CLI example](https://github.com/Bdaya-Dev/oidc/blob/main/packages/oidc_core/example/oidc_core_example.dart), showing how to use this package to implement the auth code flow in a CLI environment.
+you can check the [CLI example](https://github.com/Bdaya-Dev/oidc/blob/main/packages/oidc_core/example/main.dart), showing how to use this package to implement the auth code flow in a CLI environment.
 
 ## OidcUtils
 
@@ -38,13 +36,32 @@ this is an enum that contains all the possible namespaces
 
     On the web platform, since we use an external `redirect.html` page, implementations of the store MUST match the used page.
 
-    we made a default implementation in [package:oidc_default_store](oidc_default_store.md), which matches the `redirect.html` page provided in our examples.
+    we made a default implementation in [package:oidc_default_store](oidc_default_store.md) and [package:oidc_web_core](oidc_web_store.md), which matches the `redirect.html` page provided in our examples.
 
 ### OidcMemoryStore
 
 A simple implementation of `OidcStore`, used mainly on CLI apps and for testing.
 
 It stores everything in memory, and doesn't persist anything.
+
+## OidcUserManagerBase
+
+An abstract class containing all the base logic needed to implement oidc spec and maintain a user, regardless of platform.
+
+Example implementations:
+
+- CLI: example [here](https://github.com/Bdaya-Dev/oidc/blob/main/packages/oidc_core/example/cli_user_manager.dart)
+- Flutter: `OidcUserManager` in [package:oidc](https://github.com/Bdaya-Dev/oidc/blob/main/packages/oidc/lib/src/managers/user_manager.dart)
+- Dart Web: `OidcUserManagerWeb` in [package:oidc_web_core](https://github.com/Bdaya-Dev/oidc/blob/main/packages/oidc_web_core/lib/src/user_manager_web.dart)
+
+
+## OidcEvent
+
+The base class for all events, this contains an `at` property that stores when the event occurred.
+
+### OidcPreLogoutEvent
+
+Occurs before a user is forgotten, either via `forgetUser()` or via `logout()`.
 
 ## OidcPkcePair
 
@@ -147,6 +164,7 @@ Contains methods that help you implement the OIDC spec yourself.
 - `userInfo`: sends a request to the `/userinfo` endpoint.
 - `deviceAuthorization`: sends a request to the device authorization endpoint.
 
+--- 
 
 [package_link]: https://pub.dev/packages/oidc_core
 [package_image]: https://img.shields.io/badge/package-oidc__core-0175C2?logo=dart&logoColor=white
