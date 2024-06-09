@@ -2,8 +2,8 @@
 
 > Note: This release has breaking changes.
 
- - **FEAT**: depend on oidc_web_core.
- - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+ - **FEAT**: depend on [oidc_web_core](https://pub.dev/packages/oidc_web_core).
+ - **BREAKING** **FEAT**: [Migrate to package:web](https://dart.dev/interop/js-interop/package-web).
 
 ## 0.3.1+2
 

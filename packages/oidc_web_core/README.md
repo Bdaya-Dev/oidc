@@ -6,7 +6,7 @@
 
 Core web package for oidc.
 
-This package doesn't depend on flutter, and only depends on [package:web](https://pub.dev/packages/web), making it compatible with both [WASM](https://docs.flutter.dev/platform-integration/web/wasm) and [ngdart](https://pub.dev/packages/ngdart).
+This package doesn't depend on flutter, and only depends on [package:web](https://pub.dev/packages/web), making it compatible with both [WASM](https://docs.flutter.dev/platform-integration/web/wasm) and dart web apps like [ngdart](https://pub.dev/packages/ngdart).
 
 Make sure you read the [![Wiki](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/oidc_web_core/) for extra information.
 

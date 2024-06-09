@@ -2,7 +2,8 @@
 
 > Note: This release has breaking changes.
 
- - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+ - Update a dependency to the latest release.
+ - **BREAKING** **FEAT**: added `Map<String, dynamic> prepareForRedirectFlow(OidcPlatformSpecificOptions options)` to `OidcPlatform` to solve [issue #31](https://github.com/Bdaya-Dev/oidc/issues/31).
 
 ## 0.3.1+2
 
