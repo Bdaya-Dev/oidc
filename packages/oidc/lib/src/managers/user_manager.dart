@@ -30,11 +30,13 @@ class OidcUserManager extends OidcUserManagerBase {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) {
     return OidcFlutter.getPlatformAuthorizationResponse(
       metadata: metadata,
       request: request,
       options: options,
+      preparationResult: preparationResult,
     );
   }
 
@@ -43,11 +45,13 @@ class OidcUserManager extends OidcUserManagerBase {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) {
     return OidcFlutter.getPlatformEndSessionResponse(
       metadata: metadata,
       request: request,
       options: options,
+      preparationResult: preparationResult,
     );
   }
 
@@ -75,5 +79,12 @@ class OidcUserManager extends OidcUserManagerBase {
       checkSessionIframe: checkSessionIframe,
       request: request,
     );
+  }
+
+  @override
+  Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions options,
+  ) {
+    return OidcFlutter.prepareForRedirectFlow(options);
   }
 }

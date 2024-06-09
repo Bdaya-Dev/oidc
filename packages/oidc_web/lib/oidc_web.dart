@@ -19,11 +19,13 @@ class OidcWeb extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) async {
     return _coreInstance.getAuthorizationResponse(
       metadata,
       request,
       options.web,
+      preparationResult,
     );
   }
 
@@ -55,11 +57,20 @@ class OidcWeb extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) {
     return _coreInstance.getEndSessionResponse(
       metadata,
       request,
       options.web,
+      preparationResult,
     );
+  }
+
+  @override
+  Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions options,
+  ) {
+    return _coreInstance.prepareForRedirectFlow(options.web);
   }
 }

@@ -78,6 +78,7 @@ class CliUserManager extends OidcUserManagerBase {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) async {
     final authEndpoint = metadata.authorizationEndpoint;
     if (authEndpoint == null) {
@@ -114,6 +115,7 @@ class CliUserManager extends OidcUserManagerBase {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) async {
     final endSessionEndpoint = metadata.endSessionEndpoint;
     if (endSessionEndpoint == null) {
@@ -165,5 +167,12 @@ class CliUserManager extends OidcUserManagerBase {
     required OidcMonitorSessionStatusRequest request,
   }) {
     return const Stream.empty();
+  }
+
+  @override
+  Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions options,
+  ) {
+    return {};
   }
 }

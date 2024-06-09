@@ -112,22 +112,32 @@ abstract class OidcUserManagerBase {
 
   /// Returns the authorization response.
   /// may throw an [OidcException].
+  @protected
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   );
 
   /// Returns the end session response for an RP initiated logout request.
   /// may throw an [OidcException].
+  @protected
   Future<OidcEndSessionResponse?> getEndSessionResponse(
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
+    OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
+  );
+
+  @protected
+  Map<String, dynamic> prepareForRedirectFlow(
     OidcPlatformSpecificOptions options,
   );
 
   /// Listens to incoming front channel logout requests.
   /// returns an empty stream on non-supported platforms.
+  @protected
   Stream<OidcFrontChannelLogoutIncomingRequest>
       listenToFrontChannelLogoutRequests(
     Uri listenOn,
@@ -135,6 +145,7 @@ abstract class OidcUserManagerBase {
   );
 
   /// starts monitoring the session status.
+  @protected
   Stream<OidcMonitorSessionResult> monitorSessionStatus({
     required Uri checkSessionIframe,
     required OidcMonitorSessionStatusRequest request,
@@ -176,6 +187,7 @@ abstract class OidcUserManagerBase {
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
     options = getPlatformOptions(options);
+    final prep = prepareForRedirectFlow(options);
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
@@ -218,6 +230,7 @@ abstract class OidcUserManagerBase {
       request: requestContainer.request,
       options: options,
       metadata: discoveryDocument,
+      prep: prep,
     );
   }
 
@@ -263,13 +276,11 @@ abstract class OidcUserManagerBase {
     required String grantType,
     required OidcPlatformSpecificOptions options,
     required OidcProviderMetadata metadata,
+    required Map<String, dynamic> prep,
   }) async {
     try {
-      final response = await getAuthorizationResponse(
-        metadata,
-        request,
-        options,
-      );
+      final response =
+          await getAuthorizationResponse(metadata, request, options, prep);
       if (response == null) {
         return null;
       }
@@ -321,7 +332,9 @@ abstract class OidcUserManagerBase {
   }) async {
     ensureInit();
     final doc = discoveryDocumentOverride ?? discoveryDocument;
-    options ??= const OidcPlatformSpecificOptions();
+    options = getPlatformOptions(options);
+    final prep = prepareForRedirectFlow(options);
+
     final simpleReq = OidcSimpleImplicitFlowRequest(
       responseType: responseType,
       clientId: clientCredentials.clientId,
@@ -353,6 +366,7 @@ abstract class OidcUserManagerBase {
       grantType: OidcConstants_GrantType.implicit,
       options: options,
       metadata: doc,
+      prep: prep,
     );
   }
 
@@ -391,6 +405,7 @@ abstract class OidcUserManagerBase {
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
     options = getPlatformOptions(options);
+    final prep = prepareForRedirectFlow(options);
     final currentUser = this.currentUser;
     if (currentUser == null) {
       return;
@@ -413,18 +428,18 @@ abstract class OidcUserManagerBase {
       );
     }
     final resultFuture = getEndSessionResponse(
-      discoveryDocument,
-      OidcEndSessionRequest(
-        clientId: clientCredentials.clientId,
-        postLogoutRedirectUri: postLogoutRedirectUri,
-        uiLocales: uiLocalesOverride ?? settings.uiLocales,
-        idTokenHint: currentUser.idToken,
-        extra: extraParameters,
-        logoutHint: logoutHint,
-        state: stateData?.id,
-      ),
-      options,
-    );
+        discoveryDocument,
+        OidcEndSessionRequest(
+          clientId: clientCredentials.clientId,
+          postLogoutRedirectUri: postLogoutRedirectUri,
+          uiLocales: uiLocalesOverride ?? settings.uiLocales,
+          idTokenHint: currentUser.idToken,
+          extra: extraParameters,
+          logoutHint: logoutHint,
+          state: stateData?.id,
+        ),
+        options,
+        prep);
     if (stateData == null) {
       // they won't come back with a result!
       await forgetUser();

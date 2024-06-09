@@ -29,12 +29,22 @@ abstract class OidcPlatform extends PlatformInterface {
     _instance = instance;
   }
 
+  /// prepares the platform to handle a redirect flow
+  ///
+  /// Mainly used in web to launch the page before any other async code is executed
+  ///
+  /// see https://github.com/Bdaya-Dev/oidc/issues/31
+  Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions options,
+  );
+
   /// Returns the authorization response.
   /// may throw an [OidcException].
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   );
 
   /// Returns the end session response for an RP initiated logout request.
@@ -43,6 +53,7 @@ abstract class OidcPlatform extends PlatformInterface {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   );
 
   /// Listens to incoming front channel logout requests.
@@ -67,6 +78,7 @@ class NoOpOidcPlatform extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) {
     throw UnimplementedError();
   }
@@ -76,6 +88,7 @@ class NoOpOidcPlatform extends OidcPlatform {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) {
     throw UnimplementedError();
   }
@@ -94,6 +107,12 @@ class NoOpOidcPlatform extends OidcPlatform {
     required Uri checkSessionIframe,
     required OidcMonitorSessionStatusRequest request,
   }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Map<String, dynamic> prepareForRedirectFlow(
+      OidcPlatformSpecificOptions options) {
     throw UnimplementedError();
   }
 }

@@ -24,10 +24,17 @@ mixin OidcFlutterAppauth on OidcPlatform {
       false;
 
   @override
+  Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions options,
+  ) =>
+      {};
+      
+  @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) async {
     final authorizationEndpoint = metadata.authorizationEndpoint;
     if (authorizationEndpoint == null) {
@@ -76,6 +83,7 @@ mixin OidcFlutterAppauth on OidcPlatform {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) async {
     final endSessionEndpoint = metadata.endSessionEndpoint;
     if (endSessionEndpoint == null) {

@@ -34,11 +34,13 @@ class OidcUserManagerWeb extends OidcUserManagerBase {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) {
     return _coreInstance.getAuthorizationResponse(
       metadata,
       request,
       options.web,
+      preparationResult,
     );
   }
 
@@ -47,11 +49,13 @@ class OidcUserManagerWeb extends OidcUserManagerBase {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) {
     return _coreInstance.getEndSessionResponse(
       metadata,
       request,
       options.web,
+      preparationResult,
     );
   }
 
@@ -79,5 +83,12 @@ class OidcUserManagerWeb extends OidcUserManagerBase {
       checkSessionIframe: checkSessionIframe,
       request: request,
     );
+  }
+
+  @override
+  Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions options,
+  ) {
+    return _coreInstance.prepareForRedirectFlow(options.web);
   }
 }
