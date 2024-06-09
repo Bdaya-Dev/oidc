@@ -4,7 +4,7 @@ version: 0.2.0
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_loopback_listener
 homepage: https://bdaya-dev.github.io/oidc/
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.3.0 <4.0.0"  
 dependencies:
   meta: ^1.9.1
 

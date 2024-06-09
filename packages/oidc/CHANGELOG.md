@@ -4,8 +4,7 @@
 
  - **FIX**: oidc not passing options properly.
  - **FEAT**: support offline auth.
- - **DOCS**: update changelogs.
- - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+ - **BREAKING** **FIX**: Opening in new tab not working reliably [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
 
 ## 0.5.2
 
