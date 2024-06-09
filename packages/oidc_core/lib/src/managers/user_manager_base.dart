@@ -25,7 +25,7 @@ abstract class OidcUserManagerBase {
     this.httpClient,
     JsonWebKeyStore? keyStore,
   })  : discoveryDocumentUri = null,
-        _discoveryDocument = discoveryDocument,
+        currentDiscoveryDocument = discoveryDocument,
         _keyStore = keyStore;
 
   /// Create a new UserManager that delays getting the discovery document until
@@ -94,7 +94,7 @@ abstract class OidcUserManagerBase {
 
   @protected
   void ensureInit() {
-    if (!_hasInit) {
+    if (!hasInit) {
       logAndThrow(
         "discoveryDocument hasn't been fetched yet, "
         'please call init() first.',
@@ -364,7 +364,7 @@ abstract class OidcUserManagerBase {
   /// NOTE: this is different than [logout], since this method doesn't initiate
   /// any logout flows.
   Future<void> forgetUser() async {
-    await _cleanUpStore(toDelete: {
+    await cleanUpStore(toDelete: {
       OidcStoreNamespace.secureTokens,
     });
     final currentUser = this.currentUser;
@@ -442,10 +442,11 @@ abstract class OidcUserManagerBase {
       await forgetUser();
       return;
     }
-    await _handleEndSessionResponse(result: result);
+    await handleEndSessionResponse(result: result);
   }
 
-  Future<void> _handleEndSessionResponse({
+  @protected
+  Future<void> handleEndSessionResponse({
     required OidcEndSessionResponse result,
   }) async {
     //found result!
@@ -760,7 +761,8 @@ abstract class OidcUserManagerBase {
     );
   }
 
-  Future<void> _listenToTokenRefreshIfSupported(
+  @protected
+  Future<void> listenToTokenRefreshIfSupported(
     OidcTokenEventsManager tokenEventsManager,
     OidcUser? user,
   ) async {
@@ -784,7 +786,8 @@ abstract class OidcUserManagerBase {
     }
   }
 
-  Future<void> _handleTokenExpiring(OidcToken event) async {
+  @protected
+  Future<void> handleTokenExpiring(OidcToken event) async {
     final refreshToken = event.refreshToken;
     if (refreshToken == null) {
       return;
@@ -823,7 +826,8 @@ abstract class OidcUserManagerBase {
     logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
   }
 
-  void _handleTokenExpired(OidcToken event) {
+  @protected
+  void handleTokenExpired(OidcToken event) {
     if (!settings.supportOfflineAuth) {
       forgetUser();
     }
@@ -933,7 +937,8 @@ abstract class OidcUserManagerBase {
     return null;
   }
 
-  Future<void> _cleanUpStore({
+  @protected
+  Future<void> cleanUpStore({
     required Set<OidcStoreNamespace> toDelete,
   }) async {
     for (final element in toDelete) {
@@ -945,14 +950,15 @@ abstract class OidcUserManagerBase {
   /// The discovery document containing openid configuration.
   OidcProviderMetadata get discoveryDocument {
     ensureInit();
-    return _discoveryDocument!;
+    return currentDiscoveryDocument!;
   }
 
   set discoveryDocument(OidcProviderMetadata value) {
-    _discoveryDocument = value;
+    currentDiscoveryDocument = value;
   }
 
-  OidcProviderMetadata? _discoveryDocument;
+  @protected
+  OidcProviderMetadata? currentDiscoveryDocument;
 
   /// The discovery document Uri containing openid configuration.
   final Uri? discoveryDocumentUri;
@@ -961,10 +967,11 @@ abstract class OidcUserManagerBase {
   /// (based on discoveryDocumentUri).
   ///
   /// Then tries to get it from the network.
-  Future<void> _ensureDiscoveryDocument() async {
+  @protected
+  Future<void> ensureDiscoveryDocument() async {
     final uri = discoveryDocumentUri;
 
-    if (_discoveryDocument != null) {
+    if (currentDiscoveryDocument != null) {
       return;
     }
 
@@ -981,7 +988,7 @@ abstract class OidcUserManagerBase {
     if (cachedDocument != null) {
       try {
         ///try loading the document
-        _discoveryDocument = OidcProviderMetadata.fromJson(
+        currentDiscoveryDocument = OidcProviderMetadata.fromJson(
           jsonDecode(cachedDocument) as Map<String, dynamic>,
         );
       } catch (e, st) {
@@ -1001,13 +1008,13 @@ abstract class OidcUserManagerBase {
     }
 
     try {
-      _discoveryDocument = await OidcEndpoints.getProviderMetadata(
+      currentDiscoveryDocument = await OidcEndpoints.getProviderMetadata(
         uri,
         client: httpClient,
       );
     } catch (e, st) {
       //maybe there is no internet.
-      if (_discoveryDocument == null) {
+      if (currentDiscoveryDocument == null) {
         logAndThrow(
           "Couldn't fetch the discoveryDocument",
           error: e,
@@ -1116,7 +1123,8 @@ abstract class OidcUserManagerBase {
   ///
   /// if this returns `true`, a result has been found, and there is no need to
   /// load cached tokens.
-  Future<bool> _loadStateResult() async {
+  @protected
+  Future<bool> loadStateResult() async {
     final statesWithResponses = await store.getStatesWithResponses();
     if (statesWithResponses.isEmpty) {
       return false;
@@ -1149,7 +1157,7 @@ abstract class OidcUserManagerBase {
         case OidcEndSessionState():
           final resp =
               OidcEndSessionResponse.fromJson(stateResponseUrl.queryParameters);
-          await _handleEndSessionResponse(result: resp);
+          await handleEndSessionResponse(result: resp);
           return true;
         default:
           return false;
@@ -1159,7 +1167,8 @@ abstract class OidcUserManagerBase {
   }
 
   /// returns true if there was a logout request.
-  Future<bool> _loadLogoutRequests() async {
+  @protected
+  Future<bool> loadLogoutRequests() async {
     final request = await store.getCurrentFrontChannelLogoutRequest();
     if (request == null) {
       return false;
@@ -1182,11 +1191,15 @@ abstract class OidcUserManagerBase {
   }
 
   /// true if [init] has been called with no exceptions.
-  bool get didInit => _hasInit;
-  bool _hasInit = false;
+  bool get didInit => hasInit;
+  @protected
+  bool hasInit = false;
 
-  final _toDispose = <StreamSubscription<dynamic>>[];
-  Future<void> _clearUnusedStates() async {
+  @protected
+  final toDispose = <StreamSubscription<dynamic>>[];
+
+  @protected
+  Future<void> clearUnusedStates() async {
     await OidcState.clearStaleState(
       store: store,
       age: const Duration(days: 1),
@@ -1196,28 +1209,28 @@ abstract class OidcUserManagerBase {
   /// Initializes the user manager, this also gets the [discoveryDocument] if it
   /// wasn't provided.
   Future<void> init() async {
-    if (_hasInit) {
+    if (hasInit) {
       return;
     }
     try {
-      _hasInit = true;
+      hasInit = true;
       await store.init();
-      await _ensureDiscoveryDocument();
+      await ensureDiscoveryDocument();
       final jwksUri = discoveryDocument.jwksUri;
       if (jwksUri != null) {
         keyStore.addKeySetUrl(jwksUri);
       }
-      await _clearUnusedStates();
-      if (!await _loadLogoutRequests()) {
+      await clearUnusedStates();
+      if (!await loadLogoutRequests()) {
         //no logout requests.
-        if (!await _loadStateResult()) {
+        if (!await loadStateResult()) {
           //no state results.
           await loadCachedTokens();
         }
       }
       final frontChannelLogoutUri = settings.frontChannelLogoutUri;
       if (frontChannelLogoutUri != null) {
-        _toDispose.add(
+        toDispose.add(
           listenToFrontChannelLogoutRequests(
             frontChannelLogoutUri,
             settings.frontChannelRequestListeningOptions,
@@ -1227,15 +1240,15 @@ abstract class OidcUserManagerBase {
 
       //start listening to token events, if the user enabled them.
 
-      _toDispose
+      toDispose
         ..add(userSubject.listen(
-          (value) => _listenToTokenRefreshIfSupported(tokenEvents, value),
+          (value) => listenToTokenRefreshIfSupported(tokenEvents, value),
         ))
         ..add(userSubject.listen(listenToUserSessionIfSupported))
-        ..add(tokenEvents.expiring.listen(_handleTokenExpiring))
-        ..add(tokenEvents.expired.listen(_handleTokenExpired));
+        ..add(tokenEvents.expiring.listen(handleTokenExpiring))
+        ..add(tokenEvents.expired.listen(handleTokenExpired));
     } catch (e) {
-      _hasInit = false;
+      hasInit = false;
       rethrow;
     }
   }
@@ -1246,7 +1259,7 @@ abstract class OidcUserManagerBase {
     await tokenEvents.dispose();
     await userSubject.close();
     await eventsController.close();
-    await Future.wait(_toDispose.map((e) => e.cancel()));
+    await Future.wait(toDispose.map((e) => e.cancel()));
   }
 
   @protected
