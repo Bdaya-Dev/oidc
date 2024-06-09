@@ -52,7 +52,7 @@ class OidcUserManagerSettings {
   ///
   /// When this option is enabled, expired tokens will NOT be removed if the
   /// server can't be contacted
-  /// 
+  ///
   /// This parameter is disabled by default due to security concerns.
   final bool supportOfflineAuth;
 

@@ -1204,7 +1204,7 @@ abstract class OidcUserManagerBase {
       await store.init();
       await _ensureDiscoveryDocument();
       final jwksUri = discoveryDocument.jwksUri;
-      if (jwksUri != null) {        
+      if (jwksUri != null) {
         keyStore.addKeySetUrl(jwksUri);
       }
       await _clearUnusedStates();
