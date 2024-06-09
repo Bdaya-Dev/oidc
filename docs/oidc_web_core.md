@@ -10,7 +10,7 @@ Learn more about developing dart web apps in: [dart.dev/web](https://dart.dev/we
 
 ## Getting started
 
-The setup here is similar to what is done in [package:oidc](/oidc-getting-started/#web)
+The setup here is similar to what is done in [package:oidc](oidc-getting-started.md#web)
 
 ### Add the dependencies
 
@@ -54,7 +54,7 @@ also the html page is completely customizable, but it's preferred to leave the j
 
 ## Usage
 
-using this package is identical to [package:oidc](/oidc-usage/)
+using this package is identical to [package:oidc](oidc-usage.md)
 
 you can also see an [example here](https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_web_core/example) of a dart web app using this package
 
