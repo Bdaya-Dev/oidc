@@ -1,6 +1,9 @@
 name: oidc_web_core
 description: dart web package for oidc protocol
 version: 0.1.0
+repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_web_core
+topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
+homepage: https://bdaya-dev.github.io/oidc/
 
 environment:
   sdk: ^3.3.0
