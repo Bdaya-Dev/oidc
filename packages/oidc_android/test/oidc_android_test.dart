@@ -57,6 +57,7 @@ void main() {
           scope: ['openid'],
         ),
         const OidcPlatformSpecificOptions(),
+        {},
       );
       expect(response, isNotNull);
       expect(response!.code, mockAuthResponse['authorizationCode']);

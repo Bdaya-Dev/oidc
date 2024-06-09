@@ -17,6 +17,13 @@ class OidcFlutter {
         request: request,
       );
 
+  /// Prepares the platform to handle a redirect flow.
+  static Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions options,
+  ) {
+    return _platform.prepareForRedirectFlow(options);
+  }
+
   /// starts the authorization flow, and returns the response.
   ///
   /// on android/ios/macos, if the `request.responseType` is set to anything other than `code`, it returns null.
@@ -28,12 +35,14 @@ class OidcFlutter {
     required OidcProviderMetadata metadata,
     required OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
+    Map<String, dynamic> preparationResult = const {},
   }) async {
     try {
       return _platform.getAuthorizationResponse(
         metadata,
         request,
         options,
+        preparationResult,
       );
     } on OidcException {
       rethrow;
@@ -53,12 +62,14 @@ class OidcFlutter {
     required OidcProviderMetadata metadata,
     required OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
+    required Map<String, dynamic> preparationResult,
   }) async {
     try {
       return _platform.getEndSessionResponse(
         metadata,
         request,
         options,
+        preparationResult,
       );
     } catch (e, st) {
       throw OidcException(

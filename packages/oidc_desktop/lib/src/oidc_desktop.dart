@@ -22,6 +22,12 @@ mixin OidcDesktop on OidcPlatform {
     OidcPlatformSpecificOptions options,
   );
 
+  @override
+  Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions options,
+  ) =>
+      {};
+
   /// starts a listener and gets a response Uri.
   ///
   /// override this in mock implementations.
@@ -92,6 +98,7 @@ mixin OidcDesktop on OidcPlatform {
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) async {
     final authEndpoint = metadata.authorizationEndpoint;
     if (authEndpoint == null) {
@@ -127,6 +134,7 @@ mixin OidcDesktop on OidcPlatform {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
   ) async {
     final endSessionEndpoint = metadata.endSessionEndpoint;
     if (endSessionEndpoint == null) {

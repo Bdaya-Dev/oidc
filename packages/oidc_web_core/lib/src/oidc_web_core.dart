@@ -27,7 +27,10 @@ class OidcWebCore {
     return windowOpts;
   }
 
+  static const _webWindowKey = 'web_window';
+
   HTMLElement _getBody() => window.document.body!;
+
   HTMLIFrameElement _createHiddenIframe({
     required String iframeId,
     bool appendToDocument = true,
@@ -55,6 +58,7 @@ class OidcWebCore {
     required OidcPlatformSpecificOptions_Web options,
     required Uri uri,
     required String? state,
+    required Map<String, dynamic> preparationResult,
   }) async {
     final channel = BroadcastChannel(options.broadcastChannel);
     final c = Completer<Uri>();
@@ -86,6 +90,7 @@ class OidcWebCore {
     }
 
     channel.onmessage = eventFunction.toJS;
+    final preparedWindow = preparationResult[_webWindowKey] as Window?;
     try {
       //first prepare
       switch (options.navigationMode) {
@@ -95,30 +100,23 @@ class OidcWebCore {
           // return null, since this mode can't be awaited.
           return null;
         case OidcPlatformSpecificOptions_Web_NavigationMode.newPage:
+        case OidcPlatformSpecificOptions_Web_NavigationMode.popup:
           //
-          final openedWindow = window.open(uri.toString(), '_blank');
-
+          if (preparedWindow == null) {
+            throw const OidcException(
+              'please prepare the window in $_webWindowKey parameter first.',
+            );
+          }
+          preparedWindow.location.replace(uri.toString());
           //listen to response uri.
           final res = await c.future;
-          if (openedWindow != null && !openedWindow.closed) {
-            openedWindow.close();
+          if (!preparedWindow.closed) {
+            preparedWindow.close();
           }
           return res;
-        case OidcPlatformSpecificOptions_Web_NavigationMode.popup:
-          final windowOpts = _calculatePopupOptions(options);
-          final openedWindow = window.open(
-            uri.toString(),
-            'oidc_auth_popup',
-            windowOpts,
-          );
 
-          final res = await c.future;
-          if (openedWindow != null && !openedWindow.closed) {
-            openedWindow.close();
-          }
-          return res;
         case OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame:
-          const iframeId = 'oidc-session-management-iframe';
+          const iframeId = 'oidc-redirect-iframe';
           final iframe = _createHiddenIframe(iframeId: iframeId);
           iframe.src = uri.toString();
           final emptyUri = Uri();
@@ -137,12 +135,33 @@ class OidcWebCore {
     }
   }
 
+  Window? _prepareWindow(OidcPlatformSpecificOptions_Web options) {
+    return switch (options.navigationMode) {
+      OidcPlatformSpecificOptions_Web_NavigationMode.newPage =>
+        window.open('', '_blank'),
+      OidcPlatformSpecificOptions_Web_NavigationMode.popup =>
+        window.open('', 'oidc_auth_popup', _calculatePopupOptions(options)),
+      _ => null,
+    };
+  }
+
+  /// prepares the window for the given navigation mode
+  Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions_Web options,
+  ) {
+    final prepared = _prepareWindow(options);
+    return {
+      if (prepared != null) _webWindowKey: prepared,
+    };
+  }
+
   /// Returns the authorization response.
   /// may throw an [OidcException].
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions_Web options,
+    Map<String, dynamic> preparationResult,
   ) async {
     final endpoint = metadata.authorizationEndpoint;
     if (endpoint == null) {
@@ -165,6 +184,7 @@ class OidcWebCore {
       options: options,
       uri: request.generateUri(endpoint),
       state: request.state,
+      preparationResult: preparationResult,
     );
     if (respUri == null) {
       return null;
@@ -181,6 +201,7 @@ class OidcWebCore {
     OidcProviderMetadata metadata,
     OidcEndSessionRequest request,
     OidcPlatformSpecificOptions_Web options,
+    Map<String, dynamic> preparationResult,
   ) async {
     final endpoint = metadata.endSessionEndpoint;
     if (endpoint == null) {
@@ -193,6 +214,7 @@ class OidcWebCore {
       options: options,
       uri: request.generateUri(endpoint),
       state: request.state,
+      preparationResult: preparationResult,
     );
     if (respUri == null) {
       return null;
