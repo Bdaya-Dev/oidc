@@ -24,7 +24,7 @@ enum OidcStoreNamespace {
   /// Stores requests (mainly frontchannel logout).
   request('request'),
 
-  /// Stores discovery documents as json
+  /// Stores discovery documents and jwks as json
   discoveryDocument('discoveryDocument'),
 
   /// Identity Tokens, Access tokens, or any other token that requires

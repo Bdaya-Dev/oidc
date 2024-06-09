@@ -34,8 +34,7 @@ class OidcUserManagerSettings {
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
-    this.keepUnverifiedTokens = false,
-    this.keepExpiredTokens = false,
+    this.supportOfflineAuth = false,
   });
 
   /// The default scopes
@@ -45,19 +44,17 @@ class OidcUserManagerSettings {
   final OidcUserInfoSettings userInfoSettings;
 
   /// whether JWTs are strictly verified.
+  ///
+  /// If set to true, the library will throw an exception if a JWT is invalid.
   final bool strictJwtVerification;
 
-  /// Whether to keep unverified tokens or not.
+  /// Whether to support offline authentication or not.
   ///
-  /// This is useful when supporting offline-first apps, where it's not always
-  /// possible to verify the cached token.
-  final bool keepUnverifiedTokens;
-
-  /// Whether to keep expired tokens or not.
-  ///
-  /// This is useful when supporting offline-first apps, where it's not always
-  /// possible to refresh the access tokens.
-  final bool keepExpiredTokens;
+  /// When this option is enabled, expired tokens will NOT be removed if the
+  /// server can't be contacted
+  /// 
+  /// This parameter is disabled by default due to security concerns.
+  final bool supportOfflineAuth;
 
   /// see [OidcAuthorizeRequest.redirectUri].
   final Uri redirectUri;

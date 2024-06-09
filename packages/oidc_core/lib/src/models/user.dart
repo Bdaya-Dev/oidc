@@ -30,6 +30,7 @@ class OidcUser {
     required OidcToken token,
     bool strictVerification = false,
     JsonWebKeyStore? keystore,
+    OidcStore? cacheStore,
     List<String>? allowedAlgorithms,
     Map<String, dynamic>? attributes,
     Map<String, dynamic>? userInfo,
@@ -41,28 +42,13 @@ class OidcUser {
         "Server didn't return the id_token.",
       );
     }
-    JsonWebToken webToken;
-    if (keystore == null) {
-      webToken = JsonWebToken.unverified(idToken);
-    } else {
-      try {
-        webToken = await JsonWebToken.decodeAndVerify(
-          idToken,
-          keystore,
-          allowedArguments: allowedAlgorithms,
-        );
-      } catch (e, st) {
-        if (strictVerification) {
-          rethrow;
-        }
-        _logger.severe(
-          'Failed to verify id_token, using unverified instead.',
-          e,
-          st,
-        );
-        webToken = JsonWebToken.unverified(idToken);
-      }
-    }
+    final webToken = await _getWebToken(
+      keystore,
+      idToken,
+      allowedAlgorithms,
+      cacheStore,
+      strictVerification,
+    );
 
     return OidcUser._(
       idToken: idToken,
@@ -73,6 +59,48 @@ class OidcUser {
       keystore: keystore,
       userInfo: userInfo ?? const {},
     );
+  }
+
+  static Future<JsonWebToken> _getWebToken(
+    JsonWebKeyStore? keystore,
+    String idToken,
+    List<String>? allowedAlgorithms,
+    OidcStore? cacheStore,
+    bool strictVerification,
+  ) async {
+    JsonWebToken webToken;
+
+    if (keystore == null) {
+      webToken = JsonWebToken.unverified(idToken);
+    } else {
+      try {
+        webToken = await JsonWebKeySetLoader.runZoned(
+          () async {
+            return JsonWebToken.decodeAndVerify(
+              idToken,
+              keystore,
+              allowedArguments: allowedAlgorithms,
+            );
+          },
+          loader: cacheStore == null
+              ? null
+              : OidcJwksStoreLoader(
+                  store: cacheStore,
+                ),
+        );
+      } catch (e, st) {
+        if (strictVerification) {
+          rethrow;
+        }
+        _logger.warning(
+          'Failed to verify id_token, using unverified instead.',
+          e,
+          st,
+        );
+        webToken = JsonWebToken.unverified(idToken);
+      }
+    }
+    return webToken;
   }
 
   /// The jwt token this user was verified from.
@@ -126,19 +154,20 @@ class OidcUser {
   Future<OidcUser> replaceToken(
     OidcToken newToken, {
     String? idTokenOverride,
+    bool strictVerification = false,
+    OidcStore? cacheStore,
   }) async {
     final idToken = idTokenOverride ?? newToken.idToken ?? this.idToken;
 
     JsonWebToken webToken;
     if (idToken != this.idToken) {
-      final keystore = this.keystore;
-      webToken = keystore == null
-          ? JsonWebToken.unverified(idToken)
-          : await JsonWebToken.decodeAndVerify(
-              idToken,
-              keystore,
-              allowedArguments: allowedAlgorithms,
-            );
+      webToken = await _getWebToken(
+        keystore,
+        idToken,
+        allowedAlgorithms,
+        cacheStore,
+        strictVerification,
+      );
     } else {
       webToken = parsedIdToken;
     }

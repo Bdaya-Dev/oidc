@@ -26,7 +26,7 @@ abstract class OidcUserManagerBase {
     JsonWebKeyStore? keyStore,
   })  : discoveryDocumentUri = null,
         _discoveryDocument = discoveryDocument,
-        keyStore = keyStore ?? JsonWebKeyStore();
+        _keyStore = keyStore;
 
   /// Create a new UserManager that delays getting the discovery document until
   /// [init] is called.
@@ -37,7 +37,7 @@ abstract class OidcUserManagerBase {
     required this.settings,
     this.httpClient,
     JsonWebKeyStore? keyStore,
-  }) : keyStore = keyStore ?? JsonWebKeyStore();
+  }) : _keyStore = keyStore;
 
   bool get isWeb;
 
@@ -51,7 +51,8 @@ abstract class OidcUserManagerBase {
   final OidcStore store;
 
   /// The id_token verification options.
-  final JsonWebKeyStore keyStore;
+  JsonWebKeyStore? _keyStore;
+  JsonWebKeyStore get keyStore => _keyStore ??= JsonWebKeyStore();
 
   /// The settings used in this manager.
   final OidcUserManagerSettings settings;
@@ -250,6 +251,7 @@ abstract class OidcUserManagerBase {
         sessionState: null,
       ),
       attributes: null,
+      userInfo: null,
       nonce: null,
       metadata: discoveryDocument,
     );
@@ -517,6 +519,7 @@ abstract class OidcUserManagerBase {
           );
           return await createUserFromToken(
             token: token,
+            userInfo: null,
             attributes: null,
             nonce: stateData.nonce,
             metadata: metadata,
@@ -562,6 +565,7 @@ abstract class OidcUserManagerBase {
         token: token,
         nonce: stateData.nonce,
         attributes: null,
+        userInfo: null,
         metadata: metadata,
       );
     } finally {
@@ -587,11 +591,12 @@ abstract class OidcUserManagerBase {
     required OidcToken token,
     required String? nonce,
     required Map<String, dynamic>? attributes,
+    required Map<String, dynamic>? userInfo,
     required OidcProviderMetadata metadata,
     bool validateAndSave = true,
   }) async {
     final currentUser = this.currentUser;
-    OidcUser newUser;
+    OidcUser? newUser;
     final idTokenOverride = await settings.getIdToken?.call(token);
     if (currentUser == null) {
       newUser = await OidcUser.fromIdToken(
@@ -600,15 +605,22 @@ abstract class OidcUserManagerBase {
         keystore: keyStore,
         attributes: attributes,
         strictVerification: settings.strictJwtVerification,
+        userInfo: userInfo,
         idTokenOverride: idTokenOverride,
+        cacheStore: store,
       );
     } else {
       newUser = await currentUser.replaceToken(
         token,
         idTokenOverride: idTokenOverride,
+        strictVerification: settings.strictJwtVerification,
+        cacheStore: store,
       );
       if (attributes != null) {
         newUser = newUser.setAttributes(attributes);
+      }
+      if (userInfo != null) {
+        newUser = newUser.withUserInfo(userInfo);
       }
     }
 
@@ -632,6 +644,7 @@ abstract class OidcUserManagerBase {
       OidcStoreNamespace.secureTokens,
       values: {
         OidcConstants_Store.currentToken: jsonEncode(user.token.toJson()),
+        OidcConstants_Store.currentUserInfo: jsonEncode(user.userInfo),
         OidcConstants_Store.currentUserAttributes: jsonEncode(user.attributes),
       },
     );
@@ -741,6 +754,7 @@ abstract class OidcUserManagerBase {
         sessionState: currentUser?.token.sessionState,
       ),
       nonce: null,
+      userInfo: null,
       attributes: null,
       metadata: discoveryDocument,
     );
@@ -799,6 +813,7 @@ abstract class OidcUserManagerBase {
         ),
         nonce: null,
         attributes: null,
+        userInfo: null,
         metadata: discoveryDocument,
       );
     } catch (e) {
@@ -809,7 +824,7 @@ abstract class OidcUserManagerBase {
   }
 
   void _handleTokenExpired(OidcToken event) {
-    if (!settings.keepExpiredTokens) {
+    if (!settings.supportOfflineAuth) {
       forgetUser();
     }
   }
@@ -885,7 +900,7 @@ abstract class OidcUserManagerBase {
     if (errors.isEmpty ||
         //keep going if the only error is that the token expired,
         //and it's allowed in settings.
-        (settings.keepExpiredTokens &&
+        (settings.supportOfflineAuth &&
             errors.every((e) =>
                 e is JoseException && e.message.startsWith('JWT expired.')))) {
       // apply userinfo if present
@@ -898,16 +913,18 @@ abstract class OidcUserManagerBase {
     } else {
       for (final element in errors) {
         logger.warning(
-          'Found a JWT, but failed the validation test: $element',
+          'Found the following problem when validation JWT: $element',
           element,
           StackTrace.current,
         );
       }
       await store.setCurrentNonce(null);
+
       await store.removeMany(
         OidcStoreNamespace.secureTokens,
         keys: {
           OidcConstants_Store.currentToken,
+          OidcConstants_Store.currentUserInfo,
           OidcConstants_Store.currentUserAttributes,
           OidcConstants_AuthParameters.nonce,
         },
@@ -1015,6 +1032,7 @@ abstract class OidcUserManagerBase {
     final usedKeys = <String>{
       OidcConstants_Store.currentToken,
       OidcConstants_Store.currentUserAttributes,
+      OidcConstants_Store.currentUserInfo,
     };
 
     final tokens = await store.getMany(
@@ -1022,6 +1040,7 @@ abstract class OidcUserManagerBase {
       keys: usedKeys,
     );
     final rawToken = tokens[OidcConstants_Store.currentToken];
+    final rawUserInfo = tokens[OidcConstants_Store.currentUserInfo];
     final rawAttributes = tokens[OidcConstants_Store.currentUserAttributes];
     if (rawToken == null) {
       return;
@@ -1031,6 +1050,9 @@ abstract class OidcUserManagerBase {
       final decodedAttributes = rawAttributes == null
           ? null
           : jsonDecode(rawAttributes) as Map<String, dynamic>;
+      final decodedUserInfo = rawUserInfo == null
+          ? null
+          : jsonDecode(rawUserInfo) as Map<String, dynamic>;
       final decodedToken = jsonDecode(rawToken) as Map<String, dynamic>;
       final token = OidcToken.fromJson(decodedToken);
       final metadata = discoveryDocument;
@@ -1039,6 +1061,7 @@ abstract class OidcUserManagerBase {
         // nonce is only checked for new tokens.
         nonce: null,
         attributes: decodedAttributes,
+        userInfo: decodedUserInfo,
         metadata: metadata,
         validateAndSave: false,
       );
@@ -1058,9 +1081,9 @@ abstract class OidcUserManagerBase {
                 await refreshToken(overrideRefreshToken: token.refreshToken);
           } catch (e) {
             // An app might go offline during token refresh, so we consult the
-            // keepUnverifiedTokens setting to check whether this is an issue or
+            // supportOfflineAuth setting to check whether this is an issue or
             // not.
-            if (!settings.keepExpiredTokens) {
+            if (!settings.supportOfflineAuth) {
               rethrow;
             }
           }
@@ -1079,7 +1102,7 @@ abstract class OidcUserManagerBase {
         );
       }
     } catch (e) {
-      if (settings.keepUnverifiedTokens) {
+      if (!settings.supportOfflineAuth) {
         // remove invalid tokens, so that they don't get used again.
         await store.removeMany(
           OidcStoreNamespace.secureTokens,
@@ -1181,7 +1204,7 @@ abstract class OidcUserManagerBase {
       await store.init();
       await _ensureDiscoveryDocument();
       final jwksUri = discoveryDocument.jwksUri;
-      if (jwksUri != null) {
+      if (jwksUri != null) {        
         keyStore.addKeySetUrl(jwksUri);
       }
       await _clearUnusedStates();
@@ -1269,7 +1292,7 @@ abstract class OidcUserManagerBase {
       return user;
     } on OidcException catch (e) {
       if (e.errorResponse != null) {
-        if (!settings.keepExpiredTokens) {
+        if (!settings.supportOfflineAuth) {
           await forgetUser();
         }
         return null;
