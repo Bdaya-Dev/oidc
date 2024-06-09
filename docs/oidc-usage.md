@@ -89,9 +89,16 @@ an instance of `OidcStore`, we provide 3 types of stores out of the box, dependi
 1. `OidcMemoryStore` from [package:oidc_core](oidc_core.md); which stores the auth state in memory (good for CLI apps or during testing).
 2. `OidcDefaultStore` from [package:oidc_default_store](oidc_default_store.md); which persists the auth state on disk or `localStorage` on web, And tries to encrypt the data if possible.
 3. `OidcWebStore` from [package:oidc_web_core](oidc_web_core.md); which persists the auth state on `localStorage`/`session_storage` on web.
+
 #### settings
 
 settings to control the behavior of the instance.
+
+- `bool supportOfflineAuth = false`: whether the app should keep expired tokens if it's not able to contact the server.
+
+    !!! Warning
+        Enabling offline auth can be a security risk, as it allows the app to keep tokens that are no longer valid.
+        And it may open up unexpected attack vectors.
 
 - `bool strictJwtVerification = false`: whether JWTs are strictly verified.
 - `Uri redirectUri`: the redirect uri that was configured with the provider.

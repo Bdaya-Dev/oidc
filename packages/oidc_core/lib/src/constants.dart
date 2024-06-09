@@ -669,6 +669,7 @@ class OidcConstants_Store {
   static const expiresAt = 'expiresAt';
   static const expiresInReferenceDate = 'expiresInReferenceDate';
   static const currentUserAttributes = 'userAttributes';
+  static const currentUserInfo = 'userInfo';
   static const originalUri = 'original_uri';
   static const operationDiscriminator = 'operationDiscriminator';
 

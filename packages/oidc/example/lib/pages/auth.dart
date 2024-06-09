@@ -104,27 +104,32 @@ class _AuthPageState extends State<AuthPage> {
               child: const Text('login with Resource owner grant'),
             ),
             const Divider(),
-            DropdownButton<OidcPlatformSpecificOptions_Web_NavigationMode>(
-              hint: const Text('Web Navigation Mode'),
-              items: OidcPlatformSpecificOptions_Web_NavigationMode.values
-                  .map(
-                    (e) => DropdownMenuItem(
-                      value: e,
-                      child: Text(e.name),
-                    ),
-                  )
-                  .toList(),
-              value: webNavigationMode,
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
-                setState(() {
-                  webNavigationMode = value;
-                });
-              },
-            ),
-            const Divider(),
+            if (kIsWeb) ...[
+              Text(
+                'Login Web Navigation Mode',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              DropdownButton<OidcPlatformSpecificOptions_Web_NavigationMode>(
+                items: OidcPlatformSpecificOptions_Web_NavigationMode.values
+                    .map(
+                      (e) => DropdownMenuItem(
+                        value: e,
+                        child: Text(e.name),
+                      ),
+                    )
+                    .toList(),
+                value: webNavigationMode,
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    webNavigationMode = value;
+                  });
+                },
+              ),
+              const Divider(),
+            ],
             ElevatedButton(
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);

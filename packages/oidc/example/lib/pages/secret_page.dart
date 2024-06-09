@@ -128,22 +128,22 @@ class _SecretPageState extends State<SecretPage> {
                     },
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: () async {
-                    await app_state.currentManager.logout(
-                      //after logout, go back to home
-                      originalUri: Uri.parse('/'),
-                      options: OidcPlatformSpecificOptions(
-                        web: OidcPlatformSpecificOptions_Web(
-                          navigationMode: webNavigationMode,
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text('Logout'),
-                ),
-                const Divider(),
               ],
+              ElevatedButton(
+                onPressed: () async {
+                  await app_state.currentManager.logout(
+                    //after logout, go back to home
+                    originalUri: Uri.parse('/'),
+                    options: OidcPlatformSpecificOptions(
+                      web: OidcPlatformSpecificOptions_Web(
+                        navigationMode: webNavigationMode,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Logout'),
+              ),
+              const Divider(),
               Wrap(
                 spacing: 8,
                 children: [
