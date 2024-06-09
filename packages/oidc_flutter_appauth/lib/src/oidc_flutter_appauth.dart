@@ -28,7 +28,7 @@ mixin OidcFlutterAppauth on OidcPlatform {
     OidcPlatformSpecificOptions options,
   ) =>
       {};
-      
+
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
