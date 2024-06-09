@@ -15,9 +15,9 @@ dependencies:
   logging: ^1.2.0
   oidc_android:
     path: ../
-  oidc_core: ^0.6.3
-  oidc_default_store: ^0.2.0+8
-  oidc_platform_interface: ^0.3.1+2
+  oidc_core: ^0.7.0
+  oidc_default_store: ^0.2.0+9
+  oidc_platform_interface: ^0.4.0
   url_strategy: ^0.2.0
 
 dev_dependencies:

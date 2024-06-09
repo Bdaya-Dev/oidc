@@ -1,3 +1,17 @@
+## 0.7.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**: expand successful status range to include 300-399 status code to allow for 304 , see.
+ - **FIX**: improve OidcEndpoints error handling.
+ - **FIX**: update oidc_web_core version.
+ - **FEAT**: support offline auth.
+ - **FEAT**: add keepUnverifiedTokens and keepExpiredTokens to user manager settings.
+ - **FEAT**: add getIdToken to OidcUserManagerSettings.
+ - **FEAT**: updated oidc_core example.
+ - **DOCS**: update changelogs.
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
 ## 0.6.3
 
  - **DEPS**: Use `jose_plus: ^0.4.4` which uses [package:clock](https://pub.dev/packages/clock) JWT validation to simplify testing.

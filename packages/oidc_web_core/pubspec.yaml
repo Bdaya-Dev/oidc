@@ -1,6 +1,6 @@
 name: oidc_web_core
 description: dart web package for oidc protocol
-version: 0.1.0+1
+version: 0.2.0
 
 
 environment:
@@ -9,7 +9,7 @@ environment:
 dependencies:
   collection: ^1.18.0
   logging: ^1.2.0
-  oidc_core: ^0.6.3
+  oidc_core: ^0.7.0
   rxdart: ^0.27.7
   web: ^0.5.1
 

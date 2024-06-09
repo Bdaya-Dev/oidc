@@ -3,6 +3,102 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2024-06-09
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v0.6.0`](#oidc---v060)
+ - [`oidc_android` - `v0.4.0`](#oidc_android---v040)
+ - [`oidc_core` - `v0.7.0`](#oidc_core---v070)
+ - [`oidc_desktop` - `v0.3.0`](#oidc_desktop---v030)
+ - [`oidc_flutter_appauth` - `v0.3.0`](#oidc_flutter_appauth---v030)
+ - [`oidc_ios` - `v0.4.0`](#oidc_ios---v040)
+ - [`oidc_macos` - `v0.4.0`](#oidc_macos---v040)
+ - [`oidc_platform_interface` - `v0.4.0`](#oidc_platform_interface---v040)
+ - [`oidc_web` - `v0.4.0`](#oidc_web---v040)
+ - [`oidc_web_core` - `v0.2.0`](#oidc_web_core---v020)
+
+Packages with other changes:
+
+ - [`oidc_default_store` - `v0.2.0+9`](#oidc_default_store---v0209)
+ - [`oidc_linux` - `v0.3.0+9`](#oidc_linux---v0309)
+ - [`oidc_windows` - `v0.3.1+3`](#oidc_windows---v0313)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_default_store` - `v0.2.0+9`
+ - `oidc_linux` - `v0.3.0+9`
+ - `oidc_windows` - `v0.3.1+3`
+
+---
+
+#### `oidc` - `v0.6.0`
+
+ - **FIX**: oidc not passing options properly.
+ - **FEAT**: support offline auth.
+ - **DOCS**: update changelogs.
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+#### `oidc_android` - `v0.4.0`
+
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+#### `oidc_core` - `v0.7.0`
+
+ - **FIX**: expand successful status range to include 300-399 status code to allow for 304 , see.
+ - **FIX**: improve OidcEndpoints error handling.
+ - **FIX**: update oidc_web_core version.
+ - **FEAT**: support offline auth.
+ - **FEAT**: add keepUnverifiedTokens and keepExpiredTokens to user manager settings.
+ - **FEAT**: add getIdToken to OidcUserManagerSettings.
+ - **FEAT**: updated oidc_core example.
+ - **DOCS**: update changelogs.
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+#### `oidc_desktop` - `v0.3.0`
+
+ - **FIX**: typo in oidc_desktop.
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+#### `oidc_flutter_appauth` - `v0.3.0`
+
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+#### `oidc_ios` - `v0.4.0`
+
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+#### `oidc_macos` - `v0.4.0`
+
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+#### `oidc_platform_interface` - `v0.4.0`
+
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+#### `oidc_web` - `v0.4.0`
+
+ - **FEAT**: depend on oidc_web_core.
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+#### `oidc_web_core` - `v0.2.0`
+
+ - **FIX**: [#68](https://github.com/Bdaya-Dev/oidc/issues/68).
+ - **FIX**: update oidc_web_core version.
+ - **DOCS**: update oidc_web_core readme.
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
+# Change Log
+
+All notable changes to this project will be documented in this file.
+See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
+
 ## 2024-03-20
 
 ### Changes

@@ -1,3 +1,10 @@
+## 0.4.0
+
+> Note: This release has breaking changes.
+
+ - **FEAT**: depend on oidc_web_core.
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
 ## 0.3.1+2
 
  - **FIX**: false positive warning when launching urls removed.

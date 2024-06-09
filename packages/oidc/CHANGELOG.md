@@ -1,3 +1,12 @@
+## 0.6.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**: oidc not passing options properly.
+ - **FEAT**: support offline auth.
+ - **DOCS**: update changelogs.
+ - **BREAKING** **FIX**: Opening in new tab not working reliably in Safari for iOS [#31](https://github.com/Bdaya-Dev/oidc/issues/31).
+
 ## 0.5.2
 
  - **FEAT**: Use [package:clock](https://pub.dev/packages/clock) to get the current time instead of `DateTime.now()` to simplify testing.
