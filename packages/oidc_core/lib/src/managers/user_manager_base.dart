@@ -784,15 +784,6 @@ abstract class OidcUserManagerBase {
     if (user == null) {
       tokenEventsManager.unload();
     } else {
-      if (!discoveryDocument.grantTypesSupportedOrDefault
-          .contains(OidcConstants_GrantType.refreshToken)) {
-        //Server doesn't support refresh_token grant.
-        return;
-      }
-      if (user.token.refreshToken == null) {
-        // Can't refresh the access token anyway.
-        return;
-      }
       if (user.token.expiresIn == null) {
         // Can't know how much time is left.
         return;
@@ -803,6 +794,8 @@ abstract class OidcUserManagerBase {
 
   @protected
   Future<void> handleTokenExpiring(OidcToken event) async {
+    settings.onTokenExpiring?.call(event);
+
     final refreshToken = event.refreshToken;
     if (refreshToken == null) {
       return;
@@ -843,6 +836,8 @@ abstract class OidcUserManagerBase {
 
   @protected
   void handleTokenExpired(OidcToken event) {
+    settings.onTokenExpired?.call(event);
+
     if (!settings.supportOfflineAuth) {
       forgetUser();
     }

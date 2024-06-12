@@ -3,6 +3,8 @@ import 'package:oidc_core/oidc_core.dart';
 /// The callback used to determine the `expiring` duration.
 typedef OidcRefreshBeforeCallback = Duration? Function(OidcToken token);
 
+typedef OidcTokenCallback = void Function(OidcToken token);
+
 /// The default refreshBefore function, which refreshes 1 minute before the token expires.
 Duration? defaultRefreshBefore(OidcToken token) {
   return const Duration(minutes: 1);
@@ -35,6 +37,8 @@ class OidcUserManagerSettings {
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
     this.supportOfflineAuth = false,
+    this.onTokenExpiring,
+    this.onTokenExpired,
   });
 
   /// The default scopes
@@ -127,6 +131,12 @@ class OidcUserManagerSettings {
 
   /// platform-specific options.
   final OidcPlatformSpecificOptions? options;
+
+  /// Callback that is called before the token expires.
+  final OidcTokenCallback? onTokenExpiring;
+
+  /// Callback that is called after the token expired.
+  final OidcTokenCallback? onTokenExpired;
 }
 
 ///
