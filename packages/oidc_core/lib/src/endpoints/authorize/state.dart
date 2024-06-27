@@ -17,7 +17,7 @@ class OidcAuthorizeState extends OidcState {
     required this.codeVerifier,
     required this.codeChallenge,
     required this.originalUri,
-    required this.nonce,
+    required this.rawNonce,
     required this.clientId,
     required this.extraTokenParams,
     required this.extraTokenHeaders,
@@ -65,8 +65,8 @@ class OidcAuthorizeState extends OidcState {
   @JsonKey(name: OidcConstants_Store.originalUri)
   final Uri? originalUri;
 
-  @JsonKey(name: OidcConstants_AuthParameters.nonce)
-  final String nonce;
+  @JsonKey(name: OidcConstants_AuthParameters.rawNonce)
+  final String rawNonce;
 
   @override
   Map<String, dynamic> toJson() => _$OidcAuthorizeStateToJson(this);

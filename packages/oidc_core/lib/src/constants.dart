@@ -159,6 +159,9 @@ class OidcConstants_AuthParameters {
   /// authorization request
   static const nonce = 'nonce';
 
+  // raw nonce
+  static const rawNonce = 'rawNonce';
+
   /// authorization request
   static const display = 'display';
 

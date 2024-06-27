@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
-
+import 'package:crypto/crypto.dart';
 import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
 import 'package:jose_plus/jose.dart';
@@ -117,7 +117,8 @@ class OidcEndpoints {
       }
     }
 
-    final nonce = Nonce.generate(32, Random.secure());
+    final rawNonce = Nonce.generate(32, Random.secure());
+
     final stateData = OidcAuthorizeState(
       id: const Uuid().v4(),
       createdAt: clock.now(),
@@ -125,7 +126,7 @@ class OidcEndpoints {
       codeChallenge: codeChallenge,
       redirectUri: input.redirectUri,
       clientId: input.clientId,
-      nonce: nonce,
+      rawNonce: rawNonce,
       originalUri: input.originalUri,
       data: input.extraStateData,
       extraTokenParams: input.extraTokenParameters,
@@ -140,12 +141,15 @@ class OidcEndpoints {
       );
       // store the current state and nonce.
       // await store.setCurrentState(stateData.id);
-      await store.setCurrentNonce(nonce);
+      await store.setCurrentRawNonce(rawNonce);
     }
 
     final supportsOpenIdScope =
         metadata.scopesSupported?.contains(OidcConstants_Scopes.openid) ??
             false;
+
+    final bytes = utf8.encode(rawNonce);
+    final nonce = sha256.convert(bytes).toString();
 
     final req = OidcAuthorizeRequest(
       state: stateData.id,
@@ -190,7 +194,7 @@ class OidcEndpoints {
     OidcStore? store,
   }) async {
     //
-    final nonce = Nonce.generate(32, Random.secure());
+    final rawNonce = Nonce.generate(32, Random.secure());
     final stateData = OidcAuthorizeState(
       id: const Uuid().v4(),
       createdAt: clock.now(),
@@ -198,7 +202,7 @@ class OidcEndpoints {
       codeChallenge: null,
       redirectUri: input.redirectUri,
       clientId: input.clientId,
-      nonce: nonce,
+      rawNonce: rawNonce,
       originalUri: input.originalUri,
       options: input.options,
       data: input.extraStateData,
@@ -213,12 +217,15 @@ class OidcEndpoints {
       );
       // store the current state and nonce.
       // await store.setCurrentState(stateData.id);
-      await store.setCurrentNonce(nonce);
+      await store.setCurrentRawNonce(rawNonce);
     }
 
     final supportsOpenIdScope =
         metadata.scopesSupported?.contains(OidcConstants_Scopes.openid) ??
             false;
+
+    final bytes = utf8.encode(rawNonce);
+    final nonce = sha256.convert(bytes).toString();
 
     return OidcAuthorizeRequest(
       state: stateData.id,
