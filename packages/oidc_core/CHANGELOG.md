@@ -1,3 +1,11 @@
+## 0.8.0
+
+> Note: This release has breaking changes.
+
+- **BREAKING** : Remove hashed nonce from secure storage.
+- **FEAT**: hash nonce before sending it to auth server (spec: https://openid.net/specs/openid-connect-core-1_0.html#NonceNotes).
+- **FEAT**: compare the hashed nonce with IDToken nonce.
+
 ## 0.7.0
 
 > Note: This release has breaking changes.

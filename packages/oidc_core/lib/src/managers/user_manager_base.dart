@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:jose_plus/jose.dart';
 import 'package:logging/logging.dart';
@@ -265,7 +266,7 @@ abstract class OidcUserManagerBase {
       ),
       attributes: null,
       userInfo: null,
-      nonce: null,
+      rawNonce: null,
       metadata: discoveryDocument,
     );
   }
@@ -537,7 +538,7 @@ abstract class OidcUserManagerBase {
             token: token,
             userInfo: null,
             attributes: null,
-            nonce: stateData.nonce,
+            rawNonce: stateData.rawNonce,
             metadata: metadata,
           );
         }
@@ -579,7 +580,7 @@ abstract class OidcUserManagerBase {
       );
       return await createUserFromToken(
         token: token,
-        nonce: stateData.nonce,
+        rawNonce: stateData.rawNonce,
         attributes: null,
         userInfo: null,
         metadata: metadata,
@@ -605,7 +606,7 @@ abstract class OidcUserManagerBase {
   @protected
   Future<OidcUser?> createUserFromToken({
     required OidcToken token,
-    required String? nonce,
+    required String? rawNonce,
     required Map<String, dynamic>? attributes,
     required Map<String, dynamic>? userInfo,
     required OidcProviderMetadata metadata,
@@ -642,7 +643,10 @@ abstract class OidcUserManagerBase {
 
     final idTokenNonce = newUser
         .parsedIdToken.claims[OidcConstants_AuthParameters.nonce] as String?;
-    if (nonce != null && idTokenNonce != nonce) {
+    final bytes = utf8.encode(rawNonce ?? '');
+    final hashedNonce = sha256.convert(bytes).toString();
+
+    if (idTokenNonce != hashedNonce) {
       logAndThrow(
         'Server returned a wrong id_token nonce, might be a replay attack.',
       );
@@ -769,7 +773,7 @@ abstract class OidcUserManagerBase {
         overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
         sessionState: currentUser?.token.sessionState,
       ),
-      nonce: null,
+      rawNonce: null,
       userInfo: null,
       attributes: null,
       metadata: discoveryDocument,
@@ -829,7 +833,7 @@ abstract class OidcUserManagerBase {
           overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
           sessionState: event.sessionState,
         ),
-        nonce: null,
+        rawNonce: null,
         attributes: null,
         userInfo: null,
         metadata: discoveryDocument,
@@ -937,7 +941,7 @@ abstract class OidcUserManagerBase {
           StackTrace.current,
         );
       }
-      await store.setCurrentNonce(null);
+      await store.setCurrentRawNonce(null);
 
       await store.removeMany(
         OidcStoreNamespace.secureTokens,
@@ -1081,7 +1085,7 @@ abstract class OidcUserManagerBase {
       var loadedUser = await createUserFromToken(
         token: token,
         // nonce is only checked for new tokens.
-        nonce: null,
+        rawNonce: null,
         attributes: decodedAttributes,
         userInfo: decodedUserInfo,
         metadata: metadata,
