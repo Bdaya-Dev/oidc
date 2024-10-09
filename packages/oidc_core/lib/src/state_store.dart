@@ -84,10 +84,10 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
   //     );
 
   /// Gets the current nonce from the session namespace.
-  Future<String?> getCurrentNonce() => get(
-        OidcStoreNamespace.secureTokens,
-        key: OidcConstants_AuthParameters.nonce,
-      );
+  Future<String?> getCurrentRawNonce() => get(
+    OidcStoreNamespace.secureTokens,
+    key: OidcConstants_AuthParameters.rawNonce,
+  );
 
   /// Gets the stateData (value) of a [state] (key).
   Future<String?> getStateData(String state) => get(
@@ -167,16 +167,16 @@ extension OidcStoreExt on OidcStore {
   /// Sets the current state from the session namespace.
   ///
   /// Sending null will remove the key.
-  Future<void> setCurrentNonce(String? nonce) => nonce == null
+  Future<void> setCurrentRawNonce(String? rawNonce) => rawNonce == null
       ? remove(
-          OidcStoreNamespace.secureTokens,
-          key: OidcConstants_AuthParameters.nonce,
-        )
+    OidcStoreNamespace.secureTokens,
+    key: OidcConstants_AuthParameters.rawNonce,
+  )
       : set(
-          OidcStoreNamespace.secureTokens,
-          key: OidcConstants_AuthParameters.nonce,
-          value: nonce,
-        );
+    OidcStoreNamespace.secureTokens,
+    key: OidcConstants_AuthParameters.rawNonce,
+    value: rawNonce,
+  );
 
   /// Sets the [stateData] (value) of a [state] (key).
   ///
