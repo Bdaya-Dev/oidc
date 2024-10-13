@@ -794,7 +794,9 @@ abstract class OidcUserManagerBase {
 
   @protected
   Future<void> handleTokenExpiring(OidcToken event) async {
-    settings.onTokenExpiring?.call(event);
+    eventsController.add(
+      OidcTokenExpiringEvent.now(currentToken: event),
+    );
 
     final refreshToken = event.refreshToken;
     if (refreshToken == null) {
@@ -836,7 +838,9 @@ abstract class OidcUserManagerBase {
 
   @protected
   void handleTokenExpired(OidcToken event) {
-    settings.onTokenExpired?.call(event);
+    eventsController.add(
+      OidcTokenExpiredEvent.now(currentToken: event),
+    );
 
     if (!settings.supportOfflineAuth) {
       forgetUser();
