@@ -85,6 +85,9 @@ scripts:
     packageFilters:
       dirExists: test
       flutter: false
+  remove_dart_test_yaml:
+    name: Remove dart_test.yaml
+    run: find . -type f -name 'dart_test.yaml' -delete
   test:flutter:
     name: Flutter tests
     exec: flutter test --coverage

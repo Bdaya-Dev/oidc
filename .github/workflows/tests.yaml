@@ -74,8 +74,7 @@ jobs:
       - name: '[Verify step] Test Dart packages [Firefox]'
         run: melos run test:web:firefox
       - name: Remove dart_test.yaml Files
-        run: |
-          find . -type f -name 'dart_test.yaml' -delete
+        run: melos run remove_dart_test_yaml
       - name: '[Verify step] Test Flutter packages'
         run: melos run test:flutter
       - name: '[Coverage] Format & print test coverage'
@@ -125,6 +124,9 @@ jobs:
         with:
           run-bootstrap: true
           bootstrap-no-example: true
+
+      - name: Remove dart_test.yaml Files
+        run: melos run remove_dart_test_yaml
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
