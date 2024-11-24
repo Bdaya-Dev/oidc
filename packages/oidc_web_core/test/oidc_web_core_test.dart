@@ -1,7 +1,6 @@
 @TestOn('js')
 library;
 
-
 // ignore_for_file: prefer_const_constructors
 
 import 'package:oidc_web_core/oidc_web_core.dart';
