@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: subosito/flutter-action@v2
-      - uses: ahmednfwela/melos-action@main
+      - uses: ahmednfwela/melos-action@feat/bootstrap-no-example
         with:
           run-bootstrap: true
           bootstrap-no-example: true

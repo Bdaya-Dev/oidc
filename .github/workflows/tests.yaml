@@ -45,11 +45,10 @@ jobs:
           flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
-      - name: Prepare dependencies for the project management
-        run: dart pub get
-      - uses: ahmednfwela/melos-action@main
+      - uses: ahmednfwela/melos-action@feat/bootstrap-no-example
         with:
           run-bootstrap: true
+          bootstrap-no-example: true
 
       - name: '[Verify step] ✨ Format'
         if: ${{ matrix.sdk == 'stable' }}
