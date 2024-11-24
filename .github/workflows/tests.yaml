@@ -75,7 +75,7 @@ jobs:
         run: melos run test:flutter
       - name: '[Coverage] Format & print test coverage'
         if: ${{ matrix.sdk == 'stable' }}
-        run: melos run coverage:show
+        run: melos run coverage:combine
       - name: Report to Codecov
         uses: codecov/codecov-action@v4
         if: ${{ matrix.sdk == 'stable' }}
