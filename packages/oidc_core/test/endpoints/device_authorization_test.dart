@@ -1,5 +1,7 @@
+@TestOn('vm')
+library;
+
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:http/http.dart';
@@ -26,13 +28,13 @@ void main() {
 
     final client = MockClient((request) async {
       if (request.url.host != deviceAuthorizationEndpoint.host) {
-        return Response('Not found', HttpStatus.notFound);
+        return Response('Not found', 404);
       }
       if (eq.equals(
           request.url.pathSegments, deviceAuthorizationEndpoint.pathSegments)) {
         return Response(jsonEncode(json), 200);
       }
-      return Response('Not found', HttpStatus.notFound);
+      return Response('Not found', 404);
     });
 
     test('device code', () async {
