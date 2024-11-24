@@ -16,10 +16,19 @@ jobs:
         with:
           fetch-depth: 0
       - uses: subosito/flutter-action@v2
-      - uses: ahmednfwela/melos-action@feat/bootstrap-no-example
+      # see https://github.com/invertase/melos/issues/796
+      - uses: bluefireteam/melos-action@main
+        continue-on-error: true
+        with:
+          run-bootstrap: true          
+          bootstrap-no-example: false      
+      - uses: bluefireteam/melos-action@main
         with:
           run-bootstrap: true
           bootstrap-no-example: true
+      - uses: bluefireteam/melos-action@main
+        with:
+          run-bootstrap: false
           run-versioning: true
           publish-dry-run: true
           create-pr: true

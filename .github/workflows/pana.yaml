@@ -37,7 +37,13 @@ jobs:
         with:
           channel: stable
           cache: true
-      - uses: ahmednfwela/melos-action@feat/bootstrap-no-example
+      # see https://github.com/invertase/melos/issues/796
+      - uses: bluefireteam/melos-action@main
+        continue-on-error: true
+        with:
+          run-bootstrap: true          
+          bootstrap-no-example: false      
+      - uses: bluefireteam/melos-action@main
         with:
           run-bootstrap: true
           bootstrap-no-example: true
