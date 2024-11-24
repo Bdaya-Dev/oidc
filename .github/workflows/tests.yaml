@@ -154,10 +154,12 @@ jobs:
           script: echo "Generated AVD snapshot for caching."
       
       - name: Run Android Emulator and Integration Tests
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@v2        
         with:
+          working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
           script: |
+            pwd
             flutter doctor -v
             flutter test integration_test --coverage -d android
             ls -lR
