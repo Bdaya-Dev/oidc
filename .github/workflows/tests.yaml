@@ -68,6 +68,9 @@ jobs:
         run: melos run test:web:chrome
       - name: '[Verify step] Test Dart packages [Firefox]'
         run: melos run test:web:firefox
+      - name: Remove dart_test.yaml Files
+        run: |
+          find . -type f -name 'dart_test.yaml' -delete
       - name: '[Verify step] Test Flutter packages'
         run: melos run test:flutter
       - name: '[Coverage] Format & print test coverage'
