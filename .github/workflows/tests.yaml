@@ -42,7 +42,7 @@ jobs:
         with:
           cache: true          
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
-          flutter-version: ${{ matrix.sdk == 'min' && '3.10.0' || '' }}
+          flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: Prepare dependencies for the project management
