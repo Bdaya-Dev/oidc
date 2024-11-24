@@ -9,7 +9,7 @@ command:
     runPubGetInParallel: false
   clean:
     hooks:
-      post: |        
+      post: |
         melos exec --flutter -- "flutter clean" &&        
         rm -rf coverage &&
         rm -rf pubspec.lock &&
@@ -92,13 +92,13 @@ scripts:
       flutter: true
       dirExists: test
       ignore:
-        - '*example*'
+        - "*example*"
 
   test:coverage:
     name: Run all tests and combine coverage
     run: |
       melos run test
-      melos run coverage:format      
+      melos run coverage:format
 
   upgrade:dart:
     name: Upgrade Dart package deps
