@@ -18,6 +18,7 @@ jobs:
       - uses: subosito/flutter-action@v2
       - uses: bluefireteam/melos-action@v3
         with:
+          run-bootstrap: true
           run-versioning: true
           publish-dry-run: true
           create-pr: true

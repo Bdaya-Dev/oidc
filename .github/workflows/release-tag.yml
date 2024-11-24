@@ -18,6 +18,7 @@ jobs:
       - uses: subosito/flutter-action@v2
       - uses: bluefireteam/melos-action@v3
         with:
+          run-bootstrap: true
           tag: true
       - run: |
           melos exec -c 1 --no-published --no-private --order-dependents -- \
