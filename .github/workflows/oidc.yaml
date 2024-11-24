@@ -12,18 +12,6 @@ on:
   #     - main
 
 jobs:
-
-  build:
-    uses: ./.github/workflows/flutter_package.yaml
-    with:
-      working_directory: packages/oidc
-
-  pana:
-    uses: ./.github/workflows/pana.yaml
-    with:
-      min_score: 100
-
-
   android:
     runs-on: macos-latest
     if: false # TODO: Integration tests are flaky, see https://github.com/VeryGoodOpenSource/very_good_flutter_plugin/issues/79

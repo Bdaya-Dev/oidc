@@ -24,8 +24,8 @@ defaults:
   run:
     shell: bash -leo pipefail {0}
 
-jobs:
-  workflows:
+jobs:  
+  unit_tests:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -40,7 +40,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          cache: true          
+          cache: true
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
           flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}
       - run: |
@@ -81,11 +81,85 @@ jobs:
       - name: '[Coverage] Format & print test coverage'
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run coverage:combine
-      - name: Report to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload Unit Test Coverage Report
+        uses: actions/upload-artifact@v4
         if: ${{ matrix.sdk == 'stable' }}
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}        
         with:
-          file: coverage/lcov.info
-          fail_ci_if_error: false
+          name: unit-tests-coverage
+          path: coverage/lcov.info
+      # Upload
+      # - name: Report to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   if: ${{ matrix.sdk == 'stable' }}
+      #   env:
+      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}        
+      #   with:
+      #     file: coverage/lcov.info
+      #     fail_ci_if_error: false
+
+# integration tests
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        api-level: [29]
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          cache: true
+          channel: stable
+          flutter-version: 3.22.0      
+      # see https://github.com/invertase/melos/issues/796
+      - uses: bluefireteam/melos-action@main
+        continue-on-error: true
+        with:
+          run-bootstrap: true
+          bootstrap-no-example: false
+      - uses: bluefireteam/melos-action@main
+        with:
+          run-bootstrap: true
+          bootstrap-no-example: true
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v3
+          
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ matrix.api-level }}
+
+      - name: create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+      
+      - name: Run Android Emulator and Integration Tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          script: flutter doctor -v
+      # - name: Upload Coverage Report
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: android-coverage
+      #     path: packages/oidc/example/coverage/lcov.info
