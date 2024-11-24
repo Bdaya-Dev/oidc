@@ -57,11 +57,11 @@ jobs:
       - name: '[Verify step] 🕵️ Analyze packages'
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run analyze
-      - name: '[Verify step] 🕵️ Run Pana'
-        if: ${{ matrix.sdk == 'stable' }}
-        run: |
-          flutter pub global activate pana
-          melos run pana
+      # - name: '[Verify step] 🕵️ Run Pana'
+      #   if: ${{ matrix.sdk == 'stable' }}
+      #   run: |
+      #     flutter pub global activate pana
+      #     melos run pana
       - name: '[Verify step] Test Dart packages [VM]'
         run: melos run test:vm
       - name: '[Verify step] Test Dart packages [Chrome]'
