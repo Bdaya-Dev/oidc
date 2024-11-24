@@ -57,7 +57,7 @@ class _AuthPageState extends State<AuthPage> {
         title: const Text('Auth page'),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(8),
         child: ListView(
           children: [
             const Text('Resource owner grant'),
