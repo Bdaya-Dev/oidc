@@ -7,11 +7,13 @@ environment:
   sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
   async: ^2.11.0
   bdaya_shared_value: ^3.1.3
   dio: ^5.3.3
-  flutter:
-    sdk: flutter
   go_router: ^14.1.4
   http: ^1.1.0
   logging: ^1.2.0
@@ -19,7 +21,6 @@ dependencies:
     path: ../
   oidc_core: ^0.7.0
   oidc_default_store: ^0.2.0+9
-  url_strategy: ^0.2.0
 
 dev_dependencies:
   flutter_driver:

@@ -18,7 +18,6 @@ dependencies:
   oidc_core: ^0.7.0
   oidc_default_store: ^0.2.0+9
   oidc_platform_interface: ^0.4.0
-  url_strategy: ^0.2.0
 
 dev_dependencies:
   flutter_driver:

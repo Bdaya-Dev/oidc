@@ -3,15 +3,12 @@
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
-import 'package:url_strategy/url_strategy.dart';
 
 import 'app_state.dart' as app_state;
 
 // you must run this app with --web-port 22433
 
 void main() {
-  setPathUrlStrategy();
-
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((record) {
     debugPrint('${record.level.name}: ${record.time}: ${record.message}');
