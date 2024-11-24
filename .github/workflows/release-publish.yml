@@ -21,4 +21,5 @@ jobs:
       - uses: ahmednfwela/melos-action@main
         with:
           run-bootstrap: true
+          bootstrap-no-example: true
           publish: true

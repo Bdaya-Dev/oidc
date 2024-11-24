@@ -19,6 +19,7 @@ jobs:
       - uses: ahmednfwela/melos-action@main
         with:
           run-bootstrap: true
+          bootstrap-no-example: true
           run-versioning: true
           publish-dry-run: true
           create-pr: true
