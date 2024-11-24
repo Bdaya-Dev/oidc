@@ -93,6 +93,12 @@ scripts:
       dirExists: test
       ignore:
         - "*example*"
+  test:flutter:integration:
+    name: Flutter Integration tests
+    exec: flutter test integration_test --coverage
+    packageFilters:
+      flutter: true
+      dirExists: integration_test
 
   test:coverage:
     name: Run all tests and combine coverage
