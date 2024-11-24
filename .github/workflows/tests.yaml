@@ -47,7 +47,7 @@ jobs:
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: Prepare dependencies for the project management
         run: dart pub get
-      - uses: bluefireteam/melos-action@v3
+      - uses: ahmednfwela/melos-action@main
         with:
           run-bootstrap: true
 

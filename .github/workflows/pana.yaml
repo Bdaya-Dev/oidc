@@ -37,7 +37,12 @@ jobs:
         with:
           channel: stable
           cache: true
-
+      - uses: ahmednfwela/melos-action@main
+        with:
+          run-bootstrap: true
+          run-versioning: true
+          publish-dry-run: true
+          create-pr: true
       - name: 📦 Install Pana
         run: flutter pub global activate pana ${{inputs.pana_version}}
 
