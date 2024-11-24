@@ -10,7 +10,8 @@ environment:
 # Add regular dependencies here.
 dependencies:
   web: ^0.5.1
-  oidc_core: ^0.8.0
+  oidc_core:
+    path: ../../oidc_core
   oidc_web_core:
     path: ../
 
