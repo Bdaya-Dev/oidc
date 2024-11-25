@@ -112,6 +112,14 @@ scripts:
       dirExists: 
         - integration_test
         - ios
+  integration_test:chrome:
+    name: Flutter Chrome Integration tests
+    exec: flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d chrome
+    packageFilters:
+      flutter: true
+      dirExists:
+        - integration_test
+        - web
 
   test:coverage:
     name: Run all tests and combine coverage
