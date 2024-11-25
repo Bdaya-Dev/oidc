@@ -164,6 +164,9 @@ jobs:
           name: ios-coverage.info
           path: packages/oidc/example/ios-coverage.info
   web:
+    strategy:
+      matrix:
+        working-directory: ["packages/oidc/example"]
     runs-on: macos-latest
     timeout-minutes: 15
     steps:
@@ -178,7 +181,8 @@ jobs:
       # - name: Run Web Integration Tests
       #   run: melos run integration_test:chrome
       # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
-      - name: Ensure all tests are actually passing
+      - name: Run Web Integration Tests
+        working-directory: ${{ matrix.working-directory }}
         run: |
           chromedriver --verbose --port=4444 --trace-buffer-size=100000 | tee chromedriver.log & sleep 5
           flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d chrome | tee output.log
