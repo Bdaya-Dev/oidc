@@ -85,6 +85,9 @@ scripts:
     packageFilters:
       dirExists: test
       flutter: false
+  remove_dart_test_yaml:
+    name: Remove dart_test.yaml
+    run: find . -type f -name 'dart_test.yaml' -delete
   test:flutter:
     name: Flutter tests
     exec: flutter test --coverage
@@ -93,6 +96,30 @@ scripts:
       dirExists: test
       ignore:
         - "*example*"
+  integration_test:android:
+    name: Flutter Android Integration tests
+    exec: flutter test integration_test --coverage -d android --coverage-path android-coverage.info
+    packageFilters:
+      flutter: true
+      dirExists: 
+        - integration_test
+        - android
+  integration_test:ios:
+    name: Flutter iOs Integration tests
+    exec: flutter test integration_test --coverage -d iPhone --coverage-path ios-coverage.info
+    packageFilters:
+      flutter: true
+      dirExists: 
+        - integration_test
+        - ios
+  integration_test:chrome:
+    name: Flutter Chrome Integration tests
+    exec: flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d chrome | tee output.log
+    packageFilters:
+      flutter: true
+      dirExists:
+        - integration_test
+        - web
 
   test:coverage:
     name: Run all tests and combine coverage

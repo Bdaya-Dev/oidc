@@ -24,8 +24,8 @@ defaults:
   run:
     shell: bash -leo pipefail {0}
 
-jobs:
-  workflows:
+jobs:  
+  unit_tests:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -36,26 +36,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
         with:
-          cache: true          
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
-          flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}
+          flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}      
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
-      # see https://github.com/invertase/melos/issues/796
-      - uses: bluefireteam/melos-action@main
-        continue-on-error: true
-        with:
-          run-bootstrap: true
-          bootstrap-no-example: false
-      - uses: bluefireteam/melos-action@main
-        with:
-          run-bootstrap: true
-          bootstrap-no-example: true
-
       - name: '[Verify step] ✨ Format'
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run format
@@ -74,18 +61,143 @@ jobs:
       - name: '[Verify step] Test Dart packages [Firefox]'
         run: melos run test:web:firefox
       - name: Remove dart_test.yaml Files
-        run: |
-          find . -type f -name 'dart_test.yaml' -delete
+        run: melos run remove_dart_test_yaml
       - name: '[Verify step] Test Flutter packages'
         run: melos run test:flutter
       - name: '[Coverage] Format & print test coverage'
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run coverage:combine
-      - name: Report to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload Unit Test Coverage Report
+        uses: actions/upload-artifact@v4
         if: ${{ matrix.sdk == 'stable' }}
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}        
         with:
-          file: coverage/lcov.info
-          fail_ci_if_error: false
+          name: unit-tests-coverage
+          path: coverage/lcov.info
+      # Upload
+      # - name: Report to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   if: ${{ matrix.sdk == 'stable' }}
+      #   env:
+      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}        
+      #   with:
+      #     file: coverage/lcov.info
+      #     fail_ci_if_error: false
+
+# integration tests
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        api-level: [29]
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v3
+          
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ matrix.api-level }}
+
+      - name: create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+      
+      - name: Run Android Emulator and Integration Tests
+        uses: reactivecircus/android-emulator-runner@v2        
+        with:
+          working-directory: packages/oidc/example
+          api-level: ${{ matrix.api-level }}
+          script: melos run integration_test:android
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-coverage.info
+          path: packages/oidc/example/android-coverage.info
+
+  ios:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+
+      - name: Start Simulator
+        # Start an iPhone simulator
+        run: |
+          UDID=$(xcrun xctrace list devices | grep "^iPhone" | awk '{gsub(/[()]/,""); print $NF}' | head -n 1)
+          echo $UDID
+          xcrun simctl boot "${UDID:?No Simulator with this name found}"
+
+      - name: Integration Tests
+        run: melos run integration_test:ios
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-coverage.info
+          path: packages/oidc/example/ios-coverage.info
+  web:
+    strategy:
+      matrix:
+        working-directory: ["packages/oidc/example"]
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base      
+      # - name: Run Chromedriver
+      #   uses: nanasess/setup-chromedriver@v2
+      # - run: chromedriver --verbose --port=4444 --trace-buffer-size=100000 | tee chromedriver.log & sleep 5          
+      #   name: run chrome driver
+      # - name: Run Web Integration Tests
+      #   run: melos run integration_test:chrome
+      # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
+      - name: Run Web Integration Tests
+        working-directory: ${{ matrix.working-directory }}
+        run: |
+          chromedriver --verbose --port=4444 --trace-buffer-size=100000 | tee chromedriver.log & sleep 5
+          flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d chrome | tee output.log
+          # We have to check the output for failed tests matching the string "[E]"
+          output=$(<output.log)
+          if [[ "$output" =~ \[E\] ]]; then
+          # You will see "All tests passed." in the logs even when tests failed.
+          echo "All tests did not pass. Please check the logs for more information."
+          exit 1
+          fi
+        shell: bash
+
+      # web has no test coverage for now  
+      # - name: Upload Coverage Report
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: web-coverage
+      #     path: packages/oidc/example/coverage/web-coverage.info
