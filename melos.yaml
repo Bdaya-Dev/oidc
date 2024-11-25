@@ -96,12 +96,22 @@ scripts:
       dirExists: test
       ignore:
         - "*example*"
-  test:flutter:integration:
-    name: Flutter Integration tests
-    exec: flutter test integration_test --coverage
+  integration_test:android:
+    name: Flutter Android Integration tests
+    exec: flutter test integration_test --coverage -d android --coverage-path android-coverage.info
     packageFilters:
       flutter: true
-      dirExists: integration_test
+      dirExists: 
+        - integration_test
+        - android
+  integration_test:ios:
+    name: Flutter iOs Integration tests
+    exec: flutter test integration_test --coverage -d iPhone --coverage-path ios-coverage.info
+    packageFilters:
+      flutter: true
+      dirExists: 
+        - integration_test
+        - ios
 
   test:coverage:
     name: Run all tests and combine coverage

@@ -1,0 +1,22 @@
+name: "Set up Integration test"
+description: "Sets up the environment for Flutter integration tests"
+
+inputs:
+  channel:
+    description: "Flutter channel to use"
+    default: "stable"
+  flutter-version:
+    description: "Flutter version to use"
+    default: "3.22.0"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Environment
+      uses: ./.github/actions/setup-environment
+      with:
+        channel: ${{ inputs.channel }}
+        flutter-version: ${{ inputs.flutter-version }}
+
+    - name: Remove dart_test.yaml Files
+      run: melos run remove_dart_test_yaml

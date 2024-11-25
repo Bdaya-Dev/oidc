@@ -106,27 +106,8 @@ jobs:
       run:
         working-directory: packages/oidc/example
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          cache: true
-          channel: stable
-          flutter-version: 3.22.0      
-      # see https://github.com/invertase/melos/issues/796
-      - uses: bluefireteam/melos-action@main
-        continue-on-error: true
-        with:
-          run-bootstrap: true
-          bootstrap-no-example: false
-      - uses: bluefireteam/melos-action@main
-        with:
-          run-bootstrap: true
-          bootstrap-no-example: true
-
-      - name: Remove dart_test.yaml Files
-        run: melos run remove_dart_test_yaml
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base.yaml
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -160,10 +141,34 @@ jobs:
         with:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
-          script: |
-            flutter test integration_test --coverage -d android --coverage-path android-coverage.info
+          script: melos run integration_test:android
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
           name: android-coverage.info
           path: packages/oidc/example/android-coverage.info
+
+  ios:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+
+    steps:
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base.yaml
+
+      - name: Start Simulator
+        # Start an iPhone simulator
+        run: |
+          UDID=$(xcrun xctrace list devices | grep "^iPhone" | awk '{gsub(/[()]/,""); print $NF}' | head -n 1)
+          echo $UDID
+          xcrun simctl boot "${UDID:?No Simulator with this name found}"
+
+      - name: Integration Tests
+        run: melos run integration_test:ios
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-coverage.info
+          path: packages/oidc/example/ios-coverage.info
