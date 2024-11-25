@@ -174,8 +174,8 @@ jobs:
         uses: nanasess/setup-chromedriver@v2
       - run: |
           export DISPLAY=:99
-          chromedriver --port=4444 --url-base=/wd/hub &
-          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
+          chromedriver --port=4444 --url-base=/wd/hub & sleep 5
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & sleep 5 # optional
         name: run chrome driver
       - name: Run Web Integration Tests
         run: melos run integration_test:chrome
