@@ -34,6 +34,8 @@ jobs:
     env:
       TEST_PRESET: all
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
       - name: Set up Environment
         uses: ./.github/actions/flutter_base
         with:
@@ -91,6 +93,8 @@ jobs:
       run:
         working-directory: packages/oidc/example
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Enable KVM
@@ -140,6 +144,8 @@ jobs:
         working-directory: packages/oidc/example
 
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
 
