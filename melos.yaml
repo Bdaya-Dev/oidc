@@ -114,7 +114,7 @@ scripts:
         - ios
   integration_test:chrome:
     name: Flutter Chrome Integration tests
-    exec: flutter drive --profile --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d web-server --browser-name=chrome | tee output.log
+    exec: flutter drive --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart -d chrome | tee output.log
     packageFilters:
       flutter: true
       dirExists:
