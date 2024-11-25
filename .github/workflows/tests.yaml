@@ -34,28 +34,13 @@ jobs:
     env:
       TEST_PRESET: all
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
         with:
-          cache: true
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
-          flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}
+          flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}      
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
-      # see https://github.com/invertase/melos/issues/796
-      - uses: bluefireteam/melos-action@main
-        continue-on-error: true
-        with:
-          run-bootstrap: true
-          bootstrap-no-example: false
-      - uses: bluefireteam/melos-action@main
-        with:
-          run-bootstrap: true
-          bootstrap-no-example: true
-
       - name: '[Verify step] ✨ Format'
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run format
@@ -107,7 +92,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Set up Environment
-        uses: ./.github/actions/integration_test_base.yaml
+        uses: ./.github/actions/integration_test_base
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -156,7 +141,7 @@ jobs:
 
     steps:
       - name: Set up Environment
-        uses: ./.github/actions/integration_test_base.yaml
+        uses: ./.github/actions/integration_test_base
 
       - name: Start Simulator
         # Start an iPhone simulator

@@ -13,10 +13,11 @@ runs:
   using: "composite"
   steps:
     - name: Set up Environment
-      uses: ./.github/actions/setup-environment
+      uses: ./.github/actions/flutter_base
       with:
         channel: ${{ inputs.channel }}
         flutter-version: ${{ inputs.flutter-version }}
 
     - name: Remove dart_test.yaml Files
       run: melos run remove_dart_test_yaml
+      shell: bash
