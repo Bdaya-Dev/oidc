@@ -161,11 +161,9 @@ jobs:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
           script: |
-            flutter test integration_test --coverage -d android --coverage-path android-coverage
-            ls android-coverage
-
+            flutter test integration_test --coverage -d android --coverage-path android-coverage.info
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
-          name: android-coverage
-          path: packages/oidc/example/android-coverage/lcov.info
+          name: android-coverage.info
+          path: packages/oidc/example/android-coverage.info
