@@ -168,7 +168,7 @@ jobs:
       fail-fast: false
       matrix:
         working-directory: ["packages/oidc/example"]
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout Code
