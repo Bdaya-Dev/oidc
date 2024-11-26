@@ -185,7 +185,7 @@ jobs:
         working-directory: ${{ matrix.working-directory }}
         run: |
           chromedriver --port=4444 --trace-buffer-size=100000 &
-          flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome | tee output.log
+          flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --dart-define=CI=true | tee output.log
           # We have to check the output for failed tests matching the string "[E]"
           output=$(<output.log)
           if [[ "$output" =~ \[E\] ]]; then

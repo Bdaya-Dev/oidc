@@ -1,16 +1,52 @@
 // ignore_for_file: avoid_redundant_argument_values
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:async/async.dart';
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
 
+import 'mock.dart';
+
 //This file represents a global state, which is bad
 //in a production app (since you can't test it).
+
+const kIsCI = bool.fromEnvironment('CI');
+final http.Client client = kIsCI ? http.MockClient(ciHandler) : http.Client();
+Future<http.Response> ciHandler(http.Request request) async {
+  // intercept requests to duende to avoid flaky tests.
+  switch (request) {
+    case http.Request(
+        method: 'GET',
+        url: Uri(
+          host: 'demo.duendesoftware.com',
+          pathSegments: [
+            '.well-known',
+            'openid-configuration',
+          ]
+        )
+      ):
+      return http.Response.bytes(
+        utf8.encode(duendeDiscoveryDocument),
+        HttpStatus.ok,
+      );
+    default:
+      exampleLogger
+          .warning('sending out ${request.method} request to ${request.url}');
+      final client = http.Client();
+      try {
+        return http.Response.fromStream(await client.send(request));
+      } finally {
+        client.close();
+      }
+  }
+}
 
 //usually you would use a dependency injection library
 //and put these in a service.
@@ -29,7 +65,7 @@ final duendeManager = OidcUserManager.lazy(
     clientId: 'interactive.public.short',
   ),
   store: OidcDefaultStore(),
-
+  httpClient: client,
   // keyStore: JsonWebKeyStore(),
   settings: OidcUserManagerSettings(
     frontChannelLogoutUri: Uri(path: 'redirect.html'),
