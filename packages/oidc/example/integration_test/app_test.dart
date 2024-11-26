@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
@@ -8,6 +10,12 @@ void main() {
 
   tearDownAll(
     () async {
+      // under normal circumstances this callback should NEVER be called, since
+      // IntegrationTestWidgetsFlutterBinding will shutdown the test process before this is reached.
+
+      // however when running integration tests on macos, web, this might not happen and tests will hang forever.
+
+      //this method attempts to fix this.
       print(
         'tearDownAll is called, binding.allTestsPassed.isCompleted: ${binding.allTestsPassed.isCompleted}, binding.failureMethodsDetails.isEmpty: ${binding.failureMethodsDetails.isEmpty}.',
       );
@@ -17,9 +25,13 @@ void main() {
         binding.allTestsPassed.complete(binding.failureMethodsDetails.isEmpty);
       }
       if (await binding.allTestsPassed.future) {
-        print('tearDownAll is called AND allTestsPassed = true.');
+        print(
+            'tearDownAll is called AND allTestsPassed = true, exit code will be 0.');
+        exit(0);
       } else {
-        print('tearDownAll is called AND allTestsPassed = false.');
+        print(
+            'tearDownAll is called AND allTestsPassed = false, exit code will be 1.');
+        exit(1);
       }
     },
   );
