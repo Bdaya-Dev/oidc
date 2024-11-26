@@ -14,8 +14,6 @@ void main() {
       // IntegrationTestWidgetsFlutterBinding will shutdown the test process before this is reached.
 
       // however when running integration tests on macos, web, this might not happen and tests will hang forever.
-
-      //this method attempts to fix this.
       print(
         'tearDownAll is called, binding.allTestsPassed.isCompleted: ${binding.allTestsPassed.isCompleted}, binding.failureMethodsDetails.isEmpty: ${binding.failureMethodsDetails.isEmpty}.',
       );
@@ -24,15 +22,11 @@ void main() {
 
         binding.allTestsPassed.complete(binding.failureMethodsDetails.isEmpty);
       }
-      if (await binding.allTestsPassed.future) {
-        print(
-            'tearDownAll is called AND allTestsPassed = true, exit code will be 0.');
-        exit(0);
-      } else {
-        print(
-            'tearDownAll is called AND allTestsPassed = false, exit code will be 1.');
-        exit(1);
-      }
+
+      print(
+          'binding.allTestsPassed = ${await binding.allTestsPassed.future}, will attempt to call  binding.callbackManager.cleanup().');
+      binding.callbackManager.cleanup();
+      print('binding.callbackManager.cleanup() finished.');
     },
   );
 
