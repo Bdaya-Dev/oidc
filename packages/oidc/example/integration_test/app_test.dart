@@ -8,8 +8,14 @@ void main() {
 
   tearDownAll(
     () async {
-      print('tearDownAll is called.');
-      IntegrationTestWidgetsFlutterBinding.instance.inTest;
+      print(
+        'tearDownAll is called, binding.allTestsPassed.isCompleted: ${binding.allTestsPassed.isCompleted}, binding.failureMethodsDetails.isEmpty: ${binding.failureMethodsDetails.isEmpty}.',
+      );
+      if (!binding.allTestsPassed.isCompleted) {
+        print('binding.allTestsPassed was not completed, completing it...');
+
+        binding.allTestsPassed.complete(binding.failureMethodsDetails.isEmpty);
+      }
       if (await binding.allTestsPassed.future) {
         print('tearDownAll is called AND allTestsPassed = true.');
       } else {
