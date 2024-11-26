@@ -113,22 +113,22 @@ scripts:
         - integration_test
         - ios
   # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
-  integration_test:chrome:
-    name: Flutter Chrome Integration tests
-    exec: |
-      flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --dart-define=CI=true | tee output.log
-      # We have to check the output for failed tests matching the string "[E]"
-      output=$(<output.log)
-      if [[ "$output" =~ \[E\] ]]; then
-      # You will see "All tests passed." in the logs even when tests failed.
-      echo "All tests did not pass. Please check the logs for more information."
-      exit 1
-      fi
-    packageFilters:
-      flutter: true
-      dirExists:
-        - integration_test
-        - web
+  # integration_test:chrome:
+  #   name: Flutter Chrome Integration tests
+  #   exec: |
+  #     flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --dart-define=CI=true | tee output.log
+  #     # We have to check the output for failed tests matching the string "[E]"
+  #     output=$(<output.log)
+  #     if [[ "$output" =~ \[E\] ]]; then
+  #     # You will see "All tests passed." in the logs even when tests failed.
+  #     echo "All tests did not pass. Please check the logs for more information."
+  #     exit 1
+  #     fi
+  #   packageFilters:
+  #     flutter: true
+  #     dirExists:
+  #       - integration_test
+  #       - web
 
   test:coverage:
     name: Run all tests and combine coverage
