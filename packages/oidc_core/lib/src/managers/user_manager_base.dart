@@ -138,8 +138,7 @@ abstract class OidcUserManagerBase {
   /// Listens to incoming front channel logout requests.
   /// returns an empty stream on non-supported platforms.
   @protected
-  Stream<OidcFrontChannelLogoutIncomingRequest>
-      listenToFrontChannelLogoutRequests(
+  Stream<OidcFrontChannelLogoutIncomingRequest> listenToFrontChannelLogoutRequests(
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions options,
   );
@@ -155,9 +154,7 @@ abstract class OidcUserManagerBase {
   OidcPlatformSpecificOptions getPlatformOptions([
     OidcPlatformSpecificOptions? optionsOverride,
   ]) {
-    return optionsOverride ??
-        settings.options ??
-        const OidcPlatformSpecificOptions();
+    return optionsOverride ?? settings.options ?? const OidcPlatformSpecificOptions();
   }
 
   /// Attempts to login the user via the AuthorizationCodeFlow.
@@ -184,8 +181,7 @@ abstract class OidcUserManagerBase {
     OidcPlatformSpecificOptions? options,
   }) async {
     ensureInit();
-    final discoveryDocument =
-        discoveryDocumentOverride ?? this.discoveryDocument;
+    final discoveryDocument = discoveryDocumentOverride ?? this.discoveryDocument;
     options = getPlatformOptions(options);
     final prep = prepareForRedirectFlow(options);
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
@@ -198,8 +194,8 @@ abstract class OidcUserManagerBase {
       extraStateData: extraStateData,
       uiLocales: uiLocalesOverride ?? settings.uiLocales,
       acrValues: acrValuesOverride ?? settings.acrValues,
-      idTokenHint: idTokenHintOverride ??
-          (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
+      idTokenHint:
+          idTokenHintOverride ?? (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
       loginHint: loginHint,
       extraTokenHeaders: {
         ...?settings.extraTokenHeaders,
@@ -219,8 +215,7 @@ abstract class OidcUserManagerBase {
     // this function adds state, state data, nonce to the store
     // the state/state data is only until we get a response (success or fail).
     // the nonce is until the user logs out.
-    final requestContainer =
-        await OidcEndpoints.prepareAuthorizationCodeFlowRequest(
+    final requestContainer = await OidcEndpoints.prepareAuthorizationCodeFlowRequest(
       input: simpleReq,
       metadata: discoveryDocument,
       store: store,
@@ -241,8 +236,7 @@ abstract class OidcUserManagerBase {
     List<String>? scopeOverride,
     OidcProviderMetadata? discoveryDocumentOverride,
   }) async {
-    final discoveryDocument =
-        discoveryDocumentOverride ?? this.discoveryDocument;
+    final discoveryDocument = discoveryDocumentOverride ?? this.discoveryDocument;
     final tokenResp = await OidcEndpoints.token(
       tokenEndpoint: discoveryDocument.tokenEndpoint!,
       request: OidcTokenRequest.password(
@@ -279,8 +273,7 @@ abstract class OidcUserManagerBase {
     required Map<String, dynamic> prep,
   }) async {
     try {
-      final response =
-          await getAuthorizationResponse(metadata, request, options, prep);
+      final response = await getAuthorizationResponse(metadata, request, options, prep);
       if (response == null) {
         return null;
       }
@@ -346,8 +339,8 @@ abstract class OidcUserManagerBase {
       extraStateData: extraStateData,
       uiLocales: uiLocalesOverride ?? settings.uiLocales,
       acrValues: acrValuesOverride ?? settings.acrValues,
-      idTokenHint: idTokenHintOverride ??
-          (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
+      idTokenHint:
+          idTokenHintOverride ?? (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
       loginHint: loginHint,
       extraParameters: {
         ...?settings.extraAuthenticationParameters,
@@ -402,16 +395,14 @@ abstract class OidcUserManagerBase {
     OidcProviderMetadata? discoveryDocumentOverride,
   }) async {
     ensureInit();
-    final discoveryDocument =
-        discoveryDocumentOverride ?? this.discoveryDocument;
+    final discoveryDocument = discoveryDocumentOverride ?? this.discoveryDocument;
     options = getPlatformOptions(options);
     final prep = prepareForRedirectFlow(options);
     final currentUser = this.currentUser;
     if (currentUser == null) {
       return;
     }
-    final postLogoutRedirectUri =
-        postLogoutRedirectUriOverride ?? settings.postLogoutRedirectUri;
+    final postLogoutRedirectUri = postLogoutRedirectUriOverride ?? settings.postLogoutRedirectUri;
 
     final stateData = postLogoutRedirectUri == null
         ? null
@@ -449,8 +440,7 @@ abstract class OidcUserManagerBase {
     final result = await resultFuture;
     if (result == null) {
       if (isWeb &&
-          options.web.navigationMode ==
-              OidcPlatformSpecificOptions_Web_NavigationMode.samePage) {
+          options.web.navigationMode == OidcPlatformSpecificOptions_Web_NavigationMode.samePage) {
         //wait for a result after redirect.
         return;
       }
@@ -525,12 +515,10 @@ abstract class OidcUserManagerBase {
       if (grantType == OidcConstants_GrantType.implicit) {
         //implicit grant gets the token directly from the response.
         final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
-        if (implicitTokenResponse.accessToken != null ||
-            implicitTokenResponse.idToken != null) {
+        if (implicitTokenResponse.accessToken != null || implicitTokenResponse.idToken != null) {
           final token = OidcToken.fromResponse(
             implicitTokenResponse,
-            overrideExpiresIn:
-                settings.getExpiresIn?.call(implicitTokenResponse),
+            overrideExpiresIn: settings.getExpiresIn?.call(implicitTokenResponse),
             sessionState: response.sessionState,
           );
           return await createUserFromToken(
@@ -640,8 +628,8 @@ abstract class OidcUserManagerBase {
       }
     }
 
-    final idTokenNonce = newUser
-        .parsedIdToken.claims[OidcConstants_AuthParameters.nonce] as String?;
+    final idTokenNonce =
+        newUser.parsedIdToken.claims[OidcConstants_AuthParameters.nonce] as String?;
     if (nonce != null && idTokenNonce != nonce) {
       logAndThrow(
         'Server returned a wrong id_token nonce, might be a replay attack.',
@@ -735,16 +723,14 @@ abstract class OidcUserManagerBase {
     OidcProviderMetadata? discoveryDocumentOverride,
   }) async {
     ensureInit();
-    final discoveryDocument =
-        discoveryDocumentOverride ?? this.discoveryDocument;
+    final discoveryDocument = discoveryDocumentOverride ?? this.discoveryDocument;
     if (!discoveryDocument.grantTypesSupportedOrDefault
         .contains(OidcConstants_GrantType.refreshToken)) {
       //Server doesn't support refresh_token grant.
       return null;
     }
 
-    final refreshToken =
-        overrideRefreshToken ?? currentUser?.token.refreshToken;
+    final refreshToken = overrideRefreshToken ?? currentUser?.token.refreshToken;
     if (refreshToken == null) {
       // Can't refresh the access token anyway.
       return null;
@@ -797,6 +783,12 @@ abstract class OidcUserManagerBase {
     eventsController.add(
       OidcTokenExpiringEvent.now(currentToken: event),
     );
+
+    if (!discoveryDocument.grantTypesSupportedOrDefault
+        .contains(OidcConstants_GrantType.refreshToken)) {
+      //Server doesn't support refresh_token grant.
+      return;
+    }
 
     final refreshToken = event.refreshToken;
     if (refreshToken == null) {
@@ -895,16 +887,14 @@ abstract class OidcUserManagerBase {
             tokenLocation: settings.userInfoSettings.accessTokenLocation,
             client: httpClient,
             allowedAlgorithms: metadata.userinfoSigningAlgValuesSupported,
-            followDistributedClaims:
-                settings.userInfoSettings.followDistributedClaims,
+            followDistributedClaims: settings.userInfoSettings.followDistributedClaims,
             getAccessTokenForDistributedSource:
                 settings.userInfoSettings.getAccessTokenForDistributedSource,
             keyStore: keyStore,
           );
 
           logger.info('UserInfo response: ${userInfoResp.src}');
-          if (userInfoResp.sub != null &&
-              userInfoResp.sub != actualUser.claims.subject) {
+          if (userInfoResp.sub != null && userInfoResp.sub != actualUser.claims.subject) {
             errors.add(
               const OidcException("UserInfo didn't return the same subject."),
             );
@@ -919,8 +909,7 @@ abstract class OidcUserManagerBase {
         //keep going if the only error is that the token expired,
         //and it's allowed in settings.
         (settings.supportOfflineAuth &&
-            errors.every((e) =>
-                e is JoseException && e.message.startsWith('JWT expired.')))) {
+            errors.every((e) => e is JoseException && e.message.startsWith('JWT expired.')))) {
       // apply userinfo if present
       if (userInfoResp != null) {
         actualUser = actualUser.withUserInfo(userInfoResp.src);
@@ -1068,12 +1057,10 @@ abstract class OidcUserManagerBase {
     }
 
     try {
-      final decodedAttributes = rawAttributes == null
-          ? null
-          : jsonDecode(rawAttributes) as Map<String, dynamic>;
-      final decodedUserInfo = rawUserInfo == null
-          ? null
-          : jsonDecode(rawUserInfo) as Map<String, dynamic>;
+      final decodedAttributes =
+          rawAttributes == null ? null : jsonDecode(rawAttributes) as Map<String, dynamic>;
+      final decodedUserInfo =
+          rawUserInfo == null ? null : jsonDecode(rawUserInfo) as Map<String, dynamic>;
       final decodedToken = jsonDecode(rawToken) as Map<String, dynamic>;
       final token = OidcToken.fromJson(decodedToken);
       final metadata = discoveryDocument;
@@ -1095,11 +1082,9 @@ abstract class OidcUserManagerBase {
             .whereType<JoseException>()
             .any((element) => element.message.startsWith('JWT expired'));
 
-        if (token.refreshToken != null &&
-            (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
+        if (token.refreshToken != null && (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
           try {
-            loadedUser =
-                await refreshToken(overrideRefreshToken: token.refreshToken);
+            loadedUser = await refreshToken(overrideRefreshToken: token.refreshToken);
           } catch (e) {
             // An app might go offline during token refresh, so we consult the
             // supportOfflineAuth setting to check whether this is an issue or
@@ -1145,8 +1130,7 @@ abstract class OidcUserManagerBase {
     }
 
     for (final entry in statesWithResponses.entries) {
-      final (stateData: stateDataRaw, stateResponse: stateResponseRaw) =
-          entry.value;
+      final (stateData: stateDataRaw, stateResponse: stateResponseRaw) = entry.value;
 
       final stateResponseUrl = Uri.tryParse(stateResponseRaw);
       if (stateResponseUrl == null) {
@@ -1169,8 +1153,7 @@ abstract class OidcUserManagerBase {
           );
           return true;
         case OidcEndSessionState():
-          final resp =
-              OidcEndSessionResponse.fromJson(stateResponseUrl.queryParameters);
+          final resp = OidcEndSessionResponse.fromJson(stateResponseUrl.queryParameters);
           await handleEndSessionResponse(result: resp);
           return true;
         default:
@@ -1191,8 +1174,7 @@ abstract class OidcUserManagerBase {
     if (requestUri == null) {
       return false;
     }
-    final requestType =
-        requestUri.queryParameters[OidcConstants_Store.requestType];
+    final requestType = requestUri.queryParameters[OidcConstants_Store.requestType];
     if (requestType != OidcConstants_Store.frontChannelLogout) {
       return false;
     }
@@ -1311,8 +1293,7 @@ abstract class OidcUserManagerBase {
         promptOverride: ['none'],
         options: const OidcPlatformSpecificOptions(
           web: OidcPlatformSpecificOptions_Web(
-            navigationMode:
-                OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame,
+            navigationMode: OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame,
           ),
         ),
       );
