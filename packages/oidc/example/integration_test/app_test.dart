@@ -14,7 +14,7 @@ void main() {
         print('tearDownAll is called AND allTestsPassed = true.');
       } else {
         print('tearDownAll is called AND allTestsPassed = false.');
-      }      
+      }
     },
   );
 
