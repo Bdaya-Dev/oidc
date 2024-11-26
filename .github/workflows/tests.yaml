@@ -176,7 +176,8 @@ jobs:
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
         with:
-          flutter-version: 3.24.5
+          channel: master
+          flutter-version: ''
       # - name: Run Chromedriver
       #   uses: nanasess/setup-chromedriver@v2
       # - run: chromedriver --verbose --port=4444 --trace-buffer-size=100000 | tee chromedriver.log & sleep 5          
