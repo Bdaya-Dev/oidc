@@ -165,6 +165,7 @@ jobs:
           path: packages/oidc/example/ios-coverage.info
   web:
     strategy:
+      fail-fast: false
       matrix:
         working-directory: ["packages/oidc/example"]
     runs-on: macos-latest
