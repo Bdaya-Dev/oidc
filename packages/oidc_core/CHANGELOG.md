@@ -1,3 +1,7 @@
+## 0.9.1
+
+ - **FEAT**: Added `OidcTokenExpiredEvent` and `OidcTokenExpiringEvent` ([#91](https://github.com/Bdaya-Dev/oidc/issues/91)). ([85ba41ce](https://github.com/Bdaya-Dev/oidc/commit/85ba41cef689b852e102a65ec6550580489fb4bc))
+
 ## 0.9.0
 
 > Note: This release has breaking changes.

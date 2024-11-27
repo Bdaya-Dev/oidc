@@ -1,6 +1,6 @@
 name: oidc_core
 description: A dart package containing models and helpers for OpenId Connect spec.
-version: 0.9.0
+version: 0.9.1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_core
 topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
 homepage: https://bdaya-dev.github.io/oidc/
