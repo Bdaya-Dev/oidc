@@ -3,6 +3,56 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2024-11-27
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_core` - `v0.9.1`](#oidc_core---v091)
+ - [`oidc` - `v0.9.0+1`](#oidc---v0901)
+ - [`oidc_flutter_appauth` - `v0.5.0+1`](#oidc_flutter_appauth---v0501)
+ - [`oidc_desktop` - `v0.5.0+1`](#oidc_desktop---v0501)
+ - [`oidc_ios` - `v0.6.0+1`](#oidc_ios---v0601)
+ - [`oidc_web` - `v0.6.0+1`](#oidc_web---v0601)
+ - [`oidc_android` - `v0.6.0+1`](#oidc_android---v0601)
+ - [`oidc_default_store` - `v0.2.0+12`](#oidc_default_store---v02012)
+ - [`oidc_platform_interface` - `v0.6.0+1`](#oidc_platform_interface---v0601)
+ - [`oidc_windows` - `v0.3.1+6`](#oidc_windows---v0316)
+ - [`oidc_linux` - `v0.3.0+12`](#oidc_linux---v03012)
+ - [`oidc_web_core` - `v0.3.0+1`](#oidc_web_core---v0301)
+ - [`oidc_macos` - `v0.6.0+1`](#oidc_macos---v0601)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc` - `v0.9.0+1`
+ - `oidc_flutter_appauth` - `v0.5.0+1`
+ - `oidc_desktop` - `v0.5.0+1`
+ - `oidc_ios` - `v0.6.0+1`
+ - `oidc_web` - `v0.6.0+1`
+ - `oidc_android` - `v0.6.0+1`
+ - `oidc_default_store` - `v0.2.0+12`
+ - `oidc_platform_interface` - `v0.6.0+1`
+ - `oidc_windows` - `v0.3.1+6`
+ - `oidc_linux` - `v0.3.0+12`
+ - `oidc_web_core` - `v0.3.0+1`
+ - `oidc_macos` - `v0.6.0+1`
+
+---
+
+#### `oidc_core` - `v0.9.1`
+
+ - **FEAT**: Added `OidcTokenExpiredEvent` and `OidcTokenExpiringEvent` ([#91](https://github.com/Bdaya-Dev/oidc/issues/91)). ([85ba41ce](https://github.com/Bdaya-Dev/oidc/commit/85ba41cef689b852e102a65ec6550580489fb4bc))
+
+
 ## 2024-11-24
 
 ### Changes
