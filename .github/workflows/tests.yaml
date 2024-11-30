@@ -6,7 +6,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
     paths-ignore:
       - "**.md"
   pull_request:
@@ -24,13 +24,13 @@ defaults:
   run:
     shell: bash -leo pipefail {0}
 
-jobs:  
+jobs:
   unit_tests:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        sdk: [ min, stable, beta ]
+        sdk: [min, stable, beta]
     env:
       TEST_PRESET: all
     steps:
@@ -40,13 +40,13 @@ jobs:
         uses: ./.github/actions/flutter_base
         with:
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
-          flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}      
+          flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
-      - name: '[Verify step] ✨ Format'
+      - name: "[Verify step] ✨ Format"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run format
-      - name: '[Verify step] 🕵️ Analyze packages'
+      - name: "[Verify step] 🕵️ Analyze packages"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run analyze
       # - name: '[Verify step] 🕵️ Run Pana'
@@ -54,17 +54,17 @@ jobs:
       #   run: |
       #     flutter pub global activate pana
       #     melos run pana
-      - name: '[Verify step] Test Dart packages [VM]'
+      - name: "[Verify step] Test Dart packages [VM]"
         run: melos run test:vm
-      - name: '[Verify step] Test Dart packages [Chrome]'
+      - name: "[Verify step] Test Dart packages [Chrome]"
         run: melos run test:web:chrome
-      - name: '[Verify step] Test Dart packages [Firefox]'
+      - name: "[Verify step] Test Dart packages [Firefox]"
         run: melos run test:web:firefox
       - name: Remove dart_test.yaml Files
         run: melos run remove_dart_test_yaml
-      - name: '[Verify step] Test Flutter packages'
+      - name: "[Verify step] Test Flutter packages"
         run: melos run test:flutter
-      - name: '[Coverage] Format & print test coverage'
+      - name: "[Coverage] Format & print test coverage"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run coverage:combine
       - name: Upload Unit Test Coverage Report
@@ -78,12 +78,12 @@ jobs:
       #   uses: codecov/codecov-action@v4
       #   if: ${{ matrix.sdk == 'stable' }}
       #   env:
-      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}        
+      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       #   with:
       #     file: coverage/lcov.info
       #     fail_ci_if_error: false
 
-# integration tests
+  # integration tests
   android:
     runs-on: ubuntu-latest
     strategy:
@@ -105,7 +105,7 @@ jobs:
 
       - name: Gradle cache
         uses: gradle/actions/setup-gradle@v3
-          
+
       - name: AVD cache
         uses: actions/cache@v4
         id: avd-cache
@@ -124,9 +124,9 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
-      
+
       - name: Run Android Emulator and Integration Tests
-        uses: reactivecircus/android-emulator-runner@v2        
+        uses: reactivecircus/android-emulator-runner@v2
         with:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
@@ -150,7 +150,7 @@ jobs:
         uses: ./.github/actions/integration_test_base
         with:
           channel: master
-          flutter-version: ''
+          flutter-version: ""
       - name: Start Simulator
         # Start an iPhone simulator
         run: |
@@ -176,7 +176,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Set up Environment
-        uses: ./.github/actions/integration_test_base        
+        uses: ./.github/actions/integration_test_base
       # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
       - name: Run Web Integration Tests
         working-directory: ${{ matrix.working-directory }}
@@ -185,7 +185,7 @@ jobs:
           export DISPLAY=:99
           chromedriver --port=4444 --trace-buffer-size=100000 &
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
-          
+
           # then we start flutter drive
           flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --dart-define=CI=true | tee output.log
           # We have to check the output for failed tests matching the string "[E]"
@@ -197,9 +197,27 @@ jobs:
           fi
         shell: bash
 
-      # web has no test coverage for now  
+      # web has no test coverage for now
       # - name: Upload Coverage Report
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: web-coverage
       #     path: packages/oidc/example/coverage/web-coverage.info
+
+  macos:
+    runs-on: macos-13
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      - name: Integration Tests
+        run: melos run integration_test:macos
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-coverage.info
+          path: packages/oidc/example/macos-coverage.info
