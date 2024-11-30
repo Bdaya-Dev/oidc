@@ -130,7 +130,7 @@ scripts:
         - linux
   integration_test:windows:
     name: Flutter Windows Integration tests
-    exec: xvfb-run flutter test integration_test --coverage -d windows --coverage-path windows-coverage.info --dart-define=CI=true
+    exec: flutter test integration_test --coverage -d windows --coverage-path windows-coverage.info --dart-define=CI=true
     packageFilters:
       flutter: true
       dirExists: 
