@@ -253,7 +253,7 @@ jobs:
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base      
       - name: Integration Tests
-        run: melos run integration_test:windows
+        run: dart run melos run integration_test:windows
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:

@@ -19,5 +19,5 @@ runs:
         flutter-version: ${{ inputs.flutter-version }}
 
     - name: Remove dart_test.yaml Files
-      run: melos run remove_dart_test_yaml
+      run: dart run melos run remove_dart_test_yaml
       shell: bash
