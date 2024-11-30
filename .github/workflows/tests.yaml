@@ -73,15 +73,6 @@ jobs:
         with:
           name: unit-tests-coverage
           path: coverage/lcov.info
-      # Upload
-      # - name: Report to Codecov
-      #   uses: codecov/codecov-action@v4
-      #   if: ${{ matrix.sdk == 'stable' }}
-      #   env:
-      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      #   with:
-      #     file: coverage/lcov.info
-      #     fail_ci_if_error: false
 
   # integration tests
   android:
@@ -256,12 +247,28 @@ jobs:
       #   run: dart pub global activate melos
       #   shell: bash
       - name: Integration Tests
-        run: |
-          dart pub global activate melos
-          dart pub global run melos run integration_test:windows
+        run: dart pub global run melos run integration_test:windows
         shell: bash
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
           name: windows-coverage.info
           path: packages/oidc/example/windows-coverage.info
+      
+      
+  upload-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      # Upload
+      # - name: Report to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   if: ${{ matrix.sdk == 'stable' }}
+      #   env:
+      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      #   with:
+      #     file: coverage/lcov.info
+      #     fail_ci_if_error: false
