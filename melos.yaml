@@ -120,6 +120,22 @@ scripts:
       dirExists: 
         - integration_test
         - macos
+  integration_test:linux:
+    name: Flutter Linux Integration tests
+    exec: xvfb-run flutter test integration_test --coverage -d linux --coverage-path linux-coverage.info --dart-define=CI=true
+    packageFilters:
+      flutter: true
+      dirExists: 
+        - integration_test
+        - linux
+  integration_test:windows:
+    name: Flutter Windows Integration tests
+    exec: xvfb-run flutter test integration_test --coverage -d windows --coverage-path windows-coverage.info --dart-define=CI=true
+    packageFilters:
+      flutter: true
+      dirExists: 
+        - integration_test
+        - windows
   # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
   # integration_test:chrome:
   #   name: Flutter Chrome Integration tests

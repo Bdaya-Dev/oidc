@@ -219,5 +219,43 @@ jobs:
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
-          name: ios-coverage.info
+          name: macos-coverage.info
           path: packages/oidc/example/macos-coverage.info
+  linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libx11-dev pkg-config cmake ninja-build libblkid-dev liblzma-dev
+      - name: Integration Tests
+        run: melos run integration_test:linux
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-coverage.info
+          path: packages/oidc/example/linux-coverage.info
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base      
+      - name: Integration Tests
+        run: melos run integration_test:windows
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-coverage.info
+          path: packages/oidc/example/windows-coverage.info
