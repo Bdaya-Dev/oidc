@@ -731,10 +731,12 @@ abstract class OidcUserManagerBase {
   ///
   /// An [OidcException] will be thrown if the server returns an error.
   Future<OidcUser?> refreshToken({
+    OidcToken? overrideToken,
     String? overrideRefreshToken,
     OidcProviderMetadata? discoveryDocumentOverride,
   }) async {
     ensureInit();
+    final token = overrideToken ?? currentUser?.token;
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
     if (!discoveryDocument.grantTypesSupportedOrDefault
@@ -743,8 +745,7 @@ abstract class OidcUserManagerBase {
       return null;
     }
 
-    final refreshToken =
-        overrideRefreshToken ?? currentUser?.token.refreshToken;
+    final refreshToken = overrideRefreshToken ?? token?.refreshToken;
     if (refreshToken == null) {
       // Can't refresh the access token anyway.
       return null;
@@ -767,7 +768,7 @@ abstract class OidcUserManagerBase {
       token: OidcToken.fromResponse(
         tokenResponse,
         overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
-        sessionState: currentUser?.token.sessionState,
+        sessionState: token?.sessionState,
       ),
       nonce: null,
       userInfo: null,
@@ -798,48 +799,15 @@ abstract class OidcUserManagerBase {
       OidcTokenExpiringEvent.now(currentToken: event),
     );
 
-    if (!discoveryDocument.grantTypesSupportedOrDefault
-        .contains(OidcConstants_GrantType.refreshToken)) {
-      //Server doesn't support refresh_token grant.
-      return;
-    }
-
-    final refreshToken = event.refreshToken;
-    if (refreshToken == null) {
-      return;
-    }
-    OidcUser? newUser;
-    //try getting a new token.
     try {
-      final tokenResponse = await OidcEndpoints.token(
-        tokenEndpoint: discoveryDocument.tokenEndpoint!,
-        credentials: clientCredentials,
-        client: httpClient,
-        headers: settings.extraTokenHeaders,
-        request: OidcTokenRequest.refreshToken(
-          refreshToken: refreshToken,
-          clientId: clientCredentials.clientId,
-          clientSecret: clientCredentials.clientSecret,
-          extra: settings.extraTokenParameters,
-          scope: settings.scope,
-        ),
-      );
-      newUser = await createUserFromToken(
-        token: OidcToken.fromResponse(
-          tokenResponse,
-          overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
-          sessionState: event.sessionState,
-        ),
-        nonce: null,
-        attributes: null,
-        userInfo: null,
-        metadata: discoveryDocument,
-      );
-    } catch (e) {
-      //swallow errors on fail, but unload the event manager.
+      final newUser = await refreshToken(overrideToken: event);
+      logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
+    } catch (error) {
       tokenEvents.unload();
+      eventsController.add(
+        OidcTokenRefreshFailedEvent.now(error: error),
+      );
     }
-    logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
   }
 
   @protected

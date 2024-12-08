@@ -63,6 +63,10 @@ The base class for all events, this contains an `at` property that stores when t
 
 Occurs before a user is forgotten, either via `forgetUser()` or via `logout()`.
 
+### OidcTokenRefreshFailedEvent
+
+Occurs when the automatic refresh of a token fails.
+
 ## OidcPkcePair
 
 you can use this to generate PKCE key pairs.
