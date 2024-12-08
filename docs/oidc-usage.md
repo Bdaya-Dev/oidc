@@ -267,7 +267,7 @@ This can be done by calling `logout` with the following optional parameters:
 
 ### Listening to currentUser changes
 
-Whenever a user logs in, logs out, or a token gets refreshed automatically, an event is added to the `userChanges()` stream.
+Whenever a user logs in, logs out, a token gets refreshed automatically, or the automatic refresh of the token fails, an event is added to the `userChanges()` stream.
 
 This is similar to firebase auth, and can be used to track the current session.
 
