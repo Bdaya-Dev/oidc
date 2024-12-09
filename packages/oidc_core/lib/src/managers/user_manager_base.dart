@@ -731,6 +731,17 @@ abstract class OidcUserManagerBase {
   ///
   /// An [OidcException] will be thrown if the server returns an error.
   Future<OidcUser?> refreshToken({
+    String? overrideRefreshToken,
+    OidcProviderMetadata? discoveryDocumentOverride,
+  }) {
+    return doRefreshToken(
+      overrideRefreshToken: overrideRefreshToken,
+      discoveryDocumentOverride: discoveryDocumentOverride,
+    );
+  }
+
+  @protected
+  Future<OidcUser?> doRefreshToken({
     OidcToken? overrideToken,
     String? overrideRefreshToken,
     OidcProviderMetadata? discoveryDocumentOverride,
@@ -800,7 +811,7 @@ abstract class OidcUserManagerBase {
     );
 
     try {
-      final newUser = await refreshToken(overrideToken: event);
+      final newUser = await doRefreshToken(overrideToken: event);
       logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
     } catch (error) {
       tokenEvents.unload();
