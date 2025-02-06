@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:crypto/crypto.dart';
 import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
 import 'package:jose_plus/jose.dart';
@@ -118,6 +119,9 @@ class OidcEndpoints {
     }
 
     final nonce = Nonce.generate(32, Random.secure());
+    final bytes = utf8.encode(nonce);
+    final hashedNonce = sha256.convert(bytes).toString();
+    
     final stateData = OidcAuthorizeState(
       id: const Uuid().v4(),
       createdAt: clock.now(),
@@ -125,7 +129,7 @@ class OidcEndpoints {
       codeChallenge: codeChallenge,
       redirectUri: input.redirectUri,
       clientId: input.clientId,
-      nonce: nonce,
+      nonce: hashedNonce,
       originalUri: input.originalUri,
       data: input.extraStateData,
       extraTokenParams: input.extraTokenParameters,
@@ -166,7 +170,7 @@ class OidcEndpoints {
       idTokenHint: input.idTokenHint,
       loginHint: input.loginHint,
       maxAge: input.maxAge,
-      nonce: nonce,
+      nonce: hashedNonce,
       prompt: input.prompt,
       uiLocales: input.uiLocales,
     );
