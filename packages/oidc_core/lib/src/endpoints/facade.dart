@@ -121,7 +121,7 @@ class OidcEndpoints {
     final nonce = Nonce.generate(32, Random.secure());
     final bytes = utf8.encode(nonce);
     final hashedNonce = sha256.convert(bytes).toString();
-    
+
     final stateData = OidcAuthorizeState(
       id: const Uuid().v4(),
       createdAt: clock.now(),
