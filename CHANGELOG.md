@@ -3,6 +3,55 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2025-03-03
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc_core` - `v0.10.0`](#oidc_core---v0100)
+
+Packages with other changes:
+
+ - [`oidc_platform_interface` - `v0.6.0+2`](#oidc_platform_interface---v0602)
+ - [`oidc_android` - `v0.6.0+2`](#oidc_android---v0602)
+ - [`oidc_linux` - `v0.3.0+13`](#oidc_linux---v03013)
+ - [`oidc_ios` - `v0.6.0+2`](#oidc_ios---v0602)
+ - [`oidc_windows` - `v0.3.1+7`](#oidc_windows---v0317)
+ - [`oidc_flutter_appauth` - `v0.5.0+2`](#oidc_flutter_appauth---v0502)
+ - [`oidc_macos` - `v0.6.0+2`](#oidc_macos---v0602)
+ - [`oidc_default_store` - `v0.2.0+13`](#oidc_default_store---v02013)
+ - [`oidc_desktop` - `v0.5.0+2`](#oidc_desktop---v0502)
+ - [`oidc_web_core` - `v0.3.0+2`](#oidc_web_core---v0302)
+ - [`oidc_web` - `v0.6.0+2`](#oidc_web---v0602)
+ - [`oidc` - `v0.9.0+2`](#oidc---v0902)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_platform_interface` - `v0.6.0+2`
+ - `oidc_android` - `v0.6.0+2`
+ - `oidc_linux` - `v0.3.0+13`
+ - `oidc_ios` - `v0.6.0+2`
+ - `oidc_windows` - `v0.3.1+7`
+ - `oidc_flutter_appauth` - `v0.5.0+2`
+ - `oidc_macos` - `v0.6.0+2`
+ - `oidc_default_store` - `v0.2.0+13`
+ - `oidc_desktop` - `v0.5.0+2`
+ - `oidc_web_core` - `v0.3.0+2`
+ - `oidc_web` - `v0.6.0+2`
+ - `oidc` - `v0.9.0+2`
+
+---
+
+#### `oidc_core` - `v0.10.0`
+
+ - **BREAKING** **FEAT**: minimal implement nonce hashing  ([#172](https://github.com/Bdaya-Dev/oidc/issues/172)). ([d4daf387](https://github.com/Bdaya-Dev/oidc/commit/d4daf387b660332513fcb13dcd1e855098c566ee))
+
+
 ## 2024-11-27
 
 ### Changes
