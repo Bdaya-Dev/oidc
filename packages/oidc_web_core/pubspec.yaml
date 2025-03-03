@@ -12,7 +12,7 @@ dependencies:
   collection: ^1.18.0
   logging: ^1.2.0
   oidc_core: ^0.9.1
-  rxdart: ^0.27.7
+  rxdart: ">=0.27.7 <2.0.0"
   web: ">=0.5.1 <2.0.0"
 
 dev_dependencies:
