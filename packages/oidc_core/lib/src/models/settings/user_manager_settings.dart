@@ -35,6 +35,7 @@ class OidcUserManagerSettings {
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
     this.supportOfflineAuth = false,
+    this.includeScopesOnRefresh = true,
   });
 
   /// The default scopes
@@ -127,6 +128,9 @@ class OidcUserManagerSettings {
 
   /// platform-specific options.
   final OidcPlatformSpecificOptions? options;
+
+  /// Specify whether or not to include scopes when refresh token
+  final bool includeScopesOnRefresh;
 }
 
 ///
