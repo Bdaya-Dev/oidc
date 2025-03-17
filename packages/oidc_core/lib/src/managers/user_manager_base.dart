@@ -236,6 +236,33 @@ abstract class OidcUserManagerBase {
     );
   }
 
+  Future<OidcToken> getTokenWithRefreshToken(List<String> scope) async {
+    if (currentUser?.token.refreshToken == null) {
+      throw Exception('No refresh token available');
+    }
+    final request = OidcTokenRequest.refreshToken(
+      refreshToken: currentUser!.token.refreshToken!,
+      clientId: clientCredentials.clientId,
+      clientSecret: clientCredentials.clientSecret,
+      extra: settings.extraTokenParameters,
+      scope: scope,
+    );
+
+    final tokenResponse = await OidcEndpoints.token(
+      tokenEndpoint: discoveryDocument.tokenEndpoint!,
+      credentials: clientCredentials,
+      client: httpClient,
+      headers: settings.extraTokenHeaders,
+      request: request,
+    );
+
+    return OidcToken.fromResponse(
+      tokenResponse,
+      overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
+      sessionState: currentUser?.token.sessionState,
+    );
+  }
+
   /// Attempts to login the user via resource owner's credentials.
   Future<OidcUser?> loginPassword({
     required String username,
