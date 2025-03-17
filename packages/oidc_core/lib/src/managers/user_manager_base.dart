@@ -169,6 +169,7 @@ abstract class OidcUserManagerBase {
     Uri? redirectUriOverride,
     Uri? originalUri,
     List<String>? scopeOverride,
+    List<String>? extraScopeToConsent,
     List<String>? promptOverride,
     List<String>? uiLocalesOverride,
     String? displayOverride,
@@ -192,7 +193,8 @@ abstract class OidcUserManagerBase {
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
       redirectUri: redirectUriOverride ?? settings.redirectUri,
-      scope: scopeOverride ?? settings.scope,
+      scope: [...(scopeOverride ?? settings.scope), ...?extraScopeToConsent],
+      extraScopeToConsent: extraScopeToConsent,
       prompt: promptOverride ?? settings.prompt,
       display: displayOverride ?? settings.display,
       extraStateData: extraStateData,
@@ -291,10 +293,13 @@ abstract class OidcUserManagerBase {
         await store.setStateResponseData(state: state, stateData: null);
       }
       return await handleSuccessfulAuthResponse(
-        response: response,
-        grantType: grantType,
-        metadata: metadata,
-      );
+          response: response,
+          grantType: grantType,
+          metadata: metadata,
+          scopes: [
+            ...request.scope
+                .where((e) => request.extraScopeToConsent?.contains(e) != true)
+          ]);
     } on OidcException catch (e) {
       //failed to authorize.
       final response = e.errorResponse;
@@ -499,6 +504,7 @@ abstract class OidcUserManagerBase {
     required OidcAuthorizeResponse response,
     required String grantType,
     required OidcProviderMetadata metadata,
+    required List<String> scopes,
   }) async {
     final receivedStateKey = response.state;
     if (receivedStateKey == null) {
@@ -564,12 +570,12 @@ abstract class OidcUserManagerBase {
         credentials: clientCredentials,
         headers: stateData.extraTokenHeaders,
         request: OidcTokenRequest.authorizationCode(
-          redirectUri: response.redirectUri ?? stateData.redirectUri,
-          codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
-          extra: stateData.extraTokenParams,
-          clientId: clientCredentials.clientId,
-          code: code,
-        ),
+            redirectUri: response.redirectUri ?? stateData.redirectUri,
+            codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
+            extra: stateData.extraTokenParams,
+            clientId: clientCredentials.clientId,
+            code: code,
+            scope: scopes),
         client: httpClient,
       );
       final token = OidcToken.fromResponse(
@@ -1167,12 +1173,13 @@ abstract class OidcUserManagerBase {
           );
 
           await handleSuccessfulAuthResponse(
-            response: resp,
-            grantType: resp.code == null
-                ? OidcConstants_GrantType.implicit
-                : OidcConstants_GrantType.authorizationCode,
-            metadata: discoveryDocument,
-          );
+              response: resp,
+              grantType: resp.code == null
+                  ? OidcConstants_GrantType.implicit
+                  : OidcConstants_GrantType.authorizationCode,
+              metadata: discoveryDocument,
+              // TODO: this shold not include the extra scopes to consent.
+              scopes: resp.scope);
           return true;
         case OidcEndSessionState():
           final resp =
