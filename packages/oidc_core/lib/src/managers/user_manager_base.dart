@@ -736,21 +736,25 @@ abstract class OidcUserManagerBase {
   /// If any of these conditions are not met, null is returned.
   ///
   /// An [OidcException] will be thrown if the server returns an error.
-  Future<OidcUser?> refreshToken({
-    String? overrideRefreshToken,
-    OidcProviderMetadata? discoveryDocumentOverride,
-  }) async {
+  Future<OidcUser?> refreshToken(
+      {OidcToken? accessTokenOverride,
+      String? overrideRefreshToken,
+      OidcProviderMetadata? discoveryDocumentOverride,
+      bool replaceUserToken = true,
+      bool skipSupportedCheck = false}) async {
     ensureInit();
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
-    if (!discoveryDocument.grantTypesSupportedOrDefault
-        .contains(OidcConstants_GrantType.refreshToken)) {
+    if (!skipSupportedCheck &&
+        !discoveryDocument.grantTypesSupportedOrDefault
+            .contains(OidcConstants_GrantType.refreshToken)) {
       //Server doesn't support refresh_token grant.
       return null;
     }
 
-    final refreshToken =
-        overrideRefreshToken ?? currentUser?.token.refreshToken;
+    final refreshToken = overrideRefreshToken ??
+        accessTokenOverride?.refreshToken ??
+        currentUser?.token.refreshToken;
     if (refreshToken == null) {
       // Can't refresh the access token anyway.
       return null;
@@ -766,20 +770,20 @@ abstract class OidcUserManagerBase {
         clientId: clientCredentials.clientId,
         clientSecret: clientCredentials.clientSecret,
         extra: settings.extraTokenParameters,
-        scope: settings.scope,
+        scope: accessTokenOverride?.scope ?? settings.scope,
       ),
     );
     return createUserFromToken(
-      token: OidcToken.fromResponse(
-        tokenResponse,
-        overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
-        sessionState: currentUser?.token.sessionState,
-      ),
-      nonce: null,
-      userInfo: null,
-      attributes: null,
-      metadata: discoveryDocument,
-    );
+        token: OidcToken.fromResponse(
+          tokenResponse,
+          overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
+          sessionState: currentUser?.token.sessionState,
+        ),
+        nonce: null,
+        userInfo: null,
+        attributes: null,
+        metadata: discoveryDocument,
+        validateAndSave: replaceUserToken);
   }
 
   @protected
