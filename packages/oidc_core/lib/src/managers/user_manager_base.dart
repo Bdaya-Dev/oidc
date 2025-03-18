@@ -433,7 +433,8 @@ abstract class OidcUserManagerBase {
           clientId: clientCredentials.clientId,
           postLogoutRedirectUri: postLogoutRedirectUri,
           uiLocales: uiLocalesOverride ?? settings.uiLocales,
-          idTokenHint: currentUser.idToken,
+          idTokenHint:
+              postLogoutRedirectUri == null ? null : currentUser.idToken,
           extra: extraParameters,
           logoutHint: logoutHint,
           state: stateData?.id,
