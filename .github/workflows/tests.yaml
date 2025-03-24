@@ -125,7 +125,9 @@ jobs:
       - name: Find .info files and files in coverage folders
         run: |
           echo "Listing all .info files and files inside any coverage/ directory:"
-          find . \( -name "*.info" -o -path "*/coverage/*" \) -type f -exec ls -l {} +
+          pwd
+          echo "$GITHUB_WORKSPACE"
+          find "$GITHUB_WORKSPACE" \( -name "*.info" -o -path "*/coverage/*" \) -type f -exec ls -l {} +
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
