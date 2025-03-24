@@ -132,7 +132,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-coverage.info
-          path: coverage/android-coverage.info
+          path: packages/oidc/example/coverage/android-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error
 
   ios:
     runs-on: macos-latest
