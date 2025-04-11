@@ -163,7 +163,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-coverage.info
-          path: coverage/ios-coverage.info
+          path: packages/oidc/example/coverage/ios-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error
   web:
     strategy:
       fail-fast: false
@@ -219,7 +221,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-coverage.info
-          path: coverage/macos-coverage.info
+          path: packages/oidc/example/coverage/macos-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error
   linux:
     runs-on: ubuntu-latest
     defaults:
@@ -240,7 +244,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-coverage.info
-          path: coverage/linux-coverage.info
+          path: packages/oidc/example/coverage/linux-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error          
   windows:
     runs-on: windows-latest
     defaults:
@@ -261,8 +267,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-coverage.info
-          path: coverage/windows-coverage.info
-      
+          path: packages/oidc/example/coverage/windows-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error     
       
   upload-coverage:
     runs-on: ubuntu-latest
