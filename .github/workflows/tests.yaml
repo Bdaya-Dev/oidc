@@ -278,12 +278,50 @@ jobs:
         uses: actions/checkout@v4
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
+      - name: Download unit test coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-tests-coverage
+          path: coverage/package-coverage.info
+      - name: Download android coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: android-coverage.info
+          path: packages/oidc/example/coverage/android-coverage.info
+      - name: Download ios coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-coverage.info
+          path: packages/oidc/example/coverage/ios-coverage.info
+      - name: Download macos coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-coverage.info
+          path: packages/oidc/example/coverage/macos-coverage.info
+      - name: Download linux coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-coverage.info
+          path: packages/oidc/example/coverage/linux-coverage.info
+      - name: Download windows coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-coverage.info
+          path: packages/oidc/example/coverage/windows-coverage.info
+      - name: Combine Coverage Results
+        run: |
+          dart pub global activate combine_coverage          
+          dart pub global run combine_coverage
       # Upload
-      # - name: Report to Codecov
-      #   uses: codecov/codecov-action@v4
-      #   if: ${{ matrix.sdk == 'stable' }}
-      #   env:
-      #     CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      #   with:
-      #     file: coverage/lcov.info
-      #     fail_ci_if_error: false
+      - name: Upload the final coverage as an artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: final-coverage
+          path: coverage/lcov.info
+      - name: Report to Codecov
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          file: coverage/lcov.info
+          fail_ci_if_error: false
