@@ -310,9 +310,13 @@ jobs:
           name: windows-coverage.info
           path: packages/oidc/example/coverage/windows-coverage.info
       - name: Combine Coverage Results
+        env:
+          REPO_PATH: ${{ github.workspace }}
         run: |
-          dart pub global activate combine_coverage          
-          dart pub global run combine_coverage --repo-path=$GITHUB_WORKSPACE
+          echo "Using repo path: $REPO_PATH"
+          find . -type f -name "*-coverage.info"
+          dart pub global activate combine_coverage
+          dart pub global run combine_coverage --repo-path="$REPO_PATH"
       # Upload
       - name: Upload the final coverage as an artifact
         uses: actions/download-artifact@v4
