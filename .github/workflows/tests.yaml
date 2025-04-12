@@ -283,8 +283,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: package-coverage
-          path: coverage/
-          
+          path: coverage/downloaded/
+          merge-multiple: true
+      - name: Extract package-coverage artifact
+        run: |
+          mv coverage/downloaded/lcov.info coverage/package-coverage.info
+          rm -rf coverage/downloaded
+          ls -lR coverage
       - name: Download integration coverages
         uses: actions/download-artifact@v4
         with:          
