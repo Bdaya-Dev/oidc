@@ -6,7 +6,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
     paths-ignore:
       - "**.md"
   pull_request:
@@ -25,41 +25,28 @@ defaults:
     shell: bash -leo pipefail {0}
 
 jobs:
-  workflows:
+  unit_tests:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        sdk: [ min, stable, beta ]
+        sdk: [min, stable, beta]
     env:
       TEST_PRESET: all
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
         with:
-          cache: true          
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
           flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
-      # see https://github.com/invertase/melos/issues/796
-      - uses: bluefireteam/melos-action@main
-        continue-on-error: true
-        with:
-          run-bootstrap: true
-          bootstrap-no-example: false
-      - uses: bluefireteam/melos-action@main
-        with:
-          run-bootstrap: true
-          bootstrap-no-example: true
-
-      - name: '[Verify step] ✨ Format'
+      - name: "[Verify step] ✨ Format"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run format
-      - name: '[Verify step] 🕵️ Analyze packages'
+      - name: "[Verify step] 🕵️ Analyze packages"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run analyze
       # - name: '[Verify step] 🕵️ Run Pana'
@@ -67,25 +54,267 @@ jobs:
       #   run: |
       #     flutter pub global activate pana
       #     melos run pana
-      - name: '[Verify step] Test Dart packages [VM]'
+      - name: "[Verify step] Test Dart packages [VM]"
         run: melos run test:vm
-      - name: '[Verify step] Test Dart packages [Chrome]'
+      - name: "[Verify step] Test Dart packages [Chrome]"
         run: melos run test:web:chrome
-      - name: '[Verify step] Test Dart packages [Firefox]'
+      - name: "[Verify step] Test Dart packages [Firefox]"
         run: melos run test:web:firefox
       - name: Remove dart_test.yaml Files
-        run: |
-          find . -type f -name 'dart_test.yaml' -delete
-      - name: '[Verify step] Test Flutter packages'
+        run: melos run remove_dart_test_yaml
+      - name: "[Verify step] Test Flutter packages"
         run: melos run test:flutter
-      - name: '[Coverage] Format & print test coverage'
+      - name: "[Coverage] Format & print test coverage"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run coverage:combine
-      - name: Report to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Upload Unit Test Coverage Report
+        uses: actions/upload-artifact@v4
         if: ${{ matrix.sdk == 'stable' }}
+        with:
+          name: package-coverage
+          path: coverage/lcov.info
+
+  # integration tests
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        api-level: [29]
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: AVD cache
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ matrix.api-level }}
+
+      - name: create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "Generated AVD snapshot for caching."
+
+      - name: Run Android Emulator and Integration Tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          working-directory: packages/oidc/example
+          api-level: ${{ matrix.api-level }}
+          script: melos run integration_test:android
+      - name: Find .info files and files in coverage folders
+        run: |
+          echo "Listing all .info files and files inside any coverage/ directory:"
+          pwd
+          echo "$GITHUB_WORKSPACE"
+          find "$GITHUB_WORKSPACE" \( -name "*.info" -o -path "*/coverage/*" \) -type f -exec ls -l {} +
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-integration-coverage
+          path: packages/oidc/example/coverage/android-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error
+
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+        with:
+          channel: master
+          flutter-version: ""
+      - name: Start Simulator
+        # Start an iPhone simulator
+        run: |
+          UDID=$(xcrun xctrace list devices | grep "^iPhone" | awk '{gsub(/[()]/,""); print $NF}' | head -n 1)
+          echo $UDID
+          xcrun simctl boot "${UDID:?No Simulator with this name found}"
+
+      - name: Integration Tests
+        run: melos run integration_test:ios
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-integration-coverage
+          path: packages/oidc/example/coverage/ios-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error
+  web:
+    strategy:
+      fail-fast: false
+      matrix:
+        working-directory: ["packages/oidc/example"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
+      - name: Run Web Integration Tests
+        working-directory: ${{ matrix.working-directory }}
+        run: |
+          # first we run chromedriver on port 4444 and Xvfb
+          export DISPLAY=:99
+          chromedriver --port=4444 --trace-buffer-size=100000 &
+          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
+
+          # then we start flutter drive
+          flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --dart-define=CI=true | tee output.log
+          # We have to check the output for failed tests matching the string "[E]"
+          output=$(<output.log)
+          if [[ "$output" =~ \[E\] ]]; then
+          # You will see "All tests passed." in the logs even when tests failed.
+          echo "All tests did not pass. Please check the logs for more information."
+          exit 1
+          fi
+        shell: bash
+
+      # web has no test coverage for now
+      # - name: Upload Coverage Report
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: web-coverage
+      #     path: packages/oidc/example/coverage/web-coverage.info
+
+  macos:
+    runs-on: macos-13
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      - name: Integration Tests
+        run: melos run integration_test:macos
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-integration-coverage
+          path: packages/oidc/example/coverage/macos-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error
+  linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-dev libgtk-3-dev libx11-dev pkg-config cmake ninja-build libblkid-dev liblzma-dev
+      - name: Integration Tests
+        run: melos run integration_test:linux
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-integration-coverage
+          path: packages/oidc/example/coverage/linux-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error          
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      # - name: Activate Melos
+      #   run: dart pub global activate melos
+      #   shell: bash
+      - name: Integration Tests
+        run: dart pub global run melos run integration_test:windows
+        shell: bash
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-integration-coverage
+          path: packages/oidc/example/coverage/windows-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error     
+      
+  upload-coverage:
+    runs-on: ubuntu-latest
+    needs: [unit_tests, android, ios, macos, linux, windows]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      - name: Download unit test coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: package-coverage
+          path: coverage/downloaded/
+          merge-multiple: true
+      - name: Extract package-coverage artifact
+        run: |
+          mv coverage/downloaded/lcov.info coverage/package-coverage.info
+          rm -rf coverage/downloaded
+          ls -lR coverage
+      - name: Download integration coverages
+        uses: actions/download-artifact@v4
+        with:          
+          path: packages/oidc/example/coverage/
+          pattern: '*-integration-coverage'
+          merge-multiple: true
+      
+      - name: Combine Coverage Results
         env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}        
+          REPO_PATH: ${{ github.workspace }}
+        run: |
+          echo "Using repo path: $REPO_PATH"
+          find . -type f -name "*-coverage.info"
+          dart pub global activate combine_coverage
+          dart pub global run combine_coverage --repo-path="$REPO_PATH"
+      # Upload
+      - name: Upload the final coverage as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-coverage
+          path: coverage/lcov.info
+      - name: Report to Codecov
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           file: coverage/lcov.info
           fail_ci_if_error: false

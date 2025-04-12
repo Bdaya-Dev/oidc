@@ -1,0 +1,31 @@
+name: "Set up flutter"
+description: "Sets up the environment for Flutter projects and melos"
+
+inputs:
+  channel:
+    description: "Flutter channel to use"
+    default: "stable"
+  flutter-version:
+    description: "Flutter version to use"
+    default: "3.22.0"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        cache: true
+        channel: ${{ inputs.channel }}
+        flutter-version: ${{ inputs.flutter-version }}
+
+    # see https://github.com/invertase/melos/issues/796
+    - uses: bluefireteam/melos-action@main
+      continue-on-error: true
+      with:
+        run-bootstrap: true
+        bootstrap-no-example: false
+    - uses: bluefireteam/melos-action@main
+      with:
+        run-bootstrap: true
+        bootstrap-no-example: true

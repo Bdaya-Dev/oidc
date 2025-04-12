@@ -85,14 +85,57 @@ scripts:
     packageFilters:
       dirExists: test
       flutter: false
+  remove_dart_test_yaml:
+    name: Remove dart_test.yaml
+    run: find . -type f -name 'dart_test.yaml' -delete
   test:flutter:
     name: Flutter tests
-    exec: flutter test --coverage
+    exec: flutter test --coverage --branch-coverage
     packageFilters:
       flutter: true
       dirExists: test
       ignore:
         - "*example*"
+  integration_test:android:
+    name: Flutter Android Integration tests
+    exec: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d android --coverage-path coverage/android-coverage.info --dart-define=CI=true
+    packageFilters:
+      flutter: true
+      dirExists:
+        - integration_test
+        - android
+  integration_test:ios:
+    name: Flutter iOs Integration tests
+    exec: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage --ignore-timeouts -d iPhone --coverage-path coverage/ios-coverage.info --dart-define=CI=true
+    packageFilters:
+      flutter: true
+      dirExists:
+        - integration_test
+        - ios
+  integration_test:macos:
+    name: Flutter MacOs Integration tests
+    exec: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d macos --coverage-path coverage/macos-coverage.info --dart-define=CI=true
+    packageFilters:
+      flutter: true
+      dirExists:
+        - integration_test
+        - macos
+  integration_test:linux:
+    name: Flutter Linux Integration tests
+    exec: xvfb-run flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true
+    packageFilters:
+      flutter: true
+      dirExists:
+        - integration_test
+        - linux
+  integration_test:windows:
+    name: Flutter Windows Integration tests
+    exec: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d windows --coverage-path coverage/windows-coverage.info --dart-define=CI=true
+    packageFilters:
+      flutter: true
+      dirExists:
+        - integration_test
+        - windows
 
   test:coverage:
     name: Run all tests and combine coverage
