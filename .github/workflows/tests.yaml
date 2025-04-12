@@ -273,6 +273,7 @@ jobs:
       
   upload-coverage:
     runs-on: ubuntu-latest
+    needs: [unit_tests, android, ios, macos, linux, windows]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
