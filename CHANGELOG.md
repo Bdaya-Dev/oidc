@@ -11,6 +11,56 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 Packages with breaking changes:
 
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_core` - `v0.10.0+1`](#oidc_core---v01001)
+ - [`oidc_platform_interface` - `v0.6.0+3`](#oidc_platform_interface---v0603)
+ - [`oidc_linux` - `v0.3.0+14`](#oidc_linux---v03014)
+ - [`oidc_android` - `v0.6.0+3`](#oidc_android---v0603)
+ - [`oidc_ios` - `v0.6.0+3`](#oidc_ios---v0603)
+ - [`oidc_windows` - `v0.3.1+8`](#oidc_windows---v0318)
+ - [`oidc_flutter_appauth` - `v0.5.0+3`](#oidc_flutter_appauth---v0503)
+ - [`oidc_macos` - `v0.6.0+3`](#oidc_macos---v0603)
+ - [`oidc_desktop` - `v0.5.0+3`](#oidc_desktop---v0503)
+ - [`oidc_default_store` - `v0.2.0+14`](#oidc_default_store---v02014)
+ - [`oidc_web_core` - `v0.3.0+3`](#oidc_web_core---v0303)
+ - [`oidc_web` - `v0.6.0+3`](#oidc_web---v0603)
+ - [`oidc` - `v0.9.0+3`](#oidc---v0903)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_platform_interface` - `v0.6.0+3`
+ - `oidc_linux` - `v0.3.0+14`
+ - `oidc_android` - `v0.6.0+3`
+ - `oidc_ios` - `v0.6.0+3`
+ - `oidc_windows` - `v0.3.1+8`
+ - `oidc_flutter_appauth` - `v0.5.0+3`
+ - `oidc_macos` - `v0.6.0+3`
+ - `oidc_desktop` - `v0.5.0+3`
+ - `oidc_default_store` - `v0.2.0+14`
+ - `oidc_web_core` - `v0.3.0+3`
+ - `oidc_web` - `v0.6.0+3`
+ - `oidc` - `v0.9.0+3`
+
+---
+
+#### `oidc_core` - `v0.10.0+1`
+
+ - **FIX**: set idTokenHint null if no postLogoutRedirectUri set ([#192](https://github.com/Bdaya-Dev/oidc/issues/192)). ([bcf47cbd](https://github.com/Bdaya-Dev/oidc/commit/bcf47cbde8c36619ce89055b296fd162eb3c30f9))
+
+
+## 2025-04-12
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
  - [`oidc_core` - `v0.10.0`](#oidc_core---v0100)
 
 Packages with other changes:
