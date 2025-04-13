@@ -7,19 +7,11 @@ part of 'client_auth.dart';
 // **************************************************************************
 
 Map<String, dynamic> _$OidcClientAuthenticationToJson(
-    OidcClientAuthentication instance) {
-  final val = <String, dynamic>{
-    'client_id': instance.clientId,
-  };
-
-  void writeNotNull(String key, dynamic value) {
-    if (value != null) {
-      val[key] = value;
-    }
-  }
-
-  writeNotNull('client_secret', instance.clientSecret);
-  writeNotNull('client_assertion_type', instance.clientAssertionType);
-  writeNotNull('client_assertion', instance.clientAssertion);
-  return val;
-}
+        OidcClientAuthentication instance) =>
+    <String, dynamic>{
+      'client_id': instance.clientId,
+      if (instance.clientSecret case final value?) 'client_secret': value,
+      if (instance.clientAssertionType case final value?)
+        'client_assertion_type': value,
+      if (instance.clientAssertion case final value?) 'client_assertion': value,
+    };
