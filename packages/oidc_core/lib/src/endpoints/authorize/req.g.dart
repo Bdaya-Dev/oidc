@@ -7,41 +7,39 @@ part of 'req.dart';
 // **************************************************************************
 
 Map<String, dynamic> _$OidcAuthorizeRequestToJson(
-    OidcAuthorizeRequest instance) {
-  final val = <String, dynamic>{};
-
-  void writeNotNull(String key, dynamic value) {
-    if (value != null) {
-      val[key] = value;
-    }
-  }
-
-  writeNotNull(
-      'scope', OidcInternalUtilities.joinSpaceDelimitedList(instance.scope));
-  writeNotNull('response_type',
-      OidcInternalUtilities.joinSpaceDelimitedList(instance.responseType));
-  val['client_id'] = instance.clientId;
-  val['redirect_uri'] = instance.redirectUri.toString();
-  writeNotNull('state', instance.state);
-  writeNotNull('response_mode', instance.responseMode);
-  writeNotNull('nonce', instance.nonce);
-  writeNotNull('display', instance.display);
-  writeNotNull(
-      'prompt', OidcInternalUtilities.joinSpaceDelimitedList(instance.prompt));
-  writeNotNull(
-      'max_age',
-      _$JsonConverterToJson<int, Duration>(
-          instance.maxAge, const OidcDurationSecondsConverter().toJson));
-  writeNotNull('ui_locales',
-      OidcInternalUtilities.joinSpaceDelimitedList(instance.uiLocales));
-  writeNotNull('id_token_hint', instance.idTokenHint);
-  writeNotNull('login_hint', instance.loginHint);
-  writeNotNull('acr_values',
-      OidcInternalUtilities.joinSpaceDelimitedList(instance.acrValues));
-  writeNotNull('code_challenge', instance.codeChallenge);
-  writeNotNull('code_challenge_method', instance.codeChallengeMethod);
-  return val;
-}
+        OidcAuthorizeRequest instance) =>
+    <String, dynamic>{
+      if (OidcInternalUtilities.joinSpaceDelimitedList(instance.scope)
+          case final value?)
+        'scope': value,
+      if (OidcInternalUtilities.joinSpaceDelimitedList(instance.responseType)
+          case final value?)
+        'response_type': value,
+      'client_id': instance.clientId,
+      'redirect_uri': instance.redirectUri.toString(),
+      if (instance.state case final value?) 'state': value,
+      if (instance.responseMode case final value?) 'response_mode': value,
+      if (instance.nonce case final value?) 'nonce': value,
+      if (instance.display case final value?) 'display': value,
+      if (OidcInternalUtilities.joinSpaceDelimitedList(instance.prompt)
+          case final value?)
+        'prompt': value,
+      if (_$JsonConverterToJson<int, Duration>(
+              instance.maxAge, const OidcDurationSecondsConverter().toJson)
+          case final value?)
+        'max_age': value,
+      if (OidcInternalUtilities.joinSpaceDelimitedList(instance.uiLocales)
+          case final value?)
+        'ui_locales': value,
+      if (instance.idTokenHint case final value?) 'id_token_hint': value,
+      if (instance.loginHint case final value?) 'login_hint': value,
+      if (OidcInternalUtilities.joinSpaceDelimitedList(instance.acrValues)
+          case final value?)
+        'acr_values': value,
+      if (instance.codeChallenge case final value?) 'code_challenge': value,
+      if (instance.codeChallengeMethod case final value?)
+        'code_challenge_method': value,
+    };
 
 Json? _$JsonConverterToJson<Json, Value>(
   Value? value,

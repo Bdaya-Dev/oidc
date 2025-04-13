@@ -37,25 +37,19 @@ const _$OidcTokenFieldMap = <String, String>{
   'sessionState': 'session_state',
 };
 
-Map<String, dynamic> _$OidcTokenToJson(OidcToken instance) {
-  final val = <String, dynamic>{};
-
-  void writeNotNull(String key, dynamic value) {
-    if (value != null) {
-      val[key] = value;
-    }
-  }
-
-  writeNotNull(
-      'scope', OidcInternalUtilities.joinSpaceDelimitedList(instance.scope));
-  writeNotNull('access_token', instance.accessToken);
-  writeNotNull('token_type', instance.tokenType);
-  writeNotNull('id_token', instance.idToken);
-  writeNotNull(
-      'expires_in', OidcInternalUtilities.durationToJson(instance.expiresIn));
-  writeNotNull('refresh_token', instance.refreshToken);
-  writeNotNull('expiresInReferenceDate',
-      OidcInternalUtilities.dateTimeToJson(instance.creationTime));
-  writeNotNull('session_state', instance.sessionState);
-  return val;
-}
+Map<String, dynamic> _$OidcTokenToJson(OidcToken instance) => <String, dynamic>{
+      if (OidcInternalUtilities.joinSpaceDelimitedList(instance.scope)
+          case final value?)
+        'scope': value,
+      if (instance.accessToken case final value?) 'access_token': value,
+      if (instance.tokenType case final value?) 'token_type': value,
+      if (instance.idToken case final value?) 'id_token': value,
+      if (OidcInternalUtilities.durationToJson(instance.expiresIn)
+          case final value?)
+        'expires_in': value,
+      if (instance.refreshToken case final value?) 'refresh_token': value,
+      if (OidcInternalUtilities.dateTimeToJson(instance.creationTime)
+          case final value?)
+        'expiresInReferenceDate': value,
+      if (instance.sessionState case final value?) 'session_state': value,
+    };
