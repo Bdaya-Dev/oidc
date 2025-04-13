@@ -1,3 +1,10 @@
+## 0.11.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**: set idTokenHint null if no postLogoutRedirectUri set ([#192](https://github.com/Bdaya-Dev/oidc/issues/192)). ([bcf47cbd](https://github.com/Bdaya-Dev/oidc/commit/bcf47cbde8c36619ce89055b296fd162eb3c30f9))
+ - **BREAKING** **CHORE**: regenerate files with new json serializer. ([35523a61](https://github.com/Bdaya-Dev/oidc/commit/35523a617753d3058e7065be79b2a4cf2f322199))
+
 ## 0.10.0
 
 > Note: This release has breaking changes.
