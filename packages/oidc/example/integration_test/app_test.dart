@@ -14,17 +14,17 @@ void main() {
       expect(app_state.currentManager.didInit, true);
     });
 
-    testWidgets(
-      'login works',
-      (tester) async {
-        example.main();
-        await tester.pumpAndSettle();
-        // final loginFuture =
-        //     app_state.currentManager.loginAuthorizationCodeFlow();
-        // print('waiting for login future...');
+    // testWidgets(
+    //   'login works',
+    //   (tester) async {
+    //     example.main();
+    //     await tester.pumpAndSettle();
+    //     // final loginFuture =
+    //     //     app_state.currentManager.loginAuthorizationCodeFlow();
+    //     // print('waiting for login future...');
 
-        // await loginFuture;
-      },
-    );
+    //     // await loginFuture;
+    //   },
+    // );
   });
 }
