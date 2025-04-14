@@ -77,7 +77,8 @@ Map<String, dynamic> _$OidcPlatformSpecificOptions_AppAuth_IosMacosToJson(
     };
 
 const _$ExternalUserAgentEnumMap = {
-  OidcAppAuthExternalUserAgent.asWebAuthenticationSession: 'asWebAuthenticationSession',
+  OidcAppAuthExternalUserAgent.asWebAuthenticationSession:
+      'asWebAuthenticationSession',
   OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession:
       'ephemeralAsWebAuthenticationSession',
   OidcAppAuthExternalUserAgent.sfSafariViewController: 'sfSafariViewController',
