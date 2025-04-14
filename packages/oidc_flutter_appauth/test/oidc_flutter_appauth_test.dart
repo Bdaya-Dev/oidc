@@ -1,6 +1,8 @@
 // ignore_for_file: prefer_const_constructors, lines_longer_than_80_chars
 
 import 'package:flutter/services.dart';
+import 'package:flutter_appauth/flutter_appauth.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_flutter_appauth/oidc_flutter_appauth.dart';
@@ -11,11 +13,11 @@ import 'duende_discovery.dart';
 class MockAppAuthImpl extends OidcPlatform with OidcFlutterAppauth {
   MockAppAuthImpl({
     required this.allowInsecureConnections,
-    required this.preferEphemeralSession,
+    required this.externalUserAgent,
   });
 
   final bool allowInsecureConnections;
-  final bool preferEphemeralSession;
+  final OidcAppAuthExternalUserAgent externalUserAgent;
 
   @override
   bool getAllowInsecureConnections(
@@ -24,9 +26,13 @@ class MockAppAuthImpl extends OidcPlatform with OidcFlutterAppauth {
     return allowInsecureConnections;
   }
 
+  // @override
+  // bool getPreferEphemeralSession(OidcPlatformSpecificOptions options) {
+  //   return preferEphemeralSession;
+  // }
   @override
-  bool getPreferEphemeralSession(OidcPlatformSpecificOptions options) {
-    return preferEphemeralSession;
+  ExternalUserAgent getExternalUserAgent(OidcPlatformSpecificOptions options) {
+    return OidcFlutterAppauth.mapToExternalUserAgent(externalUserAgent);
   }
 }
 
@@ -58,14 +64,14 @@ void main() {
         }
       });
     });
-    for (final preferEphemeralSession in [true, false]) {
-      group('(preferEphemeralSession: $preferEphemeralSession)', () {
+    for (final externalUserAgent in OidcAppAuthExternalUserAgent.values) {
+      group('(externalUserAgent: $externalUserAgent)', () {
         for (final allowInsecureConnections in [true, false]) {
           group('(allowInsecureConnections: $allowInsecureConnections)', () {
             setUp(() {
               oidc = MockAppAuthImpl(
                 allowInsecureConnections: allowInsecureConnections,
-                preferEphemeralSession: preferEphemeralSession,
+                externalUserAgent: externalUserAgent,
               );
             });
 

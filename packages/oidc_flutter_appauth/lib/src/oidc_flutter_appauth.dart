@@ -11,11 +11,39 @@ mixin OidcFlutterAppauth on OidcPlatform {
   @protected
   final appAuth = const FlutterAppAuth();
 
+  /// maps the [OidcAppAuthExternalUserAgent] to [ExternalUserAgent].
+  static ExternalUserAgent mapToExternalUserAgent(
+    OidcAppAuthExternalUserAgent value,
+  ) {
+    return switch (value) {
+      OidcAppAuthExternalUserAgent.asWebAuthenticationSession =>
+        ExternalUserAgent.asWebAuthenticationSession,
+      OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession =>
+        ExternalUserAgent.ephemeralAsWebAuthenticationSession,
+      OidcAppAuthExternalUserAgent.sfSafariViewController =>
+        ExternalUserAgent.sfSafariViewController,
+    };
+  }
+
+  /// maps the [ExternalUserAgent] to [OidcAppAuthExternalUserAgent].
+  static OidcAppAuthExternalUserAgent mapToOidcAppAuthExternalUserAgent(
+    ExternalUserAgent value,
+  ) {
+    return switch (value) {
+      ExternalUserAgent.asWebAuthenticationSession =>
+        OidcAppAuthExternalUserAgent.asWebAuthenticationSession,
+      ExternalUserAgent.ephemeralAsWebAuthenticationSession =>
+        OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession,
+      ExternalUserAgent.sfSafariViewController =>
+        OidcAppAuthExternalUserAgent.sfSafariViewController,
+    };
+  }
+
   /// gets the `preferEphemeralSession` parameter from options.
-  bool getPreferEphemeralSession(
+  ExternalUserAgent getExternalUserAgent(
     OidcPlatformSpecificOptions options,
   ) =>
-      false;
+      ExternalUserAgent.asWebAuthenticationSession;
 
   /// gets the allowInsecureConnections
   bool getAllowInsecureConnections(
@@ -60,13 +88,12 @@ mixin OidcFlutterAppauth on OidcPlatform {
         promptValues: request.prompt,
         scopes: request.scope,
         responseMode: request.responseMode,
-        preferEphemeralSession: getPreferEphemeralSession(options),
+
+        externalUserAgent: getExternalUserAgent(options),
+        // preferEphemeralSession: getPreferEphemeralSession(options),
         allowInsecureConnections: getAllowInsecureConnections(options),
       ),
     );
-    if (resp == null) {
-      return null;
-    }
     return OidcAuthorizeResponse.fromJson({
       OidcConstants_AuthParameters.code: resp.authorizationCode,
       OidcConstants_AuthParameters.codeVerifier: resp.codeVerifier,
@@ -104,15 +131,12 @@ mixin OidcFlutterAppauth on OidcPlatform {
         ),
         idTokenHint: request.idTokenHint,
         allowInsecureConnections: getAllowInsecureConnections(options),
-        preferEphemeralSession: getPreferEphemeralSession(options),
+        externalUserAgent: getExternalUserAgent(options),
         state: request.state,
         issuer: metadata.issuer?.toString(),
         postLogoutRedirectUrl: request.postLogoutRedirectUri?.toString(),
       ),
     );
-    if (resp == null) {
-      return null;
-    }
     return OidcEndSessionResponse.fromJson({
       if (resp.state != null) OidcConstants_AuthParameters.state: resp.state,
     });
