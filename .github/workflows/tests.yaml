@@ -115,7 +115,10 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
-
+      - name: Run flutter precache
+        run: flutter precache -v
+      - name: Run flutter doctor
+        run: flutter doctor -v
       - name: Run Android Emulator and Integration Tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -156,6 +159,8 @@ jobs:
           UDID=$(xcrun xctrace list devices | grep "^iPhone" | awk '{gsub(/[()]/,""); print $NF}' | head -n 1)
           echo $UDID
           xcrun simctl boot "${UDID:?No Simulator with this name found}"
+      - name: Run flutter precache
+        run: flutter precache -v
       - name: Run flutter doctor
         run: flutter doctor -v
       - name: Integration Tests
