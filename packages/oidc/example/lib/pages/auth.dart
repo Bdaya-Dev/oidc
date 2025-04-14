@@ -21,7 +21,8 @@ class _AuthPageState extends State<AuthPage> {
       OidcPlatformSpecificOptions_Web_NavigationMode.newPage;
 
   bool allowInsecureConnections = false;
-  bool preferEphemeralSession = false;
+  OidcAppAuthExternalUserAgent externalUserAgent =
+      OidcAppAuthExternalUserAgent.asWebAuthenticationSession;
 
   OidcPlatformSpecificOptions _getOptions() {
     return OidcPlatformSpecificOptions(
@@ -35,10 +36,10 @@ class _AuthPageState extends State<AuthPage> {
         allowInsecureConnections: allowInsecureConnections,
       ),
       ios: OidcPlatformSpecificOptions_AppAuth_IosMacos(
-        preferEphemeralSession: preferEphemeralSession,
+        externalUserAgent: externalUserAgent,
       ),
       macos: OidcPlatformSpecificOptions_AppAuth_IosMacos(
-        preferEphemeralSession: preferEphemeralSession,
+        externalUserAgent: externalUserAgent,
       ),
       windows: const OidcPlatformSpecificOptions_Native(),
     );
