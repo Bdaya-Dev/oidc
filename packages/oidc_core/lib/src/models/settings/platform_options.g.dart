@@ -64,15 +64,24 @@ OidcPlatformSpecificOptions_AppAuth_IosMacos
     _$OidcPlatformSpecificOptions_AppAuth_IosMacosFromJson(
             Map<String, dynamic> json) =>
         OidcPlatformSpecificOptions_AppAuth_IosMacos(
-          preferEphemeralSession:
-              json['preferEphemeralSession'] as bool? ?? false,
+          externalUserAgent: $enumDecodeNullable(
+                  _$ExternalUserAgentEnumMap, json['externalUserAgent']) ??
+              OidcAppAuthExternalUserAgent.asWebAuthenticationSession,
         );
 
 Map<String, dynamic> _$OidcPlatformSpecificOptions_AppAuth_IosMacosToJson(
         OidcPlatformSpecificOptions_AppAuth_IosMacos instance) =>
     <String, dynamic>{
-      'preferEphemeralSession': instance.preferEphemeralSession,
+      'externalUserAgent':
+          _$ExternalUserAgentEnumMap[instance.externalUserAgent]!,
     };
+
+const _$ExternalUserAgentEnumMap = {
+  OidcAppAuthExternalUserAgent.asWebAuthenticationSession: 'asWebAuthenticationSession',
+  OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession:
+      'ephemeralAsWebAuthenticationSession',
+  OidcAppAuthExternalUserAgent.sfSafariViewController: 'sfSafariViewController',
+};
 
 OidcPlatformSpecificOptions_Native _$OidcPlatformSpecificOptions_NativeFromJson(
         Map<String, dynamic> json) =>

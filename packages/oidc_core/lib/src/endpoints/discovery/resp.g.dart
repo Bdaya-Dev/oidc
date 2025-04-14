@@ -134,7 +134,7 @@ abstract class _$OidcProviderMetadataCWProxy {
   /// OidcProviderMetadata(...).copyWith(id: 12, name: "My name")
   /// ````
   OidcProviderMetadata call({
-    Map<String, dynamic>? src,
+    Map<String, dynamic> src,
     Uri? issuer,
     Uri? authorizationEndpoint,
     Uri? jwksUri,
@@ -498,7 +498,7 @@ class _$OidcProviderMetadataCWProxyImpl
     Object? userinfoEncryptionEncValuesSupported = const $CopyWithPlaceholder(),
   }) {
     return OidcProviderMetadata._(
-      src: src == const $CopyWithPlaceholder() || src == null
+      src: src == const $CopyWithPlaceholder()
           ? _value.src
           // ignore: cast_nullable_to_non_nullable
           : src as Map<String, dynamic>,
