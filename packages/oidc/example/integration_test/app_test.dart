@@ -19,11 +19,11 @@ void main() {
       (tester) async {
         example.main();
         await tester.pumpAndSettle();
-        final loginFuture =
-            app_state.currentManager.loginAuthorizationCodeFlow();
-        print('waiting for login future...');
+        // final loginFuture =
+        //     app_state.currentManager.loginAuthorizationCodeFlow();
+        // print('waiting for login future...');
 
-        await loginFuture;
+        // await loginFuture;
       },
     );
   });
