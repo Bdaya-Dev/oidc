@@ -88,7 +88,6 @@ mixin OidcFlutterAppauth on OidcPlatform {
         promptValues: request.prompt,
         scopes: request.scope,
         responseMode: request.responseMode,
-
         externalUserAgent: getExternalUserAgent(options),
         allowInsecureConnections: getAllowInsecureConnections(options),
       ),

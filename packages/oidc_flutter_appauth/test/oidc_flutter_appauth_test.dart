@@ -25,7 +25,7 @@ class MockAppAuthImpl extends OidcPlatform with OidcFlutterAppauth {
   ) {
     return allowInsecureConnections;
   }
-  
+
   @override
   ExternalUserAgent getExternalUserAgent(OidcPlatformSpecificOptions options) {
     return OidcFlutterAppauth.mapToExternalUserAgent(externalUserAgent);
