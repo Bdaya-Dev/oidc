@@ -166,7 +166,7 @@ settings to control the behavior of the instance.
 
             Note that as this does not follow the best practices on using the appropriate native APIs based on the OS version, developers should use this at their own discretion.
         
-    - Native options: these are options that apply to desktop 🖥️ platforms (linux + windows) that use [loopback interface redirection](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3), to customize how the server responds to redirect responses:
+    - Native options: these are options that apply to desktop 🖥️ platforms (linux $$+ windows) that use [loopback interface redirection](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3), to customize how the server responds to redirect responses:
         - `String? successfulPageResponse`: What to return if a URI is matched
         - `String? methodMismatchResponse`: What to return if a method other than `GET` is requested.
         - `String? notFoundResponse`: What to return if a different path is used.
