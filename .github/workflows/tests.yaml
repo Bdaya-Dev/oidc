@@ -152,14 +152,28 @@ jobs:
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
         with:
-          channel: beta
-          flutter-version: ""
+          channel: master
+          flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Start Simulator
         # Start an iPhone simulator
         run: |
           UDID=$(xcrun xctrace list devices | grep "^iPhone" | awk '{gsub(/[()]/,""); print $NF}' | head -n 1)
           echo $UDID
           xcrun simctl boot "${UDID:?No Simulator with this name found}"
+      - name: Wait for Simulator to be Ready
+        run: |
+            COUNT=0
+            MAX_RETRIES=12  # Wait for a maximum of 12 * 5 = 60 seconds
+            until xcrun simctl list devices | grep -q "Booted"; do
+              if [ $COUNT -ge $MAX_RETRIES ]; then
+                echo "Simulator did not boot within the expected time."
+                exit 1
+              fi
+              echo "Waiting for simulator to boot... Attempt: $((COUNT+1))"
+              sleep 20
+              COUNT=$((COUNT+1))
+            done
+            echo "Simulator is ready."
       - name: Run flutter precache
         run: flutter precache -v
       - name: Run flutter doctor
