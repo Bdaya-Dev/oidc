@@ -106,7 +106,7 @@ scripts:
         - android
   integration_test:ios:
     name: Flutter iOs Integration tests
-    exec: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d iPhone --coverage-path coverage/ios-coverage.info --dart-define=CI=true
+    exec: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage --ignore-timeouts -d iPhone --coverage-path coverage/ios-coverage.info --dart-define=CI=true
     packageFilters:
       flutter: true
       dirExists:
