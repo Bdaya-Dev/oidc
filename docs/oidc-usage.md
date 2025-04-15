@@ -135,8 +135,37 @@ settings to control the behavior of the instance.
 
 - `OidcPlatformSpecificOptions? options`: platform specific options to control auth requests:
     - `bool allowInsecureConnections`: Whether to allow non-HTTPS endpoints; for `android` 🤖 platform only.
-    - `bool preferEphemeralSession`: Whether to use an ephemeral session that prevents cookies and other browser data being shared with the user's normal browser session.
-        This property is only applicable to `iOS`/`MacOs` 🍏 versions 13 and above.
+    - `OidcAppAuthExternalUserAgent externalUserAgent`: Selects the strategy for opening external browser in ios📱and macos 💻:
+        - `asWebAuthenticationSession` (default)
+            Uses the [ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession) APIs where possible.
+            
+            This is the default for macOS and iOS 12 and above. On iOS 11, it will
+            use [SFAuthenticationSession](https://developer.apple.com/documentation/safariservices/sfauthenticationsession)
+            instead.
+            
+            Behind the scenes, the plugin makes use of the default external user-agent
+            provided by the AppAuth iOS SDK. This will use the best user-agent
+            available on the device. Specifically, on iOS it will use [OIDExternalUserAgentIOS](https://openid.github.io/AppAuth-iOS/docs/latest/interface_o_i_d_external_user_agent_i_o_s.html)
+            and on macOS it will use [OIDExternalUserAgentMac](https://openid.github.io/AppAuth-iOS/docs/latest/interface_o_i_d_external_user_agent_mac.html).
+            
+            Using this follows the best practices on using the appropriate native APIs
+            based on the OS version.
+        - `ephemeralAsWebAuthenticationSession`: 
+            Indicates a preference in using an ephemeral sessions by using the [ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession) APIs where possible.
+            This is only applicable to macOS and iOS 12 and above. On these platforms, the session will not share browser data with user's normal browser session and does not keep the cache.
+
+            Like `asWebAuthenticationSession`, it fallback to use [SFAuthenticationSession](https://developer.apple.com/documentation/safariservices/sfauthenticationsession)
+            on iOS 11 where there's no support for ephemeral sessions.
+        - `sfSafariViewController`: 
+            Uses the [SFSafariViewController](https://developer.apple.com/documentation/safariservices/sfsafariviewcontroller) APIs. This does not share browser data with the user's normal browser session but keeps the cache.
+
+            This is only applicable to iOS. On macOS, it will use the same behavior as         `asWebAuthenticationSession`.
+            One reason for using this is when applications trigger an end session request but wants to avoid the prompt that would have appeared when the [ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession) APIs are used. 
+
+            In this case, there's concern that the system-generated prompt would confuse the user as they are trying to sign out but the prompt states that it's taking the user through a sign-in flow.
+
+            Note that as this does not follow the best practices on using the appropriate native APIs based on the OS version, developers should use this at their own discretion.
+        
     - Native options: these are options that apply to desktop 🖥️ platforms (linux + windows) that use [loopback interface redirection](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3), to customize how the server responds to redirect responses:
         - `String? successfulPageResponse`: What to return if a URI is matched
         - `String? methodMismatchResponse`: What to return if a method other than `GET` is requested.

@@ -39,7 +39,7 @@ mixin OidcFlutterAppauth on OidcPlatform {
     };
   }
 
-  /// gets the `preferEphemeralSession` parameter from options.
+  /// gets the [ExternalUserAgent] parameter from options.
   ExternalUserAgent getExternalUserAgent(
     OidcPlatformSpecificOptions options,
   ) =>
@@ -90,7 +90,6 @@ mixin OidcFlutterAppauth on OidcPlatform {
         responseMode: request.responseMode,
 
         externalUserAgent: getExternalUserAgent(options),
-        // preferEphemeralSession: getPreferEphemeralSession(options),
         allowInsecureConnections: getAllowInsecureConnections(options),
       ),
     );
