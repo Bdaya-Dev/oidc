@@ -152,7 +152,7 @@ jobs:
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
         with:
-          channel: stable
+          channel: beta
           flutter-version: ""
       - name: Start Simulator
         # Start an iPhone simulator
