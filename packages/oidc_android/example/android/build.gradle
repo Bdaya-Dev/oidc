@@ -1,17 +1,5 @@
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-
-
-    dependencies {
-        classpath 'com.android.tools.build:gradle:7.4.2'
-    }
-}
-
 allprojects {
-    repositories {
+    repositories {        
         google()
         mavenCentral()
     }
@@ -24,8 +12,6 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(':app')
 }
-
-
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
