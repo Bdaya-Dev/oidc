@@ -1,3 +1,7 @@
+## 0.3.0+4
+
+ - **REFACTOR**: minor lints and refactors. ([5ab9af70](https://github.com/Bdaya-Dev/oidc/commit/5ab9af70140be2a11f54d62a9d93c9c6edc9e554))
+
 ## 0.3.0+3
 
  - Update a dependency to the latest release.

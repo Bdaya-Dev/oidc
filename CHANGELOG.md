@@ -3,6 +3,82 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2025-04-16
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v0.10.0`](#oidc---v0100)
+ - [`oidc_android` - `v0.7.0`](#oidc_android---v070)
+ - [`oidc_core` - `v0.12.0`](#oidc_core---v0120)
+ - [`oidc_flutter_appauth` - `v0.6.0`](#oidc_flutter_appauth---v060)
+ - [`oidc_ios` - `v0.7.0`](#oidc_ios---v070)
+ - [`oidc_macos` - `v0.7.0`](#oidc_macos---v070)
+
+Packages with other changes:
+
+ - [`oidc_default_store` - `v0.2.0+15`](#oidc_default_store---v02015)
+ - [`oidc_platform_interface` - `v0.6.0+4`](#oidc_platform_interface---v0604)
+ - [`oidc_web_core` - `v0.3.0+4`](#oidc_web_core---v0304)
+ - [`oidc_linux` - `v0.3.0+15`](#oidc_linux---v03015)
+ - [`oidc_windows` - `v0.3.1+9`](#oidc_windows---v0319)
+ - [`oidc_desktop` - `v0.5.0+4`](#oidc_desktop---v0504)
+ - [`oidc_web` - `v0.6.0+4`](#oidc_web---v0604)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_linux` - `v0.3.0+15`
+ - `oidc_windows` - `v0.3.1+9`
+ - `oidc_desktop` - `v0.5.0+4`
+ - `oidc_web` - `v0.6.0+4`
+
+---
+
+#### `oidc` - `v0.10.0`
+
+ - **REFACTOR**: minor lints and refactors. ([5ab9af70](https://github.com/Bdaya-Dev/oidc/commit/5ab9af70140be2a11f54d62a9d93c9c6edc9e554))
+ - **BREAKING** **CHORE**(deps): upgrade flutter_appauth to v9.0.0 ([#199](https://github.com/Bdaya-Dev/oidc/issues/199)). ([f027af34](https://github.com/Bdaya-Dev/oidc/commit/f027af3460a833780cc77ed2cce11f692c7a8ce5))
+
+#### `oidc_android` - `v0.7.0`
+
+ - **BREAKING** **CHORE**(deps): upgrade flutter_appauth to v9.0.0 ([#199](https://github.com/Bdaya-Dev/oidc/issues/199)). ([f027af34](https://github.com/Bdaya-Dev/oidc/commit/f027af3460a833780cc77ed2cce11f692c7a8ce5))
+
+#### `oidc_core` - `v0.12.0`
+
+ - **REFACTOR**: minor lints and refactors. ([5ab9af70](https://github.com/Bdaya-Dev/oidc/commit/5ab9af70140be2a11f54d62a9d93c9c6edc9e554))
+ - **BREAKING** **CHORE**(deps): upgrade flutter_appauth to v9.0.0 ([#199](https://github.com/Bdaya-Dev/oidc/issues/199)). ([f027af34](https://github.com/Bdaya-Dev/oidc/commit/f027af3460a833780cc77ed2cce11f692c7a8ce5))
+
+#### `oidc_flutter_appauth` - `v0.6.0`
+
+ - **BREAKING** **CHORE**(deps): upgrade flutter_appauth to v9.0.0 ([#199](https://github.com/Bdaya-Dev/oidc/issues/199)). ([f027af34](https://github.com/Bdaya-Dev/oidc/commit/f027af3460a833780cc77ed2cce11f692c7a8ce5))
+
+#### `oidc_ios` - `v0.7.0`
+
+ - **REFACTOR**: minor lints and refactors. ([5ab9af70](https://github.com/Bdaya-Dev/oidc/commit/5ab9af70140be2a11f54d62a9d93c9c6edc9e554))
+ - **BREAKING** **CHORE**(deps): upgrade flutter_appauth to v9.0.0 ([#199](https://github.com/Bdaya-Dev/oidc/issues/199)). ([f027af34](https://github.com/Bdaya-Dev/oidc/commit/f027af3460a833780cc77ed2cce11f692c7a8ce5))
+
+#### `oidc_macos` - `v0.7.0`
+
+ - **BREAKING** **CHORE**(deps): upgrade flutter_appauth to v9.0.0 ([#199](https://github.com/Bdaya-Dev/oidc/issues/199)). ([f027af34](https://github.com/Bdaya-Dev/oidc/commit/f027af3460a833780cc77ed2cce11f692c7a8ce5))
+
+#### `oidc_default_store` - `v0.2.0+15`
+
+ - **REFACTOR**: minor lints and refactors. ([5ab9af70](https://github.com/Bdaya-Dev/oidc/commit/5ab9af70140be2a11f54d62a9d93c9c6edc9e554))
+
+#### `oidc_platform_interface` - `v0.6.0+4`
+
+ - **REFACTOR**: minor lints and refactors. ([5ab9af70](https://github.com/Bdaya-Dev/oidc/commit/5ab9af70140be2a11f54d62a9d93c9c6edc9e554))
+
+#### `oidc_web_core` - `v0.3.0+4`
+
+ - **REFACTOR**: minor lints and refactors. ([5ab9af70](https://github.com/Bdaya-Dev/oidc/commit/5ab9af70140be2a11f54d62a9d93c9c6edc9e554))
+
+
 ## 2025-04-13
 
 ### Changes
