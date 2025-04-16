@@ -169,6 +169,7 @@ abstract class OidcUserManagerBase {
     Uri? redirectUriOverride,
     Uri? originalUri,
     List<String>? scopeOverride,
+    List<String>? extraScopeToConsent,
     List<String>? promptOverride,
     List<String>? uiLocalesOverride,
     String? displayOverride,
@@ -192,7 +193,8 @@ abstract class OidcUserManagerBase {
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
       redirectUri: redirectUriOverride ?? settings.redirectUri,
-      scope: scopeOverride ?? settings.scope,
+      scope: [...(scopeOverride ?? settings.scope), ...?extraScopeToConsent],
+      extraScopeToConsent: extraScopeToConsent,
       prompt: promptOverride ?? settings.prompt,
       display: displayOverride ?? settings.display,
       extraStateData: extraStateData,
@@ -231,6 +233,33 @@ abstract class OidcUserManagerBase {
       options: options,
       metadata: discoveryDocument,
       prep: prep,
+    );
+  }
+
+  Future<OidcToken> getTokenWithRefreshToken(List<String> scope) async {
+    if (currentUser?.token.refreshToken == null) {
+      throw Exception('No refresh token available');
+    }
+    final request = OidcTokenRequest.refreshToken(
+      refreshToken: currentUser!.token.refreshToken!,
+      clientId: clientCredentials.clientId,
+      clientSecret: clientCredentials.clientSecret,
+      extra: settings.extraTokenParameters,
+      scope: scope,
+    );
+
+    final tokenResponse = await OidcEndpoints.token(
+      tokenEndpoint: discoveryDocument.tokenEndpoint!,
+      credentials: clientCredentials,
+      client: httpClient,
+      headers: settings.extraTokenHeaders,
+      request: request,
+    );
+
+    return OidcToken.fromResponse(
+      tokenResponse,
+      overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
+      sessionState: currentUser?.token.sessionState,
     );
   }
 
@@ -291,10 +320,13 @@ abstract class OidcUserManagerBase {
         await store.setStateResponseData(state: state, stateData: null);
       }
       return await handleSuccessfulAuthResponse(
-        response: response,
-        grantType: grantType,
-        metadata: metadata,
-      );
+          response: response,
+          grantType: grantType,
+          metadata: metadata,
+          scopes: [
+            ...request.scope
+                .where((e) => request.extraScopeToConsent?.contains(e) != true)
+          ]);
     } on OidcException catch (e) {
       //failed to authorize.
       final response = e.errorResponse;
@@ -500,6 +532,7 @@ abstract class OidcUserManagerBase {
     required OidcAuthorizeResponse response,
     required String grantType,
     required OidcProviderMetadata metadata,
+    required List<String> scopes,
   }) async {
     final receivedStateKey = response.state;
     if (receivedStateKey == null) {
@@ -565,12 +598,12 @@ abstract class OidcUserManagerBase {
         credentials: clientCredentials,
         headers: stateData.extraTokenHeaders,
         request: OidcTokenRequest.authorizationCode(
-          redirectUri: response.redirectUri ?? stateData.redirectUri,
-          codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
-          extra: stateData.extraTokenParams,
-          clientId: clientCredentials.clientId,
-          code: code,
-        ),
+            redirectUri: response.redirectUri ?? stateData.redirectUri,
+            codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
+            extra: stateData.extraTokenParams,
+            clientId: clientCredentials.clientId,
+            code: code,
+            scope: scopes),
         client: httpClient,
       );
       final token = OidcToken.fromResponse(
@@ -731,21 +764,25 @@ abstract class OidcUserManagerBase {
   /// If any of these conditions are not met, null is returned.
   ///
   /// An [OidcException] will be thrown if the server returns an error.
-  Future<OidcUser?> refreshToken({
-    String? overrideRefreshToken,
-    OidcProviderMetadata? discoveryDocumentOverride,
-  }) async {
+  Future<OidcUser?> refreshToken(
+      {OidcToken? accessTokenOverride,
+      String? overrideRefreshToken,
+      OidcProviderMetadata? discoveryDocumentOverride,
+      bool replaceUserToken = true,
+      bool skipSupportedCheck = false}) async {
     ensureInit();
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
-    if (!discoveryDocument.grantTypesSupportedOrDefault
-        .contains(OidcConstants_GrantType.refreshToken)) {
+    if (!skipSupportedCheck &&
+        !discoveryDocument.grantTypesSupportedOrDefault
+            .contains(OidcConstants_GrantType.refreshToken)) {
       //Server doesn't support refresh_token grant.
       return null;
     }
 
-    final refreshToken =
-        overrideRefreshToken ?? currentUser?.token.refreshToken;
+    final refreshToken = overrideRefreshToken ??
+        accessTokenOverride?.refreshToken ??
+        currentUser?.token.refreshToken;
     if (refreshToken == null) {
       // Can't refresh the access token anyway.
       return null;
@@ -761,20 +798,20 @@ abstract class OidcUserManagerBase {
         clientId: clientCredentials.clientId,
         clientSecret: clientCredentials.clientSecret,
         extra: settings.extraTokenParameters,
-        scope: settings.scope,
+        scope: accessTokenOverride?.scope ?? settings.scope,
       ),
     );
     return createUserFromToken(
-      token: OidcToken.fromResponse(
-        tokenResponse,
-        overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
-        sessionState: currentUser?.token.sessionState,
-      ),
-      nonce: null,
-      userInfo: null,
-      attributes: null,
-      metadata: discoveryDocument,
-    );
+        token: OidcToken.fromResponse(
+          tokenResponse,
+          overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
+          sessionState: currentUser?.token.sessionState,
+        ),
+        nonce: null,
+        userInfo: null,
+        attributes: null,
+        metadata: discoveryDocument,
+        validateAndSave: replaceUserToken);
   }
 
   @protected
@@ -1056,7 +1093,7 @@ abstract class OidcUserManagerBase {
 
   /// Loads and verifies the tokens.
   @protected
-  Future<void> loadCachedTokens() async {
+  Future<void> loadCachedTokens({bool skipSupportedCheck = false}) async {
     final usedKeys = <String>{
       OidcConstants_Store.currentToken,
       OidcConstants_Store.currentUserAttributes,
@@ -1105,8 +1142,9 @@ abstract class OidcUserManagerBase {
         if (token.refreshToken != null &&
             (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
           try {
-            loadedUser =
-                await refreshToken(overrideRefreshToken: token.refreshToken);
+            loadedUser = await refreshToken(
+                overrideRefreshToken: token.refreshToken,
+                skipSupportedCheck: skipSupportedCheck);
           } catch (e) {
             // An app might go offline during token refresh, so we consult the
             // supportOfflineAuth setting to check whether this is an issue or
@@ -1168,12 +1206,13 @@ abstract class OidcUserManagerBase {
           );
 
           await handleSuccessfulAuthResponse(
-            response: resp,
-            grantType: resp.code == null
-                ? OidcConstants_GrantType.implicit
-                : OidcConstants_GrantType.authorizationCode,
-            metadata: discoveryDocument,
-          );
+              response: resp,
+              grantType: resp.code == null
+                  ? OidcConstants_GrantType.implicit
+                  : OidcConstants_GrantType.authorizationCode,
+              metadata: discoveryDocument,
+              // TODO: this shold not include the extra scopes to consent.
+              scopes: resp.scope);
           return true;
         case OidcEndSessionState():
           final resp =
@@ -1229,7 +1268,7 @@ abstract class OidcUserManagerBase {
 
   /// Initializes the user manager, this also gets the [discoveryDocument] if it
   /// wasn't provided.
-  Future<void> init() async {
+  Future<void> init({bool skipSupportedCheck = false}) async {
     if (hasInit) {
       return;
     }
@@ -1246,7 +1285,7 @@ abstract class OidcUserManagerBase {
         //no logout requests.
         if (!await loadStateResult()) {
           //no state results.
-          await loadCachedTokens();
+          await loadCachedTokens(skipSupportedCheck: skipSupportedCheck);
         }
       }
       final frontChannelLogoutUri = settings.frontChannelLogoutUri;

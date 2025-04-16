@@ -11,6 +11,7 @@ class OidcSimpleAuthorizationCodeFlowRequest {
     required this.scope,
     required this.clientId,
     required this.redirectUri,
+    this.extraScopeToConsent,
     this.originalUri,
     this.display,
     this.prompt,
@@ -50,6 +51,9 @@ class OidcSimpleAuthorizationCodeFlowRequest {
 
   /// see [OidcAuthorizeRequest.scope].
   final List<String> scope;
+
+  /// see [OidcAuthorizeRequest.extraScopeToConsent].
+  final List<String>? extraScopeToConsent;
 
   /// see [OidcAuthorizeRequest.clientId].
   final String clientId;

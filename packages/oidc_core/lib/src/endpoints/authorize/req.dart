@@ -21,6 +21,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     required this.clientId,
     required this.redirectUri,
     required this.scope,
+    this.extraScopeToConsent,
     this.codeChallenge,
     this.codeChallengeMethod,
     super.extra,
@@ -55,6 +56,11 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     toJson: OidcInternalUtilities.joinSpaceDelimitedList,
   )
   List<String> scope;
+
+  /// OPTIONAL.
+  ///
+  /// Will be requested to be consented by the user. Included in initial AuthorizationCodeFlowRequest but not in the Token request.
+  List<String>? extraScopeToConsent;
 
   /// REQUIRED.
   ///

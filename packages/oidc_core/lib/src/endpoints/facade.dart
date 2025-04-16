@@ -162,6 +162,7 @@ class OidcEndpoints {
               if (supportsOpenIdScope) OidcConstants_Scopes.openid,
               ...input.scope,
             ],
+      extraScopeToConsent: input.extraScopeToConsent,
       acrValues: input.acrValues,
       codeChallenge: codeChallenge,
       codeChallengeMethod: codeChallengeMethod,

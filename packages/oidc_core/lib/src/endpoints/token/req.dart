@@ -34,6 +34,7 @@ class OidcTokenRequest extends JsonBasedRequest {
 
   OidcTokenRequest.authorizationCode({
     required String this.code,
+    required this.scope,
     this.redirectUri,
     this.clientId,
     this.clientSecret,
@@ -49,8 +50,7 @@ class OidcTokenRequest extends JsonBasedRequest {
         subjectToken = null,
         actorTokenType = null,
         actorToken = null,
-        refreshToken = null,
-        scope = null;
+        refreshToken = null;
 
   OidcTokenRequest.refreshToken({
     required String this.refreshToken,
