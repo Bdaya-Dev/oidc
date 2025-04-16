@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:collection/collection.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:web/web.dart';
 
@@ -35,11 +34,11 @@ class OidcWebStore implements OidcStore {
   final OidcWebStoreSessionManagementLocation webSessionManagementLocation;
 
   String _getKey(OidcStoreNamespace namespace, String key) {
-    return [storagePrefix, namespace.value, key].whereNotNull().join('.');
+    return [storagePrefix, namespace.value, key].nonNulls.join('.');
   }
 
   String _getNamespaceKeys(OidcStoreNamespace namespace) {
-    return [storagePrefix, 'keys', namespace.value].whereNotNull().join('.');
+    return [storagePrefix, 'keys', namespace.value].nonNulls.join('.');
   }
 
   @override
@@ -67,7 +66,8 @@ class OidcWebStore implements OidcStore {
 
   @override
   Future<Set<String>> getAllKeys(OidcStoreNamespace namespace) async {
-    final keysRaw = window.localStorage[_getNamespaceKeys(namespace)] ?? '[]';
+    final keysRaw =
+        window.localStorage.getItem(_getNamespaceKeys(namespace)) ?? '[]';
     return (jsonDecode(keysRaw) as List).cast<String>().toSet();
   }
 
@@ -75,7 +75,7 @@ class OidcWebStore implements OidcStore {
     OidcStoreNamespace namespace,
     List<String> keys,
   ) async {
-    window.localStorage[_getNamespaceKeys(namespace)] = jsonEncode(keys);
+    window.localStorage.setItem(_getNamespaceKeys(namespace), jsonEncode(keys));
   }
 
   Future<Map<String, String>> _defaultGetMany(
@@ -86,7 +86,7 @@ class OidcWebStore implements OidcStore {
         .map(
           (key) => MapEntry(
             key,
-            window.localStorage[_getKey(namespace, key)],
+            window.localStorage.getItem(_getKey(namespace, key)),
           ),
         )
         .purify();
@@ -97,7 +97,7 @@ class OidcWebStore implements OidcStore {
     Map<String, String> values,
   ) async {
     for (final entry in values.entries) {
-      window.localStorage[_getKey(namespace, entry.key)] = entry.value;
+      window.localStorage.setItem(_getKey(namespace, entry.key), entry.value);
     }
   }
 
@@ -126,7 +126,7 @@ class OidcWebStore implements OidcStore {
               .map(
                 (key) => MapEntry(
                   key,
-                  window.sessionStorage[_getKey(namespace, key)],
+                  window.sessionStorage.getItem(_getKey(namespace, key)),
                 ),
               )
               .purify();
@@ -156,8 +156,8 @@ class OidcWebStore implements OidcStore {
         if (webSessionManagementLocation ==
             OidcWebStoreSessionManagementLocation.sessionStorage) {
           for (final element in values.entries) {
-            window.sessionStorage[_getKey(namespace, element.key)] =
-                element.value;
+            window.sessionStorage
+                .setItem(_getKey(namespace, element.key), element.value);
           }
         } else {
           await _defaultSetMany(namespace, values);

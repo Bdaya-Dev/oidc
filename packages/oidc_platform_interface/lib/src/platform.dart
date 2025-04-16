@@ -112,7 +112,8 @@ class NoOpOidcPlatform extends OidcPlatform {
 
   @override
   Map<String, dynamic> prepareForRedirectFlow(
-      OidcPlatformSpecificOptions options) {
+    OidcPlatformSpecificOptions options,
+  ) {
     throw UnimplementedError();
   }
 }

@@ -2,11 +2,9 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 import 'package:json_annotation/json_annotation.dart';
-import 'package:meta/meta.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_core/src/converters.dart';
 
-@internal
 class OidcInternalUtilities {
   static Future<http.Response> sendWithClient({
     required http.Client? client,

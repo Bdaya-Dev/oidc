@@ -61,8 +61,8 @@ class OidcFlutter {
   static Future<OidcEndSessionResponse?> getPlatformEndSessionResponse({
     required OidcProviderMetadata metadata,
     required OidcEndSessionRequest request,
-    OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
     required Map<String, dynamic> preparationResult,
+    OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
   }) async {
     try {
       return _platform.getEndSessionResponse(

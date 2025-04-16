@@ -3,10 +3,13 @@ analyzer:
   errors:
     sort_pub_dependencies: ignore
     deprecated_member_use_from_same_package: ignore
+    document_ignores: ignore
+
     # invalid_dependency: ignore
 
 linter:
   rules:
+    document_ignores: false
     constant_identifier_names: false
     non_constant_identifier_names: false
     require_trailing_commas: false

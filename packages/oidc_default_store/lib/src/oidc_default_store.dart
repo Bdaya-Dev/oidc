@@ -2,7 +2,6 @@
 
 import 'dart:convert';
 
-import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
@@ -70,11 +69,11 @@ class OidcDefaultStore implements OidcStore {
   bool _hasInit = false;
 
   String _getKey(OidcStoreNamespace namespace, String key) {
-    return [storagePrefix, namespace.value, key].whereNotNull().join('.');
+    return [storagePrefix, namespace.value, key].nonNulls.join('.');
   }
 
   String _getNamespaceKeys(OidcStoreNamespace namespace) {
-    return [storagePrefix, 'keys', namespace.value].whereNotNull().join('.');
+    return [storagePrefix, 'keys', namespace.value].nonNulls.join('.');
   }
 
   @override
