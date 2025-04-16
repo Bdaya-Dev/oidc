@@ -56,7 +56,6 @@ class CliUserManager extends OidcUserManagerBase {
     final uri = endpoint.replace(
       queryParameters: {
         ...endpoint.queryParameters,
-        // ignore: invalid_use_of_internal_member
         ...OidcInternalUtilities.serializeQueryParameters(requestParameters),
         // override the redirect uri.
         redirectUriKey: originalRedirectUri.toString(),

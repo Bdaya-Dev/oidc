@@ -12,7 +12,7 @@ import 'package:logging/logging.dart';
 import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
 
-import 'mock.dart';
+import 'package:oidc_example/mock.dart';
 
 //This file represents a global state, which is bad
 //in a production app (since you can't test it).

@@ -1,4 +1,4 @@
-import 'package:flutter_appauth_platform_interface/src/external_user_agent.dart';
+import 'package:flutter_appauth_platform_interface/flutter_appauth_platform_interface.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_flutter_appauth/oidc_flutter_appauth.dart';
 
