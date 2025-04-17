@@ -761,7 +761,7 @@ abstract class OidcUserManagerBase {
         clientId: clientCredentials.clientId,
         clientSecret: clientCredentials.clientSecret,
         extra: settings.extraTokenParameters,
-        scope: settings.scope,
+        scope: settings.includeScopesOnRefresh ? settings.scope : [],
       ),
     );
     return createUserFromToken(
@@ -822,7 +822,7 @@ abstract class OidcUserManagerBase {
           clientId: clientCredentials.clientId,
           clientSecret: clientCredentials.clientSecret,
           extra: settings.extraTokenParameters,
-          scope: settings.scope,
+          scope: settings.includeScopesOnRefresh ? settings.scope : [],
         ),
       );
       newUser = await createUserFromToken(
