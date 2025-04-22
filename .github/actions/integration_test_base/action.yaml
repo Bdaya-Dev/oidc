@@ -21,7 +21,8 @@ runs:
     - name: Remove dart_test.yaml Files
       run: dart run melos run remove_dart_test_yaml
       shell: bash
-    
+    - name: Docker Setup Docker
+      uses: docker/setup-docker-action@v4.3.0
     - name: Create Docker network
       run: docker network create hydra-network
       shell: bash
