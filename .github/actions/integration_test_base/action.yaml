@@ -26,7 +26,7 @@ runs:
     - name: Create Docker network
       run: docker network create hydra-network
       shell: bash
-    - run: docker create --name hydra --network hydra-network --network-alias hydra -p 4444:4444 -p 4445:4445  -e "DSN=memory" -e "URLS_SELF_ISSUER=http://localhost:4444" -e "URLS_LOGIN=http://localhost:3000/login" -e "URLS_CONSENT=http://localhost:3000/consent" -e "SECRETS_SYSTEM=some-super-secret" -e "LOG_LEAK_SENSITIVE_VALUES=true" -e "DEV=true" -e GITHUB_ACTIONS=true -e CI=true oryd/hydra:v2.3.0
+    - run: docker create --name hydra --network hydra-network --network-alias hydra -p 4446:4444 -p 4445:4445  -e "DSN=memory" -e "URLS_SELF_ISSUER=http://localhost:4446" -e "URLS_LOGIN=http://localhost:3000/login" -e "URLS_CONSENT=http://localhost:3000/consent" -e "SECRETS_SYSTEM=some-super-secret" -e "LOG_LEAK_SENSITIVE_VALUES=true" -e "DEV=true" -e GITHUB_ACTIONS=true -e CI=true oryd/hydra:v2.3.0
       shell: bash
       name: Create Hydra container
     - run: docker create --name consent --network hydra-network --network-alias consent -p 3000:3000  -e "HYDRA_ADMIN_URL=http://hydra:4445" -e GITHUB_ACTIONS=true -e CI=true ahmednfwela/ory-hydra-auto-login:latest
@@ -39,7 +39,7 @@ runs:
       shell: bash
       run: |
         for i in {1..10}; do
-          if curl -sf http://localhost:4444/health/alive; then
+          if curl -sf http://localhost:4446/health/alive; then
             echo "✅ hydra is up"; break
           fi
           echo "⏳ waiting for hydra…"; sleep 5

@@ -107,8 +107,8 @@ final duendeManager = OidcUserManager.lazy(
   ),
 );
 
-const hydraIssuer = 'http://localhost:4444';
-const androidHydraIssuer = 'http://10.0.2.2:4444';
+const hydraIssuer = 'http://localhost:4446';
+const androidHydraIssuer = 'http://10.0.2.2:4446';
 // Headless Hydra manager for CI
 final hydraManager = OidcUserManager.lazy(
   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(

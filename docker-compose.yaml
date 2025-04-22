@@ -10,19 +10,14 @@ services:
   hydra:
     image: oryd/hydra:v2.3.0
     ports:
-      - '4444:4444'
+      - '4446:4444'
       - '4445:4445'
     command: ["serve", "all", "--dev"]    
-    pull_policy: missing
-    healthcheck:
-      test: "printf 'GET /health/alive HTTP/1.1\r\nHost: localhost\r\n\r\n' | nc localhost 4444 | sed -n '1,/^\r$/d; p' | grep -q '^{\"status\":\"ok\"}$'"
-      interval: 5s
-      timeout: 20s
-      retries: 3
+    pull_policy: missing    
     restart: unless-stopped
     environment:
       DSN: memory
-      URLS_SELF_ISSUER: http://localhost:4444
+      URLS_SELF_ISSUER: http://localhost:4446
       URLS_LOGIN: http://localhost:3000/login
       URLS_CONSENT: http://localhost:3000/consent
       SECRETS_SYSTEM: some-super-secret
@@ -31,8 +26,7 @@ services:
   hydra-client:
     image: oryd/hydra:v2.3.0
     depends_on:
-      hydra:
-        condition: service_healthy
+      - hydra
     command:
       [
         "create", "client",

@@ -33,7 +33,7 @@ void main() {
             var parsed = oidc_core.OidcProviderMetadata.fromJson(
               jsonDecode(body) as Map<String, dynamic>,
             );
-            final issuer = Uri.parse('http://10.0.2.2:4444');
+            final issuer = Uri.parse('http://10.0.2.2:4446');
             parsed = parsed.copyWith(
               issuer: issuer,
               authorizationEndpoint: parsed.authorizationEndpoint?.replace(
