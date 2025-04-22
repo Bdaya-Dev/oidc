@@ -73,11 +73,9 @@ jobs:
         with:
           name: package-coverage
           path: coverage/lcov.info
-  call-hydra:
-    uses: ./.github/workflows/hydra-services.yml
+
   # integration tests
   android:
-    needs: call-hydra
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -144,7 +142,6 @@ jobs:
 
   ios:
     runs-on: macos-latest
-    needs: call-hydra
     timeout-minutes: 60
     defaults:
       run:
@@ -191,7 +188,6 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
   web:
-    needs: call-hydra
     strategy:
       fail-fast: false
       matrix:
@@ -231,7 +227,6 @@ jobs:
       #     path: packages/oidc/example/coverage/web-coverage.info
 
   macos:
-    needs: call-hydra
     runs-on: macos-13
     defaults:
       run:
@@ -253,7 +248,6 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
   linux:
-    needs: call-hydra
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -279,7 +273,6 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error          
   windows:
-    needs: call-hydra
     runs-on: windows-latest
     defaults:
       run:

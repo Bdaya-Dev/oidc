@@ -21,6 +21,51 @@ runs:
     - name: Remove dart_test.yaml Files
       run: dart run melos run remove_dart_test_yaml
       shell: bash
+    
+    - name: Create Docker network
+      run: docker network create hydra-network
+      shell: bash
+    - run: docker create --name hydra --network hydra-network --network-alias hydra -p 4444:4444 -p 4445:4445  -e "DSN=memory" -e "URLS_SELF_ISSUER=http://localhost:4444" -e "URLS_LOGIN=http://localhost:3000/login" -e "URLS_CONSENT=http://localhost:3000/consent" -e "SECRETS_SYSTEM=some-super-secret" -e "LOG_LEAK_SENSITIVE_VALUES=true" -e "DEV=true" -e GITHUB_ACTIONS=true -e CI=true oryd/hydra:v2.3.0
+      shell: bash
+      name: Create Hydra container
+    - run: docker create --name consent --network hydra-network --network-alias consent -p 3000:3000  -e "HYDRA_ADMIN_URL=http://hydra:4445" -e GITHUB_ACTIONS=true -e CI=true ahmednfwela/ory-hydra-auto-login:latest
+      shell: bash
+      name: Create Consent container
+    - run: docker start hydra
+      shell: bash
+      name: Start Hydra container
+    - name: Wait for Hydra → alive
+      shell: bash
+      run: |
+        for i in {1..10}; do
+          if curl -sf http://localhost:4444/health/alive; then
+            echo "✅ hydra is up"; break
+          fi
+          echo "⏳ waiting for hydra…"; sleep 5
+        done
+    - name: Create Hydra client
+      shell: bash
+      run: |
+        # you can either use the hydra CLI if it's installed,
+        # or spin up a transient container:
+        docker run --rm \
+          --network host \
+          oryd/hydra:v2.3.0 create client \
+              --endpoint http://localhost:4445 \
+              --format json \
+              --id integration-client \
+              --secret integration-client-secret \
+              --grant-type authorization_code \
+              --token-endpoint-auth-method none \
+              --response-type code \
+              --skip-consent \
+              --skip-logout-consent \
+              --scope openid,profile,email,offline_access \
+              --redirect-uri http://localhost:22433/redirect.html,http://127.0.0.1,http://localhost,com.bdayadev.oidc.example:/oauth2redirect \
+              --post-logout-callback http://localhost:22433/redirect.html,http://127.0.0.1,http://localhost,com.bdayadev.oidc.example:/endsessionredirect \
+              --request-uri http://localhost:22433/redirect.html \
+              --skip-tls-verify
+
 
     # - name: Set up Docker Compose
     #   uses: docker/setup-compose-action@v1
