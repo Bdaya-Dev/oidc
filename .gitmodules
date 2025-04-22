@@ -1,3 +1,0 @@
-[submodule "e2e/hydra-consent/hydra-auto-login"]
-	path = e2e/hydra-consent/hydra-auto-login
-	url = git@github.com:ahmednfwela/hydra-auto-login.git
