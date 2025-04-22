@@ -7,7 +7,6 @@ import 'package:async/async.dart';
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
