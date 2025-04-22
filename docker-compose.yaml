@@ -1,41 +1,55 @@
 version: '3'
 services:
-  oidc-server-mock:
-    container_name: oidc-server-mock
-    image: ghcr.io/soluto/oidc-server-mock:latest
-    ports:      
-      - '10154:80' # http port      
-      - '10156:443' # https port
+  consent:
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: https://+:443;http://+:80
-      ASPNETCORE_Kestrel__Certificates__Default__Password: oidc-server-mock-pwd
-      ASPNETCORE_Kestrel__Certificates__Default__Path: /https/aspnetapp.pfx
-      SERVER_OPTIONS_PATH: /config/server-options.json
-      LOGIN_OPTIONS_INLINE: |
-        {
-          "AllowRememberLogin": false
-        }
-      LOGOUT_OPTIONS_INLINE: |
-        {
-          "AutomaticRedirectAfterSignOut": true
-        }
-      API_RESOURCES_PATH: /config/api-resources.yaml      
-      API_SCOPES_INLINE: |
-        - Name: some-app-scope-1
-          UserClaims:
-            - some-app-scope-1-custom-user-claim
-        - Name: some-app-scope-2      
-      USERS_CONFIGURATION_PATH: /config/users.yaml
-      CLIENTS_CONFIGURATION_PATH: /config/clients.json
-      IDENTITY_RESOURCES_PATH: /config/identity-resources.json
-      ASPNET_SERVICES_OPTIONS_INLINE: |
-        { 
-          "BasePath": "/some-base-path",
-          "ForwardedHeadersOptions": { 
-            "ForwardedHeaders" : "All"
-          }
-        }
-    volumes:
-      - ./e2e/config:/config:ro
-      - ./e2e/https:/https:ro
+      - HYDRA_ADMIN_URL=http://hydra:4445
+    image: ahmednfwela/hydra-auto-login:latest
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+  hydra:
+    image: oryd/hydra:v2.3.0
+    ports:
+      - '4444:4444'
+      - '4445:4445'
+    command: ["serve", "all", "--dev"]    
+    pull_policy: missing
+    healthcheck:
+      test: "printf 'GET /health/alive HTTP/1.1\r\nHost: localhost\r\n\r\n' | nc localhost 4444 | sed -n '1,/^\r$/d; p' | grep -q '^{\"status\":\"ok\"}$'"
+      interval: 5s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    environment:
+      DSN: memory
+      URLS_SELF_ISSUER: http://localhost:4444
+      URLS_LOGIN: http://localhost:3000/login
+      URLS_CONSENT: http://localhost:3000/consent
+      SECRETS_SYSTEM: some-super-secret
+      LOG_LEAK_SENSITIVE_VALUES: 'true'
+
+  hydra-client:
+    image: oryd/hydra:v2.3.0
+    depends_on:
+      hydra:
+        condition: service_healthy
+    command:
+      [
+        "create", "client",
+        "--endpoint", "http://hydra:4445",
+        "--format", "json",
+        "--id", "integration-client",
+        "--secret", "integration-client-secret",
+        "--grant-type", "authorization_code",
+        "--token-endpoint-auth-method", "none",
+        "--response-type", "code",
+        "--skip-consent",
+        "--skip-logout-consent",
+        "--scope", "openid,profile,email,offline_access",
+        "--redirect-uri", "http://localhost:22433/redirect.html,http://127.0.0.1,http://localhost,com.bdayadev.oidc.example:/oauth2redirect",
+        "--post-logout-callback", "http://localhost:22433/redirect.html,http://127.0.0.1,http://localhost,com.bdayadev.oidc.example:/endsessionredirect",
+        "--request-uri", "http://localhost:22433/redirect.html",
+        "--skip-tls-verify"
+      ]
+    entrypoint: ["hydra"]
+    restart: "no"

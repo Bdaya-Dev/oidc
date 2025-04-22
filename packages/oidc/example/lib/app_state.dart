@@ -18,7 +18,7 @@ import 'package:oidc_example/mock.dart';
 //in a production app (since you can't test it).
 
 const kIsCI = bool.fromEnvironment('CI');
-final http.Client client = kIsCI ? http.MockClient(ciHandler) : http.Client();
+
 Future<http.Response> ciHandler(http.Request request) async {
   // intercept requests to duende to avoid flaky tests.
   switch (request) {
@@ -53,7 +53,7 @@ Future<http.Response> ciHandler(http.Request request) async {
 final exampleLogger = Logger('oidc.example');
 
 /// Gets the current manager used in the example.
-OidcUserManager currentManager = duendeManager;
+OidcUserManager currentManager = kIsCI ? hydraManager : duendeManager;
 
 final duendeManager = OidcUserManager.lazy(
   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
@@ -65,7 +65,7 @@ final duendeManager = OidcUserManager.lazy(
     clientId: 'interactive.public.short',
   ),
   store: OidcDefaultStore(),
-  httpClient: client,
+  httpClient: null,
   // keyStore: JsonWebKeyStore(),
   settings: OidcUserManagerSettings(
     frontChannelLogoutUri: Uri(path: 'redirect.html'),
@@ -107,6 +107,68 @@ final duendeManager = OidcUserManager.lazy(
                 : Uri(),
   ),
 );
+
+const hydraIssuer = 'http://localhost:4444';
+const androidHydraIssuer = 'http://10.0.2.2:4444';
+// Headless Hydra manager for CI
+final hydraManager = OidcUserManager.lazy(
+  discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
+    Uri.parse(
+      !kIsWeb
+          ? Platform.isAndroid
+              ? androidHydraIssuer
+              : hydraIssuer
+          : hydraIssuer,
+    ),
+  ),
+  clientCredentials: const OidcClientAuthentication.none(
+    clientId: 'integration-client',
+  ),
+  store: OidcDefaultStore(),
+  httpClient: null,
+  settings: OidcUserManagerSettings(
+    frontChannelLogoutUri: Uri(path: 'redirect.html'),
+    uiLocales: ['ar'],
+    refreshBefore: (token) {
+      return const Duration(seconds: 1);
+    },
+    strictJwtVerification: true,
+    // set to true to enable offline auth
+    supportOfflineAuth: false,
+    // scopes supported by the provider and needed by the client.
+    scope: ['openid', 'profile', 'email', 'offline_access'],
+    // Make ory hydra auto login
+    extraAuthenticationParameters: {'auto_login': 'true'},
+    postLogoutRedirectUri: kIsWeb
+        ? Uri.parse('http://localhost:22433/redirect.html')
+        : Platform.isAndroid || Platform.isIOS || Platform.isMacOS
+            ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
+            : Platform.isWindows || Platform.isLinux
+                ? Uri.parse('http://127.0.0.1:0')
+                : null,
+    redirectUri: kIsWeb
+        // this url must be an actual html page.
+        // see the file in /web/redirect.html for an example.
+        //
+        // for debugging in flutter, you must run this app with --web-port 22433
+        ? Uri.parse('http://localhost:22433/redirect.html')
+        : Platform.isIOS || Platform.isMacOS || Platform.isAndroid
+            // scheme: reverse domain name notation of your package name.
+            // path: anything.
+            ? Uri.parse('com.bdayadev.oidc.example:/oauth2redirect')
+            : Platform.isWindows || Platform.isLinux
+                // using port 0 means that we don't care which port is used,
+                // and a random unused port will be assigned.
+                //
+                // this is safer than passing a port yourself.
+                //
+                // note that you can also pass a path like /redirect,
+                // but it's completely optional.
+                ? Uri.parse('http://127.0.0.1:0')
+                : Uri(),
+  ),
+);
+
 // final certificationManager = OidcUserManager.lazy(
 //   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
 //     Uri.parse('https://www.certification.openid.net/test/a/oidc_dart'),

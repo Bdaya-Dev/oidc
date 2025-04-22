@@ -21,3 +21,8 @@ runs:
     - name: Remove dart_test.yaml Files
       run: dart run melos run remove_dart_test_yaml
       shell: bash
+
+    - name: Start Ory Hydra
+      run: |
+        docker-compose -f docker-compose.yaml up -d
+      shell: bash

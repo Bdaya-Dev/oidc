@@ -902,3 +902,73 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
               ?.map((e) => e as String)
               .toList(),
     );
+
+Map<String, dynamic> _$OidcProviderMetadataToJson(
+        OidcProviderMetadata instance) =>
+    <String, dynamic>{
+      'issuer': instance.issuer?.toString(),
+      'authorization_endpoint': instance.authorizationEndpoint?.toString(),
+      'token_endpoint': instance.tokenEndpoint?.toString(),
+      'userinfo_endpoint': instance.userinfoEndpoint?.toString(),
+      'jwks_uri': instance.jwksUri?.toString(),
+      'registration_endpoint': instance.registrationEndpoint?.toString(),
+      'scopes_supported': instance.scopesSupported,
+      'response_types_supported': instance.responseTypesSupported,
+      'response_modes_supported': instance.responseModesSupported,
+      'grant_types_supported': instance.grantTypesSupported,
+      'acr_values_supported': instance.acrValuesSupported,
+      'subject_types_supported': instance.subjectTypesSupported,
+      'id_token_signing_alg_values_supported':
+          instance.idTokenSigningAlgValuesSupported,
+      'id_token_encryption_alg_values_supported':
+          instance.idTokenEncryptionAlgValuesSupported,
+      'id_token_encryption_enc_values_supported':
+          instance.idTokenEncryptionEncValuesSupported,
+      'userinfo_signing_alg_values_supported':
+          instance.userinfoSigningAlgValuesSupported,
+      'userinfo_encryption_alg_values_supported':
+          instance.userinfoEncryptionAlgValuesSupported,
+      'userinfo_encryption_enc_values_supported':
+          instance.userinfoEncryptionEncValuesSupported,
+      'request_object_signing_alg_values_supported':
+          instance.requestObjectSigningAlgValuesSupported,
+      'request_object_encryption_alg_values_supported':
+          instance.requestObjectEncryptionAlgValuesSupported,
+      'request_object_encryption_enc_values_supported':
+          instance.requestObjectEncryptionEncValuesSupported,
+      'token_endpoint_auth_methods_supported':
+          instance.tokenEndpointAuthMethodsSupported,
+      'token_endpoint_auth_signing_alg_values_supported':
+          instance.tokenEndpointAuthSigningAlgValuesSupported,
+      'display_values_supported': instance.displayValuesSupported,
+      'claim_types_supported': instance.claimTypesSupported,
+      'claims_supported': instance.claimsSupported,
+      'service_documentation': instance.serviceDocumentation?.toString(),
+      'claims_locales_supported': instance.claimsLocalesSupported,
+      'ui_locales_supported': instance.uiLocalesSupported,
+      'claims_parameter_supported': instance.claimsParameterSupported,
+      'request_parameter_supported': instance.requestParameterSupported,
+      'request_uri_parameter_supported': instance.requestUriParameterSupported,
+      'require_request_uri_registration':
+          instance.requireRequestUriRegistration,
+      'op_policy_uri': instance.opPolicyUri?.toString(),
+      'op_tos_uri': instance.opTosUri?.toString(),
+      'check_session_iframe': instance.checkSessionIframe?.toString(),
+      'end_session_endpoint': instance.endSessionEndpoint?.toString(),
+      'revocation_endpoint': instance.revocationEndpoint?.toString(),
+      'revocation_endpoint_auth_methods_supported':
+          instance.revocationEndpointAuthMethodsSupported,
+      'revocation_endpoint_auth_signing_alg_values_supported':
+          instance.revocationEndpointAuthSigningAlgValuesSupported,
+      'introspection_endpoint': instance.introspectionEndpoint?.toString(),
+      'introspection_endpoint_auth_methods_supported':
+          instance.introspectionEndpointAuthMethodsSupported,
+      'introspection_endpoint_auth_signing_alg_values_supported':
+          instance.introspectionEndpointAuthSigningAlgValuesSupported,
+      'code_challenge_methods_supported':
+          instance.codeChallengeMethodsSupported,
+      'pushed_authorization_request_endpoint':
+          instance.pushedAuthorizationRequestEndpoint?.toString(),
+      'require_pushed_authorization_requests':
+          instance.requirePushedAuthorizationRequests,
+    };
