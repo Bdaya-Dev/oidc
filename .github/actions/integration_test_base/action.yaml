@@ -21,8 +21,6 @@ runs:
     - name: Remove dart_test.yaml Files
       run: dart run melos run remove_dart_test_yaml
       shell: bash
-    - name: Docker Setup Docker
-      uses: docker/setup-docker-action@v4.3.0
     - name: Create Docker network
       run: docker network create hydra-network
       shell: bash
@@ -44,6 +42,9 @@ runs:
           fi
           echo "⏳ waiting for hydra…"; sleep 5
         done
+    - name: Print discovery document
+      shell: bash
+      run: curl http://localhost:4446/.well-known/openid-configuration
     - name: Create Hydra client
       shell: bash
       run: |
