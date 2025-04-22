@@ -21,6 +21,9 @@ jobs:
         env:
           HYDRA_ADMIN_URL: http://hydra:4445
     steps:
+
+      - run: docker ps -a
+        name: List all containers
       - name: Wait for Hydra → alive
         run: |
           for i in {1..10}; do
