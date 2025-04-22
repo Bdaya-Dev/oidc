@@ -3,7 +3,7 @@ services:
   consent:
     environment:
       - HYDRA_ADMIN_URL=http://hydra:4445
-    image: ahmednfwela/hydra-auto-login:latest
+    image: ahmednfwela/ory-hydra-auto-login:latest
     ports:
       - "3000:3000"
     restart: unless-stopped
