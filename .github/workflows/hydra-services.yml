@@ -13,14 +13,6 @@ jobs:
           SECRETS_SYSTEM: some-super-secret
           LOG_LEAK_SENSITIVE_VALUES: 'true'
           DEV: 'true'
-        options: >-
-          --health-cmd "printf 'GET /health/alive HTTP/1.1\r\nHost: localhost\r\n\r\n' \
-                       | nc localhost 4444 \
-                       | sed -n '1,/\r$/d; p' \
-                       | grep -q '{"status":"ok"}$'" 
-          --health-interval 5s
-          --health-timeout  20s
-          --health-retries  3
 
       consent:
         image: ahmednfwela/ory-hydra-auto-login:latest
