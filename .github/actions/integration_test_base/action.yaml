@@ -22,7 +22,12 @@ runs:
       run: dart run melos run remove_dart_test_yaml
       shell: bash
 
+    - name: Set up Docker Compose
+      uses: docker/setup-compose-action@v1
+
     - name: Start Ory Hydra
-      uses: hoverkraft-tech/compose-action@v2.2.0
-      with:
-        compose-file: "./docker-compose.yaml"
+      run: docker compose up -d
+      shell: bash
+      # uses: hoverkraft-tech/compose-action@v2.2.0
+      # with:
+      #   compose-file: "./docker-compose.yaml"
