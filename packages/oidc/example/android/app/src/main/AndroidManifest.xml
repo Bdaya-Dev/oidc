@@ -6,7 +6,8 @@
     android:name="${applicationName}"
     android:icon="@mipmap/ic_launcher"
     android:fullBackupContent="@xml/backup_rules"
-    android:dataExtractionRules="@xml/data_extraction_rules">
+    android:dataExtractionRules="@xml/data_extraction_rules"
+    android:networkSecurityConfig="@xml/network_security_config">
 
     <activity
       android:name="io.flutter.embedding.android.FlutterActivity"

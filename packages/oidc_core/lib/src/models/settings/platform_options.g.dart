@@ -65,7 +65,8 @@ OidcPlatformSpecificOptions_AppAuth_IosMacos
             Map<String, dynamic> json) =>
         OidcPlatformSpecificOptions_AppAuth_IosMacos(
           externalUserAgent: $enumDecodeNullable(
-                  _$ExternalUserAgentEnumMap, json['externalUserAgent']) ??
+                  _$OidcAppAuthExternalUserAgentEnumMap,
+                  json['externalUserAgent']) ??
               OidcAppAuthExternalUserAgent.asWebAuthenticationSession,
         );
 
@@ -73,10 +74,10 @@ Map<String, dynamic> _$OidcPlatformSpecificOptions_AppAuth_IosMacosToJson(
         OidcPlatformSpecificOptions_AppAuth_IosMacos instance) =>
     <String, dynamic>{
       'externalUserAgent':
-          _$ExternalUserAgentEnumMap[instance.externalUserAgent]!,
+          _$OidcAppAuthExternalUserAgentEnumMap[instance.externalUserAgent]!,
     };
 
-const _$ExternalUserAgentEnumMap = {
+const _$OidcAppAuthExternalUserAgentEnumMap = {
   OidcAppAuthExternalUserAgent.asWebAuthenticationSession:
       'asWebAuthenticationSession',
   OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession:

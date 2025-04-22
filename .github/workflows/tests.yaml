@@ -149,6 +149,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v4.3.0
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
         with:
@@ -234,6 +236,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+      - name: Set up Docker          
+        uses: docker/setup-docker-action@v4.3.0
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Run flutter precache

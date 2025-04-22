@@ -11,7 +11,6 @@ part 'resp.g.dart';
 ///
 /// see https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml
 @JsonSerializable(
-  createToJson: false,
   converters: OidcInternalUtilities.commonConverters,
   constructor: '_',
 )
@@ -70,6 +69,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   ///
   factory OidcProviderMetadata.fromJson(Map<String, dynamic> json) =>
       _$OidcProviderMetadataFromJson(json);
+  Map<String, dynamic> toJson() => _$OidcProviderMetadataToJson(this);
 
   /// URL that the OP asserts as its OpenIdProviderMetadata Identifier.
   @JsonKey(name: OidcConstants_ProviderMetadata.issuer)

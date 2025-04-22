@@ -45,7 +45,7 @@ abstract class OidcUserManagerBase {
   final OidcClientAuthentication clientCredentials;
 
   /// The http client to use when sending requests
-  final http.Client? httpClient;
+  http.Client? httpClient;
 
   /// The store responsible for setting/getting cached values.
   final OidcStore store;
