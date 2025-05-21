@@ -64,6 +64,20 @@ final newUser = await manager.loginAuthorizationCodeFlow();
 await manager.logout();
 ```
 
+### PKCE implementation 🛠️
+```dart
+// using a predefined `OidcUserManager` as "manager"
+
+final sha256 = OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256;
+
+final discoveryDocument = manager.discoveryDocument
+  .copyWith(codeChallengeMethodsSupported: [sha256]);
+
+final newUser = await manager.loginAuthorizationCodeFlow(
+  discoveryDocumentOverride: discoveryDocument,
+);
+```
+
 ## Features 📚
 
 - 🧩 **Cross platform**: most features work on all platforms that can run flutter (Android, Ios, macos, web, windows, linux).
