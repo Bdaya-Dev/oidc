@@ -240,21 +240,38 @@ abstract class OidcUserManagerBase {
     required String password,
     List<String>? scopeOverride,
     OidcProviderMetadata? discoveryDocumentOverride,
+    Map<String, dynamic>? extraBodyFields,
   }) async {
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
-    final tokenResp = await OidcEndpoints.token(
-      tokenEndpoint: discoveryDocument.tokenEndpoint!,
-      request: OidcTokenRequest.password(
-        password: password,
-        username: username,
-        scope: scopeOverride ?? settings.scope,
-        clientId: clientCredentials.clientId,
-        extra: settings.extraTokenParameters,
+
+    final tokenResp = await (settings.hooks?.token).execute(
+      request: OidcTokenHookRequest(
+        metadata: discoveryDocument,
+        tokenEndpoint: discoveryDocument.tokenEndpoint!,
+        request: OidcTokenRequest.password(
+          username: username,
+          password: password,
+          scope: scopeOverride ?? settings.scope,
+          clientId: clientCredentials.clientId,
+          extra: settings.extraTokenParameters,
+        ),
+        credentials: clientCredentials,
+        headers: settings.extraTokenHeaders,
+        client: httpClient,
+        extraBodyFields: extraBodyFields,
+        options: settings.options,
       ),
-      headers: settings.extraTokenHeaders,
-      client: httpClient,
-      credentials: clientCredentials,
+      defaultExecution: (hookRequest) {
+        return OidcEndpoints.token(
+          tokenEndpoint: hookRequest.tokenEndpoint,
+          credentials: hookRequest.credentials,
+          headers: hookRequest.headers,
+          request: hookRequest.request,
+          client: hookRequest.client,
+          extraBodyFields: hookRequest.extraBodyFields,
+        );
+      },
     );
 
     return createUserFromToken(
@@ -279,8 +296,22 @@ abstract class OidcUserManagerBase {
     required Map<String, dynamic> prep,
   }) async {
     try {
-      final response =
-          await getAuthorizationResponse(metadata, request, options, prep);
+      final response = await (settings.hooks?.authorization).execute(
+        defaultExecution: (request) {
+          return getAuthorizationResponse(
+            request.metadata,
+            request.request,
+            request.options,
+            request.preparationResult,
+          );
+        },
+        request: OidcAuthorizationHookRequest(
+          metadata: metadata,
+          request: request,
+          options: options,
+          preparationResult: prep,
+        ),
+      );
       if (response == null) {
         return null;
       }
@@ -560,19 +591,34 @@ abstract class OidcUserManagerBase {
         );
       }
       //request the token.
-      final tokenResp = await OidcEndpoints.token(
-        tokenEndpoint: tokenEndpoint,
-        credentials: clientCredentials,
-        headers: stateData.extraTokenHeaders,
-        request: OidcTokenRequest.authorizationCode(
-          redirectUri: response.redirectUri ?? stateData.redirectUri,
-          codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
-          extra: stateData.extraTokenParams,
-          clientId: clientCredentials.clientId,
-          code: code,
+      final tokenResp = await (settings.hooks?.token).execute(
+        request: OidcTokenHookRequest(
+          metadata: metadata,
+          tokenEndpoint: tokenEndpoint,
+          credentials: clientCredentials,
+          headers: stateData.extraTokenHeaders,
+          request: OidcTokenRequest.authorizationCode(
+            redirectUri: response.redirectUri ?? stateData.redirectUri,
+            codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
+            extra: stateData.extraTokenParams,
+            clientId: clientCredentials.clientId,
+            code: code,
+          ),
+          client: httpClient,
+          options: settings.options,
         ),
-        client: httpClient,
+        defaultExecution: (hookRequest) {
+          return OidcEndpoints.token(
+            tokenEndpoint: hookRequest.tokenEndpoint,
+            credentials: hookRequest.credentials,
+            headers: hookRequest.headers,
+            request: hookRequest.request,
+            client: hookRequest.client,
+            extraBodyFields: hookRequest.extraBodyFields,
+          );
+        },
       );
+
       final token = OidcToken.fromResponse(
         tokenResp,
         overrideExpiresIn: settings.getExpiresIn?.call(tokenResp),
@@ -734,6 +780,7 @@ abstract class OidcUserManagerBase {
   Future<OidcUser?> refreshToken({
     String? overrideRefreshToken,
     OidcProviderMetadata? discoveryDocumentOverride,
+    Map<String, dynamic>? extraBodyFields,
   }) async {
     ensureInit();
     final discoveryDocument =
@@ -751,19 +798,35 @@ abstract class OidcUserManagerBase {
       return null;
     }
 
-    final tokenResponse = await OidcEndpoints.token(
-      tokenEndpoint: discoveryDocument.tokenEndpoint!,
-      credentials: clientCredentials,
-      client: httpClient,
-      headers: settings.extraTokenHeaders,
-      request: OidcTokenRequest.refreshToken(
-        refreshToken: refreshToken,
-        clientId: clientCredentials.clientId,
-        clientSecret: clientCredentials.clientSecret,
-        extra: settings.extraTokenParameters,
-        scope: settings.scope,
+    final tokenResponse = await (settings.hooks?.token).execute(
+      request: OidcTokenHookRequest(
+        metadata: discoveryDocument,
+        tokenEndpoint: discoveryDocument.tokenEndpoint!,
+        request: OidcTokenRequest.refreshToken(
+          refreshToken: refreshToken,
+          clientId: clientCredentials.clientId,
+          clientSecret: clientCredentials.clientSecret,
+          extra: settings.extraTokenParameters,
+          scope: settings.scope,
+        ),
+        credentials: clientCredentials,
+        headers: settings.extraTokenHeaders,
+        extraBodyFields: extraBodyFields,
+        client: httpClient,
+        options: settings.options,
       ),
+      defaultExecution: (tokenHookRequest) async {
+        return OidcEndpoints.token(
+          tokenEndpoint: tokenHookRequest.tokenEndpoint,
+          credentials: tokenHookRequest.credentials,
+          client: tokenHookRequest.client,
+          headers: tokenHookRequest.headers,
+          request: tokenHookRequest.request,
+          extraBodyFields: tokenHookRequest.extraBodyFields,
+        );
+      },
     );
+
     return createUserFromToken(
       token: OidcToken.fromResponse(
         tokenResponse,
@@ -798,7 +861,7 @@ abstract class OidcUserManagerBase {
     eventsController.add(
       OidcTokenExpiringEvent.now(currentToken: event),
     );
-
+    final discoveryDocument = this.discoveryDocument;
     if (!discoveryDocument.grantTypesSupportedOrDefault
         .contains(OidcConstants_GrantType.refreshToken)) {
       //Server doesn't support refresh_token grant.
@@ -812,18 +875,32 @@ abstract class OidcUserManagerBase {
     OidcUser? newUser;
     //try getting a new token.
     try {
-      final tokenResponse = await OidcEndpoints.token(
-        tokenEndpoint: discoveryDocument.tokenEndpoint!,
-        credentials: clientCredentials,
-        client: httpClient,
-        headers: settings.extraTokenHeaders,
-        request: OidcTokenRequest.refreshToken(
-          refreshToken: refreshToken,
-          clientId: clientCredentials.clientId,
-          clientSecret: clientCredentials.clientSecret,
-          extra: settings.extraTokenParameters,
-          scope: settings.scope,
+      final tokenResponse = await (settings.hooks?.token).execute(
+        request: OidcTokenHookRequest(
+          metadata: discoveryDocument,
+          tokenEndpoint: discoveryDocument.tokenEndpoint!,
+          credentials: clientCredentials,
+          client: httpClient,
+          headers: settings.extraTokenHeaders,
+          request: OidcTokenRequest.refreshToken(
+            refreshToken: refreshToken,
+            clientId: clientCredentials.clientId,
+            clientSecret: clientCredentials.clientSecret,
+            extra: settings.extraTokenParameters,
+            scope: settings.scope,
+          ),
+          options: settings.options,
         ),
+        defaultExecution: (hookRequest) {
+          return OidcEndpoints.token(
+            tokenEndpoint: hookRequest.tokenEndpoint,
+            credentials: hookRequest.credentials,
+            client: hookRequest.client,
+            headers: hookRequest.headers,
+            request: hookRequest.request,
+            extraBodyFields: hookRequest.extraBodyFields,
+          );
+        },
       );
       newUser = await createUserFromToken(
         token: OidcToken.fromResponse(

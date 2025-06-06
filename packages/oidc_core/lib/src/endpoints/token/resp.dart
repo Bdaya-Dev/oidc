@@ -11,7 +11,7 @@ part 'resp.g.dart';
   constructor: '_',
 )
 class OidcTokenResponse extends JsonBasedResponse {
-  const OidcTokenResponse._({
+  OidcTokenResponse({
     required super.src,
     this.tokenType,
     this.accessToken,
@@ -29,13 +29,13 @@ class OidcTokenResponse extends JsonBasedResponse {
     name: OidcConstants_AuthParameters.scope,
     fromJson: OidcInternalUtilities.splitSpaceDelimitedStringNullable,
   )
-  final List<String>? scope;
+  List<String>? scope;
 
   /// OPTIONAL.
   ///
   /// The access token issued by the authorization server.
   @JsonKey(name: OidcConstants_AuthParameters.accessToken)
-  final String? accessToken;
+  String? accessToken;
 
   /// REQUIRED.
   ///
@@ -43,13 +43,13 @@ class OidcTokenResponse extends JsonBasedResponse {
   ///
   /// Value is case insensitive.
   @JsonKey(name: OidcConstants_AuthParameters.tokenType)
-  final String? tokenType;
+  String? tokenType;
 
   /// REQUIRED, in the OIDC spec.
   ///
   /// ID Token value associated with the authenticated session.
   @JsonKey(name: OidcConstants_AuthParameters.idToken)
-  final String? idToken;
+  String? idToken;
 
   bool get isOidc => idToken?.isNotEmpty ?? false;
 
@@ -66,16 +66,16 @@ class OidcTokenResponse extends JsonBasedResponse {
     name: OidcConstants_AuthParameters.expiresIn,
     fromJson: OidcInternalUtilities.durationFromJson,
   )
-  final Duration? expiresIn;
+  Duration? expiresIn;
 
   /// OPTIONAL.
   ///
   /// The refresh token, which can be used to obtain new access tokens based on
   /// the grant passed in the corresponding token request.
   @JsonKey(name: OidcConstants_AuthParameters.refreshToken)
-  final String? refreshToken;
+  String? refreshToken;
 
   /// The session state used in the session management spec.
   @JsonKey(name: OidcConstants_AuthParameters.sessionState)
-  final String? sessionState;
+  String? sessionState;
 }

@@ -54,13 +54,13 @@ class OidcToken {
     fromJson: OidcInternalUtilities.splitSpaceDelimitedStringNullable,
     toJson: OidcInternalUtilities.joinSpaceDelimitedList,
   )
-  final List<String>? scope;
+  List<String>? scope;
 
   /// OPTIONAL.
   ///
   /// The access token issued by the authorization server.
   @JsonKey(name: OidcConstants_AuthParameters.accessToken)
-  final String? accessToken;
+  String? accessToken;
 
   /// REQUIRED.
   ///
@@ -68,13 +68,13 @@ class OidcToken {
   ///
   /// Value is case insensitive.
   @JsonKey(name: OidcConstants_AuthParameters.tokenType)
-  final String? tokenType;
+  String? tokenType;
 
   /// REQUIRED, in the OIDC spec.
   ///
   /// ID Token value associated with the authenticated session.
   @JsonKey(name: OidcConstants_AuthParameters.idToken)
-  final String? idToken;
+  String? idToken;
 
   bool get isOidc => idToken?.isNotEmpty ?? false;
 
@@ -92,14 +92,14 @@ class OidcToken {
     fromJson: OidcInternalUtilities.durationFromJson,
     toJson: OidcInternalUtilities.durationToJson,
   )
-  final Duration? expiresIn;
+  Duration? expiresIn;
 
   /// OPTIONAL.
   ///
   /// The refresh token, which can be used to obtain new access tokens based on
   /// the grant passed in the corresponding token request.
   @JsonKey(name: OidcConstants_AuthParameters.refreshToken)
-  final String? refreshToken;
+  String? refreshToken;
 
   /// Store when this token was originally created.
   @JsonKey(
@@ -108,18 +108,18 @@ class OidcToken {
     toJson: OidcInternalUtilities.dateTimeToJson,
     disallowNullValue: true,
   )
-  final DateTime creationTime;
+  DateTime creationTime;
 
   /// The received session state.
   @JsonKey(name: OidcConstants_AuthParameters.sessionState)
-  final String? sessionState;
+  String? sessionState;
 
   @JsonKey(
     includeFromJson: true,
     includeToJson: false,
     readValue: _readExtra,
   )
-  final Map<String, dynamic>? extra;
+  Map<String, dynamic>? extra;
 
   Duration? calculateExpiresInFromNow({
     DateTime? now,

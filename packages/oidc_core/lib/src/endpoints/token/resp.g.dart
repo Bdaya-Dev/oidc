@@ -7,7 +7,7 @@ part of 'resp.dart';
 // **************************************************************************
 
 OidcTokenResponse _$OidcTokenResponseFromJson(Map<String, dynamic> json) =>
-    OidcTokenResponse._(
+    OidcTokenResponse(
       src: readSrcMap(json, '') as Map<String, dynamic>,
       tokenType: json['token_type'] as String?,
       accessToken: json['access_token'] as String?,
