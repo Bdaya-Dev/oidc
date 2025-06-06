@@ -119,11 +119,11 @@ class OidcUserManagerSettings {
   /// overrides a token's expires_in value.
   final Duration? Function(OidcTokenResponse tokenResponse)? getExpiresIn;
 
-  /// pass this function to control how and idToken is fetched from a
+  /// pass this function to control how an `id_token` is fetched from a
   /// token response.
   ///
-  /// This can be used to trick the user manager into using a JWT access_token
-  /// as an id_token for example.
+  /// This can be used to trick the user manager into using a JWT `access_token`
+  /// as an `id_token` for example.
   final Future<String?> Function(OidcToken token)? getIdToken;
 
   /// platform-specific options.

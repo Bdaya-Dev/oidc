@@ -104,6 +104,7 @@ settings to control the behavior of the instance.
 - `Uri redirectUri`: the redirect uri that was configured with the provider.
 - `Uri? postLogoutRedirectUri`: the post logout redirect uri that was configured with the provider.
 - `Uri? frontChannelLogoutUri`: the uri of the front channel logout flow. this Uri MUST be registered with the OP first. the OP will call this Uri when it wants to logout the user.
+- `Future<String?> Function(OidcToken token) getIdToken`: pass this function to control how an idToken is fetched from a token response. This can be used to trick the user manager into using a JWT `access_token` as an `id_token` for example. 
 - `frontChannelRequestListeningOptions`: the options to use when listening for front channel logout requests.
     ```dart
     frontChannelRequestListeningOptions: OidcFrontChannelRequestListeningOptions(
@@ -178,6 +179,70 @@ settings to control the behavior of the instance.
 > you can also pass `popupWidth` and `popupHeight` to control the popup window dimensions.
         - `String broadcastChannel`: The broadcast channel to use when receiving messages from the browser; defaults to: `oidc_flutter_web/redirect`
 > Note: This MUST be the same as the one in your  [redirect.html](oidc-getting-started.md/#web) page.
+
+##### Hooks
+
+`OidcUserManagerHooks? hooks`: a set of hooks that allow you to customize the behavior of the user manager.
+
+- All hooks inherit `OidcHookMixin<TRequest, TResponse>`, which is just a marker mixin.
+- By default, we support the following hooks:
+    - `token`: to hook into the token request and response.
+    - `authorization`: to hook into the authorization request and response.
+
+To define a hook you can either extend `OidcHookBase`, or use the `OidcHook` class directly.
+
+###### Example: 
+
+To remove the scope from the `refresh_token` request, you can define a hook like this:
+
+```dart
+OidcUserManagerSettings(
+  hooks: OidcUserManagerHooks(
+    token:  OidcHook(
+      modifyRequest: (request) {
+        if (request.request.grantType == 'refresh_token') {
+          // Remove the scope from refresh_token requests
+          request.request.scope = null;
+        }
+        return Future.value(request);
+      },
+    ),
+  ),
+),
+```
+
+You can also group multiple hooks together, for example:
+
+```dart
+hooks: OidcUserManagerHooks(
+  token: OidcHookGroup(
+    // Only modifyRequest, modifyResponse hooks can be chained.
+    hooks: [
+      OidcHook(
+        modifyResponse: (response) {
+          logger.info(
+            'Modifying token response: ${response.src}',
+          );
+          return Future.value(response);
+        },
+      ),
+    ],
+    // Only a single executionHook can be defined for the group.
+    executionHook: OidcHook(
+      modifyExecution: (request, defaultExecution) async {
+        logger.info(
+          'Executing token request: ${request.request.toMap()}',
+        );
+        final response = await defaultExecution(request);
+        logger.info(
+          'Executed token request: ${response.src}',
+        );
+        return response;
+      },
+    ),
+  ),
+),
+```
 
 ##### Default Auth request parameters
 
