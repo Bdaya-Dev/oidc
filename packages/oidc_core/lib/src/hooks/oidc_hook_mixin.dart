@@ -1,0 +1,1 @@
+mixin OidcHookMixin<TRequest, TResponse> {}
