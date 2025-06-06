@@ -35,6 +35,7 @@ class OidcUserManagerSettings {
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
     this.supportOfflineAuth = false,
+    this.hooks,
   });
 
   /// The default scopes
@@ -127,6 +128,9 @@ class OidcUserManagerSettings {
 
   /// platform-specific options.
   final OidcPlatformSpecificOptions? options;
+
+  /// Customized hooks to modify the user manager behavior.
+  final OidcUserManagerHooks? hooks;
 }
 
 ///
