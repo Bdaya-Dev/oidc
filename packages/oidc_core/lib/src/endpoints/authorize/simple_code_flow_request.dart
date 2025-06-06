@@ -30,56 +30,56 @@ class OidcSimpleAuthorizationCodeFlowRequest {
   /// when the response is received.
   ///
   /// it MUST be json serializable.
-  final Map<String, dynamic>? options;
+  Map<String, dynamic>? options;
 
   /// The original uri to go back to after the authorization succeeds,
   /// if null, defaults to [redirectUri].
-  final Uri? originalUri;
+  Uri? originalUri;
 
   /// see [OidcAuthorizeState.extraTokenParams]
-  final Map<String, dynamic>? extraTokenParameters;
+  Map<String, dynamic>? extraTokenParameters;
 
   /// see [OidcAuthorizeState.extraTokenHeaders]
-  final Map<String, String>? extraTokenHeaders;
+  Map<String, String>? extraTokenHeaders;
 
   /// Extra state data that will be persisted and roundtripped when the response
   /// is received.
   ///
   /// it MUST be json serializable.
-  final dynamic extraStateData;
+  dynamic extraStateData;
 
   /// see [OidcAuthorizeRequest.scope].
-  final List<String> scope;
+  List<String> scope;
 
   /// see [OidcAuthorizeRequest.clientId].
-  final String clientId;
+  String clientId;
 
   /// see [OidcAuthorizeRequest.redirectUri].
-  final Uri redirectUri;
+  Uri redirectUri;
 
   /// see [OidcAuthorizeRequest.display].
-  final String? display;
+  String? display;
 
   /// see [OidcAuthorizeRequest.prompt].
-  final List<String>? prompt;
+  List<String>? prompt;
 
   /// see [OidcAuthorizeRequest.maxAge].
-  final Duration? maxAge;
+  Duration? maxAge;
 
   /// see [OidcAuthorizeRequest.uiLocales].
-  final List<String>? uiLocales;
+  List<String>? uiLocales;
 
   /// see [OidcAuthorizeRequest.idTokenHint].
-  final String? idTokenHint;
+  String? idTokenHint;
 
   /// see [OidcAuthorizeRequest.loginHint].
-  final String? loginHint;
+  String? loginHint;
 
   /// see [OidcAuthorizeRequest.acrValues].
-  final List<String>? acrValues;
+  List<String>? acrValues;
 
   /// see [OidcAuthorizeRequest.extra].
-  final Map<String, dynamic>? extraParameters;
+  Map<String, dynamic>? extraParameters;
 }
 
 /// The result of processing an [OidcSimpleAuthorizationCodeFlowRequest]

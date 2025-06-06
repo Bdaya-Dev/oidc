@@ -153,62 +153,62 @@ class OidcTokenRequest extends JsonBasedRequest {
         password = null;
 
   @JsonKey(name: OidcConstants_AuthParameters.grantType)
-  final String grantType;
+  String grantType;
 
   /// REQUIRED, if using the Authorization Code Flow.
   ///
   /// This is the code you received from the /authorize response
   @JsonKey(name: OidcConstants_AuthParameters.code)
-  final String? code;
+  String? code;
 
   /// REQUIRED if client secret (or any other Client Authentication mechanism)
   /// is not available.
   @JsonKey(name: OidcConstants_AuthParameters.clientId)
-  final String? clientId;
+  String? clientId;
 
   /// REQUIRED if client secret (or any other Client Authentication mechanism)
   /// is not available.
   @JsonKey(name: OidcConstants_AuthParameters.clientSecret)
-  final String? clientSecret;
+  String? clientSecret;
 
   /// REQUIRED, if using PKCE.
   ///
   /// Code verifier.
   @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
-  final String? codeVerifier;
+  String? codeVerifier;
 
   @JsonKey(name: OidcConstants_AuthParameters.username)
-  final String? username;
+  String? username;
   @JsonKey(name: OidcConstants_AuthParameters.password)
-  final String? password;
+  String? password;
   @JsonKey(name: OidcConstants_AuthParameters.assertion)
-  final String? assertion;
+  String? assertion;
 
   @JsonKey(name: OidcConstants_AuthParameters.audience)
-  final String? audience;
+  String? audience;
   @JsonKey(name: OidcConstants_AuthParameters.subjectTokenType)
-  final String? subjectTokenType;
+  String? subjectTokenType;
   @JsonKey(name: OidcConstants_AuthParameters.subjectToken)
-  final String? subjectToken;
+  String? subjectToken;
   @JsonKey(name: OidcConstants_AuthParameters.actorTokenType)
-  final String? actorTokenType;
+  String? actorTokenType;
   @JsonKey(name: OidcConstants_AuthParameters.actorToken)
-  final String? actorToken;
+  String? actorToken;
 
   @JsonKey(name: OidcConstants_AuthParameters.deviceCode)
-  final String? deviceCode;
+  String? deviceCode;
 
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
-  final Uri? redirectUri;
+  Uri? redirectUri;
 
   @JsonKey(name: OidcConstants_AuthParameters.refreshToken)
-  final String? refreshToken;
+  String? refreshToken;
 
   @JsonKey(
     name: OidcConstants_AuthParameters.scope,
     toJson: OidcInternalUtilities.joinSpaceDelimitedList,
   )
-  final List<String>? scope;
+  List<String>? scope;
 
   @override
   Map<String, dynamic> toMap() {

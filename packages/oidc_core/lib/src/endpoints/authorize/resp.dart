@@ -18,7 +18,7 @@ const _implicitWarning =
 )
 class OidcAuthorizeResponse extends JsonBasedResponse {
   ///
-  const OidcAuthorizeResponse._({
+  OidcAuthorizeResponse({
     required super.src,
     this.codeVerifier,
     this.redirectUri,
@@ -39,10 +39,10 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
       _$OidcAuthorizeResponseFromJson(src);
 
   @JsonKey(name: OidcConstants_AuthParameters.state)
-  final String? state;
+  String? state;
 
   @JsonKey(name: OidcConstants_AuthParameters.sessionState)
-  final String? sessionState;
+  String? sessionState;
 
   /// OPTIONAL.
   ///
@@ -52,7 +52,7 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   ///
   ///  See [RFC9207](https://www.rfc-editor.org/rfc/rfc9207.html) for additional details on when this parameter is necessary, and how the client can use it to prevent mixup attacks.
   @JsonKey(name: OidcConstants_AuthParameters.iss)
-  final Uri? iss;
+  Uri? iss;
 
   /// REQUIRED, if the request_type was code.
   ///
@@ -65,35 +65,35 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   ///
   /// The client MUST NOT use the authorization code
   @JsonKey(name: OidcConstants_AuthParameters.code)
-  final String? code;
+  String? code;
   @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
-  final String? codeVerifier;
+  String? codeVerifier;
   @JsonKey(name: OidcConstants_AuthParameters.nonce)
-  final String? nonce;
+  String? nonce;
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
-  final Uri? redirectUri;
+  Uri? redirectUri;
   @JsonKey(
     name: OidcConstants_AuthParameters.scope,
     fromJson: OidcInternalUtilities.splitSpaceDelimitedString,
   )
-  final List<String> scope;
+  List<String> scope;
 
   @Deprecated(_implicitWarning)
   @JsonKey(name: OidcConstants_AuthParameters.accessToken)
-  final String? accessToken;
+  String? accessToken;
 
   @Deprecated(_implicitWarning)
   @JsonKey(name: OidcConstants_AuthParameters.idToken)
-  final String? idToken;
+  String? idToken;
 
   @Deprecated(_implicitWarning)
   @JsonKey(name: OidcConstants_AuthParameters.tokenType)
-  final String? tokenType;
+  String? tokenType;
 
   @Deprecated(_implicitWarning)
   @JsonKey(
     name: OidcConstants_AuthParameters.expiresIn,
     readValue: OidcInternalUtilities.readDurationSeconds,
   )
-  final Duration? expiresIn;
+  Duration? expiresIn;
 }

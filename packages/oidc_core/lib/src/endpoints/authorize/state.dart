@@ -35,38 +35,38 @@ class OidcAuthorizeState extends OidcState {
       _$OidcAuthorizeStateFromJson(src);
 
   @JsonKey(name: OidcConstants_Store.extraTokenHeaders)
-  final Map<String, String>? extraTokenHeaders;
+  Map<String, String>? extraTokenHeaders;
 
   @JsonKey(name: OidcConstants_Store.extraTokenParams)
-  final Map<String, dynamic>? extraTokenParams;
+  Map<String, dynamic>? extraTokenParams;
 
   @JsonKey(name: OidcConstants_Store.options)
-  final Map<String, dynamic>? options;
+  Map<String, dynamic>? options;
 
   /// The same code_challenge that was used to obtain the authorization_code
   /// via PKCE.
   @JsonKey(name: OidcConstants_AuthParameters.codeChallenge)
-  final String? codeChallenge;
+  String? codeChallenge;
 
   /// The same code_verifier that was used to obtain the authorization_code
   /// via PKCE.
   @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
-  final String? codeVerifier;
+  String? codeVerifier;
 
   /// The redirectUri that was passed.
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)
-  final Uri redirectUri;
+  Uri redirectUri;
 
   @JsonKey(name: OidcConstants_AuthParameters.clientId)
-  final String clientId;
+  String clientId;
 
   /// The uri to go back to after the page in `redirectUri`
   /// processes the response.
   @JsonKey(name: OidcConstants_Store.originalUri)
-  final Uri? originalUri;
+  Uri? originalUri;
 
   @JsonKey(name: OidcConstants_AuthParameters.nonce)
-  final String nonce;
+  String nonce;
 
   @override
   Map<String, dynamic> toJson() => _$OidcAuthorizeStateToJson(this);
