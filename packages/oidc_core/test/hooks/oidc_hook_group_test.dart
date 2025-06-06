@@ -1,7 +1,6 @@
+import 'package:oidc_core/src/_exports.dart';
 import 'package:oidc_core/src/hooks/oidc_hook_mixin.dart';
 import 'package:test/test.dart';
-import 'package:oidc_core/src/hooks/oidc_hook_group.dart';
-import 'package:oidc_core/src/hooks/oidc_request_response_hook_mixin.dart';
 
 class MockRequestModifierHook
     with
@@ -41,6 +40,39 @@ void main() {
 
       final result = await hookGroup.modifyResponse('test-response');
       expect(result, equals('test-response-modified-modified'));
+    });
+
+    test('modifyRequest and modifyResponse work together', () async {
+      final hookGroup = OidcHookGroup<String, String>(
+        hooks: [
+          MockRequestModifierHook(),
+          MockResponseModifierHook(),
+        ],
+      );
+
+      final requestResult = await hookGroup.modifyRequest('test-request');
+      expect(requestResult, equals('test-request-modified'));
+
+      final responseResult = await hookGroup.modifyResponse('test-response');
+      expect(responseResult, equals('test-response-modified'));
+    });
+
+    test('executionHook is called if provided', () async {
+      final executionHook = OidcHookGroup<String, String>(
+        hooks: [],
+        executionHook: OidcHook(
+          modifyExecution: (response, defaultExecution) async {
+            return '${await defaultExecution('$response-default')}-modifyexecuted';
+          },
+        ),
+      );
+
+      final result = await executionHook.modifyExecution(
+        'test-request',
+        (request) async => '$request-executed',
+      );
+
+      expect(result, equals('test-request-default-executed-modifyexecuted'));
     });
   });
 }

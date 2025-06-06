@@ -1,10 +1,10 @@
 import 'package:test/test.dart';
-import 'package:oidc_core/src/hooks/oidc_request_hook.dart';
+import 'package:oidc_core/src/hooks/oidc_hook.dart';
 
 void main() {
   group('OidcRequestHook', () {
     test('modifyRequest modifies the request as expected', () async {
-      final hook = OidcRequestHook<String, String>(
+      final hook = OidcHook<String, String>(
         modifyRequest: (request) async => '$request-modified',
       );
 
@@ -13,7 +13,7 @@ void main() {
     });
 
     test('modifyResponse modifies the response as expected', () async {
-      final hook = OidcRequestHook<String, String>(
+      final hook = OidcHook<String, String>(
         modifyResponse: (response) async => '$response-modified',
       );
 
@@ -22,7 +22,7 @@ void main() {
     });
 
     test('modifyExecution modifies the execution as expected', () async {
-      final hook = OidcRequestHook<String, String>(
+      final hook = OidcHook<String, String>(
         modifyExecution: (request, defaultExecution) async {
           final defaultResult = await defaultExecution('$request-default');
           return '$defaultResult-modified';

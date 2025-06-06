@@ -105,6 +105,38 @@ final duendeManager = OidcUserManager.lazy(
                 // but it's completely optional.
                 ? Uri.parse('http://localhost:0')
                 : Uri(),
+    hooks: OidcUserManagerHooks(
+      token: OidcHookGroup(
+        hooks: [
+          OidcHook(
+            modifyRequest: (request) {
+              exampleLogger.info(
+                'Modifying token request: ${request.request.toMap()}',
+              );
+              return Future.value(request);
+            },
+            modifyResponse: (response) {
+              exampleLogger.info(
+                'Modifying token response: ${response.src}',
+              );
+              return Future.value(response);
+            },
+          ),
+        ],
+        executionHook: OidcHook(
+          modifyExecution: (request, defaultExecution) async {
+            exampleLogger.info(
+              'Executing token request: ${request.request.toMap()}',
+            );
+            final response = await defaultExecution(request);
+            exampleLogger.info(
+              'Executed token request: ${response.src}',
+            );
+            return response;
+          },
+        ),
+      ),
+    ),
   ),
 );
 // final certificationManager = OidcUserManager.lazy(

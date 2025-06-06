@@ -1,13 +1,12 @@
-import 'oidc_request_execution_hook_mixin.dart';
-import 'oidc_request_hook_base.dart';
+import 'oidc_execution_hook_mixin.dart';
+import 'oidc_hook_base.dart';
 
-class OidcRequestHook<TRequest, TResponse>
-    extends OidcRequestHookBase<TRequest, TResponse> {
-  OidcRequestHook({
+class OidcHook<TRequest, TResponse> extends OidcHookBase<TRequest, TResponse> {
+  OidcHook({
     Future<TRequest> Function(TRequest request)? modifyRequest,
     Future<TResponse> Function(
       TRequest response,
-      OidcRequestHookExecution<TRequest, TResponse> defaultExecution,
+      OidcHookExecution<TRequest, TResponse> defaultExecution,
     )? modifyExecution,
     Future<TResponse> Function(TResponse response)? modifyResponse,
   })  : modifyRequestFunction = modifyRequest,
@@ -17,14 +16,14 @@ class OidcRequestHook<TRequest, TResponse>
   Future<TRequest> Function(TRequest request)? modifyRequestFunction;
   Future<TResponse> Function(
     TRequest response,
-    OidcRequestHookExecution<TRequest, TResponse> defaultExecution,
+    OidcHookExecution<TRequest, TResponse> defaultExecution,
   )? modifyExecutionFunction;
   Future<TResponse> Function(TResponse response)? modifyResponseFunction;
 
   @override
   Future<TResponse> modifyExecution(
     TRequest request,
-    OidcRequestHookExecution<TRequest, TResponse> defaultExecution,
+    OidcHookExecution<TRequest, TResponse> defaultExecution,
   ) {
     final modifyExecutionFunction = this.modifyExecutionFunction;
     if (modifyExecutionFunction != null) {

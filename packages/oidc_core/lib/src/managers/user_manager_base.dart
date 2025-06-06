@@ -245,8 +245,8 @@ abstract class OidcUserManagerBase {
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
 
-    final tokenResp = await OidcUserManagerHooks.execute(
-      request: (
+    final tokenResp = await (settings.hooks?.token).execute(
+      request: OidcTokenHookRequest(
         metadata: discoveryDocument,
         tokenEndpoint: discoveryDocument.tokenEndpoint!,
         request: OidcTokenRequest.password(
@@ -260,7 +260,7 @@ abstract class OidcUserManagerBase {
         headers: settings.extraTokenHeaders,
         client: httpClient,
         extraBodyFields: extraBodyFields,
-        options: settings.options
+        options: settings.options,
       ),
       defaultExecution: (hookRequest) {
         return OidcEndpoints.token(
@@ -272,7 +272,6 @@ abstract class OidcUserManagerBase {
           extraBodyFields: hookRequest.extraBodyFields,
         );
       },
-      hook: settings.hooks?.token,
     );
 
     return createUserFromToken(
@@ -297,8 +296,7 @@ abstract class OidcUserManagerBase {
     required Map<String, dynamic> prep,
   }) async {
     try {
-      final response = await OidcUserManagerHooks.execute(
-        hook: settings.hooks?.authorization,
+      final response = await (settings.hooks?.authorization).execute(
         defaultExecution: (request) {
           return getAuthorizationResponse(
             request.metadata,
@@ -307,7 +305,7 @@ abstract class OidcUserManagerBase {
             request.preparationResult,
           );
         },
-        request: (
+        request: OidcAuthorizationHookRequest(
           metadata: metadata,
           request: request,
           options: options,
@@ -593,8 +591,8 @@ abstract class OidcUserManagerBase {
         );
       }
       //request the token.
-      final tokenResp = await OidcUserManagerHooks.execute(
-        request: (
+      final tokenResp = await (settings.hooks?.token).execute(
+        request: OidcTokenHookRequest(
           metadata: metadata,
           tokenEndpoint: tokenEndpoint,
           credentials: clientCredentials,
@@ -607,8 +605,7 @@ abstract class OidcUserManagerBase {
             code: code,
           ),
           client: httpClient,
-          extraBodyFields: null,
-          options: settings.options
+          options: settings.options,
         ),
         defaultExecution: (hookRequest) {
           return OidcEndpoints.token(
@@ -620,7 +617,6 @@ abstract class OidcUserManagerBase {
             extraBodyFields: hookRequest.extraBodyFields,
           );
         },
-        hook: settings.hooks?.token,
       );
 
       final token = OidcToken.fromResponse(
@@ -802,8 +798,8 @@ abstract class OidcUserManagerBase {
       return null;
     }
 
-    final tokenResponse = await OidcUserManagerHooks.execute(
-      request: (
+    final tokenResponse = await (settings.hooks?.token).execute(
+      request: OidcTokenHookRequest(
         metadata: discoveryDocument,
         tokenEndpoint: discoveryDocument.tokenEndpoint!,
         request: OidcTokenRequest.refreshToken(
@@ -817,7 +813,7 @@ abstract class OidcUserManagerBase {
         headers: settings.extraTokenHeaders,
         extraBodyFields: extraBodyFields,
         client: httpClient,
-        options: settings.options
+        options: settings.options,
       ),
       defaultExecution: (tokenHookRequest) async {
         return OidcEndpoints.token(
@@ -829,7 +825,6 @@ abstract class OidcUserManagerBase {
           extraBodyFields: tokenHookRequest.extraBodyFields,
         );
       },
-      hook: settings.hooks?.token,
     );
 
     return createUserFromToken(
@@ -880,8 +875,8 @@ abstract class OidcUserManagerBase {
     OidcUser? newUser;
     //try getting a new token.
     try {
-      final tokenResponse = await OidcUserManagerHooks.execute(
-        request: (
+      final tokenResponse = await (settings.hooks?.token).execute(
+        request: OidcTokenHookRequest(
           metadata: discoveryDocument,
           tokenEndpoint: discoveryDocument.tokenEndpoint!,
           credentials: clientCredentials,
@@ -895,7 +890,6 @@ abstract class OidcUserManagerBase {
             scope: settings.scope,
           ),
           options: settings.options,
-          extraBodyFields: null,
         ),
         defaultExecution: (hookRequest) {
           return OidcEndpoints.token(
@@ -907,7 +901,6 @@ abstract class OidcUserManagerBase {
             extraBodyFields: hookRequest.extraBodyFields,
           );
         },
-        hook: settings.hooks?.token,
       );
       newUser = await createUserFromToken(
         token: OidcToken.fromResponse(
