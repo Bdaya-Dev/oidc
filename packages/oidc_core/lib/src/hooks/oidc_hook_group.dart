@@ -17,8 +17,11 @@ class OidcHookGroup<TRequest, TResponse>
   Future<TRequest> modifyRequest(TRequest request) async {
     var modifiedRequest = request;
     for (final hook in hooks) {
-      if (hook is OidcRequestModifierHookMixin<TRequest, TResponse>) {
-        modifiedRequest = await hook.modifyRequest(modifiedRequest);
+      if (hook
+          case final OidcRequestModifierHookMixin<TRequest, TResponse>
+              requestModifierHook) {
+        modifiedRequest =
+            await requestModifierHook.modifyRequest(modifiedRequest);
       }
     }
     return modifiedRequest;
@@ -28,8 +31,11 @@ class OidcHookGroup<TRequest, TResponse>
   Future<TResponse> modifyResponse(TResponse response) async {
     var modifiedResponse = response;
     for (final hook in hooks) {
-      if (hook is OidcResponseModifierHookMixin<TRequest, TResponse>) {
-        modifiedResponse = await hook.modifyResponse(modifiedResponse);
+      if (hook
+          case final OidcResponseModifierHookMixin<TRequest, TResponse>
+              responseModifierHook) {
+        modifiedResponse =
+            await responseModifierHook.modifyResponse(modifiedResponse);
       }
     }
     return response;
