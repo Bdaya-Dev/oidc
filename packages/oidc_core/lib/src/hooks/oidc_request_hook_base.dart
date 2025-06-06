@@ -6,5 +6,6 @@ import 'oidc_request_execution_hook_mixin.dart';
 abstract class OidcRequestHookBase<TRequest, TResponse>
     with
         OidcHookMixin<TRequest, TResponse>,
-        OidcRequestResponseHookMixin<TRequest, TResponse>,
+        OidcRequestModifierHookMixin<TRequest, TResponse>,
+        OidcResponseModifierHookMixin<TRequest, TResponse>,
         OidcRequestExecutionHookMixin<TRequest, TResponse> {}

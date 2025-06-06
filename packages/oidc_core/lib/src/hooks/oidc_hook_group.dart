@@ -5,18 +5,21 @@ import 'oidc_hook_mixin.dart';
 class OidcHookGroup<TRequest, TResponse>
     with
         OidcHookMixin<TRequest, TResponse>,
-        OidcRequestResponseHookMixin<TRequest, TResponse> {
+        OidcResponseModifierHookMixin<TRequest, TResponse>,
+        OidcRequestModifierHookMixin<TRequest, TResponse> {
   OidcHookGroup({
     required this.hooks,
   });
 
-  final List<OidcRequestResponseHookMixin<TRequest, TResponse>> hooks;
+  final List<OidcHookMixin<TRequest, TResponse>> hooks;
 
   @override
   Future<TRequest> modifyRequest(TRequest request) async {
     var modifiedRequest = request;
     for (final hook in hooks) {
-      modifiedRequest = await hook.modifyRequest(modifiedRequest);
+      if (hook is OidcRequestModifierHookMixin<TRequest, TResponse>) {
+        modifiedRequest = await hook.modifyRequest(modifiedRequest);
+      }
     }
     return modifiedRequest;
   }
@@ -25,7 +28,9 @@ class OidcHookGroup<TRequest, TResponse>
   Future<TResponse> modifyResponse(TResponse response) async {
     var modifiedResponse = response;
     for (final hook in hooks) {
-      modifiedResponse = await hook.modifyResponse(modifiedResponse);
+      if (hook is OidcResponseModifierHookMixin<TRequest, TResponse>) {
+        modifiedResponse = await hook.modifyResponse(modifiedResponse);
+      }
     }
     return response;
   }

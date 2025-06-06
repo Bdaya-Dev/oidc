@@ -38,7 +38,7 @@ class OidcUserManagerHooks {
     if (hook == null) {
       return defaultExecution(request);
     } else {
-      if (hook case OidcRequestResponseHookMixin<TRequest, TResponse>()) {
+      if (hook case OidcRequestModifierHookMixin<TRequest, TResponse>()) {
         request = await hook.modifyRequest(request);
       }
       TResponse response;
@@ -50,7 +50,7 @@ class OidcUserManagerHooks {
       } else {
         response = await defaultExecution(request);
       }
-      if (hook case OidcRequestResponseHookMixin<TRequest, TResponse>()) {
+      if (hook case OidcResponseModifierHookMixin<TRequest, TResponse>()) {
         response = await hook.modifyResponse(response);
       }
       return response;
