@@ -38,6 +38,6 @@ class OidcHookGroup<TRequest, TResponse>
             await responseModifierHook.modifyResponse(modifiedResponse);
       }
     }
-    return response;
+    return modifiedResponse;
   }
 }
