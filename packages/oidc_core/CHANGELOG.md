@@ -1,3 +1,9 @@
+## 0.13.0
+
+> Note: This release has breaking changes.
+
+ - **BREAKING** **FEAT**: support hooks ([#228](https://github.com/Bdaya-Dev/oidc/issues/228)). ([f2d9d9c6](https://github.com/Bdaya-Dev/oidc/commit/f2d9d9c692e0cf0baac36f186be337ff62e142df))
+
 ## 0.12.0
 
 > Note: This release has breaking changes.
