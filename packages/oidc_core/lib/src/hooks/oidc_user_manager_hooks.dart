@@ -25,6 +25,7 @@ typedef OidcAuthorizationHookRequest = ({
 class OidcUserManagerHooks {
   OidcUserManagerHooks({
     this.token,
+    this.authorization,
   });
   OidcHookMixin<OidcTokenHookRequest, OidcTokenResponse>? token;
   OidcHookMixin<OidcAuthorizationHookRequest, OidcAuthorizeResponse?>?
