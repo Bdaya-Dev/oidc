@@ -81,7 +81,7 @@ class OidcDefaultStore implements OidcStore {
     if (_hasInit) return;
     try {
       _hasInit = true;
-      __sharedPreferences = await SharedPreferences.getInstance();
+      __sharedPreferences ??= await SharedPreferences.getInstance();
     } catch (e) {
       // coverage:ignore-line
       _hasInit = false;
