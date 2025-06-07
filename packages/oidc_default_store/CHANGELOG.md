@@ -1,3 +1,10 @@
+## 0.3.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**: oidc_default_store init() loads the shared preferences again and does not check if already given in ctor [#226](https://github.com/Bdaya-Dev/oidc/issues/226). ([111b0a98](https://github.com/Bdaya-Dev/oidc/commit/111b0a98e2eb57b32ab3c9ace3d9b543a2683f34))
+ - **BREAKING** **FEAT**: support hooks ([#228](https://github.com/Bdaya-Dev/oidc/issues/228)). ([f2d9d9c6](https://github.com/Bdaya-Dev/oidc/commit/f2d9d9c692e0cf0baac36f186be337ff62e142df))
+
 ## 0.2.0+15
 
  - **REFACTOR**: minor lints and refactors. ([5ab9af70](https://github.com/Bdaya-Dev/oidc/commit/5ab9af70140be2a11f54d62a9d93c9c6edc9e554))

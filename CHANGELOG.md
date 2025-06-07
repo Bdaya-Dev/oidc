@@ -3,6 +3,62 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2025-06-06
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v0.11.0`](#oidc---v0110)
+ - [`oidc_core` - `v0.13.0`](#oidc_core---v0130)
+ - [`oidc_default_store` - `v0.3.0`](#oidc_default_store---v030)
+
+Packages with other changes:
+
+ - [`oidc_web_core` - `v0.3.0+5`](#oidc_web_core---v0305)
+ - [`oidc_desktop` - `v0.5.0+5`](#oidc_desktop---v0505)
+ - [`oidc_ios` - `v0.7.0+1`](#oidc_ios---v0701)
+ - [`oidc_platform_interface` - `v0.6.0+5`](#oidc_platform_interface---v0605)
+ - [`oidc_macos` - `v0.7.0+1`](#oidc_macos---v0701)
+ - [`oidc_android` - `v0.7.0+1`](#oidc_android---v0701)
+ - [`oidc_web` - `v0.6.0+5`](#oidc_web---v0605)
+ - [`oidc_linux` - `v0.3.0+16`](#oidc_linux---v03016)
+ - [`oidc_flutter_appauth` - `v0.6.0+1`](#oidc_flutter_appauth---v0601)
+ - [`oidc_windows` - `v0.3.1+10`](#oidc_windows---v03110)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_web_core` - `v0.3.0+5`
+ - `oidc_desktop` - `v0.5.0+5`
+ - `oidc_ios` - `v0.7.0+1`
+ - `oidc_platform_interface` - `v0.6.0+5`
+ - `oidc_macos` - `v0.7.0+1`
+ - `oidc_android` - `v0.7.0+1`
+ - `oidc_web` - `v0.6.0+5`
+ - `oidc_linux` - `v0.3.0+16`
+ - `oidc_flutter_appauth` - `v0.6.0+1`
+ - `oidc_windows` - `v0.3.1+10`
+
+---
+
+#### `oidc` - `v0.11.0`
+
+ - **BREAKING** **FEAT**: support hooks ([#228](https://github.com/Bdaya-Dev/oidc/issues/228)). ([f2d9d9c6](https://github.com/Bdaya-Dev/oidc/commit/f2d9d9c692e0cf0baac36f186be337ff62e142df))
+
+#### `oidc_core` - `v0.13.0`
+
+ - **BREAKING** **FEAT**: support hooks ([#228](https://github.com/Bdaya-Dev/oidc/issues/228)). ([f2d9d9c6](https://github.com/Bdaya-Dev/oidc/commit/f2d9d9c692e0cf0baac36f186be337ff62e142df))
+
+#### `oidc_default_store` - `v0.3.0`
+
+ - **FIX**: oidc_default_store init() loads the shared preferences again and does not check if already given in ctor [#226](https://github.com/Bdaya-Dev/oidc/issues/226). ([111b0a98](https://github.com/Bdaya-Dev/oidc/commit/111b0a98e2eb57b32ab3c9ace3d9b543a2683f34))
+ - **BREAKING** **FEAT**: support hooks ([#228](https://github.com/Bdaya-Dev/oidc/issues/228)). ([f2d9d9c6](https://github.com/Bdaya-Dev/oidc/commit/f2d9d9c692e0cf0baac36f186be337ff62e142df))
+
+
 ## 2025-04-16
 
 ### Changes
