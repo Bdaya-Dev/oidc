@@ -130,7 +130,7 @@ scripts:
         - linux
   integration_test:windows:
     name: Flutter Windows Integration tests
-    exec: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d windows --coverage-path coverage/windows-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
+    exec: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d windows --coverage-path coverage/windows-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
     packageFilters:
       flutter: true
       dirExists:

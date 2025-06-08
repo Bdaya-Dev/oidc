@@ -5,13 +5,15 @@ import 'state_store.dart';
 ///
 /// for a persistent store, consider using (oidc_default_store)[https://pub.dev/packages/oidc_default_store]
 class OidcMemoryStore implements OidcStore {
-  final _namespaces = <OidcStoreNamespace, Map<String?, Map<String, String>>>{};
+  static const Object nullToken = Object();
+  final _namespaces = <OidcStoreNamespace, Map<Object, Map<String, String>>>{};
 
   Map<String, String> _perNamespaceMap(
     OidcStoreNamespace namespace, {
     required String? managerId,
   }) {
-    return (_namespaces[namespace] ??= {})[managerId] ??= <String, String>{};
+    final namespaceMap = _namespaces[namespace] ??= {};
+    return namespaceMap[managerId ?? nullToken] ??= <String, String>{};
   }
 
   @override

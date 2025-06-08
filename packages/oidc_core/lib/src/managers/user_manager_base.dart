@@ -24,11 +24,10 @@ abstract class OidcUserManagerBase {
     required this.settings,
     this.httpClient,
     JsonWebKeyStore? keyStore,
-    String? id,
+    this.id,
   })  : discoveryDocumentUri = null,
         currentDiscoveryDocument = discoveryDocument,
-        _keyStore = keyStore,
-        id = id ?? DateTime.timestamp().millisecondsSinceEpoch.toString();
+        _keyStore = keyStore;
 
   /// Create a new UserManager that delays getting the discovery document until
   /// [init] is called.
