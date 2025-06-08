@@ -122,6 +122,8 @@ jobs:
         run: flutter doctor -v
       - name: Run Android Emulator and Integration Tests
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         with:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
@@ -180,6 +182,8 @@ jobs:
         run: flutter doctor -v
       - name: Integration Tests
         run: melos run integration_test:ios
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
@@ -240,6 +244,8 @@ jobs:
         run: flutter precache -v
       - name: Integration Tests
         run: melos run integration_test:macos
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
@@ -265,6 +271,8 @@ jobs:
         run: flutter precache -v
       - name: Integration Tests
         run: melos run integration_test:linux
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
@@ -287,6 +295,8 @@ jobs:
         run: flutter precache -v
       - name: Integration Tests
         run: dart pub global run melos run integration_test:windows
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         shell: bash
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4

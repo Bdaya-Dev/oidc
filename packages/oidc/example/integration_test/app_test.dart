@@ -17,8 +17,8 @@ void main() {
     if (oidcConformanceToken.isEmpty) {
       testWidgets('Simple manager initializes correctly', (tester) async {
         example.main();
-        await app_state.currentManagerRx.$.init();
         expect(app_state.currentManagerRx.$.didInit, false);
+        await app_state.currentManagerRx.$.init();
         await tester.pumpAndSettle();
 
         expect(app_state.currentManagerRx.$.didInit, true);
