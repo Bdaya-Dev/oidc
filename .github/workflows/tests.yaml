@@ -206,6 +206,8 @@ jobs:
       # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
       - name: Run Web Integration Tests
         working-directory: ${{ matrix.working-directory }}
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         run: |
           # first we run chromedriver on port 4444 and Xvfb
           export DISPLAY=:99
