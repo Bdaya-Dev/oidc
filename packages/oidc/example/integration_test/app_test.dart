@@ -25,6 +25,9 @@ void main() {
       });
     } else {
       testWidgets('OIDC Conformance Test', (tester) async {
+        print(
+          'Running OIDC Conformance Test with token: $oidcConformanceToken',
+        );
         // prepare the conformance manager
         example.main();
         await tester.pumpAndSettle();
