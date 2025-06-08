@@ -20,7 +20,7 @@ class _SecretPageState extends State<SecretPage> {
   Widget build(BuildContext context) {
     final manager = app_state.currentManagerRx.of(context);
     final user = app_state.cachedAuthedUser.of(context);
-    if (user == null || manager == null) {
+    if (user == null) {
       // put a guard here as well, just in case
       // the redirect doesn't fire up in time.
       return const SizedBox.shrink();

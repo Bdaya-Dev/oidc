@@ -172,7 +172,7 @@ class _ManagersPageState extends State<ManagersPage> {
         itemCount: managers.length,
         itemBuilder: (context, index) {
           final manager = managers[index];
-          final isSelected = manager.id == currentUserManager?.id;
+          final isSelected = manager.id == currentUserManager.id;
           final isDefault = manager == duendeManager;
 
           return Card(
