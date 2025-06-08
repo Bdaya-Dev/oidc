@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 
 Uri getPlatformRedirectUri() {
-  return kIsWeb || kIsWasm
+  return kIsWeb
       // this url must be an actual html page.
       // see the file in /web/redirect.html for an example.
       //
@@ -26,21 +26,19 @@ Uri getPlatformRedirectUri() {
 }
 
 String getPlatformName() {
-  return kIsWasm
-      ? 'Web_WASM'
-      : kIsWeb
-          ? 'Web_JS'
-          : Platform.isAndroid
-              ? 'android'
-              : Platform.isIOS
-                  ? 'ios'
-                  : Platform.isMacOS
-                      ? 'macos'
-                      : Platform.isWindows
-                          ? 'windows'
-                          : Platform.isLinux
-                              ? 'linux'
-                              : Platform.isFuchsia
-                                  ? 'fuchsia'
-                                  : Platform.operatingSystem;
+  return kIsWeb
+      ? 'Web'
+      : Platform.isAndroid
+          ? 'android'
+          : Platform.isIOS
+              ? 'ios'
+              : Platform.isMacOS
+                  ? 'macos'
+                  : Platform.isWindows
+                      ? 'windows'
+                      : Platform.isLinux
+                          ? 'linux'
+                          : Platform.isFuchsia
+                              ? 'fuchsia'
+                              : Platform.operatingSystem;
 }
