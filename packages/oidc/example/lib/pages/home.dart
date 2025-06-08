@@ -13,26 +13,23 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Oidc Example')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: () {
-                GoRouter.of(context).go('/auth');
-              },
-              child: const Text('Go to Auth Page'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                GoRouter.of(context).go('/secret-route');
-              },
-              child: const Text('Go to Secret page'),
-            ),
-          ],
-        ),
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          ElevatedButton(
+            onPressed: () {
+              GoRouter.of(context).go('/auth');
+            },
+            child: const Text('Go to Auth Page'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              GoRouter.of(context).go('/secret-route');
+            },
+            child: const Text('Go to Secret page'),
+          ),
+        ],
       ),
     );
   }

@@ -18,8 +18,9 @@ class _SecretPageState extends State<SecretPage> {
       OidcPlatformSpecificOptions_Web_NavigationMode.newPage;
   @override
   Widget build(BuildContext context) {
+    final manager = app_state.currentManagerRx.of(context);
     final user = app_state.cachedAuthedUser.of(context);
-    if (user == null) {
+    if (user == null || manager == null) {
       // put a guard here as well, just in case
       // the redirect doesn't fire up in time.
       return const SizedBox.shrink();
@@ -58,11 +59,10 @@ class _SecretPageState extends State<SecretPage> {
               ElevatedButton(
                 onPressed: () async {
                   try {
-                    final res = await app_state.currentManager
-                        .loginAuthorizationCodeFlow(
+                    final res = await manager.loginAuthorizationCodeFlow(
                       // you can change scope too!
                       scopeOverride: [
-                        ...app_state.currentManager.settings.scope,
+                        ...manager.settings.scope,
                         'api',
                       ],
                       promptOverride: ['none'],
@@ -84,7 +84,7 @@ class _SecretPageState extends State<SecretPage> {
                     }
                   } on OidcException catch (e) {
                     if (e.errorResponse != null) {
-                      await app_state.currentManager.forgetUser();
+                      await manager.forgetUser();
                     }
                   } catch (e, st) {
                     app_state.exampleLogger
@@ -131,7 +131,7 @@ class _SecretPageState extends State<SecretPage> {
               ],
               ElevatedButton(
                 onPressed: () async {
-                  await app_state.currentManager.logout(
+                  await manager.logout(
                     //after logout, go back to home
                     originalUri: Uri.parse('/'),
                     options: OidcPlatformSpecificOptions(
@@ -150,8 +150,7 @@ class _SecretPageState extends State<SecretPage> {
                   ElevatedButton(
                     onPressed: () async {
                       try {
-                        final res =
-                            await app_state.currentManager.refreshToken();
+                        final res = await manager.refreshToken();
                         if (res == null && context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -186,7 +185,7 @@ class _SecretPageState extends State<SecretPage> {
                   ),
                   ElevatedButton(
                     onPressed: () async {
-                      await app_state.currentManager.forgetUser();
+                      await manager.forgetUser();
                     },
                     child: const Text('Forget User'),
                   ),

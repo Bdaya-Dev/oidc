@@ -48,6 +48,7 @@ class _AuthPageState extends State<AuthPage> {
   @override
   Widget build(BuildContext context) {
     //remember, you can only enter this route if there is no user.
+    final manager = app_state.currentManagerRx.of(context);
     final currentRoute = GoRouterState.of(context);
     final originalUri =
         currentRoute.uri.queryParameters[OidcConstants_Store.originalUri];
@@ -79,7 +80,7 @@ class _AuthPageState extends State<AuthPage> {
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
                 try {
-                  final result = await app_state.currentManager.loginPassword(
+                  final result = await manager.loginPassword(
                     username: userNameController.text,
                     password: passwordController.text,
                   );
@@ -135,8 +136,7 @@ class _AuthPageState extends State<AuthPage> {
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
                 try {
-                  final result =
-                      await app_state.currentManager.loginAuthorizationCodeFlow(
+                  final result = await manager.loginAuthorizationCodeFlow(
                     originalUri: parsedOriginalUri ?? Uri.parse('/'),
                     //store any arbitrary data, here we store the authorization
                     //start time.
@@ -177,7 +177,7 @@ class _AuthPageState extends State<AuthPage> {
                 final messenger = ScaffoldMessenger.of(context);
 
                 // ignore: deprecated_member_use
-                final result = await app_state.currentManager.loginImplicitFlow(
+                final result = await manager.loginImplicitFlow(
                   responseType: OidcConstants_AuthorizationEndpoint_ResponseType
                       .idToken_Token,
                   originalUri: parsedOriginalUri ?? Uri.parse('/'),

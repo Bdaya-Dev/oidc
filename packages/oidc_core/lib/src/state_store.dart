@@ -43,11 +43,15 @@ enum OidcStoreNamespace {
 /// or `OidcMemoryStore` for a memory-only store (for CI/CD or CLI apps).
 abstract interface class OidcReadOnlyStore {
   Future<void> init();
-  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace);
+  Future<Set<String>> getAllKeys(
+    OidcStoreNamespace namespace, {
+    String? managerId,
+  });
 
   Future<Map<String, String>> getMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
+    String? managerId,
   });
 }
 
@@ -60,10 +64,12 @@ abstract interface class OidcStore extends OidcReadOnlyStore {
   Future<void> setMany(
     OidcStoreNamespace namespace, {
     required Map<String, String> values,
+    String? managerId,
   });
   Future<void> removeMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
+    String? managerId,
   });
 }
 
@@ -72,8 +78,9 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
   Future<String?> get(
     OidcStoreNamespace namespace, {
     required String key,
+    String? managerId,
   }) {
-    return getMany(namespace, keys: {key})
+    return getMany(namespace, keys: {key}, managerId: managerId)
         .then((value) => value.values.firstOrNull);
   }
 
@@ -84,9 +91,10 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
   //     );
 
   /// Gets the current nonce from the session namespace.
-  Future<String?> getCurrentNonce() => get(
+  Future<String?> getCurrentNonce({String? managerId}) => get(
         OidcStoreNamespace.secureTokens,
         key: OidcConstants_AuthParameters.nonce,
+        managerId: managerId,
       );
 
   /// Gets the stateData (value) of a [state] (key).
@@ -138,45 +146,44 @@ extension OidcStoreExt on OidcStore {
     OidcStoreNamespace namespace, {
     required String key,
     required String value,
+    String? managerId,
   }) {
-    return setMany(namespace, values: {key: value});
+    return setMany(
+      namespace,
+      values: {key: value},
+      managerId: managerId,
+    );
   }
 
   /// Removes a single key from the store.
   Future<void> remove(
     OidcStoreNamespace namespace, {
     required String key,
+    String? managerId,
   }) {
-    return removeMany(namespace, keys: {key});
+    return removeMany(
+      namespace,
+      keys: {key},
+      managerId: managerId,
+    );
   }
 
-  /// Sets the current state from the session namespace.
+  /// Sets the current nonce from the secureTokens namespace.
   ///
   /// Sending null will remove the key.
-  // Future<void> setCurrentState(String? state) => state == null
-  //     ? remove(
-  //         OidcStoreNamespace.session,
-  //         key: OidcConstants_AuthParameters.state,
-  //       )
-  //     : set(
-  //         OidcStoreNamespace.session,
-  //         key: OidcConstants_AuthParameters.state,
-  //         value: state,
-  //       );
-
-  /// Sets the current state from the session namespace.
-  ///
-  /// Sending null will remove the key.
-  Future<void> setCurrentNonce(String? nonce) => nonce == null
-      ? remove(
-          OidcStoreNamespace.secureTokens,
-          key: OidcConstants_AuthParameters.nonce,
-        )
-      : set(
-          OidcStoreNamespace.secureTokens,
-          key: OidcConstants_AuthParameters.nonce,
-          value: nonce,
-        );
+  Future<void> setCurrentNonce(String? nonce, {String? managerId}) =>
+      nonce == null
+          ? remove(
+              OidcStoreNamespace.secureTokens,
+              key: OidcConstants_AuthParameters.nonce,
+              managerId: managerId,
+            )
+          : set(
+              OidcStoreNamespace.secureTokens,
+              key: OidcConstants_AuthParameters.nonce,
+              value: nonce,
+              managerId: managerId,
+            );
 
   /// Sets the [stateData] (value) of a [state] (key).
   ///

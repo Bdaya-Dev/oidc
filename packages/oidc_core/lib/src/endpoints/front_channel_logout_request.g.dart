@@ -13,4 +13,5 @@ OidcFrontChannelLogoutIncomingRequest
           src: readSrcMap(json, '') as Map<String, dynamic>,
           iss: json['iss'] == null ? null : Uri.parse(json['iss'] as String),
           sid: json['sid'] as String?,
+          managerId: json['managerId'] as String?,
         );

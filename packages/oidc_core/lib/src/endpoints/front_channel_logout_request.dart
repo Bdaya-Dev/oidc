@@ -14,6 +14,7 @@ class OidcFrontChannelLogoutIncomingRequest extends JsonBasedResponse {
     required super.src,
     this.iss,
     this.sid,
+    this.managerId,
   });
 
   factory OidcFrontChannelLogoutIncomingRequest.fromJson(
@@ -40,4 +41,7 @@ class OidcFrontChannelLogoutIncomingRequest extends JsonBasedResponse {
   /// Its syntax is the same as an OAuth 2.0 Client Identifier.
   @JsonKey(name: OidcConstants_JWTClaims.sid)
   final String? sid;
+
+  @JsonKey(name: OidcConstants_Store.managerId)
+  final String? managerId;
 }

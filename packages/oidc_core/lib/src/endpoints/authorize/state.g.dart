@@ -26,6 +26,7 @@ OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
       createdAt: _$JsonConverterFromJson<int, DateTime>(
           json['created_at'], const OidcNumericDateConverter().fromJson),
       data: json['data'],
+      managerId: json['managerId'] as String?,
     );
 
 Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
@@ -43,6 +44,7 @@ Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
       'client_id': instance.clientId,
       'original_uri': instance.originalUri?.toString(),
       'nonce': instance.nonce,
+      'managerId': instance.managerId,
     };
 
 Value? _$JsonConverterFromJson<Json, Value>(

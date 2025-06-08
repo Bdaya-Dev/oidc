@@ -11,7 +11,7 @@ import 'package:http/testing.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
-
+import 'package:rxdart/rxdart.dart' as rx;
 import 'package:oidc_example/mock.dart';
 
 //This file represents a global state, which is bad
@@ -53,9 +53,13 @@ Future<http.Response> ciHandler(http.Request request) async {
 final exampleLogger = Logger('oidc.example');
 
 /// Gets the current manager used in the example.
-OidcUserManager currentManager = duendeManager;
+// OidcUserManager currentManager = duendeManager;
+final currentManagerRx = SharedValue<OidcUserManager>(value: duendeManager);
+final managersRx = SharedValue<List<OidcUserManager>>(value: [duendeManager]);
 
+const duendeManagerId = 'duende';
 final duendeManager = OidcUserManager.lazy(
+  id: duendeManagerId,
   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
     Uri.parse('https://demo.duendesoftware.com'),
   ),
@@ -68,7 +72,12 @@ final duendeManager = OidcUserManager.lazy(
   httpClient: client,
   // keyStore: JsonWebKeyStore(),
   settings: OidcUserManagerSettings(
-    frontChannelLogoutUri: Uri(path: 'redirect.html'),
+    frontChannelLogoutUri: Uri(
+      path: 'redirect.html',
+      queryParameters: {
+        OidcConstants_Store.managerId: duendeManagerId,
+      },
+    ),
     uiLocales: ['ar'],
     refreshBefore: (token) {
       return const Duration(seconds: 1);
@@ -170,14 +179,16 @@ final duendeManager = OidcUserManager.lazy(
 final initMemoizer = AsyncMemoizer<void>();
 Future<void> initApp() {
   return initMemoizer.runOnce(() async {
-    currentManager.userChanges().listen((event) {
-      cachedAuthedUser.$ = event;
-      exampleLogger.info(
-        'User changed: ${event?.claims.toJson()}, info: ${event?.userInfo}',
-      );
-    });
-
-    await currentManager.init();
+    currentManagerRx.streamWithInitial
+        .switchMap((manager) => manager.userChanges())
+        .listen(
+      (event) {
+        cachedAuthedUser.$ = event;
+        exampleLogger.info(
+          'User changed: ${event?.claims.toJson()}, info: ${event?.userInfo}',
+        );
+      },
+    );
   });
 }
 

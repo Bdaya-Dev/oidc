@@ -13,6 +13,7 @@ class OidcUserManager extends OidcUserManagerBase {
     required super.settings,
     super.httpClient,
     super.keyStore,
+    super.id,
   });
 
   ///
@@ -23,6 +24,7 @@ class OidcUserManager extends OidcUserManagerBase {
     required super.settings,
     super.httpClient,
     super.keyStore,
+    super.id,
   }) : super.lazy();
 
   @override

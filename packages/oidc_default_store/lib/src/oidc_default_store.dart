@@ -68,12 +68,14 @@ class OidcDefaultStore implements OidcStore {
   bool get didInit => _hasInit;
   bool _hasInit = false;
 
-  String _getKey(OidcStoreNamespace namespace, String key) {
-    return [storagePrefix, namespace.value, key].nonNulls.join('.');
+  String _getKey(OidcStoreNamespace namespace, String key, String? managerId) {
+    return [storagePrefix, managerId, namespace.value, key].nonNulls.join('.');
   }
 
-  String _getNamespaceKeys(OidcStoreNamespace namespace) {
-    return [storagePrefix, 'keys', namespace.value].nonNulls.join('.');
+  String _getNamespaceKeys(OidcStoreNamespace namespace, String? managerId) {
+    return [storagePrefix, managerId, 'keys', namespace.value]
+        .nonNulls
+        .join('.');
   }
 
   @override
@@ -92,30 +94,36 @@ class OidcDefaultStore implements OidcStore {
   Future<void> _registerKeyForNamespace(
     OidcStoreNamespace namespace,
     Set<String> keys,
+    String? managerId,
   ) async {
     final prev = await getAllKeys(namespace);
     final newKeys = prev.union(keys).toList();
-    await _setAllKeys(namespace, newKeys);
+    await _setAllKeys(namespace, newKeys, managerId);
   }
 
   Future<void> _unRegisterKeyForNamespace(
     OidcStoreNamespace namespace,
     Set<String> keys,
+    String? managerId,
   ) async {
     final prev = await getAllKeys(namespace);
     final newKeys = prev.difference(keys).toList();
-    await _setAllKeys(namespace, newKeys);
+    await _setAllKeys(namespace, newKeys, managerId);
   }
 
   @override
-  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace) async {
+  Future<Set<String>> getAllKeys(
+    OidcStoreNamespace namespace, {
+    String? managerId,
+  }) async {
     if (testIsWeb) {
       final keysRaw =
-          html.window.localStorage[_getNamespaceKeys(namespace)] ?? '[]';
+          html.window.localStorage[_getNamespaceKeys(namespace, managerId)] ??
+              '[]';
       return (jsonDecode(keysRaw) as List).cast<String>().toSet();
     } else {
       return _sharedPreferences
-              .getStringList(_getNamespaceKeys(namespace))
+              .getStringList(_getNamespaceKeys(namespace, managerId))
               ?.toSet() ??
           {};
     }
@@ -124,12 +132,14 @@ class OidcDefaultStore implements OidcStore {
   Future<void> _setAllKeys(
     OidcStoreNamespace namespace,
     List<String> keys,
+    String? managerId,
   ) async {
     if (testIsWeb) {
-      html.window.localStorage[_getNamespaceKeys(namespace)] = jsonEncode(keys);
+      html.window.localStorage[_getNamespaceKeys(namespace, managerId)] =
+          jsonEncode(keys);
     } else {
       await _sharedPreferences.setStringList(
-        _getNamespaceKeys(namespace),
+        _getNamespaceKeys(namespace, managerId),
         keys,
       );
     }
@@ -138,13 +148,14 @@ class OidcDefaultStore implements OidcStore {
   Future<Map<String, String>> _defaultGetMany(
     OidcStoreNamespace namespace,
     Set<String> keys,
+    String? managerId,
   ) async {
     if (testIsWeb) {
       return keys
           .map(
             (key) => MapEntry(
               key,
-              html.window.localStorage[_getKey(namespace, key)],
+              html.window.localStorage[_getKey(namespace, key, managerId)],
             ),
           )
           .purify();
@@ -153,7 +164,7 @@ class OidcDefaultStore implements OidcStore {
           .map(
             (key) => MapEntry(
               key,
-              _sharedPreferences.getString(_getKey(namespace, key)),
+              _sharedPreferences.getString(_getKey(namespace, key, managerId)),
             ),
           )
           .purify();
@@ -163,16 +174,18 @@ class OidcDefaultStore implements OidcStore {
   Future<void> _defaultSetMany(
     OidcStoreNamespace namespace,
     Map<String, String> values,
+    String? managerId,
   ) async {
     if (testIsWeb) {
       for (final entry in values.entries) {
-        html.window.localStorage[_getKey(namespace, entry.key)] = entry.value;
+        html.window.localStorage[_getKey(namespace, entry.key, managerId)] =
+            entry.value;
       }
     } else {
       await Future.wait(
         values.entries.map(
           (entry) => _sharedPreferences.setString(
-            _getKey(namespace, entry.key),
+            _getKey(namespace, entry.key, managerId),
             entry.value,
           ),
         ),
@@ -183,14 +196,18 @@ class OidcDefaultStore implements OidcStore {
   Future<void> _defaultRemoveMany(
     OidcStoreNamespace namespace,
     Set<String> keys,
+    String? managerId,
   ) async {
     if (testIsWeb) {
       for (final key in keys) {
-        html.window.localStorage.remove(_getKey(namespace, key));
+        html.window.localStorage.remove(_getKey(namespace, key, managerId));
       }
     } else {
       await Future.wait(
-        keys.map((key) => _sharedPreferences.remove(_getKey(namespace, key))),
+        keys.map(
+          (key) =>
+              _sharedPreferences.remove(_getKey(namespace, key, managerId)),
+        ),
       );
     }
   }
@@ -199,6 +216,7 @@ class OidcDefaultStore implements OidcStore {
   Future<Map<String, String>> getMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
+    String? managerId,
   }) async {
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
@@ -209,7 +227,9 @@ class OidcDefaultStore implements OidcStore {
           // so we fallback to normal storage if that's the case.
           final res = <String, String>{};
           for (final k in keys) {
-            final v = await _secureStorage.read(key: _getKey(namespace, k));
+            final v = await _secureStorage.read(
+              key: _getKey(namespace, k, managerId),
+            );
             if (v != null) {
               res[k] = v;
             }
@@ -220,7 +240,7 @@ class OidcDefaultStore implements OidcStore {
           _logger.warning(
               'tried reading secure tokens using package:flutter_secure_storage,'
               ' but it failed, falling back to using package:shared_pereferences, which is not secure.');
-          return _defaultGetMany(namespace, keys);
+          return _defaultGetMany(namespace, keys, managerId);
           // coverage:ignore-end
         }
       case OidcStoreNamespace.session:
@@ -231,17 +251,18 @@ class OidcDefaultStore implements OidcStore {
               .map(
                 (key) => MapEntry(
                   key,
-                  html.window.sessionStorage[_getKey(namespace, key)],
+                  html.window
+                      .sessionStorage[_getKey(namespace, key, managerId)],
                 ),
               )
               .purify();
         }
-        return _defaultGetMany(namespace, keys);
+        return _defaultGetMany(namespace, keys, managerId);
       case OidcStoreNamespace.request:
       case OidcStoreNamespace.state:
       case OidcStoreNamespace.discoveryDocument:
       case OidcStoreNamespace.stateResponse:
-        return _defaultGetMany(namespace, keys);
+        return _defaultGetMany(namespace, keys, managerId);
     }
   }
 
@@ -249,8 +270,9 @@ class OidcDefaultStore implements OidcStore {
   Future<void> setMany(
     OidcStoreNamespace namespace, {
     required Map<String, String> values,
+    String? managerId,
   }) async {
-    await _registerKeyForNamespace(namespace, values.keys.toSet());
+    await _registerKeyForNamespace(namespace, values.keys.toSet(), managerId);
 
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
@@ -259,7 +281,7 @@ class OidcDefaultStore implements OidcStore {
           // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
           for (final entry in values.entries) {
             await _secureStorage.write(
-              key: _getKey(namespace, entry.key),
+              key: _getKey(namespace, entry.key, managerId),
               value: entry.value,
             );
           }
@@ -268,7 +290,7 @@ class OidcDefaultStore implements OidcStore {
           _logger.warning(
               'tried writing secure tokens using package:flutter_secure_storage,'
               ' but it failed, falling back to using package:shared_pereferences, which is not secure.');
-          return _defaultSetMany(namespace, values);
+          return _defaultSetMany(namespace, values, managerId);
           // coverage:ignore-end
         }
 
@@ -277,17 +299,17 @@ class OidcDefaultStore implements OidcStore {
             webSessionManagementLocation ==
                 OidcDefaultStoreWebSessionManagementLocation.sessionStorage) {
           for (final element in values.entries) {
-            html.window.sessionStorage[_getKey(namespace, element.key)] =
-                element.value;
+            html.window.sessionStorage[
+                _getKey(namespace, element.key, managerId)] = element.value;
           }
         } else {
-          await _defaultSetMany(namespace, values);
+          await _defaultSetMany(namespace, values, managerId);
         }
       case OidcStoreNamespace.request:
       case OidcStoreNamespace.state:
       case OidcStoreNamespace.stateResponse:
       case OidcStoreNamespace.discoveryDocument:
-        await _defaultSetMany(namespace, values);
+        await _defaultSetMany(namespace, values, managerId);
     }
   }
 
@@ -295,8 +317,9 @@ class OidcDefaultStore implements OidcStore {
   Future<void> removeMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
+    String? managerId,
   }) async {
-    await _unRegisterKeyForNamespace(namespace, keys);
+    await _unRegisterKeyForNamespace(namespace, keys, managerId);
     // final mappedKeys = keys.map((e) => _getKey(namespace, e)).toSet();
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
@@ -304,14 +327,16 @@ class OidcDefaultStore implements OidcStore {
           // optimally we would make these operations concurrent, but due to this issue we can't.
           // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
           for (final key in keys) {
-            await _secureStorage.delete(key: _getKey(namespace, key));
+            await _secureStorage.delete(
+              key: _getKey(namespace, key, managerId),
+            );
           }
         } catch (e) {
           // coverage:ignore-start
           _logger.warning(
               'tried removing secure tokens using package:flutter_secure_storage,'
               ' but it failed, falling back to reading using package:shared_pereferences, which is not secure.');
-          await _defaultRemoveMany(namespace, keys);
+          await _defaultRemoveMany(namespace, keys, managerId);
           // coverage:ignore-end
         }
       case OidcStoreNamespace.session:
@@ -319,16 +344,17 @@ class OidcDefaultStore implements OidcStore {
             webSessionManagementLocation ==
                 OidcDefaultStoreWebSessionManagementLocation.sessionStorage) {
           for (final element in keys) {
-            html.window.sessionStorage.remove(_getKey(namespace, element));
+            html.window.sessionStorage
+                .remove(_getKey(namespace, element, managerId));
           }
         } else {
-          await _defaultRemoveMany(namespace, keys);
+          await _defaultRemoveMany(namespace, keys, managerId);
         }
       case OidcStoreNamespace.request:
       case OidcStoreNamespace.state:
       case OidcStoreNamespace.discoveryDocument:
       case OidcStoreNamespace.stateResponse:
-        await _defaultRemoveMany(namespace, keys);
+        await _defaultRemoveMany(namespace, keys, managerId);
     }
   }
 }

@@ -680,6 +680,9 @@ class OidcConstants_Store {
 
   static const requestType = 'requestType';
   static const frontChannelLogout = 'front-channel-logout';
+
+  static const managerId = 'managerId';
+
   // static const latestToken = 'latest';
   // static const idToken = 'id_token';
   // static const accessToken = 'access_token';
