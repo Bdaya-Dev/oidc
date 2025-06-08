@@ -10,7 +10,6 @@ import 'helpers.dart';
 
 const String oidcConformanceToken =
     String.fromEnvironment('OIDC_CONFORMANCE_TOKEN');
-// '5vZdExdgXcy/IQVIwytdx+/bWM6cnRSqNWqKy+eO0lAKL+09Sz9uBMjYJCBUNE1AtUIOhy27hoqs4deO4DyGxA==';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
