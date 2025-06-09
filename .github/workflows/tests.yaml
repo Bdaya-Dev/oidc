@@ -276,20 +276,14 @@ jobs:
         with:
           install-dependencies: true
           install-chromedriver: true
-      - run: |
-          ${{ steps.setup-chrome.outputs.chrome-path }} --version
-          export BROWSER=${{ steps.setup-chrome.outputs.chrome-path }}
-      # - name: Install xvfb
-      #   run: |
-      #     # first we run chromedriver on port 4444 and Xvfb
-          
-      #   shell: bash
       - name: Smoke‐test xdg-open
         run: |
-          # xdg-open https://google.com &
+          chrome --version
+          export BROWSER=chrome --no-sandbox
           export DISPLAY=:99
           chromedriver --port=4444 --trace-buffer-size=100000 &
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
+          xdg-open https://google.com &
           chrome --no-sandbox https://google.com &
           sleep 20
           ps
