@@ -271,6 +271,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libsecret-1-dev libgtk-3-dev libx11-dev pkg-config cmake ninja-build libblkid-dev liblzma-dev xdg-utils libvulkan1 fonts-liberation
         shell: bash
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+      - run: |
+          ${{ steps.setup-chrome.outputs.chrome-path }} --version
       - name: Install xvfb
         run: |
           # first we run chromedriver on port 4444 and Xvfb
