@@ -288,8 +288,8 @@ jobs:
         shell: bash
       - name: Smoke‐test xdg-open
         run: |
-          xdg-open https://google.com &
-          chromium https://google.com &
+          # xdg-open https://google.com &
+          chromium --no-sandbox https://google.com &
           sleep 3
           pgrep chromium || (echo "Chromium didn’t launch!" && false)
       - name: Run flutter precache
