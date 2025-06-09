@@ -34,9 +34,7 @@ void main() {
                 final selectedManager = app_state.currentManagerRx.of(context);
                 return Scaffold(
                   appBar: AppBar(
-                    title: Text(
-                      'OIDC Example App (Selected Manager: ${selectedManager.id})',
-                    ),
+                    title: const Text('OIDC Example App'),
                     actions: [
                       if (!selectedManager.didInit)
                         IconButton(
@@ -45,8 +43,10 @@ void main() {
                           color: Colors.green,
                           onPressed: () async {
                             await selectedManager.init();
-                            // Update the current manager to trigger a rebuild.
-                            app_state.currentManagerRx.update((x) => x);
+                            // This will initialize the app state.
+                            // await app_state.initApp();
+                            //trigger a rebuild after initialization.
+                            // app_state.currentManagerRx.$ = x;
                           },
                         )
                       else
@@ -107,7 +107,8 @@ void main() {
                               return;
                             }
                             app_state.managersRx.update((managers) {
-                              return managers..add(newManager);
+                              managers.add(newManager);
+                              return managers;
                             });
                             app_state.currentManagerRx.$ = newManager;
                           },
