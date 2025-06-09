@@ -265,7 +265,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
       - uses: browser-actions/setup-chrome@v1
-      - run: chrome --version
+        id: setup-chrome
+      - run: ${{ steps.setup-chrome.outputs.chrome-path }} --version
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Install Dependencies
