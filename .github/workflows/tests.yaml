@@ -271,12 +271,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libsecret-1-dev libgtk-3-dev libx11-dev pkg-config cmake ninja-build libblkid-dev liblzma-dev xdg-utils libvulkan1 fonts-liberation
         shell: bash
+      - name: Run flutter precache
+        run: flutter precache -v
       - uses: browser-actions/setup-chrome@v1
         id: setup-chrome
         with:
           install-dependencies: true
           install-chromedriver: true
-      - name: Smoke‐test xdg-open
+      - name: Integration Tests
+        working-directory: packages/oidc/example
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         run: |
           chrome --version
           export BROWSER=chrome --no-sandbox
@@ -288,13 +293,7 @@ jobs:
           sleep 20
           ps
           pgrep chrome || (echo "Chrome didn’t launch!" && false)
-      - name: Run flutter precache
-        run: flutter precache -v
-      - name: Integration Tests
-        working-directory: packages/oidc/example
-        run: xvfb-run --auto-servernum flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} -r expanded
-        env:
-          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
+          xvfb-run --auto-servernum flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} -r expanded
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
