@@ -285,6 +285,13 @@ jobs:
         run: |
           chrome --version
           export BROWSER="chrome --no-sandbox"
+          echo "xdg info:"
+          xdg-settings get default-web-browser
+          xdg-mime query default x-scheme-handler/http
+          echo "updating settings:"
+          xdg-settings set default-web-browser google-chrome.desktop
+          echo "after updating settings:"
+          xdg-settings get default-web-browser
           xdg-mime query default x-scheme-handler/http
           # export DISPLAY=:99
           # chromedriver --port=4444 --trace-buffer-size=100000 &
