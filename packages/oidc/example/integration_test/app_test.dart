@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
@@ -31,9 +32,20 @@ void main() {
         // prepare the conformance manager
         example.main();
         await tester.pumpAndSettle();
+        const baseUrl = 'https://www.certification.openid.net/';
         final dio = Dio(
           BaseOptions(
-            baseUrl: 'https://www.certification.openid.net/',
+            // we use a CORS proxy for web testing
+            // since the conformance server does not support CORS.
+            baseUrl: kIsWeb
+                ? Uri.parse(
+                        'https://cors-proxy.bdaya-dev.workers.dev/corsproxy/')
+                    .replace(
+                    queryParameters: {
+                      'apiurl': baseUrl,
+                    },
+                  ).toString()
+                : baseUrl,
             headers: {
               'Authorization': 'Bearer $oidcConformanceToken',
               'Accept': 'application/json',
