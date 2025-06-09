@@ -164,18 +164,18 @@ jobs:
           xcrun simctl boot "${UDID:?No Simulator with this name found}"
       - name: Wait for Simulator to be Ready
         run: |
-            COUNT=0
-            MAX_RETRIES=12  # Wait for a maximum of 12 * 5 = 60 seconds
-            until xcrun simctl list devices | grep -q "Booted"; do
-              if [ $COUNT -ge $MAX_RETRIES ]; then
-                echo "Simulator did not boot within the expected time."
-                exit 1
-              fi
-              echo "Waiting for simulator to boot... Attempt: $((COUNT+1))"
-              sleep 20
-              COUNT=$((COUNT+1))
-            done
-            echo "Simulator is ready."
+          COUNT=0
+          MAX_RETRIES=12  # Wait for a maximum of 12 * 5 = 60 seconds
+          until xcrun simctl list devices | grep -q "Booted"; do
+            if [ $COUNT -ge $MAX_RETRIES ]; then
+              echo "Simulator did not boot within the expected time."
+              exit 1
+            fi
+            echo "Waiting for simulator to boot... Attempt: $((COUNT+1))"
+            sleep 20
+            COUNT=$((COUNT+1))
+          done
+          echo "Simulator is ready."
       - name: Run flutter precache
         run: flutter precache -v
       - name: Run flutter doctor
@@ -264,11 +264,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      # - uses: browser-actions/setup-chrome@v1
-      #   id: setup-chrome
-      #   with:
-      #     install-dependencies: true
-      - run: ${{ steps.setup-chrome.outputs.chrome-path }} --version
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Install Dependencies
@@ -294,14 +289,13 @@ jobs:
           name: linux-integration-coverage
           path: packages/oidc/example/coverage/linux-coverage.info
           include-hidden-files: true
-          if-no-files-found: error          
+          if-no-files-found: error
   windows:
     runs-on: windows-latest
     defaults:
       run:
         working-directory: packages/oidc/example
     steps:
-      
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Set up Environment
@@ -320,8 +314,8 @@ jobs:
           name: windows-integration-coverage
           path: packages/oidc/example/coverage/windows-coverage.info
           include-hidden-files: true
-          if-no-files-found: error     
-      
+          if-no-files-found: error
+
   upload-coverage:
     runs-on: ubuntu-latest
     needs: [unit_tests, android, ios, macos, linux, windows]
@@ -343,11 +337,11 @@ jobs:
           ls -lR coverage
       - name: Download integration coverages
         uses: actions/download-artifact@v4
-        with:          
+        with:
           path: packages/oidc/example/coverage/
-          pattern: '*-integration-coverage'
+          pattern: "*-integration-coverage"
           merge-multiple: true
-      
+
       - name: Combine Coverage Results
         env:
           REPO_PATH: ${{ github.workspace }}
