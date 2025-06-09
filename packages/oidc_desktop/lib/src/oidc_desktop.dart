@@ -71,15 +71,15 @@ mixin OidcDesktop on OidcPlatform {
       },
     );
 
-    if (!await canLaunchUrl(uri)) {
+    final didLaunch = await launchAuthUrl(
+      uri,
+      logRequestDesc: logRequestDesc,
+    );
+    if (!didLaunch) {
       logger.warning(
-        'Might not be able to launch the $logRequestDesc request url: $uri',
+        'Failed to launch the $logRequestDesc request url: $uri',
       );
     }
-
-    // launch the uri
-    await launchUrl(uri);
-
     // wait for a response from the server listener.
     final responseUri = await responseUriFuture;
     if (responseUri == null) {
@@ -91,6 +91,30 @@ mixin OidcDesktop on OidcPlatform {
       //try bringing the window to front, swallow errors if it fails.
     }
     return responseUri;
+  }
+
+  /// launches the auth url.
+  Future<bool> launchAuthUrl(
+    Uri uri, {
+    required String logRequestDesc,
+  }) async {
+    if (!await canLaunchUrl(uri)) {
+      logger.warning(
+        'Might not be able to launch the $logRequestDesc request url: $uri',
+      );
+    }
+    // launch the uri
+    final launchRes = await launchUrl(
+      uri,
+    );
+    if (!launchRes) {
+      logger.severe(
+        'Failed to launch the $logRequestDesc request url: $uri',
+      );
+    } else {
+      logger.info('Launched the $logRequestDesc request url: $uri');
+    }
+    return launchRes;
   }
 
   @override
