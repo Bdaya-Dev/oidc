@@ -278,6 +278,7 @@ jobs:
           install-chromedriver: true
       - run: |
           ${{ steps.setup-chrome.outputs.chrome-path }} --version
+          export BROWSER=${{ steps.setup-chrome.outputs.chrome-path }}
       - name: Install xvfb
         run: |
           # first we run chromedriver on port 4444 and Xvfb
