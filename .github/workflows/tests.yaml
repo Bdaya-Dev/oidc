@@ -127,7 +127,7 @@ jobs:
         with:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
-          script: melos run integration_test:android
+          script: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d android --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
       - name: Find .info files and files in coverage folders
         run: |
           echo "Listing all .info files and files inside any coverage/ directory:"
@@ -181,7 +181,8 @@ jobs:
       - name: Run flutter doctor
         run: flutter doctor -v
       - name: Integration Tests
-        run: melos run integration_test:ios
+        run: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage --ignore-timeouts -d iPhone --coverage-path coverage/ios-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
+        working-directory: packages/oidc/example
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
@@ -213,9 +214,6 @@ jobs:
           export DISPLAY=:99
           chromedriver --port=4444 --trace-buffer-size=100000 &
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
-          echo ${OIDC_CONFORMANCE_TOKEN}
-          echo $OIDC_CONFORMANCE_TOKEN
-          echo ${{ env.OIDC_CONFORMANCE_TOKEN }}
           # then we start flutter drive
           flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --web-port=22433 --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} | tee output.log
           # We have to check the output for failed tests matching the string "[E]"
@@ -247,7 +245,8 @@ jobs:
       - name: Run flutter precache
         run: flutter precache -v
       - name: Integration Tests
-        run: melos run integration_test:macos
+        working-directory: packages/oidc/example
+        run: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d macos --coverage-path coverage/macos-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}}
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
@@ -274,7 +273,8 @@ jobs:
       - name: Run flutter precache
         run: flutter precache -v
       - name: Integration Tests
-        run: melos run integration_test:linux
+        working-directory: packages/oidc/example
+        run: xvfb-run flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
@@ -298,7 +298,8 @@ jobs:
       - name: Run flutter precache
         run: flutter precache -v
       - name: Integration Tests
-        run: dart pub global run melos run integration_test:windows
+        working-directory: packages/oidc/example
+        run: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d windows --coverage-path coverage/windows-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         shell: bash
