@@ -74,6 +74,7 @@ mixin OidcDesktop on OidcPlatform {
     final didLaunch = await launchAuthUrl(
       uri,
       logRequestDesc: logRequestDesc,
+      platformOpts: platformOpts,
     );
     if (!didLaunch) {
       logger.warning(
@@ -97,6 +98,7 @@ mixin OidcDesktop on OidcPlatform {
   Future<bool> launchAuthUrl(
     Uri uri, {
     required String logRequestDesc,
+    required OidcPlatformSpecificOptions_Native platformOpts,
   }) async {
     if (!await canLaunchUrl(uri)) {
       logger.warning(

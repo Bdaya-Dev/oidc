@@ -276,11 +276,6 @@ jobs:
         shell: bash
       - name: Run flutter precache
         run: flutter precache -v
-      # - uses: browser-actions/setup-chrome@v1
-      #   id: setup-chrome
-      #   with:
-      #     install-dependencies: true
-      #     install-chromedriver: true
       - name: Integration Tests
         working-directory: packages/oidc/example
         env:
@@ -289,7 +284,7 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb
           google-chrome-stable --version
-          # export BROWSER="google-chrome-stable --no-sandbox"
+          export BROWSER="google-chrome-stable --no-sandbox"
           # export DISPLAY=:99
           # chromedriver --port=4444 --trace-buffer-size=100000 &
           # sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional

@@ -18,6 +18,7 @@ OidcEndSessionState _$OidcEndSessionStateFromJson(Map<String, dynamic> json) =>
           json['created_at'], const OidcNumericDateConverter().fromJson),
       data: json['data'],
       id: json['id'] as String?,
+      managerId: json['managerId'] as String?,
     );
 
 Map<String, dynamic> _$OidcEndSessionStateToJson(
@@ -26,6 +27,7 @@ Map<String, dynamic> _$OidcEndSessionStateToJson(
       'id': instance.id,
       'created_at': const OidcNumericDateConverter().toJson(instance.createdAt),
       'operationDiscriminator': instance.operationDiscriminator,
+      'managerId': instance.managerId,
       'data': instance.data,
       'options': instance.options,
       'post_logout_redirect_uri': instance.postLogoutRedirectUri.toString(),

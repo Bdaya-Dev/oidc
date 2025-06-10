@@ -34,6 +34,7 @@ Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
       'id': instance.id,
       'created_at': const OidcNumericDateConverter().toJson(instance.createdAt),
       'operationDiscriminator': instance.operationDiscriminator,
+      'managerId': instance.managerId,
       'data': instance.data,
       'extraTokenHeaders': instance.extraTokenHeaders,
       'extraTokenParams': instance.extraTokenParams,
@@ -44,7 +45,6 @@ Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
       'client_id': instance.clientId,
       'original_uri': instance.originalUri?.toString(),
       'nonce': instance.nonce,
-      'managerId': instance.managerId,
     };
 
 Value? _$JsonConverterFromJson<Json, Value>(

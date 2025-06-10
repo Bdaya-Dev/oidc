@@ -14,7 +14,6 @@ const _implicitWarning =
   createFactory: true,
   createToJson: false,
   converters: OidcInternalUtilities.commonConverters,
-  constructor: '_',
 )
 class OidcAuthorizeResponse extends JsonBasedResponse {
   ///
