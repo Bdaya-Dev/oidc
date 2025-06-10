@@ -38,25 +38,25 @@ class OidcLinux extends OidcPlatform with OidcDesktop {
         return urlLauncher(uri);
       }
       final process = await Process.start(
-        'xdg-open',
-        [uri.toString()],
+        'google-chrome-stable',
+        [uri.toString(), "--enable-logging", "--v=1"],
         runInShell: true,
       );
 
       final stderrSub = process.stderr.transform(utf8.decoder).listen((data) {
-        logger.severe('Error launching URL: $data');
+        logger.severe('Error from google-chrome-stable: $data');
       });
       final stdoutSub = process.stdout.transform(utf8.decoder).listen((data) {
-        logger.info('Output from xdg-open: $data');
+        logger.info('Output from google-chrome-stable: $data');
       });
 
       final _ = process.exitCode.then((exitCode) {
         stderrSub.cancel();
         stdoutSub.cancel();
         if (exitCode != 0) {
-          logger.severe('xdg-open exited with code $exitCode');
+          logger.severe('google-chrome-stable exited with code $exitCode');
         } else {
-          logger.info('xdg-open launched successfully');
+          logger.info('google-chrome-stable launched successfully');
         }
         exitCodeCompleter?.complete((process, exitCode));
       });
