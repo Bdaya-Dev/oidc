@@ -7,7 +7,7 @@ set -e
 
 # Set up a .desktop file pointing to the CIPD-installed Chrome.
 readonly LOCAL_DESKTOP_FILE_DIR=~/.local/share/applications
-readonly CHROME_EXECUTABLE="/usr/bin/google-chrome-stable"
+readonly CHROME_EXECUTABLE="/usr/bin/google-chrome"
 mkdir -p "${LOCAL_DESKTOP_FILE_DIR}"
 readonly DESKTOP_FILE_NAME=cipd-chrome.desktop
 readonly CIPD_CHROME_DESKTOP_FILE="${LOCAL_DESKTOP_FILE_DIR}/${DESKTOP_FILE_NAME}"
