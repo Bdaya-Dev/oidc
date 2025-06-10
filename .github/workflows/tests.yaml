@@ -258,10 +258,9 @@ jobs:
           if-no-files-found: error
   linux:
     runs-on: ubuntu-latest
-    container:
-      image: selenium/standalone-chrome:latest
-      options: --user root
-
+    # container:
+    #   image: selenium/standalone-chrome:latest
+    #   options: --user root
     defaults:
       run:
         working-directory: packages/oidc/example
