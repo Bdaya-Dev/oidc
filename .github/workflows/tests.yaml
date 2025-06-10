@@ -284,6 +284,7 @@ jobs:
           wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb
           google-chrome-stable --version
+          export BROWSER="xvfb-run google-chrome-stable"
           export DISPLAY=:99
           echo "DISPLAY=:99" >> $GITHUB_ENV
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 &
