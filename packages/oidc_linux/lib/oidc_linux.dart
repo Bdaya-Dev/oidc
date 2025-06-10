@@ -58,7 +58,7 @@ class OidcLinux extends OidcPlatform with OidcDesktop {
         } else {
           logger.info('xdg-open launched successfully');
         }
-      exitCodeCompleter?.complete((process, exitCode));
+        exitCodeCompleter?.complete((process, exitCode));
       });
       logger.info('Launching URL (pid: ${process.pid}): $uri');
       return process.pid > 0; // Return true if the process started successfully
