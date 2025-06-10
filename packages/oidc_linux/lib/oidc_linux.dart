@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -29,6 +30,7 @@ class OidcLinux extends OidcPlatform with OidcDesktop {
     Uri uri, {
     required String logRequestDesc,
     required OidcPlatformSpecificOptions_Native platformOpts,
+    Completer<(Process process, int statusCode)>? exitCodeCompleter,
   }) async {
     try {
       if (platformOpts.launchUrl case final urlLauncher?) {
@@ -56,8 +58,9 @@ class OidcLinux extends OidcPlatform with OidcDesktop {
         } else {
           logger.info('xdg-open launched successfully');
         }
+      exitCodeCompleter?.complete((process, exitCode));
       });
-      logger.info('Launching URL: $uri, pid: ${process.pid}');
+      logger.info('Launching URL (pid: ${process.pid}): $uri');
       return process.pid > 0; // Return true if the process started successfully
     } catch (e, st) {
       logger.severe('Failed to launch URL $uri', e, st);
