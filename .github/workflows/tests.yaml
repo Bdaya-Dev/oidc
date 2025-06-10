@@ -286,8 +286,10 @@ jobs:
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         run: |
-          chrome --version
-          # export BROWSER="chrome --no-sandbox"
+          wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo dpkg -i google-chrome-stable_current_amd64.deb
+          google-chrome-stable --version
+          # export BROWSER="google-chrome-stable --no-sandbox"
           # export DISPLAY=:99
           # chromedriver --port=4444 --trace-buffer-size=100000 &
           # sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
