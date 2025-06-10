@@ -100,6 +100,9 @@ mixin OidcDesktop on OidcPlatform {
     required String logRequestDesc,
     required OidcPlatformSpecificOptions_Native platformOpts,
   }) async {
+    if (platformOpts.launchUrl case final urlLauncher?) {
+      return urlLauncher(uri);
+    }
     if (!await canLaunchUrl(uri)) {
       logger.warning(
         'Might not be able to launch the $logRequestDesc request url: $uri',
