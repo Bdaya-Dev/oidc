@@ -39,7 +39,7 @@ class OidcLinux extends OidcPlatform with OidcDesktop {
       }
       final process = await Process.start(
         'google-chrome-stable',
-        [uri.toString(), "--enable-logging", "--v=1"],
+        ['--enable-logging', '--v=1', '--headless', uri.toString()],
         runInShell: true,
       );
 
