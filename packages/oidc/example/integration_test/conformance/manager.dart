@@ -23,6 +23,19 @@ OidcUserManager conformanceManager(
         postLogoutRedirectUri: postLogoutRedirectUri,
         frontChannelLogoutUri: frontChannelLogoutUri,
         strictJwtVerification: true,
+        options: const OidcPlatformSpecificOptions(
+          macos: OidcPlatformSpecificOptions_AppAuth_IosMacos(
+            // using ephemeral session prevents annoying popups from blocking test
+            externalUserAgent:
+                OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession,
+
+          ),
+          ios: OidcPlatformSpecificOptions_AppAuth_IosMacos(
+            externalUserAgent:
+                OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession,
+          ),
+          
+        ),
         scope: const [
           OidcConstants_Scopes.openid,
           OidcConstants_Scopes.profile,
