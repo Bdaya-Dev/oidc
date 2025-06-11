@@ -26,15 +26,13 @@ OidcUserManager conformanceManager(
         options: const OidcPlatformSpecificOptions(
           macos: OidcPlatformSpecificOptions_AppAuth_IosMacos(
             // using ephemeral session prevents annoying popups from blocking test
-            externalUserAgent:
-                OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession,
-
+            externalUserAgent: OidcAppAuthExternalUserAgent
+                .ephemeralAsWebAuthenticationSession,
           ),
           ios: OidcPlatformSpecificOptions_AppAuth_IosMacos(
-            externalUserAgent:
-                OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession,
+            externalUserAgent: OidcAppAuthExternalUserAgent
+                .ephemeralAsWebAuthenticationSession,
           ),
-          
         ),
         scope: const [
           OidcConstants_Scopes.openid,
