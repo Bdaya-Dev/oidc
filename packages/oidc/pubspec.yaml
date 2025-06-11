@@ -1,6 +1,6 @@
 name: oidc
 description: A comprehensive OpenIdConnect plugin that works on all platforms (android, ios, windows, linux, web, macos)
-version: 0.11.0
+version: 0.11.1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc
 topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
 homepage: https://bdaya-dev.github.io/oidc/
@@ -27,14 +27,14 @@ dependencies:
   flutter:
     sdk: flutter
   # Endorsed packages
-  oidc_android: ^0.7.0+1
-  oidc_core: ^0.13.0
-  oidc_ios: ^0.7.0+1
-  oidc_linux: ^0.3.0+16
-  oidc_macos: ^0.7.0+1
-  oidc_platform_interface: ^0.6.0+5
-  oidc_web: ^0.6.0+5
-  oidc_windows: ^0.3.1+10
+  oidc_android: ^0.7.0+2
+  oidc_core: ^0.13.1
+  oidc_ios: ^0.7.0+2
+  oidc_linux: ^0.3.1
+  oidc_macos: ^0.7.0+2
+  oidc_platform_interface: ^0.6.0+6
+  oidc_web: ^0.6.0+6
+  oidc_windows: ^0.3.1+11
   # ====================
   http: ^1.1.0
   jose_plus: ^0.4.4

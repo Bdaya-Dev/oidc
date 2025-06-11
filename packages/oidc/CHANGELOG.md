@@ -1,3 +1,19 @@
+## 0.11.1
+
+ - **FIX**: streamline external user agent configuration and add custom LLDB init file for iOS scheme. ([57b0e347](https://github.com/Bdaya-Dev/oidc/commit/57b0e3473abfa6433cac78d0239d815ac863b07e))
+ - **FIX**: add platform-specific options for OIDC user manager and enable GPU validation in macOS scheme. ([e9dd4eaf](https://github.com/Bdaya-Dev/oidc/commit/e9dd4eaf5dd249ea353f6a22c0fe4cc3be4c7ee5))
+ - **FIX**: update Chrome executable path in Linux setup script. ([8b50aeab](https://github.com/Bdaya-Dev/oidc/commit/8b50aeab2c6738582421c44c9d8f0b85c131d011))
+ - **FIX**: enable headless mode for Chrome in default Linux applications setup. ([dda1c2dc](https://github.com/Bdaya-Dev/oidc/commit/dda1c2dc9f43a034d553eb043294b80e000f82f3))
+ - **FIX**: update integration test setup and add script for default Linux applications. ([bc5cc945](https://github.com/Bdaya-Dev/oidc/commit/bc5cc9454f652acc28e0a7ddd93788339a46f508))
+ - **FIX**: remove unused import and simplify null check in secret page. ([427ca35a](https://github.com/Bdaya-Dev/oidc/commit/427ca35a9f4720400bd5b51639ab347895505de7))
+ - **FIX**: update platform detection for Web and remove WASM support. ([9de7ad56](https://github.com/Bdaya-Dev/oidc/commit/9de7ad56bfe0d9d49479e015a0bcb0c5e53be26b))
+ - **FIX**: remove commented-out OIDC conformance token from app_test.dart. ([fe377835](https://github.com/Bdaya-Dev/oidc/commit/fe377835b946bdacb2b180dbbc7a02d8ce1aed71))
+ - **FEAT**: enhance OIDC example app UI and initialization logic. ([e6a25de7](https://github.com/Bdaya-Dev/oidc/commit/e6a25de766b777ea06ee4b4cb3c96567a3b81232))
+ - **FEAT**: log OIDC conformance token during integration test execution. ([b1db4893](https://github.com/Bdaya-Dev/oidc/commit/b1db489326f5ffdd4b2f16eae04b9795ac8212c9))
+ - **FEAT**: enhance OIDC conformance token handling in integration tests and user manager. ([1947c29f](https://github.com/Bdaya-Dev/oidc/commit/1947c29fbd9ab20d0bd62065f697dac2fba1f682))
+ - **FEAT**: add OIDC_CONFORMANCE_TOKEN to integration test workflows and adjust test initialization order. ([b74f2960](https://github.com/Bdaya-Dev/oidc/commit/b74f29605313022657e739a6e8b09538a3a9236d))
+ - **FEAT**: Enhance OIDC store with manager ID support. ([56f42f2d](https://github.com/Bdaya-Dev/oidc/commit/56f42f2d67fd97c587611870e412de8cb357c4e4))
+
 ## 0.11.0
 
 > Note: This release has breaking changes.

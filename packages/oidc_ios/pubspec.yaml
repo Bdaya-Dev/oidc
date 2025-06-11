@@ -1,6 +1,6 @@
 name: oidc_ios
 description: iOS implementation of the oidc plugin
-version: 0.7.0+1
+version: 0.7.0+2
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_ios
 homepage: https://bdaya-dev.github.io/oidc/
 environment:
@@ -20,9 +20,9 @@ dependencies:
     sdk: flutter
   flutter_appauth: ^9.0.0
   flutter_appauth_platform_interface: ^9.0.0
-  oidc_core: ^0.13.0
-  oidc_flutter_appauth: ^0.6.0+1
-  oidc_platform_interface: ^0.6.0+5
+  oidc_core: ^0.13.1
+  oidc_flutter_appauth: ^0.6.0+2
+  oidc_platform_interface: ^0.6.0+6
 
 dev_dependencies:
   flutter_test:
