@@ -24,6 +24,7 @@ abstract class OidcUserManagerBase {
     required this.settings,
     this.httpClient,
     JsonWebKeyStore? keyStore,
+    this.id,
   })  : discoveryDocumentUri = null,
         currentDiscoveryDocument = discoveryDocument,
         _keyStore = keyStore;
@@ -37,9 +38,12 @@ abstract class OidcUserManagerBase {
     required this.settings,
     this.httpClient,
     JsonWebKeyStore? keyStore,
+    this.id,
   }) : _keyStore = keyStore;
 
   bool get isWeb;
+
+  final String? id;
 
   /// The client authentication information.
   final OidcClientAuthentication clientCredentials;
@@ -215,6 +219,7 @@ abstract class OidcUserManagerBase {
       },
       maxAge: maxAgeOverride ?? settings.maxAge,
       options: getSerializableOptions(options),
+      managerId: id,
     );
     // this function adds state, state data, nonce to the store
     // the state/state data is only until we get a response (success or fail).
@@ -507,6 +512,9 @@ abstract class OidcUserManagerBase {
       logAndThrow("Didn't receive correct state value.");
     }
     final parsedState = OidcState.fromStorageString(resStateData);
+    if (parsedState.managerId != id) {
+      return; // this state is not for this manager.
+    }
     await store.setStateData(state: resState, stateData: null);
     if (parsedState is! OidcEndSessionState) {
       logAndThrow('received wrong state type (${parsedState.runtimeType}).');
@@ -553,7 +561,9 @@ abstract class OidcUserManagerBase {
         //impossible case.
         logAndThrow('received wrong state type (${stateData.runtimeType}).');
       }
-
+      if (stateData.managerId != id) {
+        return null; // this state is not for this manager.
+      }
       if (grantType == OidcConstants_GrantType.implicit) {
         //implicit grant gets the token directly from the response.
         final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
@@ -710,6 +720,7 @@ abstract class OidcUserManagerBase {
         OidcConstants_Store.currentUserInfo: jsonEncode(user.userInfo),
         OidcConstants_Store.currentUserAttributes: jsonEncode(user.attributes),
       },
+      managerId: id,
     );
   }
 
@@ -1020,7 +1031,7 @@ abstract class OidcUserManagerBase {
           StackTrace.current,
         );
       }
-      await store.setCurrentNonce(null);
+      await store.setCurrentNonce(null, managerId: id);
 
       await store.removeMany(
         OidcStoreNamespace.secureTokens,
@@ -1030,6 +1041,7 @@ abstract class OidcUserManagerBase {
           OidcConstants_Store.currentUserAttributes,
           OidcConstants_AuthParameters.nonce,
         },
+        managerId: id,
       );
     }
     return null;
@@ -1040,8 +1052,15 @@ abstract class OidcUserManagerBase {
     required Set<OidcStoreNamespace> toDelete,
   }) async {
     for (final element in toDelete) {
-      final keys = await store.getAllKeys(element);
-      await store.removeMany(element, keys: keys);
+      final keys = await store.getAllKeys(
+        element,
+        managerId: id,
+      );
+      await store.removeMany(
+        element,
+        keys: keys,
+        managerId: id,
+      );
     }
   }
 
@@ -1082,6 +1101,7 @@ abstract class OidcUserManagerBase {
     final cachedDocument = await store.get(
       OidcStoreNamespace.discoveryDocument,
       key: key,
+      managerId: id,
     );
     if (cachedDocument != null) {
       try {
@@ -1128,6 +1148,7 @@ abstract class OidcUserManagerBase {
       OidcStoreNamespace.discoveryDocument,
       key: key,
       value: jsonEncode(discoveryDocument.src),
+      managerId: id,
     );
   }
 
@@ -1143,6 +1164,7 @@ abstract class OidcUserManagerBase {
     final tokens = await store.getMany(
       OidcStoreNamespace.secureTokens,
       keys: usedKeys,
+      managerId: id,
     );
     final rawToken = tokens[OidcConstants_Store.currentToken];
     final rawUserInfo = tokens[OidcConstants_Store.currentUserInfo];
@@ -1212,6 +1234,7 @@ abstract class OidcUserManagerBase {
         await store.removeMany(
           OidcStoreNamespace.secureTokens,
           keys: usedKeys,
+          managerId: id,
         );
       }
     }
@@ -1238,6 +1261,9 @@ abstract class OidcUserManagerBase {
       }
 
       final stateData = OidcState.fromStorageString(stateDataRaw);
+      if (stateData.managerId != id) {
+        continue; // this state is not for this manager.
+      }
       switch (stateData) {
         case OidcAuthorizeState():
           final resp = await OidcEndpoints.parseAuthorizeResponse(
@@ -1280,11 +1306,14 @@ abstract class OidcUserManagerBase {
     if (requestType != OidcConstants_Store.frontChannelLogout) {
       return false;
     }
-    await handleFrontChannelLogoutRequest(
-      OidcFrontChannelLogoutIncomingRequest.fromJson(
-        requestUri.queryParameters,
-      ),
+    final parsedRequest = OidcFrontChannelLogoutIncomingRequest.fromJson(
+      requestUri.queryParameters,
     );
+    if (parsedRequest.managerId != id) {
+      //this request is not for this manager.
+      return false;
+    }
+    await handleFrontChannelLogoutRequest(parsedRequest);
     return true;
   }
 

@@ -10,5 +10,6 @@ Map<String, dynamic> _$OidcStateToJson(OidcState instance) => <String, dynamic>{
       'id': instance.id,
       'created_at': const OidcNumericDateConverter().toJson(instance.createdAt),
       'operationDiscriminator': instance.operationDiscriminator,
+      'managerId': instance.managerId,
       'data': instance.data,
     };

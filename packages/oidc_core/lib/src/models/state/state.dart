@@ -22,6 +22,7 @@ class OidcState {
     String? id,
     DateTime? createdAt,
     this.data,
+    this.managerId,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? clock.now();
 
@@ -53,6 +54,13 @@ class OidcState {
     includeFromJson: true,
   )
   final String operationDiscriminator;
+
+  @JsonKey(
+    name: OidcConstants_Store.managerId,
+    includeToJson: true,
+    includeFromJson: true,
+  )
+  final String? managerId;
 
   /// custom "state", which can be used by a caller to have "data" round tripped
   ///

@@ -122,10 +122,12 @@ jobs:
         run: flutter doctor -v
       - name: Run Android Emulator and Integration Tests
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         with:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
-          script: melos run integration_test:android
+          script: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d android --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
       - name: Find .info files and files in coverage folders
         run: |
           echo "Listing all .info files and files inside any coverage/ directory:"
@@ -162,24 +164,27 @@ jobs:
           xcrun simctl boot "${UDID:?No Simulator with this name found}"
       - name: Wait for Simulator to be Ready
         run: |
-            COUNT=0
-            MAX_RETRIES=12  # Wait for a maximum of 12 * 5 = 60 seconds
-            until xcrun simctl list devices | grep -q "Booted"; do
-              if [ $COUNT -ge $MAX_RETRIES ]; then
-                echo "Simulator did not boot within the expected time."
-                exit 1
-              fi
-              echo "Waiting for simulator to boot... Attempt: $((COUNT+1))"
-              sleep 20
-              COUNT=$((COUNT+1))
-            done
-            echo "Simulator is ready."
+          COUNT=0
+          MAX_RETRIES=12  # Wait for a maximum of 12 * 5 = 60 seconds
+          until xcrun simctl list devices | grep -q "Booted"; do
+            if [ $COUNT -ge $MAX_RETRIES ]; then
+              echo "Simulator did not boot within the expected time."
+              exit 1
+            fi
+            echo "Waiting for simulator to boot... Attempt: $((COUNT+1))"
+            sleep 20
+            COUNT=$((COUNT+1))
+          done
+          echo "Simulator is ready."
       - name: Run flutter precache
         run: flutter precache -v
       - name: Run flutter doctor
         run: flutter doctor -v
       - name: Integration Tests
-        run: melos run integration_test:ios
+        run: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage --ignore-timeouts -d iPhone --coverage-path coverage/ios-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} -r expanded
+        working-directory: packages/oidc/example
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
@@ -202,14 +207,15 @@ jobs:
       # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
       - name: Run Web Integration Tests
         working-directory: ${{ matrix.working-directory }}
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         run: |
           # first we run chromedriver on port 4444 and Xvfb
           export DISPLAY=:99
           chromedriver --port=4444 --trace-buffer-size=100000 &
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
-
           # then we start flutter drive
-          flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --dart-define=CI=true | tee output.log
+          flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --web-port=22433 --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} | tee output.log
           # We have to check the output for failed tests matching the string "[E]"
           output=$(<output.log)
           if [[ "$output" =~ \[E\] ]]; then
@@ -239,7 +245,10 @@ jobs:
       - name: Run flutter precache
         run: flutter precache -v
       - name: Integration Tests
-        run: melos run integration_test:macos
+        working-directory: packages/oidc/example
+        run: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d macos --coverage-path coverage/macos-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} -r expanded
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
@@ -249,6 +258,9 @@ jobs:
           if-no-files-found: error
   linux:
     runs-on: ubuntu-latest
+    # container:
+    #   image: selenium/standalone-chrome:latest
+    #   options: --user root
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -260,25 +272,33 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libsecret-1-dev libgtk-3-dev libx11-dev pkg-config cmake ninja-build libblkid-dev liblzma-dev
+          sudo apt-get install -y xvfb libsecret-1-dev libgtk-3-dev libx11-dev pkg-config cmake ninja-build libblkid-dev liblzma-dev xdg-utils libvulkan1 fonts-liberation
+        shell: bash
       - name: Run flutter precache
         run: flutter precache -v
+      
       - name: Integration Tests
-        run: melos run integration_test:linux
+        working-directory: packages/oidc/example
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
+        run: |
+          google-chrome --version
+          chmod +x .ci/scripts/set_default_linux_apps.sh
+          ./.ci/scripts/set_default_linux_apps.sh
+          xvfb-run --auto-servernum flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} -r expanded
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
           name: linux-integration-coverage
           path: packages/oidc/example/coverage/linux-coverage.info
           include-hidden-files: true
-          if-no-files-found: error          
+          if-no-files-found: error
   windows:
     runs-on: windows-latest
     defaults:
       run:
         working-directory: packages/oidc/example
     steps:
-      
       - name: Checkout Code
         uses: actions/checkout@v4
       - name: Set up Environment
@@ -286,7 +306,10 @@ jobs:
       - name: Run flutter precache
         run: flutter precache -v
       - name: Integration Tests
-        run: dart pub global run melos run integration_test:windows
+        working-directory: packages/oidc/example
+        run: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d windows --coverage-path coverage/windows-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         shell: bash
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
@@ -294,8 +317,8 @@ jobs:
           name: windows-integration-coverage
           path: packages/oidc/example/coverage/windows-coverage.info
           include-hidden-files: true
-          if-no-files-found: error     
-      
+          if-no-files-found: error
+
   upload-coverage:
     runs-on: ubuntu-latest
     needs: [unit_tests, android, ios, macos, linux, windows]
@@ -317,11 +340,11 @@ jobs:
           ls -lR coverage
       - name: Download integration coverages
         uses: actions/download-artifact@v4
-        with:          
+        with:
           path: packages/oidc/example/coverage/
-          pattern: '*-integration-coverage'
+          pattern: "*-integration-coverage"
           merge-multiple: true
-      
+
       - name: Combine Coverage Results
         env:
           REPO_PATH: ${{ github.workspace }}

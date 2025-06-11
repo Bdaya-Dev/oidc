@@ -104,6 +104,7 @@ class OidcPlatformSpecificOptions_Native {
     this.successfulPageResponse,
     this.methodMismatchResponse,
     this.notFoundResponse,
+    this.launchUrl,
   });
 
   /// What to return if a URI is matched
@@ -114,6 +115,9 @@ class OidcPlatformSpecificOptions_Native {
 
   /// What to return if a different path is used.
   final String? notFoundResponse;
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  final Future<bool> Function(Uri url)? launchUrl;
 
   Map<String, dynamic> toJson() {
     return _$OidcPlatformSpecificOptions_NativeToJson(this);

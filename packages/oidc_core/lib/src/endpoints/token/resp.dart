@@ -8,7 +8,6 @@ part 'resp.g.dart';
 @JsonSerializable(
   createFactory: true,
   createToJson: false,
-  constructor: '_',
 )
 class OidcTokenResponse extends JsonBasedResponse {
   OidcTokenResponse({

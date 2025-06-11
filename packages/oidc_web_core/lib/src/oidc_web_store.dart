@@ -33,12 +33,14 @@ class OidcWebStore implements OidcStore {
   /// if true, we use the `sessionStorage` on web for the [OidcStoreNamespace.session] namespace.
   final OidcWebStoreSessionManagementLocation webSessionManagementLocation;
 
-  String _getKey(OidcStoreNamespace namespace, String key) {
-    return [storagePrefix, namespace.value, key].nonNulls.join('.');
+  String _getKey(OidcStoreNamespace namespace, String key, String? managerId) {
+    return [storagePrefix, managerId, namespace.value, key].nonNulls.join('.');
   }
 
-  String _getNamespaceKeys(OidcStoreNamespace namespace) {
-    return [storagePrefix, 'keys', namespace.value].nonNulls.join('.');
+  String _getNamespaceKeys(OidcStoreNamespace namespace, String? managerId) {
+    return [storagePrefix, managerId, 'keys', namespace.value]
+        .nonNulls
+        .join('.');
   }
 
   @override
@@ -49,64 +51,76 @@ class OidcWebStore implements OidcStore {
   Future<void> _registerKeyForNamespace(
     OidcStoreNamespace namespace,
     Set<String> keys,
+    String? managerId,
   ) async {
     final prev = await getAllKeys(namespace);
     final newKeys = prev.union(keys).toList();
-    await _setAllKeys(namespace, newKeys);
+    await _setAllKeys(namespace, newKeys, managerId);
   }
 
   Future<void> _unRegisterKeyForNamespace(
     OidcStoreNamespace namespace,
     Set<String> keys,
+    String? managerId,
   ) async {
     final prev = await getAllKeys(namespace);
     final newKeys = prev.difference(keys).toList();
-    await _setAllKeys(namespace, newKeys);
+    await _setAllKeys(namespace, newKeys, managerId);
   }
 
   @override
-  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace) async {
+  Future<Set<String>> getAllKeys(
+    OidcStoreNamespace namespace, {
+    String? managerId,
+  }) async {
     final keysRaw =
-        window.localStorage.getItem(_getNamespaceKeys(namespace)) ?? '[]';
+        window.localStorage.getItem(_getNamespaceKeys(namespace, managerId)) ??
+            '[]';
     return (jsonDecode(keysRaw) as List).cast<String>().toSet();
   }
 
   Future<void> _setAllKeys(
     OidcStoreNamespace namespace,
     List<String> keys,
+    String? managerId,
   ) async {
-    window.localStorage.setItem(_getNamespaceKeys(namespace), jsonEncode(keys));
+    window.localStorage
+        .setItem(_getNamespaceKeys(namespace, managerId), jsonEncode(keys));
   }
 
   Future<Map<String, String>> _defaultGetMany(
     OidcStoreNamespace namespace,
     Set<String> keys,
+    String? managerId,
   ) async {
     return keys
         .map(
           (key) => MapEntry(
             key,
-            window.localStorage.getItem(_getKey(namespace, key)),
+            window.localStorage.getItem(_getKey(namespace, key, managerId)),
           ),
         )
         .purify();
   }
 
-  Future<void> _defaultSetMany(
+  void _defaultSetMany(
     OidcStoreNamespace namespace,
     Map<String, String> values,
-  ) async {
+    String? managerId,
+  ) {
     for (final entry in values.entries) {
-      window.localStorage.setItem(_getKey(namespace, entry.key), entry.value);
+      window.localStorage
+          .setItem(_getKey(namespace, entry.key, managerId), entry.value);
     }
   }
 
-  Future<void> _defaultRemoveMany(
+  void _defaultRemoveMany(
     OidcStoreNamespace namespace,
     Set<String> keys,
-  ) async {
+    String? managerId,
+  ) {
     for (final key in keys) {
-      window.localStorage.removeItem(_getKey(namespace, key));
+      window.localStorage.removeItem(_getKey(namespace, key, managerId));
     }
   }
 
@@ -114,11 +128,12 @@ class OidcWebStore implements OidcStore {
   Future<Map<String, String>> getMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
+    String? managerId,
   }) async {
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
         //TODO: find a way to secure these tokens
-        return _defaultGetMany(namespace, keys);
+        return _defaultGetMany(namespace, keys, managerId);
       case OidcStoreNamespace.session:
         if (webSessionManagementLocation ==
             OidcWebStoreSessionManagementLocation.sessionStorage) {
@@ -126,17 +141,18 @@ class OidcWebStore implements OidcStore {
               .map(
                 (key) => MapEntry(
                   key,
-                  window.sessionStorage.getItem(_getKey(namespace, key)),
+                  window.sessionStorage
+                      .getItem(_getKey(namespace, key, managerId)),
                 ),
               )
               .purify();
         }
-        return _defaultGetMany(namespace, keys);
+        return _defaultGetMany(namespace, keys, managerId);
       case OidcStoreNamespace.request:
       case OidcStoreNamespace.state:
       case OidcStoreNamespace.discoveryDocument:
       case OidcStoreNamespace.stateResponse:
-        return _defaultGetMany(namespace, keys);
+        return _defaultGetMany(namespace, keys, managerId);
     }
   }
 
@@ -144,29 +160,30 @@ class OidcWebStore implements OidcStore {
   Future<void> setMany(
     OidcStoreNamespace namespace, {
     required Map<String, String> values,
+    String? managerId,
   }) async {
-    await _registerKeyForNamespace(namespace, values.keys.toSet());
+    await _registerKeyForNamespace(namespace, values.keys.toSet(), managerId);
 
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
         //TODO: find a way to secure these tokens
-        return _defaultSetMany(namespace, values);
+        return _defaultSetMany(namespace, values, managerId);
 
       case OidcStoreNamespace.session:
         if (webSessionManagementLocation ==
             OidcWebStoreSessionManagementLocation.sessionStorage) {
           for (final element in values.entries) {
-            window.sessionStorage
-                .setItem(_getKey(namespace, element.key), element.value);
+            window.sessionStorage.setItem(
+                _getKey(namespace, element.key, managerId), element.value);
           }
         } else {
-          await _defaultSetMany(namespace, values);
+          _defaultSetMany(namespace, values, managerId);
         }
       case OidcStoreNamespace.request:
       case OidcStoreNamespace.state:
       case OidcStoreNamespace.stateResponse:
       case OidcStoreNamespace.discoveryDocument:
-        await _defaultSetMany(namespace, values);
+        _defaultSetMany(namespace, values, managerId);
     }
   }
 
@@ -174,28 +191,30 @@ class OidcWebStore implements OidcStore {
   Future<void> removeMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
+    String? managerId,
   }) async {
-    await _unRegisterKeyForNamespace(namespace, keys);
+    await _unRegisterKeyForNamespace(namespace, keys, managerId);
     // final mappedKeys = keys.map((e) => _getKey(namespace, e)).toSet();
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
         // TODO: find a way to secure these tokens
-        await _defaultRemoveMany(namespace, keys);
+        _defaultRemoveMany(namespace, keys, managerId);
 
       case OidcStoreNamespace.session:
         if (webSessionManagementLocation ==
             OidcWebStoreSessionManagementLocation.sessionStorage) {
           for (final element in keys) {
-            window.sessionStorage.removeItem(_getKey(namespace, element));
+            window.sessionStorage
+                .removeItem(_getKey(namespace, element, managerId));
           }
         } else {
-          await _defaultRemoveMany(namespace, keys);
+          _defaultRemoveMany(namespace, keys, managerId);
         }
       case OidcStoreNamespace.request:
       case OidcStoreNamespace.state:
       case OidcStoreNamespace.discoveryDocument:
       case OidcStoreNamespace.stateResponse:
-        await _defaultRemoveMany(namespace, keys);
+        _defaultRemoveMany(namespace, keys, managerId);
     }
   }
 }

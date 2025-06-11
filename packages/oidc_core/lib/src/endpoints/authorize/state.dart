@@ -25,6 +25,7 @@ class OidcAuthorizeState extends OidcState {
     super.id,
     super.createdAt,
     super.data,
+    super.managerId,
   }) : super(
           operationDiscriminator:
               OidcConstants_OperationDiscriminators.authorize,

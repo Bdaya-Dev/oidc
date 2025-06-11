@@ -19,6 +19,7 @@ class OidcEndSessionState extends OidcState {
     super.createdAt,
     super.data,
     super.id,
+    super.managerId,
   }) : super(
           operationDiscriminator:
               OidcConstants_OperationDiscriminators.endSession,

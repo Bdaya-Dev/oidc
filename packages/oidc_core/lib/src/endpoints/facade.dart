@@ -135,6 +135,7 @@ class OidcEndpoints {
       extraTokenParams: input.extraTokenParameters,
       options: input.options,
       extraTokenHeaders: input.extraTokenHeaders,
+      managerId: input.managerId,
     );
     //store the state
     if (store != null) {

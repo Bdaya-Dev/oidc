@@ -11,6 +11,7 @@ class OidcSimpleAuthorizationCodeFlowRequest {
     required this.scope,
     required this.clientId,
     required this.redirectUri,
+    this.managerId,
     this.originalUri,
     this.display,
     this.prompt,
@@ -80,6 +81,9 @@ class OidcSimpleAuthorizationCodeFlowRequest {
 
   /// see [OidcAuthorizeRequest.extra].
   Map<String, dynamic>? extraParameters;
+
+  /// The id of the manager that will handle this request.
+  String? managerId;
 }
 
 /// The result of processing an [OidcSimpleAuthorizationCodeFlowRequest]

@@ -5,26 +5,44 @@ import 'state_store.dart';
 ///
 /// for a persistent store, consider using (oidc_default_store)[https://pub.dev/packages/oidc_default_store]
 class OidcMemoryStore implements OidcStore {
-  final _namespaces = <OidcStoreNamespace, Map<String, String>>{};
+  static const Object nullToken = Object();
+  final _namespaces = <OidcStoreNamespace, Map<Object, Map<String, String>>>{};
 
-  Map<String, String> _perNamespaceMap(OidcStoreNamespace namespace) {
-    return _namespaces[namespace] ??= {};
+  Map<String, String> _perNamespaceMap(
+    OidcStoreNamespace namespace, {
+    required String? managerId,
+  }) {
+    final namespaceMap = _namespaces[namespace] ??= {};
+    return namespaceMap[managerId ?? nullToken] ??= <String, String>{};
   }
 
   @override
-  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace) {
-    return Future.value(_perNamespaceMap(namespace).keys.toSet());
+  Future<Set<String>> getAllKeys(OidcStoreNamespace namespace,
+      {String? managerId}) {
+    return Future.value(_perNamespaceMap(
+      namespace,
+      managerId: managerId,
+    ).keys.toSet());
   }
 
   @override
   Future<Map<String, String>> getMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
+    String? managerId,
   }) {
     return Future.value(
       Map.fromEntries(
         keys
-            .map((k) => MapEntry(k, _perNamespaceMap(namespace)[k]))
+            .map(
+              (k) => MapEntry(
+                k,
+                _perNamespaceMap(
+                  namespace,
+                  managerId: managerId,
+                )[k],
+              ),
+            )
             .where((element) => element.value != null),
       ).cast<String, String>(),
     );
@@ -39,8 +57,10 @@ class OidcMemoryStore implements OidcStore {
   Future<void> removeMany(
     OidcStoreNamespace namespace, {
     required Set<String> keys,
+    String? managerId,
   }) {
-    _perNamespaceMap(namespace).removeWhere((key, value) => keys.contains(key));
+    _perNamespaceMap(namespace, managerId: managerId)
+        .removeWhere((key, value) => keys.contains(key));
     return Future.value();
   }
 
@@ -48,8 +68,9 @@ class OidcMemoryStore implements OidcStore {
   Future<void> setMany(
     OidcStoreNamespace namespace, {
     required Map<String, String> values,
+    String? managerId,
   }) {
-    _perNamespaceMap(namespace).addAll(values);
+    _perNamespaceMap(namespace, managerId: managerId).addAll(values);
     return Future.value();
   }
 }
