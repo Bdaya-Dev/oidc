@@ -6,9 +6,7 @@ all the classes that are exposed by this plugin start with `Oidc*`.
 
 ### Construction
 
-The main class this plugin provides, as the name suggests, it manages the current user session.
-
-> NOTE: you should only maintain a single instance of this class in your app.
+`OidcUserManager` is the main class this plugin provides, as the name suggests, it manages the current user session.
 
 you have two ways to construct it, depending on the availability of the [Discovery Document](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig).
 
@@ -39,6 +37,23 @@ you have two ways to construct it, depending on the availability of the [Discove
     ```
 
 aside from the discovery document, both constructors share the same parameters:
+
+#### Constructing multiple user managers
+
+If you want to support multiple identity providers, you can construct multiple `OidcUserManager` instances, each with its own discovery document and `id`.
+
+```dart
+final googleManager = OidcUserManager.lazy(
+    id: 'google',
+    discoveryDocumentUri: Uri.parse('https://accounts.google.com/.well-known/openid-configuration'),
+    //...other parameters.
+);
+final microsoftManager = OidcUserManager.lazy(
+    id: 'microsoft',
+    discoveryDocumentUri: Uri.parse('https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration'),
+    //...other parameters.
+);
+```
 
 #### clientCredentials
 
