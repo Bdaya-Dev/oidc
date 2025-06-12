@@ -1,3 +1,9 @@
+## 0.14.2
+
+ - **REFACTOR**: remove unnecessary library declaration and test annotation from device_authorization_test.dart. ([a8886cfe](https://github.com/Bdaya-Dev/oidc/commit/a8886cfe5c431612be2e3b7dd1db98db53dd6356))
+ - **FEAT**: add token revocation methods to OidcUserManager. ([4850788f](https://github.com/Bdaya-Dev/oidc/commit/4850788f72f759479c67b16776ff4c43bc3f6b47))
+ - **FEAT**: add token revocation support with request and response models. ([a6b635f0](https://github.com/Bdaya-Dev/oidc/commit/a6b635f03659f486bebfe3c53d7df0a26e3a5b4c))
+
 ## 0.14.1
 
  - **FEAT**: update changelogs to reflect breaking changes and new features for multiple OIDC platforms. ([4caca121](https://github.com/Bdaya-Dev/oidc/commit/4caca121f63fd21d71aaffa2730b092fc26a7da5))

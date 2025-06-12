@@ -15,6 +15,58 @@ Packages with breaking changes:
 
 Packages with other changes:
 
+ - [`oidc_core` - `v0.14.2`](#oidc_core---v0142)
+ - [`oidc_platform_interface` - `v0.6.0+8`](#oidc_platform_interface---v0608)
+ - [`oidc_desktop` - `v0.6.1+1`](#oidc_desktop---v0611)
+ - [`oidc_ios` - `v0.7.0+4`](#oidc_ios---v0704)
+ - [`oidc_flutter_appauth` - `v0.6.0+4`](#oidc_flutter_appauth---v0604)
+ - [`oidc_macos` - `v0.7.0+4`](#oidc_macos---v0704)
+ - [`oidc_web` - `v0.6.0+8`](#oidc_web---v0608)
+ - [`oidc_android` - `v0.7.0+4`](#oidc_android---v0704)
+ - [`oidc_default_store` - `v0.4.0+2`](#oidc_default_store---v0402)
+ - [`oidc_linux` - `v0.4.1+1`](#oidc_linux---v0411)
+ - [`oidc` - `v0.12.1+1`](#oidc---v01211)
+ - [`oidc_windows` - `v0.3.1+13`](#oidc_windows---v03113)
+ - [`oidc_web_core` - `v0.3.1+2`](#oidc_web_core---v0312)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_platform_interface` - `v0.6.0+8`
+ - `oidc_desktop` - `v0.6.1+1`
+ - `oidc_ios` - `v0.7.0+4`
+ - `oidc_flutter_appauth` - `v0.6.0+4`
+ - `oidc_macos` - `v0.7.0+4`
+ - `oidc_web` - `v0.6.0+8`
+ - `oidc_android` - `v0.7.0+4`
+ - `oidc_default_store` - `v0.4.0+2`
+ - `oidc_linux` - `v0.4.1+1`
+ - `oidc` - `v0.12.1+1`
+ - `oidc_windows` - `v0.3.1+13`
+ - `oidc_web_core` - `v0.3.1+2`
+
+---
+
+#### `oidc_core` - `v0.14.2`
+
+ - **REFACTOR**: remove unnecessary library declaration and test annotation from device_authorization_test.dart. ([a8886cfe](https://github.com/Bdaya-Dev/oidc/commit/a8886cfe5c431612be2e3b7dd1db98db53dd6356))
+ - **FEAT**: add token revocation methods to OidcUserManager. ([4850788f](https://github.com/Bdaya-Dev/oidc/commit/4850788f72f759479c67b16776ff4c43bc3f6b47))
+ - **FEAT**: add token revocation support with request and response models. ([a6b635f0](https://github.com/Bdaya-Dev/oidc/commit/a6b635f03659f486bebfe3c53d7df0a26e3a5b4c))
+
+
+## 2025-06-12
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
  - [`oidc` - `v0.12.1`](#oidc---v0121)
  - [`oidc_core` - `v0.14.1`](#oidc_core---v0141)
  - [`oidc_desktop` - `v0.6.1`](#oidc_desktop---v061)
