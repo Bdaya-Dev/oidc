@@ -1,3 +1,7 @@
+## 0.4.0
+
+ - **FEAT**: Enhance OIDC store with manager ID support. ([56f42f2d](https://github.com/Bdaya-Dev/oidc/commit/56f42f2d67fd97c587611870e412de8cb357c4e4))
+
 ## 0.3.0
 
 > Note: This release has breaking changes.
