@@ -95,7 +95,7 @@ void main() {
         final (path, body) = prepareTestPlanRequest(
           clientId: clientId,
           clientSecret: clientSecret,
-          planName: 'oidcc-client-basic-certification-test-plan',
+          planName: 'oidcc-client-test-plan',
           description: 'package:oidc Conformance testing on $platform',
           redirectUri: redirectUri.toString(),
           requestType: 'plain_http_request',
