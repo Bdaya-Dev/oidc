@@ -11,6 +11,69 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 Packages with breaking changes:
 
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc` - `v0.12.1`](#oidc---v0121)
+ - [`oidc_core` - `v0.14.1`](#oidc_core---v0141)
+ - [`oidc_desktop` - `v0.6.1`](#oidc_desktop---v061)
+ - [`oidc_linux` - `v0.4.1`](#oidc_linux---v041)
+ - [`oidc_android` - `v0.7.0+3`](#oidc_android---v0703)
+ - [`oidc_default_store` - `v0.4.0+1`](#oidc_default_store---v0401)
+ - [`oidc_ios` - `v0.7.0+3`](#oidc_ios---v0703)
+ - [`oidc_flutter_appauth` - `v0.6.0+3`](#oidc_flutter_appauth---v0603)
+ - [`oidc_macos` - `v0.7.0+3`](#oidc_macos---v0703)
+ - [`oidc_platform_interface` - `v0.6.0+7`](#oidc_platform_interface---v0607)
+ - [`oidc_web_core` - `v0.3.1+1`](#oidc_web_core---v0311)
+ - [`oidc_web` - `v0.6.0+7`](#oidc_web---v0607)
+ - [`oidc_windows` - `v0.3.1+12`](#oidc_windows---v03112)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_android` - `v0.7.0+3`
+ - `oidc_default_store` - `v0.4.0+1`
+ - `oidc_ios` - `v0.7.0+3`
+ - `oidc_flutter_appauth` - `v0.6.0+3`
+ - `oidc_macos` - `v0.7.0+3`
+ - `oidc_platform_interface` - `v0.6.0+7`
+ - `oidc_web_core` - `v0.3.1+1`
+ - `oidc_web` - `v0.6.0+7`
+ - `oidc_windows` - `v0.3.1+12`
+
+---
+
+#### `oidc` - `v0.12.1`
+
+ - **FEAT**: update changelogs to reflect breaking changes and new features for multiple OIDC platforms. ([4caca121](https://github.com/Bdaya-Dev/oidc/commit/4caca121f63fd21d71aaffa2730b092fc26a7da5))
+
+#### `oidc_core` - `v0.14.1`
+
+ - **FEAT**: update changelogs to reflect breaking changes and new features for multiple OIDC platforms. ([4caca121](https://github.com/Bdaya-Dev/oidc/commit/4caca121f63fd21d71aaffa2730b092fc26a7da5))
+
+#### `oidc_desktop` - `v0.6.1`
+
+ - **FEAT**: update changelogs to reflect breaking changes and new features for multiple OIDC platforms. ([4caca121](https://github.com/Bdaya-Dev/oidc/commit/4caca121f63fd21d71aaffa2730b092fc26a7da5))
+
+#### `oidc_linux` - `v0.4.1`
+
+ - **FEAT**: update changelogs to reflect breaking changes and new features for multiple OIDC platforms. ([4caca121](https://github.com/Bdaya-Dev/oidc/commit/4caca121f63fd21d71aaffa2730b092fc26a7da5))
+
+# Change Log
+
+All notable changes to this project will be documented in this file.
+See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
+
+## 2025-06-12
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
  - [`oidc_linux` - `v0.4.0`](#oidc_linux---v040)
 
 Packages with other changes:

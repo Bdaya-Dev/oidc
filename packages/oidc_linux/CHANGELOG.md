@@ -1,3 +1,7 @@
+## 0.4.1
+
+ - **FEAT**: update changelogs to reflect breaking changes and new features for multiple OIDC platforms. ([4caca121](https://github.com/Bdaya-Dev/oidc/commit/4caca121f63fd21d71aaffa2730b092fc26a7da5))
+
 ## 0.4.0
 
 > Note: This release has breaking changes.
