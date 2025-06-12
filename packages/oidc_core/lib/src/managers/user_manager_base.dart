@@ -259,12 +259,11 @@ abstract class OidcUserManagerBase {
           password: password,
           scope: scopeOverride ?? settings.scope,
           clientId: clientCredentials.clientId,
-          extra: settings.extraTokenParameters,
+          extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
         ),
         credentials: clientCredentials,
         headers: settings.extraTokenHeaders,
         client: httpClient,
-        extraBodyFields: extraBodyFields,
         options: settings.options,
       ),
       defaultExecution: (hookRequest) {
@@ -274,7 +273,6 @@ abstract class OidcUserManagerBase {
           headers: hookRequest.headers,
           request: hookRequest.request,
           client: hookRequest.client,
-          extraBodyFields: hookRequest.extraBodyFields,
         );
       },
     );
@@ -426,6 +424,214 @@ abstract class OidcUserManagerBase {
     }
   }
 
+  /// Revokes the current user's access token.
+  ///
+  /// This method sends a revocation request to the authorization server's
+  /// revocation endpoint to invalidate the access token. The token will no
+  /// longer be valid for accessing protected resources.
+  ///
+  /// **Parameters:**
+  /// - [discoveryDocumentOverride]: Optional discovery document to use instead
+  ///   of the default one
+  /// - [options]: Platform-specific options for the revocation request
+  /// - [forgetUser]: Whether to forget the current user after successful
+  ///   revocation (defaults to `true`)
+  /// - [overrideAccessToken]: Specific access token to revoke instead of the
+  ///   current user's token
+  /// - [revocationEndpointOverride]: Custom revocation endpoint URL to use
+  /// - [extraBodyFields]: Additional fields to include in the revocation request body
+  /// - [headers]: Additional HTTP headers to include in the request
+  ///
+  /// **Behavior:**
+  /// - Returns early if no current user exists
+  /// - Returns early if no access token is available to revoke
+  /// - Returns early if the authorization server doesn't provide a revocation endpoint
+  /// - Calls [forgetUser] automatically after successful revocation when [forgetUser] is `true`
+  /// - Uses hooks system to allow customization of the revocation process
+  ///
+  /// **Example:**
+  /// ```dart
+  /// // Revoke current user's access token
+  /// await userManager.revokeAccessToken();
+  ///
+  /// // Revoke specific token without forgetting user
+  /// await userManager.revokeAccessToken(
+  ///   overrideAccessToken: 'specific_token',
+  ///   forgetUser: false,
+  /// );
+  /// ```
+  Future<void> revokeAccessToken({
+    OidcProviderMetadata? discoveryDocumentOverride,
+    OidcPlatformSpecificOptions? options,
+    bool forgetUser = true,
+    String? overrideAccessToken,
+    Uri? revocationEndpointOverride,
+    Map<String, dynamic>? extraBodyFields,
+    Map<String, String>? headers,
+  }) async {
+    final currentUser = this.currentUser;
+    if (currentUser == null) {
+      return;
+    }
+    final token = overrideAccessToken ?? currentUser.token.accessToken;
+    if (token == null) {
+      return; // no access token to revoke.
+    }
+    ensureInit();
+    final discoveryDocument =
+        discoveryDocumentOverride ?? this.discoveryDocument;
+
+    final revocationEndpoint =
+        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+    if (revocationEndpoint == null) {
+      return; // no revocation endpoint, nothing to do.
+    }
+
+    final resp = await (settings.hooks?.revocation).execute(
+      request: OidcRevocationHookRequest(
+        metadata: discoveryDocument,
+        revocationEndpoint: revocationEndpoint,
+        credentials: clientCredentials,
+        headers: {
+          ...?settings.extraRevocationHeaders,
+          ...?headers,
+        },
+        request: OidcRevocationRequest(
+          token: token,
+          tokenTypeHint:
+              OidcConstants_RevocationParameters_TokenType.accessToken,
+          extra: {
+            ...?extraBodyFields,
+            ...?settings.extraRevocationParameters,
+          },
+        ),
+        options: getPlatformOptions(options),
+        client: httpClient,
+      ),
+      defaultExecution: (hookRequest) {
+        return OidcEndpoints.revokeToken(
+          revocationEndpoint: hookRequest.revocationEndpoint,
+          request: hookRequest.request,
+          client: hookRequest.client,
+          credentials: hookRequest.credentials,
+          headers: hookRequest.headers,
+        );
+      },
+    );
+    if (resp != null) {
+      if (forgetUser) {
+        await this.forgetUser();
+      }
+      return;
+    }
+    // revocation failed.
+    return;
+  }
+
+  /// Revokes the current user's refresh token.
+  ///
+  /// This method sends a revocation request to the authorization server's
+  /// revocation endpoint to invalidate the refresh token. The token will no
+  /// longer be valid for obtaining new access tokens.
+  ///
+  /// **Parameters:**
+  /// - [discoveryDocumentOverride]: Optional discovery document to use instead
+  ///   of the default one
+  /// - [options]: Platform-specific options for the revocation request
+  /// - [forgetUser]: Whether to forget the current user after successful
+  ///   revocation (defaults to `true`)
+  /// - [overrideRefreshToken]: Specific refresh token to revoke instead of the
+  ///   current user's token
+  /// - [revocationEndpointOverride]: Custom revocation endpoint URL to use
+  /// - [extraBodyFields]: Additional fields to include in the revocation request body
+  /// - [headers]: Additional HTTP headers to include in the request
+  ///
+  /// **Behavior:**
+  /// - Returns early if no current user exists
+  /// - Returns early if no refresh token is available to revoke
+  /// - Returns early if the authorization server doesn't provide a revocation endpoint
+  /// - Calls [forgetUser] automatically after successful revocation when [forgetUser] is `true`
+  /// - Uses hooks system to allow customization of the revocation process
+  ///
+  /// **Example:**
+  /// ```dart
+  /// // Revoke current user's refresh token
+  /// await userManager.revokeRefreshToken();
+  ///
+  /// // Revoke specific token with custom headers
+  /// await userManager.revokeRefreshToken(
+  ///   overrideRefreshToken: 'specific_refresh_token',
+  ///   headers: {'Custom-Header': 'value'},
+  /// );
+  /// ```
+  Future<void> revokeRefreshToken({
+    OidcProviderMetadata? discoveryDocumentOverride,
+    OidcPlatformSpecificOptions? options,
+    bool forgetUser = true,
+    String? overrideRefreshToken,
+    Uri? revocationEndpointOverride,
+    Map<String, dynamic>? extraBodyFields,
+    Map<String, String>? headers,
+  }) async {
+    final currentUser = this.currentUser;
+    if (currentUser == null) {
+      return;
+    }
+    final token = overrideRefreshToken ?? currentUser.token.refreshToken;
+    if (token == null) {
+      return; // no refresh token to revoke.
+    }
+    ensureInit();
+    final discoveryDocument =
+        discoveryDocumentOverride ?? this.discoveryDocument;
+
+    final revocationEndpoint =
+        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+    if (revocationEndpoint == null) {
+      return; // no revocation endpoint, nothing to do.
+    }
+
+    final resp = await (settings.hooks?.revocation).execute(
+      request: OidcRevocationHookRequest(
+        metadata: discoveryDocument,
+        revocationEndpoint: revocationEndpoint,
+        credentials: clientCredentials,
+        headers: {
+          ...?settings.extraRevocationHeaders,
+          ...?headers,
+        },
+        request: OidcRevocationRequest(
+          token: token,
+          tokenTypeHint:
+              OidcConstants_RevocationParameters_TokenType.refreshToken,
+          extra: {
+            ...?extraBodyFields,
+            ...?settings.extraRevocationParameters,
+          },
+        ),
+        options: getPlatformOptions(options),
+        client: httpClient,
+      ),
+      defaultExecution: (hookRequest) {
+        return OidcEndpoints.revokeToken(
+          revocationEndpoint: hookRequest.revocationEndpoint,
+          request: hookRequest.request,
+          client: hookRequest.client,
+          credentials: hookRequest.credentials,
+          headers: hookRequest.headers,
+        );
+      },
+    );
+    if (resp != null) {
+      if (forgetUser) {
+        await this.forgetUser();
+      }
+      return;
+    }
+    // revocation failed.
+    return;
+  }
+
   /// Logs out the current user and calls [forgetUser] if successful.
   Future<void> logout({
     String? logoutHint,
@@ -464,19 +670,19 @@ abstract class OidcUserManagerBase {
       );
     }
     final resultFuture = getEndSessionResponse(
-        discoveryDocument,
-        OidcEndSessionRequest(
-          clientId: clientCredentials.clientId,
-          postLogoutRedirectUri: postLogoutRedirectUri,
-          uiLocales: uiLocalesOverride ?? settings.uiLocales,
-          idTokenHint:
-              postLogoutRedirectUri == null ? null : currentUser.idToken,
-          extra: extraParameters,
-          logoutHint: logoutHint,
-          state: stateData?.id,
-        ),
-        options,
-        prep);
+      discoveryDocument,
+      OidcEndSessionRequest(
+        clientId: clientCredentials.clientId,
+        postLogoutRedirectUri: postLogoutRedirectUri,
+        uiLocales: uiLocalesOverride ?? settings.uiLocales,
+        idTokenHint: postLogoutRedirectUri == null ? null : currentUser.idToken,
+        extra: extraParameters,
+        logoutHint: logoutHint,
+        state: stateData?.id,
+      ),
+      options,
+      prep,
+    );
     if (stateData == null) {
       // they won't come back with a result!
       await forgetUser();
@@ -624,7 +830,6 @@ abstract class OidcUserManagerBase {
             headers: hookRequest.headers,
             request: hookRequest.request,
             client: hookRequest.client,
-            extraBodyFields: hookRequest.extraBodyFields,
           );
         },
       );
@@ -817,12 +1022,11 @@ abstract class OidcUserManagerBase {
           refreshToken: refreshToken,
           clientId: clientCredentials.clientId,
           clientSecret: clientCredentials.clientSecret,
-          extra: settings.extraTokenParameters,
+          extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
           scope: settings.scope,
         ),
         credentials: clientCredentials,
         headers: settings.extraTokenHeaders,
-        extraBodyFields: extraBodyFields,
         client: httpClient,
         options: settings.options,
       ),
@@ -833,7 +1037,6 @@ abstract class OidcUserManagerBase {
           client: tokenHookRequest.client,
           headers: tokenHookRequest.headers,
           request: tokenHookRequest.request,
-          extraBodyFields: tokenHookRequest.extraBodyFields,
         );
       },
     );
@@ -909,7 +1112,6 @@ abstract class OidcUserManagerBase {
             client: hookRequest.client,
             headers: hookRequest.headers,
             request: hookRequest.request,
-            extraBodyFields: hookRequest.extraBodyFields,
           );
         },
       );

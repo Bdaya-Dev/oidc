@@ -399,7 +399,73 @@ manager.events().listen((event) {
 });
 ```
 
+### Revoking tokens
 
+The `OidcUserManager` provides methods to revoke tokens at the authorization server, making them invalid for future use.
+
+#### revokeAccessToken
+
+Revokes the current user's access token, making it invalid for accessing protected resources.
+
+```dart
+// Revoke current user's access token and forget user
+await manager.revokeAccessToken();
+
+// Revoke specific token without forgetting user
+await manager.revokeAccessToken(
+  overrideAccessToken: 'specific_token',
+  forgetUser: false,
+);
+
+// Revoke with custom headers
+await manager.revokeAccessToken(
+  headers: {'Custom-Header': 'value'},
+  extraBodyFields: {'custom_param': 'value'},
+);
+```
+
+**Parameters:**
+- `discoveryDocumentOverride`: Optional discovery document to use instead of the default
+- `options`: Platform-specific options for the revocation request
+- `forgetUser`: Whether to forget the current user after successful revocation (defaults to `true`)
+- `overrideAccessToken`: Specific access token to revoke instead of the current user's token
+- `revocationEndpointOverride`: Custom revocation endpoint URL to use
+- `extraBodyFields`: Additional fields to include in the revocation request body
+- `headers`: Additional HTTP headers to include in the request
+
+#### revokeRefreshToken
+
+Revokes the current user's refresh token, making it invalid for obtaining new access tokens.
+
+```dart
+// Revoke current user's refresh token
+await manager.revokeRefreshToken();
+
+// Revoke specific refresh token with custom endpoint
+await manager.revokeRefreshToken(
+  overrideRefreshToken: 'specific_refresh_token',
+  revocationEndpointOverride: Uri.parse('https://custom.revoke.endpoint'),
+);
+```
+
+**Parameters:**
+- `discoveryDocumentOverride`: Optional discovery document to use instead of the default
+- `options`: Platform-specific options for the revocation request
+- `forgetUser`: Whether to forget the current user after successful revocation (defaults to `true`)
+- `overrideRefreshToken`: Specific refresh token to revoke instead of the current user's token
+- `revocationEndpointOverride`: Custom revocation endpoint URL to use
+- `extraBodyFields`: Additional fields to include in the revocation request body
+- `headers`: Additional HTTP headers to include in the request
+
+**Behavior:**
+- Both methods return early if no current user exists
+- Both methods return early if the respective token is not available to revoke
+- Both methods return early if the authorization server doesn't provide a revocation endpoint
+- Both methods call `forgetUser()` automatically after successful revocation when `forgetUser` is `true`
+- Both methods use the hooks system to allow customization of the revocation process
+
+!!! Note
+    Token revocation is a best-effort operation. Some authorization servers may not support token revocation, in which case these methods will return without error. Always check your authorization server's capabilities before relying on token revocation.
 
 ### Refreshing the token manually
 

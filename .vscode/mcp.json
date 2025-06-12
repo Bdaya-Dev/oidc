@@ -1,0 +1,13 @@
+{
+  "servers": {
+    // requires first running 
+    // mkdir -p ~/.cache/ietf-doc-server
+    // pip install git+https://github.com/tizee/mcp-server-ietf.git
+    "ietf": {
+      "command": "mcp-server-ietf",
+      "args": [
+      ],
+      "env": {}
+    }
+  }
+}
