@@ -19,6 +19,17 @@ class OidcEndpoints {
     required http.Request request,
     required http.Response response,
   }) {
+    final body = _handleResponseRaw(
+      request: request,
+      response: response,
+    );
+    return mapper(body);
+  }
+
+  static Map<String, dynamic> _handleResponseRaw({
+    required http.Request request,
+    required http.Response response,
+  }) {
     try {
       final body =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -37,7 +48,7 @@ class OidcEndpoints {
           rawResponse: response,
         );
       }
-      return mapper(body);
+      return body;
     } on OidcException {
       rethrow;
     } catch (e, st) {
@@ -612,6 +623,44 @@ class OidcEndpoints {
       mapper: OidcDeviceAuthorizationResponse.fromJson,
       response: resp,
       request: req,
+    );
+  }
+
+  /// Sends a token revocation request.
+  static Future<OidcRevocationResponse> revokeToken({
+    required Uri revocationEndpoint,
+    required OidcRevocationRequest request,
+    http.Client? client,
+    OidcClientAuthentication? credentials,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extraBodyFields,
+  }) async {
+    final authHeader = credentials?.getAuthorizationHeader();
+    final authBodyParams = credentials?.getBodyParameters();
+    final req = _prepareRequest(
+      method: OidcConstants_RequestMethod.post,
+      uri: revocationEndpoint,
+      contentType: _formUrlEncoded,
+      headers: {
+        if (authHeader != null) _authorizationHeaderKey: authHeader,
+        ...?headers,
+      },
+      bodyFields: {
+        ...request.toMap(),
+        if (authHeader == null) ...?authBodyParams,
+        ...?extraBodyFields,
+      },
+    );
+
+    final resp = await OidcInternalUtilities.sendWithClient(
+      client: client,
+      request: req,
+    );
+
+    return _handleResponse(
+      mapper: OidcRevocationResponse.fromJson,
+      request: req,
+      response: resp,
     );
   }
 }

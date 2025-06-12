@@ -36,6 +36,8 @@ class OidcUserManagerSettings {
     this.getIdToken,
     this.supportOfflineAuth = false,
     this.hooks,
+    this.extraRevocationParameters,
+    this.extraRevocationHeaders,
   });
 
   /// The default scopes
@@ -100,6 +102,12 @@ class OidcUserManagerSettings {
 
   /// see [OidcTokenRequest.extra]
   final Map<String, dynamic>? extraTokenParameters;
+
+  /// see [OidcRevocationRequest.extra]
+  final Map<String, dynamic>? extraRevocationParameters;
+
+  /// Extra headers to send with the revocation request.
+  final Map<String, String>? extraRevocationHeaders;
 
   /// see [OidcIdTokenVerificationOptions.expiryTolerance].
   final Duration expiryTolerance;

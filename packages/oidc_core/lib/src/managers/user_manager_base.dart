@@ -259,12 +259,11 @@ abstract class OidcUserManagerBase {
           password: password,
           scope: scopeOverride ?? settings.scope,
           clientId: clientCredentials.clientId,
-          extra: settings.extraTokenParameters,
+          extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
         ),
         credentials: clientCredentials,
         headers: settings.extraTokenHeaders,
         client: httpClient,
-        extraBodyFields: extraBodyFields,
         options: settings.options,
       ),
       defaultExecution: (hookRequest) {
@@ -274,7 +273,6 @@ abstract class OidcUserManagerBase {
           headers: hookRequest.headers,
           request: hookRequest.request,
           client: hookRequest.client,
-          extraBodyFields: hookRequest.extraBodyFields,
         );
       },
     );
@@ -426,6 +424,143 @@ abstract class OidcUserManagerBase {
     }
   }
 
+  Future<void> revokeAccessToken({
+    OidcProviderMetadata? discoveryDocumentOverride,
+    OidcPlatformSpecificOptions? options,
+    bool forgetUser = true,
+    String? overrideAccessToken,
+    Uri? revocationEndpointOverride,
+    Map<String, dynamic>? extraBodyFields,
+    Map<String, String>? headers,
+  }) async {
+    final currentUser = this.currentUser;
+    if (currentUser == null) {
+      return;
+    }
+    final token = overrideAccessToken ?? currentUser.token.accessToken;
+    if (token == null) {
+      return; // no access token to revoke.
+    }
+    ensureInit();
+    final discoveryDocument =
+        discoveryDocumentOverride ?? this.discoveryDocument;
+
+    final revocationEndpoint =
+        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+    if (revocationEndpoint == null) {
+      return; // no revocation endpoint, nothing to do.
+    }
+
+    final resp = await (settings.hooks?.revocation).execute(
+      request: OidcRevocationHookRequest(
+        metadata: discoveryDocument,
+        revocationEndpoint: revocationEndpoint,
+        credentials: clientCredentials,
+        headers: {
+          ...?settings.extraRevocationHeaders,
+          ...?headers,
+        },
+        request: OidcRevocationRequest(
+          token: token,
+          tokenTypeHint:
+              OidcConstants_RevocationParameters_TokenType.accessToken,
+          extra: {
+            ...?extraBodyFields,
+            ...?settings.extraRevocationParameters,
+          },
+        ),
+        options: getPlatformOptions(options),
+        client: httpClient,
+      ),
+      defaultExecution: (hookRequest) {
+        return OidcEndpoints.revokeToken(
+          revocationEndpoint: hookRequest.revocationEndpoint,
+          request: hookRequest.request,
+          client: hookRequest.client,
+          credentials: hookRequest.credentials,
+          headers: hookRequest.headers,
+        );
+      },
+    );
+    if (resp != null) {
+      if (forgetUser) {
+        await this.forgetUser();
+      }
+      return;
+    }
+    // revocation failed.
+    return;
+  }
+
+  /// Revoke refresh token.
+  Future<void> revokeRefreshToken({
+    OidcProviderMetadata? discoveryDocumentOverride,
+    OidcPlatformSpecificOptions? options,
+    bool forgetUser = true,
+    String? overrideRefreshToken,
+    Uri? revocationEndpointOverride,
+    Map<String, dynamic>? extraBodyFields,
+    Map<String, String>? headers,
+  }) async {
+    final currentUser = this.currentUser;
+    if (currentUser == null) {
+      return;
+    }
+    final token = overrideRefreshToken ?? currentUser.token.refreshToken;
+    if (token == null) {
+      return; // no refresh token to revoke.
+    }
+    ensureInit();
+    final discoveryDocument =
+        discoveryDocumentOverride ?? this.discoveryDocument;
+
+    final revocationEndpoint =
+        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+    if (revocationEndpoint == null) {
+      return; // no revocation endpoint, nothing to do.
+    }
+
+    final resp = await (settings.hooks?.revocation).execute(
+      request: OidcRevocationHookRequest(
+        metadata: discoveryDocument,
+        revocationEndpoint: revocationEndpoint,
+        credentials: clientCredentials,
+        headers: {
+          ...?settings.extraRevocationHeaders,
+          ...?headers,
+        },
+        request: OidcRevocationRequest(
+          token: token,
+          tokenTypeHint:
+              OidcConstants_RevocationParameters_TokenType.refreshToken,
+          extra: {
+            ...?extraBodyFields,
+            ...?settings.extraRevocationParameters,
+          },
+        ),
+        options: getPlatformOptions(options),
+        client: httpClient,
+      ),
+      defaultExecution: (hookRequest) {
+        return OidcEndpoints.revokeToken(
+          revocationEndpoint: hookRequest.revocationEndpoint,
+          request: hookRequest.request,
+          client: hookRequest.client,
+          credentials: hookRequest.credentials,
+          headers: hookRequest.headers,
+        );
+      },
+    );
+    if (resp != null) {
+      if (forgetUser) {
+        await this.forgetUser();
+      }
+      return;
+    }
+    // revocation failed.
+    return;
+  }
+
   /// Logs out the current user and calls [forgetUser] if successful.
   Future<void> logout({
     String? logoutHint,
@@ -464,19 +599,19 @@ abstract class OidcUserManagerBase {
       );
     }
     final resultFuture = getEndSessionResponse(
-        discoveryDocument,
-        OidcEndSessionRequest(
-          clientId: clientCredentials.clientId,
-          postLogoutRedirectUri: postLogoutRedirectUri,
-          uiLocales: uiLocalesOverride ?? settings.uiLocales,
-          idTokenHint:
-              postLogoutRedirectUri == null ? null : currentUser.idToken,
-          extra: extraParameters,
-          logoutHint: logoutHint,
-          state: stateData?.id,
-        ),
-        options,
-        prep);
+      discoveryDocument,
+      OidcEndSessionRequest(
+        clientId: clientCredentials.clientId,
+        postLogoutRedirectUri: postLogoutRedirectUri,
+        uiLocales: uiLocalesOverride ?? settings.uiLocales,
+        idTokenHint: postLogoutRedirectUri == null ? null : currentUser.idToken,
+        extra: extraParameters,
+        logoutHint: logoutHint,
+        state: stateData?.id,
+      ),
+      options,
+      prep,
+    );
     if (stateData == null) {
       // they won't come back with a result!
       await forgetUser();
@@ -624,7 +759,6 @@ abstract class OidcUserManagerBase {
             headers: hookRequest.headers,
             request: hookRequest.request,
             client: hookRequest.client,
-            extraBodyFields: hookRequest.extraBodyFields,
           );
         },
       );
@@ -817,12 +951,11 @@ abstract class OidcUserManagerBase {
           refreshToken: refreshToken,
           clientId: clientCredentials.clientId,
           clientSecret: clientCredentials.clientSecret,
-          extra: settings.extraTokenParameters,
+          extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
           scope: settings.scope,
         ),
         credentials: clientCredentials,
         headers: settings.extraTokenHeaders,
-        extraBodyFields: extraBodyFields,
         client: httpClient,
         options: settings.options,
       ),
@@ -833,7 +966,6 @@ abstract class OidcUserManagerBase {
           client: tokenHookRequest.client,
           headers: tokenHookRequest.headers,
           request: tokenHookRequest.request,
-          extraBodyFields: tokenHookRequest.extraBodyFields,
         );
       },
     );
@@ -909,7 +1041,6 @@ abstract class OidcUserManagerBase {
             client: hookRequest.client,
             headers: hookRequest.headers,
             request: hookRequest.request,
-            extraBodyFields: hookRequest.extraBodyFields,
           );
         },
       );

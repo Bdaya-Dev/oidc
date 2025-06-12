@@ -323,6 +323,30 @@ class OidcConstants_AuthParameters {
   static const dpopJkt = 'dpop_jkt';
 }
 
+/// The token type hints defined by the spec
+class OidcConstants_RevocationParameters_TokenType {
+  /// access token
+  static const String accessToken = 'access_token';
+
+  /// refresh token
+  static const String refreshToken = 'refresh_token';
+
+  /// id token
+  static const String idToken = 'id_token';
+}
+
+/// The parameters used in the revocation endpoint
+class OidcConstants_RevocationParameters {
+  /// token to be revoked
+  static const String token = 'token';
+
+  /// type of token to be revoked
+  static const String tokenTypeHint = 'token_type_hint';
+
+  /// callback URL to be called after revocation
+  static const String callback = 'callback';
+}
+
 class OidcConstants_ProviderMetadata {
   ///Authorization server's issuer identifier URL
   static const issuer = 'issuer';
