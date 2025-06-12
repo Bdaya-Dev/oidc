@@ -424,6 +424,42 @@ abstract class OidcUserManagerBase {
     }
   }
 
+  /// Revokes the current user's access token.
+  ///
+  /// This method sends a revocation request to the authorization server's
+  /// revocation endpoint to invalidate the access token. The token will no
+  /// longer be valid for accessing protected resources.
+  ///
+  /// **Parameters:**
+  /// - [discoveryDocumentOverride]: Optional discovery document to use instead
+  ///   of the default one
+  /// - [options]: Platform-specific options for the revocation request
+  /// - [forgetUser]: Whether to forget the current user after successful
+  ///   revocation (defaults to `true`)
+  /// - [overrideAccessToken]: Specific access token to revoke instead of the
+  ///   current user's token
+  /// - [revocationEndpointOverride]: Custom revocation endpoint URL to use
+  /// - [extraBodyFields]: Additional fields to include in the revocation request body
+  /// - [headers]: Additional HTTP headers to include in the request
+  ///
+  /// **Behavior:**
+  /// - Returns early if no current user exists
+  /// - Returns early if no access token is available to revoke
+  /// - Returns early if the authorization server doesn't provide a revocation endpoint
+  /// - Calls [forgetUser] automatically after successful revocation when [forgetUser] is `true`
+  /// - Uses hooks system to allow customization of the revocation process
+  ///
+  /// **Example:**
+  /// ```dart
+  /// // Revoke current user's access token
+  /// await userManager.revokeAccessToken();
+  ///
+  /// // Revoke specific token without forgetting user
+  /// await userManager.revokeAccessToken(
+  ///   overrideAccessToken: 'specific_token',
+  ///   forgetUser: false,
+  /// );
+  /// ```
   Future<void> revokeAccessToken({
     OidcProviderMetadata? discoveryDocumentOverride,
     OidcPlatformSpecificOptions? options,
@@ -492,7 +528,42 @@ abstract class OidcUserManagerBase {
     return;
   }
 
-  /// Revoke refresh token.
+  /// Revokes the current user's refresh token.
+  ///
+  /// This method sends a revocation request to the authorization server's
+  /// revocation endpoint to invalidate the refresh token. The token will no
+  /// longer be valid for obtaining new access tokens.
+  ///
+  /// **Parameters:**
+  /// - [discoveryDocumentOverride]: Optional discovery document to use instead
+  ///   of the default one
+  /// - [options]: Platform-specific options for the revocation request
+  /// - [forgetUser]: Whether to forget the current user after successful
+  ///   revocation (defaults to `true`)
+  /// - [overrideRefreshToken]: Specific refresh token to revoke instead of the
+  ///   current user's token
+  /// - [revocationEndpointOverride]: Custom revocation endpoint URL to use
+  /// - [extraBodyFields]: Additional fields to include in the revocation request body
+  /// - [headers]: Additional HTTP headers to include in the request
+  ///
+  /// **Behavior:**
+  /// - Returns early if no current user exists
+  /// - Returns early if no refresh token is available to revoke
+  /// - Returns early if the authorization server doesn't provide a revocation endpoint
+  /// - Calls [forgetUser] automatically after successful revocation when [forgetUser] is `true`
+  /// - Uses hooks system to allow customization of the revocation process
+  ///
+  /// **Example:**
+  /// ```dart
+  /// // Revoke current user's refresh token
+  /// await userManager.revokeRefreshToken();
+  ///
+  /// // Revoke specific token with custom headers
+  /// await userManager.revokeRefreshToken(
+  ///   overrideRefreshToken: 'specific_refresh_token',
+  ///   headers: {'Custom-Header': 'value'},
+  /// );
+  /// ```
   Future<void> revokeRefreshToken({
     OidcProviderMetadata? discoveryDocumentOverride,
     OidcPlatformSpecificOptions? options,
