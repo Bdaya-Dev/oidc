@@ -189,7 +189,13 @@ void main() {
           await manager.init();
           expect(manager.didInit, true);
           print('Manager initialized');
-
+          if (moduleName == 'oidcc-client-test-discovery-openid-config') {
+            // that's it, do nothing else.
+            app_state.currentManagerRx.$ = app_state.managersRx.$.first;
+            app_state.managersRx
+                .update((managers) => managers..remove(manager));
+            continue;
+          }
           try {
             print('Starting login authorization code flow...');
             final authResult = await manager.loginAuthorizationCodeFlow();
