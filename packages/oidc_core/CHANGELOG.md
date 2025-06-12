@@ -1,3 +1,13 @@
+## 0.14.0
+
+  - **BREAKING** **FEAT**: Added `launchUrl` parameter to `OidcPlatformSpecificOptions_Native`, to simplify modifying the url launching logic without overriding the manager.
+  - **BREAKING** **FEAT**: Added support for multiple managers by adding the `id` property to `OidcUserManagerBase`.
+    - Added the `managerId` parameter to:
+      - Multiple methods in `OidcStore`.
+      - `OidcState`
+    - See [#206](https://github.com/Bdaya-Dev/oidc/issues/206) for motivation.
+  - **FIX**: Added some missing fields in json serialization.
+
 ## 0.13.0
 
 > Note: This release has breaking changes.

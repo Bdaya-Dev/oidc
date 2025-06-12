@@ -1,3 +1,14 @@
+## 0.12.0
+  - **TESTS**: Added integration tests to run the official oidc conformance suite, this pumps our test coverage from 22% to almost 45%, effectively doubling it!
+    - Tests are run on ALL platforms (linux, macos, windows, android, ios, web).
+    - Tests check the authorization code flow only for now.
+  - **BREAKING** **FEAT**: Support for multiple `OidcUserManager` instances, by adding the `id` field to differentiate them.
+    - [See docs entry](https://bdaya-dev.github.io/oidc/oidc-usage/#constructing-multiple-user-managers)
+  - **FEAT**: Updated the example app to use the new `OidcUserManager.id`, with the ability to add your own custom managers in the UI.
+  
+  > [!IMPORTANT]
+  > We have also officially submitted our package to the openid foundation for [certification](https://github.com/Bdaya-Dev/oidc/issues/11).
+  
 ## 0.11.0
 
 > Note: This release has breaking changes.

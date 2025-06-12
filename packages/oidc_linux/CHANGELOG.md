@@ -1,3 +1,9 @@
+## 0.4.0
+
+> Note: This release has breaking changes.
+
+- **BREAKING** **FEAT**: Added `launchAuthUrl` method to `OidcDesktop` mixin and added `launchUrl` parameter to `OidcPlatformSpecificOptions_Native`, to simplify modifying the url launching logic without overriding the manager.
+
 ## 0.3.0+16
 
  - Update a dependency to the latest release.

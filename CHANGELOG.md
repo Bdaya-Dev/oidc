@@ -3,6 +3,78 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2025-06-12
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc_linux` - `v0.4.0`](#oidc_linux---v040)
+
+Packages with other changes:
+
+ - [`oidc` - `v0.12.0`](#oidc---v0120)
+ - [`oidc_core` - `v0.14.0`](#oidc_core---v0140)
+ - [`oidc_default_store` - `v0.4.0`](#oidc_default_store---v040)
+ - [`oidc_desktop` - `v0.6.0`](#oidc_desktop---v060)
+ - [`oidc_web_core` - `v0.3.1`](#oidc_web_core---v031)
+ - [`oidc_android` - `v0.7.0+2`](#oidc_android---v0702)
+ - [`oidc_flutter_appauth` - `v0.6.0+2`](#oidc_flutter_appauth---v0602)
+ - [`oidc_ios` - `v0.7.0+2`](#oidc_ios---v0702)
+ - [`oidc_macos` - `v0.7.0+2`](#oidc_macos---v0702)
+ - [`oidc_platform_interface` - `v0.6.0+6`](#oidc_platform_interface---v0606)
+ - [`oidc_web` - `v0.6.0+6`](#oidc_web---v0606)
+ - [`oidc_windows` - `v0.3.1+11`](#oidc_windows---v03111)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_android` - `v0.7.0+2`
+ - `oidc_flutter_appauth` - `v0.6.0+2`
+ - `oidc_ios` - `v0.7.0+2`
+ - `oidc_macos` - `v0.7.0+2`
+ - `oidc_platform_interface` - `v0.6.0+6`
+ - `oidc_web` - `v0.6.0+6`
+ - `oidc_windows` - `v0.3.1+11`
+
+---
+
+#### `oidc_linux` - `v0.4.0`
+
+ - **DOCS**: Document multi-manager support. ([0b6090ad](https://github.com/Bdaya-Dev/oidc/commit/0b6090ad266838bd39d139201b68d44351a5ab7c))
+
+#### `oidc` - `v0.12.0`
+
+ - **FEAT**: Enhance OIDC store with manager ID support. ([56f42f2d](https://github.com/Bdaya-Dev/oidc/commit/56f42f2d67fd97c587611870e412de8cb357c4e4))
+
+#### `oidc_core` - `v0.14.0`
+
+ - **FEAT**: implement custom URL launcher for OidcLinux platform. ([11d901fe](https://github.com/Bdaya-Dev/oidc/commit/11d901fede70dd8aaa9cb03df18c392142895ccb))
+ - **FEAT**: enhance OIDC conformance token handling in integration tests and user manager. ([1947c29f](https://github.com/Bdaya-Dev/oidc/commit/1947c29fbd9ab20d0bd62065f697dac2fba1f682))
+ - **FEAT**: Enhance OIDC store with manager ID support. ([56f42f2d](https://github.com/Bdaya-Dev/oidc/commit/56f42f2d67fd97c587611870e412de8cb357c4e4))
+
+#### `oidc_default_store` - `v0.4.0`
+
+ - **FEAT**: Enhance OIDC store with manager ID support. ([56f42f2d](https://github.com/Bdaya-Dev/oidc/commit/56f42f2d67fd97c587611870e412de8cb357c4e4))
+
+#### `oidc_desktop` - `v0.6.0`
+
+ - **FIX**: enable headless mode for Chrome in default Linux applications setup. ([dda1c2dc](https://github.com/Bdaya-Dev/oidc/commit/dda1c2dc9f43a034d553eb043294b80e000f82f3))
+ - **FEAT**: implement custom URL launcher for OidcLinux platform. ([11d901fe](https://github.com/Bdaya-Dev/oidc/commit/11d901fede70dd8aaa9cb03df18c392142895ccb))
+ - **FEAT**: improve auth URL launching with enhanced error handling and logging. ([58f3881a](https://github.com/Bdaya-Dev/oidc/commit/58f3881a3e629896acf933862bb1e6a131bb6b4e))
+
+#### `oidc_web_core` - `v0.3.1`
+
+ - **FEAT**: Enhance OIDC store with manager ID support. ([56f42f2d](https://github.com/Bdaya-Dev/oidc/commit/56f42f2d67fd97c587611870e412de8cb357c4e4))
+
+# Change Log
+
+All notable changes to this project will be documented in this file.
+See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
+
 ## 2025-06-06
 
 ### Changes
