@@ -1,8 +1,8 @@
 ## 0.6.0
 
- - **FIX**: enable headless mode for Chrome in default Linux applications setup. ([dda1c2dc](https://github.com/Bdaya-Dev/oidc/commit/dda1c2dc9f43a034d553eb043294b80e000f82f3))
- - **FEAT**: implement custom URL launcher for OidcLinux platform. ([11d901fe](https://github.com/Bdaya-Dev/oidc/commit/11d901fede70dd8aaa9cb03df18c392142895ccb))
- - **FEAT**: improve auth URL launching with enhanced error handling and logging. ([58f3881a](https://github.com/Bdaya-Dev/oidc/commit/58f3881a3e629896acf933862bb1e6a131bb6b4e))
+> Note: This release has breaking changes.
+
+- **BREAKING** **FEAT**: Added `launchAuthUrl` method to `OidcDesktop` mixin and added `launchUrl` parameter to `OidcPlatformSpecificOptions_Native`, to simplify modifying the url launching logic without overriding the manager.
 
 ## 0.5.0+5
 

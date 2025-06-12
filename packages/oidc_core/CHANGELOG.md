@@ -1,8 +1,12 @@
 ## 0.14.0
 
- - **FEAT**: implement custom URL launcher for OidcLinux platform. ([11d901fe](https://github.com/Bdaya-Dev/oidc/commit/11d901fede70dd8aaa9cb03df18c392142895ccb))
- - **FEAT**: enhance OIDC conformance token handling in integration tests and user manager. ([1947c29f](https://github.com/Bdaya-Dev/oidc/commit/1947c29fbd9ab20d0bd62065f697dac2fba1f682))
- - **FEAT**: Enhance OIDC store with manager ID support. ([56f42f2d](https://github.com/Bdaya-Dev/oidc/commit/56f42f2d67fd97c587611870e412de8cb357c4e4))
+  - **BREAKING** **FEAT**: Added `launchUrl` parameter to `OidcPlatformSpecificOptions_Native`, to simplify modifying the url launching logic without overriding the manager.
+  - **BREAKING** **FEAT**: Added support for multiple managers by adding the `id` property to `OidcUserManagerBase`.
+    - Added the `managerId` parameter to:
+      - Multiple methods in `OidcStore`.
+      - `OidcState`
+    - See [#206](https://github.com/Bdaya-Dev/oidc/issues/206) for motivation.
+  - **FIX**: Added some missing fields in json serialization.
 
 ## 0.13.0
 
