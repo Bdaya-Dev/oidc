@@ -103,6 +103,11 @@ void main() {
           postLogoutRedirectUri: redirectUri.toString(),
           frontChannelLogoutUri:
               'http://localhost:22433/redirect.html?requestType=front-channel-logout',
+          extraVariant: {
+            'client_auth_type': 'client_secret_basic',
+            'response_type': 'code',
+            'response_mode': 'default',
+          },
         );
         print('Test plan request prepared: Path: $path, Body: $body');
 
