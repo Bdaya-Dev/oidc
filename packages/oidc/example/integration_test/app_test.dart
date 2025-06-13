@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -9,7 +10,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
 import 'package:oidc_example/main.dart' as example;
-
+import 'package:archive/archive.dart';
 import 'conformance/api.dart';
 import 'conformance/manager.dart';
 import 'helpers.dart';
@@ -136,6 +137,7 @@ void main() {
             'Module: $moduleName, Client Auth Type: $clientAuthType, Response Type: $responseType, Response Mode: $responseMode',
           );
         }
+        final archive = Archive();
 
         for (final testPlanModule
             in testPlanModules.whereType<Map<String, dynamic>>()) {
@@ -224,13 +226,22 @@ void main() {
           app_state.currentManagerRx.$ = app_state.managersRx.$.first;
           app_state.managersRx.update((managers) => managers..remove(manager));
           if (!kIsWeb) {
+            final strToWrite = logsToWrite.join('\n');
+            final data = utf8.encode(strToWrite);
             var logFile = File(logFileName).absolute;
+            logFile = await logFile.create(recursive: true);
             logFile = await logFile.writeAsString(logsToWrite.join('\n'));
-            print('Log file written: ${logFile.path}');
+            archive.addFile(ArchiveFile.bytes('$moduleName.log', data));
+            print('Log file added: ${logFile.path}');
           }
         }
 
-        print('OIDC Conformance Test completed');
+        var outputFile = File('client-logs/$testPlanId.zip').absolute;
+        outputFile = await outputFile.create(recursive: true);
+        ZipEncoder().encodeStream(archive, OutputFileStream(outputFile.path));
+
+        print(
+            'OIDC Conformance Test completed, archive at: ${outputFile.path}');
       });
     }
   });

@@ -23,6 +23,7 @@ dependencies:
   oidc_default_store: ^0.4.0+2
 
 dev_dependencies:
+  archive: ^4.0.7
   flutter_driver:
     sdk: flutter
   flutter_test:
