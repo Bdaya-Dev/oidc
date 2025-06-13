@@ -237,26 +237,30 @@ void main() {
         }
 
         if (!kIsWeb && Platform.isLinux) {
-          print('Creating archive of client logs...');
+          try {
+            print('Creating archive of client logs...');
 
-          final ms = OutputMemoryStream();
-          ZipEncoder().encodeStream(archive, ms);
-          final bytes = ms.getBytes();
-          print('Sending certification package request to server...');
-          final resultLogs = await publishCertificationPackage(
-            dio: dio,
-            planId: testPlanId,
-            clientSideData: bytes,
-          );
-          if (resultLogs == null) {
-            print('No Logs returned from server');
-          } else {
-            var outputFile = File('client-logs/final.zip').absolute;
-            outputFile = await outputFile.create(recursive: true);
-            outputFile = await outputFile.writeAsBytes(resultLogs);
-            print(
-              'Saving logs archive at: ${outputFile.path}',
+            final ms = OutputMemoryStream();
+            ZipEncoder().encodeStream(archive, ms);
+            final bytes = ms.getBytes();
+            print('Sending certification package request to server...');
+            final resultLogs = await publishCertificationPackage(
+              dio: dio,
+              planId: testPlanId,
+              clientSideData: bytes,
             );
+            if (resultLogs == null) {
+              print('No Logs returned from server');
+            } else {
+              var outputFile = File('client-logs/final.zip').absolute;
+              outputFile = await outputFile.create(recursive: true);
+              outputFile = await outputFile.writeAsBytes(resultLogs);
+              print(
+                'Saving logs archive at: ${outputFile.path}',
+              );
+            }
+          } catch (e) {
+            print('failed to zip test logs: $e');
           }
         }
         print('OIDC Conformance Test completed');
