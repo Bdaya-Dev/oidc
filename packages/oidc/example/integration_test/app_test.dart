@@ -159,7 +159,7 @@ void main() {
 
           final testInstanceId = testInstance['id'] as String;
           final logger = Logger('oidc.conformance.$moduleName.$testInstanceId');
-          final logFileName = 'client-logs/$moduleName.log';
+          // final logFileName = 'client-logs/$moduleName.log';
           final logsToWrite = <String>[];
           final sub = Logger.root.onRecord.listen((record) {
             final message =
