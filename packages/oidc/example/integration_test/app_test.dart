@@ -236,12 +236,30 @@ void main() {
           }
         }
 
-        var outputFile = File('client-logs/$testPlanId.zip').absolute;
-        outputFile = await outputFile.create(recursive: true);
-        ZipEncoder().encodeStream(archive, OutputFileStream(outputFile.path));
+        if (!kIsWeb && Platform.isLinux) {
+          print('Creating archive of client logs...');
 
-        print(
-            'OIDC Conformance Test completed, archive at: ${outputFile.path}');
+          final ms = OutputMemoryStream();
+          ZipEncoder().encodeStream(archive, ms);
+          final bytes = ms.getBytes();
+          print('Sending certification package request to server...');
+          final resultLogs = await publishCertificationPackage(
+            dio: dio,
+            planId: testPlanId,
+            clientSideData: bytes,
+          );
+          if (resultLogs == null) {
+            print('No Logs returned from server');
+          } else {
+            var outputFile = File('client-logs/final.zip').absolute;
+            outputFile = await outputFile.create(recursive: true);
+            outputFile = await outputFile.writeAsBytes(resultLogs);
+            print(
+              'Saving logs archive at: ${outputFile.path}',
+            );
+          }
+        }
+        print('OIDC Conformance Test completed');
       });
     }
   });
