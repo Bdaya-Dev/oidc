@@ -225,18 +225,18 @@ void main() {
           await sub.cancel();
           app_state.currentManagerRx.$ = app_state.managersRx.$.first;
           app_state.managersRx.update((managers) => managers..remove(manager));
-          if (!kIsWeb) {
+          if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
             final strToWrite = logsToWrite.join('\n');
             final data = utf8.encode(strToWrite);
-            var logFile = File(logFileName).absolute;
-            logFile = await logFile.create(recursive: true);
-            logFile = await logFile.writeAsString(logsToWrite.join('\n'));
+            // var logFile = File(logFileName).absolute;
+            // logFile = await logFile.create(recursive: true);
+            // logFile = await logFile.writeAsString(logsToWrite.join('\n'));
             archive.addFile(ArchiveFile.bytes('$moduleName.log', data));
-            print('Log file added: ${logFile.path}');
+            // print('Log file added: ${logFile.path}');
           }
         }
 
-        if (!kIsWeb && Platform.isLinux) {
+        if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
           try {
             print('Creating archive of client logs...');
 
