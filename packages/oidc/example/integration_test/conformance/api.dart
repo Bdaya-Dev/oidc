@@ -148,8 +148,16 @@ Future<List<int>?> publishCertificationPackage({
 }) async {
   final uri = Uri(path: 'api/plan/$planId/certificationpackage');
   final formData = FormData();
-  formData.files
-      .add(MapEntry('clientSideData', MultipartFile.fromBytes(clientSideData)));
+  formData.files.add(
+    MapEntry(
+      'clientSideData',
+      MultipartFile.fromBytes(
+        clientSideData,
+        filename: 'client_side_logs.zip',
+        contentType: DioMediaType('application', 'zip'),
+      ),
+    ),
+  );
   final response = await dio.postUri<List<int>>(
     uri,
     data: formData,
