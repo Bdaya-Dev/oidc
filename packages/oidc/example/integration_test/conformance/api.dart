@@ -161,10 +161,13 @@ Future<List<int>?> publishCertificationPackage({
   final response = await dio.postUri<List<int>>(
     uri,
     data: formData,
-    options: Options(responseType: ResponseType.bytes, headers: {
-      'Content-Type': 'multipart/form-data',
-      'Accept': 'application/zip',
-    }),
+    options: Options(
+      responseType: ResponseType.bytes,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Accept': 'application/zip',
+      },
+    ),
   );
   return response.data;
 }
