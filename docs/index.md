@@ -1,3 +1,5 @@
+[![openid certification](http://openid.net/wordpress-content/uploads/2016/05/oid-l-certification-mark-l-cmyk-150dpi-90mm.jpg)](https://openid.net/developers/certified-openid-connect-implementations/)
+
 This is a federated plugin split into the following main packages:
 
 - [oidc](oidc-getting-started.md): Ready to use flutter plugin that conforms to the OIDC spec. ([pub.dev](https://pub.dev/packages/oidc))

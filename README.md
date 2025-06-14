@@ -1,6 +1,6 @@
 # oidc
 
-[![openid certification](http://openid.net/wordpress-content/uploads/2016/04/oid-l-certification-mark-l-rgb-150dpi-90mm.png)](https://openid.net/developers/certified-openid-connect-implementations/)
+[![openid certification](http://openid.net/wordpress-content/uploads/2016/05/oid-l-certification-mark-l-cmyk-150dpi-90mm.jpg)](https://openid.net/developers/certified-openid-connect-implementations/)
 
 [![melos](https://img.shields.io/badge/maintained%20with-melos-f700ff.svg?style=flat-square)](https://github.com/invertase/melos)
 [![codecov](https://codecov.io/github/Bdaya-Dev/oidc/graph/badge.svg?token=HSEDM6I7TH)](https://codecov.io/github/Bdaya-Dev/oidc)

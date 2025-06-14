@@ -1,4 +1,5 @@
 # oidc <!-- omit from toc -->
+[![openid certification](http://openid.net/wordpress-content/uploads/2016/05/oid-l-certification-mark-l-cmyk-150dpi-90mm.jpg)](https://openid.net/developers/certified-openid-connect-implementations/)
 
 [![Pub Version][pub_badge]][pub_link]
 [![last commit][github_last_commit_image]][github_link]
