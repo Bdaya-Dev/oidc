@@ -1,12 +1,16 @@
 // ignore_for_file: avoid_print
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:logging/logging.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
 import 'package:oidc_example/main.dart' as example;
-
+import 'package:archive/archive.dart';
 import 'conformance/api.dart';
 import 'conformance/manager.dart';
 import 'helpers.dart';
@@ -133,10 +137,12 @@ void main() {
             'Module: $moduleName, Client Auth Type: $clientAuthType, Response Type: $responseType, Response Mode: $responseMode',
           );
         }
+        final archive = Archive();
 
         for (final testPlanModule
             in testPlanModules.whereType<Map<String, dynamic>>()) {
           final moduleName = testPlanModule['testModule'] as String;
+
           print('Creating test instance for module: $moduleName');
 
           final variant = testPlanModule['variant'] as Map<String, dynamic>? ??
@@ -150,11 +156,20 @@ void main() {
             responseType: variant['response_type'] as String? ?? 'code',
             responseMode: variant['response_mode'] as String? ?? 'default',
           );
-          print('Test instance created: $testInstance');
 
           final testInstanceId = testInstance['id'] as String;
+          final logger = Logger('oidc.conformance.$moduleName.$testInstanceId');
+          // final logFileName = 'client-logs/$moduleName.log';
+          final logsToWrite = <String>[];
+          final sub = Logger.root.onRecord.listen((record) {
+            final message =
+                '[${record.time} ${record.level.name}][${record.loggerName}]: ${record.message}';
+            logsToWrite.add(message);
+            print(message);
+          });
+          logger.info('Test instance created: $testInstance');
           final url = testInstance['url'] as String;
-          print('Test Instance ID: $testInstanceId, URL: $url');
+          logger.info('Test Instance ID: $testInstanceId, URL: $url');
 
           final manager = conformanceManager(
             url,
@@ -167,41 +182,87 @@ void main() {
           app_state.managersRx.update((managers) => managers..add(manager));
           app_state.currentManagerRx.$ = manager;
 
-          print('Monitoring logs for test instance: $testInstanceId');
+          logger.info(
+            'Monitoring logs for test instance to wait for ready state: $testInstanceId',
+          );
           monitorLogsLoop:
           await for (final logs
               in monitorTestLogs(dio: dio, instanceId: testInstanceId)) {
             for (final log in logs) {
-              print('Log: $log');
+              logger.fine('Log: $log');
               if (log['msg'] == 'Setup Done') {
-                print('Test instance setup done: $testInstanceId');
+                logger.info('Test instance setup done: $testInstanceId');
                 break monitorLogsLoop;
               }
             }
           }
 
-          print('Initializing manager for test instance: $testInstanceId');
+          logger
+              .info('Initializing manager for test instance: $testInstanceId');
           await manager.init();
           expect(manager.didInit, true);
-          print('Manager initialized');
-
+          logger.info('Manager initialized');
+          if (moduleName == 'oidcc-client-test-discovery-openid-config') {
+            // that's it, do nothing else.
+            app_state.currentManagerRx.$ = app_state.managersRx.$.first;
+            app_state.managersRx
+                .update((managers) => managers..remove(manager));
+            continue;
+          }
           try {
-            print('Starting login authorization code flow...');
+            logger.info('Starting login authorization code flow...');
             final authResult = await manager.loginAuthorizationCodeFlow();
             if (authResult == null) {
-              print('Login failed, authResult is null');
+              logger.info('Login failed, authResult is null');
             } else {
-              print('Login successful: ${authResult.token.toJson()}');
+              logger.info('Login successful: ${authResult.token.toJson()}');
             }
           } catch (e) {
-            print('Error during login: $e');
+            logger.info('Error during login: $e');
           }
 
-          print('Cleaning up manager for test instance: $testInstanceId');
+          logger.info('Cleaning up manager for test instance: $testInstanceId');
+          await sub.cancel();
           app_state.currentManagerRx.$ = app_state.managersRx.$.first;
           app_state.managersRx.update((managers) => managers..remove(manager));
+          if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
+            final strToWrite = logsToWrite.join('\n');
+            final data = utf8.encode(strToWrite);
+            // var logFile = File(logFileName).absolute;
+            // logFile = await logFile.create(recursive: true);
+            // logFile = await logFile.writeAsString(logsToWrite.join('\n'));
+            archive.addFile(ArchiveFile.bytes('$moduleName.log', data));
+            // print('Log file added: ${logFile.path}');
+          }
         }
 
+        if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
+          try {
+            print('Creating archive of client logs...');
+
+            final ms = OutputMemoryStream();
+            ZipEncoder().encodeStream(archive, ms);
+            final bytes = ms.getBytes();
+            print('Sending certification package request to server...');
+            final resultLogs = await publishCertificationPackage(
+              dio: dio,
+              planId: testPlanId,
+              clientSideData: bytes,
+            );
+            if (resultLogs == null) {
+              print('No Logs returned from server');
+            } else {
+              var outputFile = File('client-logs/final.zip').absolute;
+              outputFile = await outputFile.create(recursive: true);
+              outputFile = await outputFile.writeAsBytes(resultLogs);
+              print(
+                'Saving logs archive at: ${outputFile.path}',
+              );
+            }
+          } catch (e) {
+            print('failed to zip test logs: $e');
+          }
+        }
         print('OIDC Conformance Test completed');
       });
     }

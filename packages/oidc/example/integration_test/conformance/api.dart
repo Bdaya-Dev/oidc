@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -137,6 +138,38 @@ Future<Map<String, dynamic>> cancelTest({
   final uri = Uri(path: 'api/runner/$instanceId');
   final response = await dio.deleteUri<Map<String, dynamic>>(uri);
   return response.data ?? {};
+}
+
+//api/plan/:id/certificationpackage
+Future<List<int>?> publishCertificationPackage({
+  required Dio dio,
+  required String planId,
+  required Uint8List clientSideData,
+}) async {
+  final uri = Uri(path: 'api/plan/$planId/certificationpackage');
+  final formData = FormData();
+  formData.files.add(
+    MapEntry(
+      'clientSideData',
+      MultipartFile.fromBytes(
+        clientSideData,
+        filename: 'client_side_logs.zip',
+        contentType: DioMediaType('application', 'zip'),
+      ),
+    ),
+  );
+  final response = await dio.postUri<List<int>>(
+    uri,
+    data: formData,
+    options: Options(
+      responseType: ResponseType.bytes,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Accept': 'application/zip',
+      },
+    ),
+  );
+  return response.data;
 }
 
 Future<Map<String, dynamic>> getTestSummary({

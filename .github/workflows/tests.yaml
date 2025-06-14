@@ -293,6 +293,13 @@ jobs:
           path: packages/oidc/example/coverage/linux-coverage.info
           include-hidden-files: true
           if-no-files-found: error
+      - name: Upload Conformance Logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: oidc-client-logs
+          path: packages/oidc/example/client-logs/final.zip
+          include-hidden-files: true
+          if-no-files-found: error
   windows:
     runs-on: windows-latest
     defaults:
