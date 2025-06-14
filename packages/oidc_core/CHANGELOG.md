@@ -1,3 +1,7 @@
+## 0.14.2+1
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
 ## 0.14.2
 
  - **REFACTOR**: remove unnecessary library declaration and test annotation from device_authorization_test.dart. ([a8886cfe](https://github.com/Bdaya-Dev/oidc/commit/a8886cfe5c431612be2e3b7dd1db98db53dd6356))
