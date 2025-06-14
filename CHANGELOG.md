@@ -3,6 +3,92 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2025-06-14
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc` - `v0.12.1+2`](#oidc---v01212)
+ - [`oidc_android` - `v0.7.0+5`](#oidc_android---v0705)
+ - [`oidc_core` - `v0.14.2+1`](#oidc_core---v01421)
+ - [`oidc_default_store` - `v0.4.0+3`](#oidc_default_store---v0403)
+ - [`oidc_desktop` - `v0.6.1+2`](#oidc_desktop---v0612)
+ - [`oidc_flutter_appauth` - `v0.6.0+5`](#oidc_flutter_appauth---v0605)
+ - [`oidc_ios` - `v0.7.0+5`](#oidc_ios---v0705)
+ - [`oidc_linux` - `v0.4.1+2`](#oidc_linux---v0412)
+ - [`oidc_loopback_listener` - `v0.2.0+1`](#oidc_loopback_listener---v0201)
+ - [`oidc_macos` - `v0.7.0+5`](#oidc_macos---v0705)
+ - [`oidc_platform_interface` - `v0.6.0+9`](#oidc_platform_interface---v0609)
+ - [`oidc_web` - `v0.6.0+9`](#oidc_web---v0609)
+ - [`oidc_web_core` - `v0.3.1+3`](#oidc_web_core---v0313)
+ - [`oidc_windows` - `v0.3.1+14`](#oidc_windows---v03114)
+
+---
+
+#### `oidc` - `v0.12.1+2`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_android` - `v0.7.0+5`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_core` - `v0.14.2+1`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_default_store` - `v0.4.0+3`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_desktop` - `v0.6.1+2`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_flutter_appauth` - `v0.6.0+5`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_ios` - `v0.7.0+5`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_linux` - `v0.4.1+2`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_loopback_listener` - `v0.2.0+1`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_macos` - `v0.7.0+5`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_platform_interface` - `v0.6.0+9`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_web` - `v0.6.0+9`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_web_core` - `v0.3.1+3`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+#### `oidc_windows` - `v0.3.1+14`
+
+ - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
+
+
 ## 2025-06-12
 
 ### Changes
