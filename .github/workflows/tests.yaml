@@ -299,7 +299,7 @@ jobs:
           name: oidc-client-logs
           path: packages/oidc/example/client-logs/final.zip
           include-hidden-files: true
-          if-no-files-found: error
+          if-no-files-found: warn
   windows:
     runs-on: windows-latest
     defaults:
