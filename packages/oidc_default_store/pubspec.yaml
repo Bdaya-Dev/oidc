@@ -10,11 +10,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_secure_storage: ^9.0.0
+  flutter_secure_storage: ^10.0.0-beta.4
   logging: ^1.2.0
   oidc_core: ^0.14.2
   shared_preferences: ^2.2.1
-  universal_html: ^2.2.3
+  universal_web: ^1.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

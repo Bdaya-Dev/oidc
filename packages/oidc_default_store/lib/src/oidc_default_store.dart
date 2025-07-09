@@ -7,7 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:universal_html/html.dart' as html;
+import 'package:universal_web/web.dart' as html;
 
 // coverage:ignore-line
 final _logger = Logger('Oidc.DefaultStore');
@@ -200,7 +200,7 @@ class OidcDefaultStore implements OidcStore {
   ) async {
     if (testIsWeb) {
       for (final key in keys) {
-        html.window.localStorage.remove(_getKey(namespace, key, managerId));
+        html.window.localStorage.removeItem(_getKey(namespace, key, managerId));
       }
     } else {
       await Future.wait(
@@ -345,7 +345,7 @@ class OidcDefaultStore implements OidcStore {
                 OidcDefaultStoreWebSessionManagementLocation.sessionStorage) {
           for (final element in keys) {
             html.window.sessionStorage
-                .remove(_getKey(namespace, element, managerId));
+                .removeItem(_getKey(namespace, element, managerId));
           }
         } else {
           await _defaultRemoveMany(namespace, keys, managerId);
