@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_secure_storage: ^10.0.0-beta.4
+  flutter_secure_storage: '>=10.0.0-beta.4 <11.0.0'
   logging: ^1.2.0
   oidc_core: ^0.14.2
   shared_preferences: ^2.2.1
