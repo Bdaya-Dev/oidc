@@ -20,13 +20,10 @@ void main() {
 
     final storeConfigs = [
       OidcDefaultStore(),
-      if (kIsWeb) ...[
-        OidcDefaultStore()..testIsWeb = true,
-        OidcDefaultStore(
-          webSessionManagementLocation:
-              OidcDefaultStoreWebSessionManagementLocation.localStorage,
-        )..testIsWeb = true,
-      ]
+      OidcDefaultStore(
+        webSessionManagementLocation:
+            OidcDefaultStoreWebSessionManagementLocation.localStorage,
+      )
     ];
     for (final store in storeConfigs) {
       testWidgets('Full test', (widgetTester) async {
