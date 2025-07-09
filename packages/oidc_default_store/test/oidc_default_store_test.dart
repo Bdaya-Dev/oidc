@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_const_constructors
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oidc_core/oidc_core.dart';
@@ -19,11 +20,13 @@ void main() {
 
     final storeConfigs = [
       OidcDefaultStore(),
-      OidcDefaultStore()..testIsWeb = true,
-      OidcDefaultStore(
-        webSessionManagementLocation:
-            OidcDefaultStoreWebSessionManagementLocation.localStorage,
-      )..testIsWeb = true,
+      if (kIsWeb) ...[
+        OidcDefaultStore()..testIsWeb = true,
+        OidcDefaultStore(
+          webSessionManagementLocation:
+              OidcDefaultStoreWebSessionManagementLocation.localStorage,
+        )..testIsWeb = true,
+      ]
     ];
     for (final store in storeConfigs) {
       testWidgets('Full test', (widgetTester) async {

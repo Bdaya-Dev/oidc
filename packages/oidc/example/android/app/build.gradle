@@ -36,7 +36,8 @@ android {
 
     defaultConfig {
         applicationId "com.bdayadev.oidc.example"
-        minSdkVersion flutter.minSdkVersion
+        // minSdk 23 to support flutter_secure_storage
+        minSdkVersion 23
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
