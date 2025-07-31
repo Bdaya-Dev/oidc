@@ -69,4 +69,19 @@ class OidcHookGroup<TRequest, TResponse>
       return defaultExecution(request);
     }
   }
+
+  @override
+  Future<TResponse> execute({
+    required TRequest request,
+    required OidcHookExecution<TRequest, TResponse> defaultExecution,
+  }) async {
+    // Apply request modifications from all hooks in sequence
+    final modifiedRequest = await modifyRequest(request);
+
+    // Handle execution control via executionHook if available
+    final response = await modifyExecution(modifiedRequest, defaultExecution);
+
+    // Apply response modifications from all hooks in sequence
+    return modifyResponse(response);
+  }
 }

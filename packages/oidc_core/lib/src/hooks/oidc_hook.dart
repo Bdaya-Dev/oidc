@@ -49,4 +49,19 @@ class OidcHook<TRequest, TResponse> extends OidcHookBase<TRequest, TResponse> {
     }
     return Future.value(response);
   }
+
+  @override
+  Future<TResponse> execute({
+    required TRequest request,
+    required OidcHookExecution<TRequest, TResponse> defaultExecution,
+  }) async {
+    // Apply request modifications
+    final modifiedRequest = await modifyRequest(request);
+
+    // Handle execution control
+    final response = await modifyExecution(modifiedRequest, defaultExecution);
+
+    // Apply response modifications
+    return modifyResponse(response);
+  }
 }
