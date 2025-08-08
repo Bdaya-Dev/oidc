@@ -6,7 +6,6 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
-import 'package:logging/logging.dart';
 
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
   // oidcc-client-basic-certification-test-plan
