@@ -150,23 +150,24 @@ Future<List<int>?> publishCertificationPackage({
   required Uint8List clientSideData,
 }) async {
   final uri = Uri(path: 'api/plan/$planId/certificationpackage');
-  final formData = FormData();
-  formData.files.add(
-    MapEntry(
-      'clientSideData',
-      MultipartFile.fromBytes(
-        clientSideData,
-        filename: 'client_side_logs.zip',
-        contentType: DioMediaType('application', 'zip'),
-      ),
-    ),
-  );
+
   int attempt = 0;
   const maxAttempts = 5;
   const initialDelay = Duration(seconds: 1);
 
   while (true) {
     try {
+      final formData = FormData();
+      formData.files.add(
+        MapEntry(
+          'clientSideData',
+          MultipartFile.fromBytes(
+            clientSideData,
+            filename: 'client_side_logs.zip',
+            contentType: DioMediaType('application', 'zip'),
+          ),
+        ),
+      );
       final response = await dio.postUri<Uint8List>(
         uri,
         data: formData,
