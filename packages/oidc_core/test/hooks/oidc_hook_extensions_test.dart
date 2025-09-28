@@ -1,7 +1,5 @@
-import 'package:oidc_core/src/hooks/oidc_hook.dart';
-import 'package:oidc_core/src/hooks/oidc_hook_extensions.dart';
+import 'package:oidc_core/src/_exports.dart';
 import 'package:oidc_core/src/hooks/oidc_hook_mixin.dart';
-import 'package:oidc_core/src/hooks/oidc_execution_hook_mixin.dart';
 import 'package:test/test.dart';
 
 // Mock hooks for testing different combinations
@@ -189,7 +187,7 @@ void main() {
 
   group('OidcHookExtensions.execute', () {
     test('executes with null hook', () async {
-      OidcHookMixin<String, String>? nullHook;
+      const OidcHookMixin<String, String>? nullHook = null;
 
       final result = await nullHook.execute(
         request: 'test-request',
@@ -246,7 +244,7 @@ void main() {
       ) as OidcHookMixin<String, String>?;
 
       // Execute multiple times to ensure consistency
-      for (int i = 0; i < 3; i++) {
+      for (var i = 0; i < 3; i++) {
         final result = await hook.execute(
           request: 'test-$i',
           defaultExecution: (request) async => '$request-executed',
