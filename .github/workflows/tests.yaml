@@ -153,9 +153,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
-        with:
-          channel: master
-          flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
+        # with:
+        #   channel: master
+        #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Start Simulator
         # Start an iPhone simulator
         run: |
