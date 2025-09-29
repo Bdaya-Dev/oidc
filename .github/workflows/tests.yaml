@@ -107,7 +107,7 @@ jobs:
             ~/.android/avd/*
             ~/.android/adb*
           # include arch to avoid reusing old 32-bit images
-          key: avd-${{ matrix.api-level }}-${{ matrix.arch }}
+          key: avd-${{ matrix.api-level }}-${{ matrix.arch }}-novulkan
 
       - name: create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -116,8 +116,8 @@ jobs:
           api-level: ${{ matrix.api-level }}
           arch: ${{ matrix.arch }}
           target: google_apis 
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -feature Vulkan=off -no-snapshot
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
       - name: Run flutter precache
@@ -132,6 +132,7 @@ jobs:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
           arch: ${{ matrix.arch }}
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -feature Vulkan=off -no-snapshot
           target: google_apis 
           script: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d android --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
       - name: Find .info files and files in coverage folders
