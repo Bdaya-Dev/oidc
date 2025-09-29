@@ -3,8 +3,9 @@ description: Base Implementation for oidc_* desktop plugins (mainly windows/linu
 version: 0.6.1+2
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_flutter_appauth
 homepage: https://bdaya-dev.github.io/oidc/
+resolution: workspace
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  sdk: ">=3.5.0 <4.0.0"
   flutter: ">=3.22.0"
 
 dependencies:
@@ -19,5 +20,5 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  mocktail: ^0.3.0
-  very_good_analysis: ^5.0.0
+  mocktail: ^1.0.3
+  very_good_analysis: ^10.0.0

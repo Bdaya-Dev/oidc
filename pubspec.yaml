@@ -1,6 +1,210 @@
 name: oidc_workspace
+publish_to: none
 
 environment:
-  sdk: '>=2.18.0 <3.0.0'
+  sdk: ^3.9.0
+  flutter: '>=3.35.0 <4.0.0'
+
+workspace:
+  - packages/oidc
+  - packages/oidc/example
+  - packages/oidc_android
+  - packages/oidc_android/example
+  - packages/oidc_core
+  - packages/oidc_default_store
+  - packages/oidc_desktop
+  - packages/oidc_flutter_appauth
+  - packages/oidc_ios
+  - packages/oidc_linux
+  - packages/oidc_loopback_listener
+  - packages/oidc_macos
+  - packages/oidc_platform_interface
+  - packages/oidc_web
+  - packages/oidc_web/example
+  - packages/oidc_web_core
+  - packages/oidc_web_core/example
+  - packages/oidc_windows
 dev_dependencies:
-  melos: ^6.2.0
+  melos: ^7.1.1
+
+
+melos:
+  repository: https://github.com/Bdaya-Dev/oidc
+
+  command:
+    bootstrap:
+      runPubGetInParallel: false
+    clean:
+      hooks:
+        post: |
+          melos exec --flutter -- "flutter clean" &&        
+          rm -rf coverage &&
+          rm -rf pubspec.lock &&
+          melos exec --dir-exists coverage -- "rm -rf coverage"
+  scripts:
+    pana:
+      run: melos exec -c 1 "pana"
+      description: Run pana on all the projects
+      packageFilters:
+        noPrivate: true
+    generate:dart:
+      run: melos exec -c 1 --depends-on="build_runner" -- "dart run build_runner build --delete-conflicting-outputs"
+      description: Build all generated files for Dart packages in this project.
+
+    analyze: # ------ taken from cfug/dio ------------
+      description: Analyze all packages
+      exec: dart analyze
+    format:
+      description: Format check all packages
+      exec: dart format --set-exit-if-changed .
+    format:fix:
+      description: Format all packages
+      exec: dart format .
+
+    test:
+      name: All tests
+      run: |
+        melos run test:vm
+        TEST_PLATFORM=chrome melos run test:web
+        TEST_PLATFORM=firefox melos run test:web
+        melos run test:flutter
+    test:vm:
+      name: Dart VM tests
+      exec: |
+        if [ "$TARGET_DART_SDK" = "min" ]; then
+          dart test --chain-stack-traces
+        else
+          dart test --coverage=coverage/vm --chain-stack-traces
+        fi
+      packageFilters:
+        flutter: false
+        dirExists: test
+        ignore:
+          - "*web*"
+    test:web:
+      name: Dart Web tests
+      run: |
+        melos run test:web:chrome
+        melos run test:web:firefox
+    test:web:chrome:
+      name: Dart Web tests in chrome
+      run: melos run test:web:single
+      env:
+        TEST_PLATFORM: chrome
+        WITH_WASM: true
+    test:web:firefox:
+      name: Dart Web tests in firefox
+      run: melos run test:web:single
+      env:
+        TEST_PLATFORM: firefox
+        WITH_WASM: false
+    test:web:single:
+      name: Dart Web tests in a browser
+      exec: |
+        if [ "$TARGET_DART_SDK" = "min" ]; then
+          dart test --platform ${TEST_PLATFORM} --chain-stack-traces
+        else
+          dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+          if [ "$WITH_WASM" = "true" ]; then
+            dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
+          fi
+        fi
+      packageFilters:
+        dirExists: test
+        flutter: false
+    remove_dart_test_yaml:
+      name: Remove dart_test.yaml
+      run: find . -type f -name 'dart_test.yaml' -delete
+    test:flutter:
+      name: Flutter tests
+      exec: flutter test --coverage --branch-coverage
+      packageFilters:
+        flutter: true
+        dirExists: test
+        ignore:
+          - "*example*"
+    integration_test:android:
+      name: Flutter Android Integration tests
+      exec: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d android --coverage-path coverage/android-coverage.info --dart-define=CI=true
+      packageFilters:
+        flutter: true
+        dirExists:
+          - integration_test
+          - android
+    integration_test:ios:
+      name: Flutter iOs Integration tests
+      exec: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage --ignore-timeouts -d iPhone --coverage-path coverage/ios-coverage.info --dart-define=CI=true
+      packageFilters:
+        flutter: true
+        dirExists:
+          - integration_test
+          - ios
+    integration_test:macos:
+      name: Flutter MacOs Integration tests
+      exec: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d macos --coverage-path coverage/macos-coverage.info --dart-define=CI=true
+      packageFilters:
+        flutter: true
+        dirExists:
+          - integration_test
+          - macos
+    integration_test:linux:
+      name: Flutter Linux Integration tests
+      exec: xvfb-run flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true
+      packageFilters:
+        flutter: true
+        dirExists:
+          - integration_test
+          - linux
+    integration_test:windows:
+      name: Flutter Windows Integration tests
+      exec: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d windows --coverage-path coverage/windows-coverage.info --dart-define=CI=true
+      packageFilters:
+        flutter: true
+        dirExists:
+          - integration_test
+          - windows
+
+    test:coverage:
+      name: Run all tests and combine coverage
+      run: |
+        melos run test
+        melos run coverage:format
+
+    upgrade:dart:
+      name: Upgrade Dart package deps
+      exec: dart pub upgrade
+      packageFilters:
+        flutter: false
+
+    upgrade:flutter:
+      name: Upgrade Flutter package deps
+      exec: flutter pub upgrade
+      packageFilters:
+        flutter: true
+
+    coverage:clean:
+      name: Clear coverage
+      exec: rm -rf coverage
+
+    coverage:format:
+      name: Format coverage
+      run: |
+        dart pub global activate coverage
+        melos run coverage:format:package
+
+    coverage:format:package:
+      name: Format coverage for each package
+      exec: dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+      packageFilters:
+        dirExists: coverage
+
+    coverage:combine:
+      name: Combine & convert coverage report
+      run: |
+        rm -rf coverage
+        dart pub global activate combine_coverage
+        dart pub global activate remove_from_coverage
+        melos run coverage:format
+        dart pub global run combine_coverage --repo-path=$pwd
+        dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$'
+
