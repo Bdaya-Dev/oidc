@@ -7,7 +7,7 @@ inputs:
     default: "stable"
   flutter-version:
     description: "Flutter version to use"
-    default: "3.35.0"
+    default: "3.35.4"
 
 runs:
   using: "composite"
@@ -24,8 +24,3 @@ runs:
       continue-on-error: true
       with:
         run-bootstrap: true
-        bootstrap-no-example: false
-    - uses: bluefireteam/melos-action@main
-      with:
-        run-bootstrap: true
-        bootstrap-no-example: true
