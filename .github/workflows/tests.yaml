@@ -80,6 +80,7 @@ jobs:
     strategy:
       matrix:
         api-level: [29]
+        arch: [x86_64]
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -105,13 +106,16 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${{ matrix.api-level }}
+          # include arch to avoid reusing old 32-bit images
+          key: avd-${{ matrix.api-level }}-${{ matrix.arch }}
 
       - name: create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
+          arch: ${{ matrix.arch }}
+          target: google_apis 
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
@@ -127,6 +131,8 @@ jobs:
         with:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
+          arch: ${{ matrix.arch }}
+          target: google_apis 
           script: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d android --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
       - name: Find .info files and files in coverage folders
         run: |
@@ -340,7 +346,7 @@ jobs:
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Download unit test coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: package-coverage
           path: coverage/downloaded/
@@ -351,7 +357,7 @@ jobs:
           rm -rf coverage/downloaded
           ls -lR coverage
       - name: Download integration coverages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: packages/oidc/example/coverage/
           pattern: "*-integration-coverage"
@@ -376,5 +382,5 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
-          file: coverage/lcov.info
+          files: coverage/lcov.info          
           fail_ci_if_error: false
