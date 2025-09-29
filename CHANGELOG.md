@@ -3,6 +3,59 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2025-09-29
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc` - `v0.12.2`](#oidc---v0122)
+ - [`oidc_core` - `v0.14.2+2`](#oidc_core---v01422)
+ - [`oidc_platform_interface` - `v0.6.0+10`](#oidc_platform_interface---v06010)
+ - [`oidc_linux` - `v0.4.1+3`](#oidc_linux---v0413)
+ - [`oidc_macos` - `v0.7.0+6`](#oidc_macos---v0706)
+ - [`oidc_flutter_appauth` - `v0.6.0+6`](#oidc_flutter_appauth---v0606)
+ - [`oidc_windows` - `v0.3.1+15`](#oidc_windows---v03115)
+ - [`oidc_default_store` - `v0.4.0+4`](#oidc_default_store---v0404)
+ - [`oidc_desktop` - `v0.6.1+3`](#oidc_desktop---v0613)
+ - [`oidc_ios` - `v0.7.0+6`](#oidc_ios---v0706)
+ - [`oidc_web_core` - `v0.3.1+4`](#oidc_web_core---v0314)
+ - [`oidc_android` - `v0.7.0+6`](#oidc_android---v0706)
+ - [`oidc_web` - `v0.6.0+10`](#oidc_web---v06010)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_platform_interface` - `v0.6.0+10`
+ - `oidc_linux` - `v0.4.1+3`
+ - `oidc_macos` - `v0.7.0+6`
+ - `oidc_flutter_appauth` - `v0.6.0+6`
+ - `oidc_windows` - `v0.3.1+15`
+ - `oidc_default_store` - `v0.4.0+4`
+ - `oidc_desktop` - `v0.6.1+3`
+ - `oidc_ios` - `v0.7.0+6`
+ - `oidc_web_core` - `v0.3.1+4`
+ - `oidc_android` - `v0.7.0+6`
+ - `oidc_web` - `v0.6.0+10`
+
+---
+
+#### `oidc` - `v0.12.2`
+
+ - **FEAT**: add OIDC conformance test suite with API client and test runner. ([a651a7d8](https://github.com/Bdaya-Dev/oidc/commit/a651a7d814a424683d141fcc66156e5d17112baa))
+
+#### `oidc_core` - `v0.14.2+2`
+
+ - **FIX**: refactor oidcExecuteHook to handle request and response modifications. ([806c6411](https://github.com/Bdaya-Dev/oidc/commit/806c641166c0634716fdd58f43f10d187f3defe4))
+
+
 ## 2025-06-14
 
 ### Changes

@@ -1,3 +1,7 @@
+## 0.12.2
+
+ - **FEAT**: add OIDC conformance test suite with API client and test runner. ([a651a7d8](https://github.com/Bdaya-Dev/oidc/commit/a651a7d814a424683d141fcc66156e5d17112baa))
+
 ## 0.12.1+2
 
  - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))

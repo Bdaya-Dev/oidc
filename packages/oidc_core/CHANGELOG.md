@@ -1,3 +1,7 @@
+## 0.14.2+2
+
+ - **FIX**: refactor oidcExecuteHook to handle request and response modifications. ([806c6411](https://github.com/Bdaya-Dev/oidc/commit/806c641166c0634716fdd58f43f10d187f3defe4))
+
 ## 0.14.2+1
 
  - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))

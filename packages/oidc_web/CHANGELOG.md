@@ -1,3 +1,7 @@
+## 0.6.0+10
+
+ - Update a dependency to the latest release.
+
 ## 0.6.0+9
 
  - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
