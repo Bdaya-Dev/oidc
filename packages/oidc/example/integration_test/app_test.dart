@@ -44,19 +44,19 @@ void main() {
       });
     } else {
       testWidgets('OIDC Conformance Test', (tester) async {
-        print('Starting OIDC Conformance Test');
-        print('Token: $oidcConformanceToken');
+        // print('Starting OIDC Conformance Test');
+        // print('Token: $oidcConformanceToken');
 
-        print('Executing app main function...');
+        // print('Executing app main function...');
         example.main();
-        print('App main function executed');
+        // print('App main function executed');
 
-        print('Pumping and settling widgets...');
+        // print('Pumping and settling widgets...');
         await tester.pumpAndSettle();
-        print('Widgets settled');
+        // print('Widgets settled');
 
         const baseUrl = 'https://www.certification.openid.net/';
-        print('Base URL: $baseUrl');
+        // print('Base URL: $baseUrl');
 
         final dio = Dio(
           BaseOptions(
@@ -71,29 +71,29 @@ void main() {
             },
           ),
         );
-        print('Dio client initialized');
+        // print('Dio client initialized');
 
-        print('Fetching server info...');
+        // print('Fetching server info...');
         final serverInfo = await dio.get<Map<String, dynamic>>('api/server');
-        print('Server info fetched: ${serverInfo.data}');
+        // print('Server info fetched: ${serverInfo.data}');
         expect(serverInfo.statusCode, 200);
 
-        print('Fetching current user info...');
+        // print('Fetching current user info...');
         final currentUser = await dio.get<Map<String, dynamic>>(
           'api/currentuser',
         );
-        print('Current user info fetched: ${currentUser.data}');
+        // print('Current user info fetched: ${currentUser.data}');
         expect(currentUser.statusCode, 200);
 
         final platform = getPlatformName();
-        print('Platform: $platform');
+        // print('Platform: $platform');
 
         const clientId = 'my_client';
         const clientSecret = 'my_client_secret';
         final redirectUri = getPlatformRedirectUri();
-        print(
-          'Client ID: $clientId, Client Secret: $clientSecret, Redirect URI: $redirectUri',
-        );
+        // print(
+        //   'Client ID: $clientId, Client Secret: $clientSecret, Redirect URI: $redirectUri',
+        // );
 
         final (path, body) = prepareTestPlanRequest(
           clientId: clientId,
@@ -107,46 +107,46 @@ void main() {
           frontChannelLogoutUri:
               'http://localhost:22433/redirect.html?requestType=front-channel-logout',
         );
-        print('Test plan request prepared: Path: $path, Body: $body');
+        // print('Test plan request prepared: Path: $path, Body: $body');
 
-        print('Submitting test plan request...');
+        // print('Submitting test plan request...');
         final testPlanResponse = await dio.post<Map<String, dynamic>>(
           path,
           data: body,
         );
-        print('Test plan response: ${testPlanResponse.data}');
+        // print('Test plan response: ${testPlanResponse.data}');
         expect(testPlanResponse.data, isMap);
 
         final testPlanData = testPlanResponse.data as Map<String, dynamic>;
         final testPlanId = testPlanData['id'] as String;
-        final testPlanName = testPlanData['name'] as String;
+        // final testPlanName = testPlanData['name'] as String;
         final testPlanModules = testPlanData['modules'] as List<dynamic>? ?? [];
-        print(
-          'Test Plan ID: $testPlanId, Name: $testPlanName, Modules: $testPlanModules',
-        );
+        // print(
+        //   'Test Plan ID: $testPlanId, Name: $testPlanName, Modules: $testPlanModules',
+        // );
 
-        for (final testPlanModule in testPlanModules) {
-          final moduleName = testPlanModule['testModule'] as String?;
-          expect(moduleName, isNotNull);
-          print('Processing Test Plan Module: $moduleName');
+        // for (final testPlanModule in testPlanModules) {
+        //   // final moduleName = testPlanModule['testModule'] as String?;
+        //   // expect(moduleName, isNotNull);
+        //   // print('Processing Test Plan Module: $moduleName');
 
-          final variant =
-              testPlanModule['variant'] as Map<String, dynamic>? ??
-              <String, dynamic>{};
-          final clientAuthType = variant['client_auth_type'] as String?;
-          final responseType = variant['response_type'] as String?;
-          final responseMode = variant['response_mode'] as String?;
-          print(
-            'Module: $moduleName, Client Auth Type: $clientAuthType, Response Type: $responseType, Response Mode: $responseMode',
-          );
-        }
+        //   // final variant =
+        //   //     testPlanModule['variant'] as Map<String, dynamic>? ??
+        //   //     <String, dynamic>{};
+        //   // final clientAuthType = variant['client_auth_type'] as String?;
+        //   // final responseType = variant['response_type'] as String?;
+        //   // final responseMode = variant['response_mode'] as String?;
+        //   // print(
+        //   //   'Module: $moduleName, Client Auth Type: $clientAuthType, Response Type: $responseType, Response Mode: $responseMode',
+        //   // );
+        // }
         final archive = Archive();
 
         for (final testPlanModule
             in testPlanModules.whereType<Map<String, dynamic>>()) {
           final moduleName = testPlanModule['testModule'] as String;
 
-          print('Creating test instance for module: $moduleName');
+          // print('Creating test instance for module: $moduleName');
 
           final variant =
               testPlanModule['variant'] as Map<String, dynamic>? ??
@@ -169,7 +169,7 @@ void main() {
             final message =
                 '[${record.time} ${record.level.name}][${record.loggerName}]: ${record.message}';
             logsToWrite.add(message);
-            print(message);
+            // print(message);
           });
           logger.info('Test instance created: $testInstance');
           final url = testInstance['url'] as String;
