@@ -142,7 +142,7 @@ jobs:
               adb wait-for-device
 
               # Pick the first Android device id
-              EMU_ID="$(adb devices | awk 'NR>1 && $2==\"device\" {print $1; exit}')"
+              EMU_ID="$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')"
               if [ -z "$EMU_ID" ]; then
                 echo "No Android device found. Available devices:"
                 flutter devices
@@ -151,7 +151,7 @@ jobs:
 
               echo "Using device: $EMU_ID"
               flutter devices
-              flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d "$EMU_ID" --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
+              flutter test integration_test --coverage --coverage-package "oidc*" --branch-coverage -d "$EMU_ID" --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
       - name: Find .info files and files in coverage folders
         run: |
           echo "Listing all .info files and files inside any coverage/ directory:"
