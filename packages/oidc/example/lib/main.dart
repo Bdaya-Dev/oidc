@@ -4,21 +4,22 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/oidc.dart';
-import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
 import 'package:oidc_example/pages/add_manager_dialog.dart';
 import 'package:oidc_example/pages/auth.dart';
 import 'package:oidc_example/pages/home.dart';
 import 'package:oidc_example/pages/secret_page.dart';
-// you must run this app with --web-port 22433
 
+// you must run this app with --web-port 22433
 void main() {
   usePathUrlStrategy();
 
   Logger.root.level = Level.ALL;
-  Logger.root.onRecord.listen((record) {
-    debugPrint('${record.level.name}: ${record.time}: ${record.message}');
-  });
+  if (!app_state.kIsCI) {
+    Logger.root.onRecord.listen((record) {
+      debugPrint('${record.level.name}: ${record.time}: ${record.message}');
+    });
+  }
 
   runApp(
     SharedValue.wrapApp(
