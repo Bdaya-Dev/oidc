@@ -282,10 +282,15 @@ jobs:
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         run: |
+          if [ -z "$OIDC_CONFORMANCE_TOKEN" ]; then
+            echo "OIDC_CONFORMANCE_TOKEN is not set or is empty"
+          else
+            echo "OIDC_CONFORMANCE_TOKEN is set (value is masked for security)"
+          fi
           google-chrome --version
           chmod +x .ci/scripts/set_default_linux_apps.sh
           ./.ci/scripts/set_default_linux_apps.sh
-          xvfb-run --auto-servernum flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} -r expanded
+          xvfb-run --auto-servernum flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN -r expanded
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
