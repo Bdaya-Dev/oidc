@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        api-level: [29]
+        api-level: [33]
         arch: [x86_64]
     defaults:
       run:
