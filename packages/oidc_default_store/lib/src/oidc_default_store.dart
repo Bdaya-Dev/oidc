@@ -7,7 +7,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web/web.dart' as html;
+
+import 'html_stub.dart' if (dart.library.js_interop) 'html_web.dart' as html;
 
 // coverage:ignore-line
 final _logger = Logger('Oidc.DefaultStore');
