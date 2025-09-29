@@ -134,7 +134,24 @@ jobs:
           arch: ${{ matrix.arch }}
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           target: google_apis 
-          script: flutter test integration_test --coverage --no-enable-impeller --coverage-package oidc* --branch-coverage -d android-x64 --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
+          script: |
+              echo "ADB devices before:"
+              adb devices -l || true
+
+              # Wait for a device to be 'device' (boot completed)
+              adb wait-for-device
+
+              # Pick the first Android device id
+              EMU_ID="$(adb devices | awk 'NR>1 && $2==\"device\" {print $1; exit}')"
+              if [ -z "$EMU_ID" ]; then
+                echo "No Android device found. Available devices:"
+                flutter devices
+                exit 1
+              fi
+
+              echo "Using device: $EMU_ID"
+              flutter devices
+              flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d "$EMU_ID" --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
       - name: Find .info files and files in coverage folders
         run: |
           echo "Listing all .info files and files inside any coverage/ directory:"
