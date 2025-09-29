@@ -7,8 +7,8 @@ part of 'response.dart';
 // **************************************************************************
 
 OidcEndSessionResponse _$OidcEndSessionResponseFromJson(
-        Map<String, dynamic> json) =>
-    OidcEndSessionResponse._(
-      src: readSrcMap(json, '') as Map<String, dynamic>,
-      state: json['state'] as String?,
-    );
+  Map<String, dynamic> json,
+) => OidcEndSessionResponse._(
+  src: readSrcMap(json, '') as Map<String, dynamic>,
+  state: json['state'] as String?,
+);

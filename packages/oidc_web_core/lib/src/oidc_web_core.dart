@@ -74,8 +74,10 @@ class OidcWebCore {
       }
 
       if (state != null) {
-        final (:parameters, responseMode: _) =
-            OidcEndpoints.resolveAuthorizeResponseParameters(
+        final (
+          :parameters,
+          responseMode: _,
+        ) = OidcEndpoints.resolveAuthorizeResponseParameters(
           responseUri: parsed,
           resolveResponseModeByKey: OidcConstants_AuthParameters.state,
         );
@@ -137,10 +139,15 @@ class OidcWebCore {
 
   Window? _prepareWindow(OidcPlatformSpecificOptions_Web options) {
     return switch (options.navigationMode) {
-      OidcPlatformSpecificOptions_Web_NavigationMode.newPage =>
-        window.open('', '_blank'),
-      OidcPlatformSpecificOptions_Web_NavigationMode.popup =>
-        window.open('', 'oidc_auth_popup', _calculatePopupOptions(options)),
+      OidcPlatformSpecificOptions_Web_NavigationMode.newPage => window.open(
+        '',
+        '_blank',
+      ),
+      OidcPlatformSpecificOptions_Web_NavigationMode.popup => window.open(
+        '',
+        'oidc_auth_popup',
+        _calculatePopupOptions(options),
+      ),
       _ => null,
     };
   }
@@ -150,9 +157,7 @@ class OidcWebCore {
     OidcPlatformSpecificOptions_Web options,
   ) {
     final prepared = _prepareWindow(options);
-    return {
-      if (prepared != null) _webWindowKey: prepared,
-    };
+    return {if (prepared != null) _webWindowKey: prepared};
   }
 
   /// Returns the authorization response.
@@ -171,7 +176,7 @@ class OidcWebCore {
     }
     final isNonePrompt =
         request.prompt?.contains(OidcConstants_AuthorizeRequest_Prompt.none) ??
-            false;
+        false;
     if (options.navigationMode ==
             OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame &&
         !isNonePrompt) {
@@ -225,12 +230,13 @@ class OidcWebCore {
   /// Listens to incoming front channel logout requests.
   /// returns an empty stream on non-supported platforms.
   Stream<OidcFrontChannelLogoutIncomingRequest>
-      listenToFrontChannelLogoutRequests(
+  listenToFrontChannelLogoutRequests(
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions_Web options,
   ) {
-    final logger =
-        Logger('Oidc.OidcWebCore.listenToFrontChannelLogoutRequests');
+    final logger = Logger(
+      'Oidc.OidcWebCore.listenToFrontChannelLogoutRequests',
+    );
     final channel = BroadcastChannel(options.broadcastChannel);
     StreamController<OidcFrontChannelLogoutIncomingRequest>? streamController;
 
@@ -300,9 +306,7 @@ class OidcWebCore {
       }
       logger.fine('successfully matched data ($uri)');
       sc.add(
-        OidcFrontChannelLogoutIncomingRequest.fromJson(
-          uri.queryParameters,
-        ),
+        OidcFrontChannelLogoutIncomingRequest.fromJson(uri.queryParameters),
       );
     }
 
@@ -348,8 +352,9 @@ class OidcWebCore {
       }
       final eventDataJs = event.data;
       if (eventDataJs is! JSString) {
-        logger
-            .warning('Received iframe message was not a string: $eventDataJs');
+        logger.warning(
+          'Received iframe message was not a string: $eventDataJs',
+        );
         return;
       }
       final eventData = eventDataJs.toDart;
@@ -359,16 +364,19 @@ class OidcWebCore {
           streamController.add(const OidcErrorMonitorSessionResult());
         case 'changed':
           logger.fine('Received changed iframe message');
-          streamController
-              .add(const OidcValidMonitorSessionResult(changed: true));
+          streamController.add(
+            const OidcValidMonitorSessionResult(changed: true),
+          );
         case 'unchanged':
           logger.fine('Received unchanged iframe message');
-          streamController
-              .add(const OidcValidMonitorSessionResult(changed: false));
+          streamController.add(
+            const OidcValidMonitorSessionResult(changed: false),
+          );
         default:
           logger.warning('Received unknown iframe message: $eventData');
-          streamController
-              .add(OidcUnknownMonitorSessionResult(data: eventData));
+          streamController.add(
+            OidcUnknownMonitorSessionResult(data: eventData),
+          );
       }
     }
 
@@ -387,29 +395,34 @@ class OidcWebCore {
         //send message to iframe
         await timerSub?.cancel();
         logger.info('Starting periodic stream!');
-        timerSub = Stream.periodic(
-          request.interval,
-          (computationCount) => computationCount,
-        ).startWith(-1).listen((_) {
-          final iframe = document.getElementById(iframeId);
-          if (iframe is! HTMLIFrameElement) {
-            return;
-          }
-          try {
-            final cw = iframe.contentWindow;
-            if (cw == null) {
-              return;
-            }
-            const space = ' ';
-            cw.postMessage(
-              '${request.clientId}$space${request.sessionState}'.toJS,
-              checkSessionIframe.origin.toJS,
-            );
-          } catch (e, st) {
-            timerSub?.cancel();
-            logger.severe("Failed to send postMessage to OP's iframe", e, st);
-          }
-        });
+        timerSub =
+            Stream.periodic(
+              request.interval,
+              (computationCount) => computationCount,
+            ).startWith(-1).listen((_) {
+              final iframe = document.getElementById(iframeId);
+              if (iframe is! HTMLIFrameElement) {
+                return;
+              }
+              try {
+                final cw = iframe.contentWindow;
+                if (cw == null) {
+                  return;
+                }
+                const space = ' ';
+                cw.postMessage(
+                  '${request.clientId}$space${request.sessionState}'.toJS,
+                  checkSessionIframe.origin.toJS,
+                );
+              } catch (e, st) {
+                timerSub?.cancel();
+                logger.severe(
+                  "Failed to send postMessage to OP's iframe",
+                  e,
+                  st,
+                );
+              }
+            });
       },
       onCancel: () {
         //stop the session iframe

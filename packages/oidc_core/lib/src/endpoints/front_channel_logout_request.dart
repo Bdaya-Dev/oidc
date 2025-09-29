@@ -19,8 +19,7 @@ class OidcFrontChannelLogoutIncomingRequest extends JsonBasedResponse {
 
   factory OidcFrontChannelLogoutIncomingRequest.fromJson(
     Map<String, dynamic> src,
-  ) =>
-      _$OidcFrontChannelLogoutIncomingRequestFromJson(src);
+  ) => _$OidcFrontChannelLogoutIncomingRequestFromJson(src);
 
   @JsonKey(name: OidcConstants_AuthParameters.iss)
   final Uri? iss;

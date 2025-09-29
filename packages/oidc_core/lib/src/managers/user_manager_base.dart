@@ -25,9 +25,9 @@ abstract class OidcUserManagerBase {
     this.httpClient,
     JsonWebKeyStore? keyStore,
     this.id,
-  })  : discoveryDocumentUri = null,
-        currentDiscoveryDocument = discoveryDocument,
-        _keyStore = keyStore;
+  }) : discoveryDocumentUri = null,
+       currentDiscoveryDocument = discoveryDocument,
+       _keyStore = keyStore;
 
   /// Create a new UserManager that delays getting the discovery document until
   /// [init] is called.
@@ -109,10 +109,9 @@ abstract class OidcUserManagerBase {
   @protected
   Map<String, dynamic> getSerializableOptions(
     OidcPlatformSpecificOptions options,
-  ) =>
-      {
-        if (isWeb) 'webLaunchMode': options.web.navigationMode.name,
-      };
+  ) => {
+    if (isWeb) 'webLaunchMode': options.web.navigationMode.name,
+  };
 
   /// Returns the authorization response.
   /// may throw an [OidcException].
@@ -143,7 +142,7 @@ abstract class OidcUserManagerBase {
   /// returns an empty stream on non-supported platforms.
   @protected
   Stream<OidcFrontChannelLogoutIncomingRequest>
-      listenToFrontChannelLogoutRequests(
+  listenToFrontChannelLogoutRequests(
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions options,
   );
@@ -202,7 +201,8 @@ abstract class OidcUserManagerBase {
       extraStateData: extraStateData,
       uiLocales: uiLocalesOverride ?? settings.uiLocales,
       acrValues: acrValuesOverride ?? settings.acrValues,
-      idTokenHint: idTokenHintOverride ??
+      idTokenHint:
+          idTokenHintOverride ??
           (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
       loginHint: loginHint,
       extraTokenHeaders: {
@@ -226,10 +226,10 @@ abstract class OidcUserManagerBase {
     // the nonce is until the user logs out.
     final requestContainer =
         await OidcEndpoints.prepareAuthorizationCodeFlowRequest(
-      input: simpleReq,
-      metadata: discoveryDocument,
-      store: store,
-    );
+          input: simpleReq,
+          metadata: discoveryDocument,
+          store: store,
+        );
     return tryGetAuthResponse(
       grantType: OidcConstants_GrantType.authorizationCode,
       request: requestContainer.request,
@@ -380,7 +380,8 @@ abstract class OidcUserManagerBase {
       extraStateData: extraStateData,
       uiLocales: uiLocalesOverride ?? settings.uiLocales,
       acrValues: acrValuesOverride ?? settings.acrValues,
-      idTokenHint: idTokenHintOverride ??
+      idTokenHint:
+          idTokenHintOverride ??
           (includeIdTokenHintFromCurrentUser ? currentUser?.idToken : null),
       loginHint: loginHint,
       extraParameters: {
@@ -412,9 +413,11 @@ abstract class OidcUserManagerBase {
   /// NOTE: this is different than [logout], since this method doesn't initiate
   /// any logout flows.
   Future<void> forgetUser() async {
-    await cleanUpStore(toDelete: {
-      OidcStoreNamespace.secureTokens,
-    });
+    await cleanUpStore(
+      toDelete: {
+        OidcStoreNamespace.secureTokens,
+      },
+    );
     final currentUser = this.currentUser;
     if (currentUser != null) {
       eventsController.add(
@@ -777,8 +780,9 @@ abstract class OidcUserManagerBase {
             implicitTokenResponse.idToken != null) {
           final token = OidcToken.fromResponse(
             implicitTokenResponse,
-            overrideExpiresIn:
-                settings.getExpiresIn?.call(implicitTokenResponse),
+            overrideExpiresIn: settings.getExpiresIn?.call(
+              implicitTokenResponse,
+            ),
             sessionState: response.sessionState,
           );
           return await createUserFromToken(
@@ -902,8 +906,9 @@ abstract class OidcUserManagerBase {
       }
     }
 
-    final idTokenNonce = newUser
-        .parsedIdToken.claims[OidcConstants_AuthParameters.nonce] as String?;
+    final idTokenNonce =
+        newUser.parsedIdToken.claims[OidcConstants_AuthParameters.nonce]
+            as String?;
     if (nonce != null && idTokenNonce != nonce) {
       logAndThrow(
         'Server returned a wrong id_token nonce, might be a replay attack.',
@@ -953,27 +958,28 @@ abstract class OidcUserManagerBase {
     }
     logger.info('started monitoring user session');
 
-    sessionSub ??= monitorSessionStatus(
-      checkSessionIframe: checkSessionIframe,
-      request: OidcMonitorSessionStatusRequest(
-        clientId: clientCredentials.clientId,
-        sessionState: sessionState,
-        interval: settings.sessionManagementSettings.interval,
-      ),
-    ).listen((event) {
-      switch (event) {
-        case OidcValidMonitorSessionResult(changed: final changed):
-          if (changed) {
-            sessionSub?.cancel();
-            reAuthorizeUser();
+    sessionSub ??=
+        monitorSessionStatus(
+          checkSessionIframe: checkSessionIframe,
+          request: OidcMonitorSessionStatusRequest(
+            clientId: clientCredentials.clientId,
+            sessionState: sessionState,
+            interval: settings.sessionManagementSettings.interval,
+          ),
+        ).listen((event) {
+          switch (event) {
+            case OidcValidMonitorSessionResult(changed: final changed):
+              if (changed) {
+                sessionSub?.cancel();
+                reAuthorizeUser();
+              }
+            case OidcErrorMonitorSessionResult():
+              if (settings.sessionManagementSettings.stopIfErrorReceived) {
+                sessionSub?.cancel();
+              }
+            case OidcUnknownMonitorSessionResult():
           }
-        case OidcErrorMonitorSessionResult():
-          if (settings.sessionManagementSettings.stopIfErrorReceived) {
-            sessionSub?.cancel();
-          }
-        case OidcUnknownMonitorSessionResult():
-      }
-    });
+        });
   }
 
   @protected
@@ -1001,8 +1007,9 @@ abstract class OidcUserManagerBase {
     ensureInit();
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
-    if (!discoveryDocument.grantTypesSupportedOrDefault
-        .contains(OidcConstants_GrantType.refreshToken)) {
+    if (!discoveryDocument.grantTypesSupportedOrDefault.contains(
+      OidcConstants_GrantType.refreshToken,
+    )) {
       //Server doesn't support refresh_token grant.
       return null;
     }
@@ -1076,8 +1083,9 @@ abstract class OidcUserManagerBase {
       OidcTokenExpiringEvent.now(currentToken: event),
     );
     final discoveryDocument = this.discoveryDocument;
-    if (!discoveryDocument.grantTypesSupportedOrDefault
-        .contains(OidcConstants_GrantType.refreshToken)) {
+    if (!discoveryDocument.grantTypesSupportedOrDefault.contains(
+      OidcConstants_GrantType.refreshToken,
+    )) {
       //Server doesn't support refresh_token grant.
       return;
     }
@@ -1216,8 +1224,9 @@ abstract class OidcUserManagerBase {
         //keep going if the only error is that the token expired,
         //and it's allowed in settings.
         (settings.supportOfflineAuth &&
-            errors.every((e) =>
-                e is JoseException && e.message.startsWith('JWT expired.')))) {
+            errors.every(
+              (e) => e is JoseException && e.message.startsWith('JWT expired.'),
+            ))) {
       // apply userinfo if present
       if (userInfoResp != null) {
         actualUser = actualUser.withUserInfo(userInfoResp.src);
@@ -1406,8 +1415,9 @@ abstract class OidcUserManagerBase {
         if (token.refreshToken != null &&
             (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
           try {
-            loadedUser =
-                await refreshToken(overrideRefreshToken: token.refreshToken);
+            loadedUser = await refreshToken(
+              overrideRefreshToken: token.refreshToken,
+            );
           } catch (e) {
             // An app might go offline during token refresh, so we consult the
             // supportOfflineAuth setting to check whether this is an issue or
@@ -1481,8 +1491,9 @@ abstract class OidcUserManagerBase {
           );
           return true;
         case OidcEndSessionState():
-          final resp =
-              OidcEndSessionResponse.fromJson(stateResponseUrl.queryParameters);
+          final resp = OidcEndSessionResponse.fromJson(
+            stateResponseUrl.queryParameters,
+          );
           await handleEndSessionResponse(result: resp);
           return true;
         default:
@@ -1570,9 +1581,11 @@ abstract class OidcUserManagerBase {
       //start listening to token events, if the user enabled them.
 
       toDispose
-        ..add(userSubject.listen(
-          (value) => listenToTokenRefreshIfSupported(tokenEvents, value),
-        ))
+        ..add(
+          userSubject.listen(
+            (value) => listenToTokenRefreshIfSupported(tokenEvents, value),
+          ),
+        )
         ..add(userSubject.listen(listenToUserSessionIfSupported))
         ..add(tokenEvents.expiring.listen(handleTokenExpiring))
         ..add(tokenEvents.expired.listen(handleTokenExpired));

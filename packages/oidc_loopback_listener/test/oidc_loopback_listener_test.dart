@@ -31,9 +31,7 @@ void main() {
       final serverCompleter = Completer<HttpServer>();
 
       unawaited(
-        listener.listenForSingleResponse(
-          serverCompleter: serverCompleter,
-        ),
+        listener.listenForSingleResponse(serverCompleter: serverCompleter),
       );
       final server = await serverCompleter.future;
       final targetUri = getTargetUriFromPort(port: server.port);
@@ -43,8 +41,10 @@ void main() {
     });
 
     test('not found', () async {
-      final listener =
-          OidcLoopbackListener(path: 'secret', notFoundResponse: 'not found');
+      final listener = OidcLoopbackListener(
+        path: 'secret',
+        notFoundResponse: 'not found',
+      );
       final serverCompleter = Completer<HttpServer>();
 
       unawaited(
@@ -64,15 +64,14 @@ void main() {
       );
       final serverCompleter = Completer<HttpServer>();
 
-      final receivedUriFuture =
-          listener.listenForSingleResponse(serverCompleter: serverCompleter);
+      final receivedUriFuture = listener.listenForSingleResponse(
+        serverCompleter: serverCompleter,
+      );
       final server = await serverCompleter.future;
       final targetUri = getTargetUriFromPort(
         port: server.port,
         path: 'secret',
-        queryParameters: {
-          'code': '123456',
-        },
+        queryParameters: {'code': '123456'},
       );
       final resp = await http.get(targetUri);
       expect(resp.statusCode, HttpStatus.ok);
@@ -88,15 +87,14 @@ void main() {
       final listener = OidcLoopbackListener(successfulPageResponse: 'good');
       final serverCompleter = Completer<HttpServer>();
 
-      final receivedUriFuture =
-          listener.listenForSingleResponse(serverCompleter: serverCompleter);
+      final receivedUriFuture = listener.listenForSingleResponse(
+        serverCompleter: serverCompleter,
+      );
       final server = await serverCompleter.future;
       final targetUri = getTargetUriFromPort(
         port: server.port,
         path: 'anything',
-        queryParameters: {
-          'code': '123456',
-        },
+        queryParameters: {'code': '123456'},
       );
       final resp = await http.get(targetUri);
       expect(resp.statusCode, HttpStatus.ok);

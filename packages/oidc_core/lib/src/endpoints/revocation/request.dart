@@ -33,7 +33,7 @@ class OidcRevocationRequest extends JsonBasedRequest {
 
   @override
   Map<String, dynamic> toMap() => {
-        ...super.toMap(),
-        ..._$OidcRevocationRequestToJson(this),
-      };
+    ...super.toMap(),
+    ..._$OidcRevocationRequestToJson(this),
+  };
 }

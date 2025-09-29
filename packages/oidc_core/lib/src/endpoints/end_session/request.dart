@@ -118,14 +118,14 @@ class OidcEndSessionRequest extends JsonBasedRequest {
 
   @override
   Map<String, dynamic> toMap() => {
-        ..._$OidcEndSessionRequestToJson(this),
-        ...super.toMap(),
-      };
+    ..._$OidcEndSessionRequestToJson(this),
+    ...super.toMap(),
+  };
 
   Uri generateUri(Uri endpoint) => endpoint.replace(
-        queryParameters: {
-          ...endpoint.queryParameters,
-          ...OidcInternalUtilities.serializeQueryParameters(toMap()),
-        },
-      );
+    queryParameters: {
+      ...endpoint.queryParameters,
+      ...OidcInternalUtilities.serializeQueryParameters(toMap()),
+    },
+  );
 }

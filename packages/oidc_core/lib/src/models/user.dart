@@ -16,9 +16,9 @@ class OidcUser {
     required this.allowedAlgorithms,
     required this.userInfo,
   }) : aggregatedClaims = {
-          ...parsedIdToken.claims.toJson(),
-          ...userInfo,
-        };
+         ...parsedIdToken.claims.toJson(),
+         ...userInfo,
+       };
 
   /// Creates a OidcUser from an encoded id_token passed via [token].
   ///

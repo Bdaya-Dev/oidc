@@ -8,34 +8,36 @@ part of 'state.dart';
 
 OidcEndSessionState _$OidcEndSessionStateFromJson(Map<String, dynamic> json) =>
     OidcEndSessionState(
-      postLogoutRedirectUri:
-          Uri.parse(json['post_logout_redirect_uri'] as String),
+      postLogoutRedirectUri: Uri.parse(
+        json['post_logout_redirect_uri'] as String,
+      ),
       originalUri: json['original_uri'] == null
           ? null
           : Uri.parse(json['original_uri'] as String),
       options: json['options'] as Map<String, dynamic>?,
       createdAt: _$JsonConverterFromJson<int, DateTime>(
-          json['created_at'], const OidcNumericDateConverter().fromJson),
+        json['created_at'],
+        const OidcNumericDateConverter().fromJson,
+      ),
       data: json['data'],
       id: json['id'] as String?,
       managerId: json['managerId'] as String?,
     );
 
 Map<String, dynamic> _$OidcEndSessionStateToJson(
-        OidcEndSessionState instance) =>
-    <String, dynamic>{
-      'id': instance.id,
-      'created_at': const OidcNumericDateConverter().toJson(instance.createdAt),
-      'operationDiscriminator': instance.operationDiscriminator,
-      'managerId': instance.managerId,
-      'data': instance.data,
-      'options': instance.options,
-      'post_logout_redirect_uri': instance.postLogoutRedirectUri.toString(),
-      'original_uri': instance.originalUri?.toString(),
-    };
+  OidcEndSessionState instance,
+) => <String, dynamic>{
+  'id': instance.id,
+  'created_at': const OidcNumericDateConverter().toJson(instance.createdAt),
+  'operationDiscriminator': instance.operationDiscriminator,
+  'managerId': instance.managerId,
+  'data': instance.data,
+  'options': instance.options,
+  'post_logout_redirect_uri': instance.postLogoutRedirectUri.toString(),
+  'original_uri': instance.originalUri?.toString(),
+};
 
 Value? _$JsonConverterFromJson<Json, Value>(
   Object? json,
   Value? Function(Json json) fromJson,
-) =>
-    json == null ? null : fromJson(json as Json);
+) => json == null ? null : fromJson(json as Json);

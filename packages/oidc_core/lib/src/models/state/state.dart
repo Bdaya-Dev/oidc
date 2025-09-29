@@ -23,8 +23,8 @@ class OidcState {
     DateTime? createdAt,
     this.data,
     this.managerId,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? clock.now();
+  }) : id = id ?? const Uuid().v4(),
+       createdAt = createdAt ?? clock.now();
 
   ///
   factory OidcState.fromStorageString(String storageString) {

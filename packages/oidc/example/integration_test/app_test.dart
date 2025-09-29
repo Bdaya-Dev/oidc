@@ -15,8 +15,9 @@ import 'conformance/api.dart';
 import 'conformance/manager.dart';
 import 'helpers.dart';
 
-const String oidcConformanceToken =
-    String.fromEnvironment('OIDC_CONFORMANCE_TOKEN');
+const String oidcConformanceToken = String.fromEnvironment(
+  'OIDC_CONFORMANCE_TOKEN',
+);
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -61,12 +62,8 @@ void main() {
           BaseOptions(
             baseUrl: kIsWeb
                 ? Uri.parse(
-                        'https://cors-proxy.bdaya-dev.workers.dev/corsproxy/')
-                    .replace(
-                    queryParameters: {
-                      'apiurl': baseUrl,
-                    },
-                  ).toString()
+                    'https://cors-proxy.bdaya-dev.workers.dev/corsproxy/',
+                  ).replace(queryParameters: {'apiurl': baseUrl}).toString()
                 : baseUrl,
             headers: {
               'Authorization': 'Bearer $oidcConformanceToken',
@@ -82,8 +79,9 @@ void main() {
         expect(serverInfo.statusCode, 200);
 
         print('Fetching current user info...');
-        final currentUser =
-            await dio.get<Map<String, dynamic>>('api/currentuser');
+        final currentUser = await dio.get<Map<String, dynamic>>(
+          'api/currentuser',
+        );
         print('Current user info fetched: ${currentUser.data}');
         expect(currentUser.statusCode, 200);
 
@@ -94,7 +92,8 @@ void main() {
         const clientSecret = 'my_client_secret';
         final redirectUri = getPlatformRedirectUri();
         print(
-            'Client ID: $clientId, Client Secret: $clientSecret, Redirect URI: $redirectUri');
+          'Client ID: $clientId, Client Secret: $clientSecret, Redirect URI: $redirectUri',
+        );
 
         final (path, body) = prepareTestPlanRequest(
           clientId: clientId,
@@ -111,8 +110,10 @@ void main() {
         print('Test plan request prepared: Path: $path, Body: $body');
 
         print('Submitting test plan request...');
-        final testPlanResponse =
-            await dio.post<Map<String, dynamic>>(path, data: body);
+        final testPlanResponse = await dio.post<Map<String, dynamic>>(
+          path,
+          data: body,
+        );
         print('Test plan response: ${testPlanResponse.data}');
         expect(testPlanResponse.data, isMap);
 
@@ -121,14 +122,16 @@ void main() {
         final testPlanName = testPlanData['name'] as String;
         final testPlanModules = testPlanData['modules'] as List<dynamic>? ?? [];
         print(
-            'Test Plan ID: $testPlanId, Name: $testPlanName, Modules: $testPlanModules');
+          'Test Plan ID: $testPlanId, Name: $testPlanName, Modules: $testPlanModules',
+        );
 
         for (final testPlanModule in testPlanModules) {
           final moduleName = testPlanModule['testModule'] as String?;
           expect(moduleName, isNotNull);
           print('Processing Test Plan Module: $moduleName');
 
-          final variant = testPlanModule['variant'] as Map<String, dynamic>? ??
+          final variant =
+              testPlanModule['variant'] as Map<String, dynamic>? ??
               <String, dynamic>{};
           final clientAuthType = variant['client_auth_type'] as String?;
           final responseType = variant['response_type'] as String?;
@@ -145,7 +148,8 @@ void main() {
 
           print('Creating test instance for module: $moduleName');
 
-          final variant = testPlanModule['variant'] as Map<String, dynamic>? ??
+          final variant =
+              testPlanModule['variant'] as Map<String, dynamic>? ??
               <String, dynamic>{};
           final testInstance = await createTestModuleInstance(
             dio: dio,
@@ -186,8 +190,10 @@ void main() {
             'Monitoring logs for test instance to wait for ready state: $testInstanceId',
           );
           monitorLogsLoop:
-          await for (final logs
-              in monitorTestLogs(dio: dio, instanceId: testInstanceId)) {
+          await for (final logs in monitorTestLogs(
+            dio: dio,
+            instanceId: testInstanceId,
+          )) {
             for (final log in logs) {
               logger.fine('Log: $log');
               if (log['msg'] == 'Setup Done') {
@@ -197,16 +203,18 @@ void main() {
             }
           }
 
-          logger
-              .info('Initializing manager for test instance: $testInstanceId');
+          logger.info(
+            'Initializing manager for test instance: $testInstanceId',
+          );
           await manager.init();
           expect(manager.didInit, true);
           logger.info('Manager initialized');
           if (moduleName == 'oidcc-client-test-discovery-openid-config') {
             // that's it, do nothing else.
             app_state.currentManagerRx.$ = app_state.managersRx.$.first;
-            app_state.managersRx
-                .update((managers) => managers..remove(manager));
+            app_state.managersRx.update(
+              (managers) => managers..remove(manager),
+            );
             continue;
           }
           try {
@@ -255,9 +263,7 @@ void main() {
               var outputFile = File('client-logs/final.zip').absolute;
               outputFile = await outputFile.create(recursive: true);
               outputFile = await outputFile.writeAsBytes(resultLogs);
-              print(
-                'Saving logs archive at: ${outputFile.path}',
-              );
+              print('Saving logs archive at: ${outputFile.path}');
             }
           } catch (e) {
             print('failed to zip test logs: $e');

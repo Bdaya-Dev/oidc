@@ -31,19 +31,22 @@ class OidcPkcePair {
   static String generateVerifier({int length = 32}) {
     if (length < 32 || length > 96) {
       throw ArgumentError.value(
-          length, 'length', 'The length must be between 32 and 96, inclusive.');
+        length,
+        'length',
+        'The length must be between 32 and 96, inclusive.',
+      );
     }
 
     final random = Random.secure();
-    return base64UrlEncode(List.generate(length, (_) => random.nextInt(256)))
-        .split('=')
-        .first;
+    return base64UrlEncode(
+      List.generate(length, (_) => random.nextInt(256)),
+    ).split('=').first;
   }
 
   static String generateS256Challenge(String verifier) {
-    return base64UrlEncode(sha256.convert(ascii.encode(verifier)).bytes)
-        .split('=')
-        .first;
+    return base64UrlEncode(
+      sha256.convert(ascii.encode(verifier)).bytes,
+    ).split('=').first;
   }
 
   static String generatePlainChallenge(String verifier) {

@@ -7,7 +7,7 @@ part of 'response.dart';
 // **************************************************************************
 
 OidcRevocationResponse _$OidcRevocationResponseFromJson(
-        Map<String, dynamic> json) =>
-    OidcRevocationResponse(
-      src: readSrcMap(json, '') as Map<String, dynamic>,
-    );
+  Map<String, dynamic> json,
+) => OidcRevocationResponse(
+  src: readSrcMap(json, '') as Map<String, dynamic>,
+);

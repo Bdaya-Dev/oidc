@@ -38,9 +38,12 @@ class OidcWebStore implements OidcStore {
   }
 
   String _getNamespaceKeys(OidcStoreNamespace namespace, String? managerId) {
-    return [storagePrefix, managerId, 'keys', namespace.value]
-        .nonNulls
-        .join('.');
+    return [
+      storagePrefix,
+      managerId,
+      'keys',
+      namespace.value,
+    ].nonNulls.join('.');
   }
 
   @override
@@ -75,7 +78,7 @@ class OidcWebStore implements OidcStore {
   }) async {
     final keysRaw =
         window.localStorage.getItem(_getNamespaceKeys(namespace, managerId)) ??
-            '[]';
+        '[]';
     return (jsonDecode(keysRaw) as List).cast<String>().toSet();
   }
 
@@ -84,8 +87,10 @@ class OidcWebStore implements OidcStore {
     List<String> keys,
     String? managerId,
   ) async {
-    window.localStorage
-        .setItem(_getNamespaceKeys(namespace, managerId), jsonEncode(keys));
+    window.localStorage.setItem(
+      _getNamespaceKeys(namespace, managerId),
+      jsonEncode(keys),
+    );
   }
 
   Future<Map<String, String>> _defaultGetMany(
@@ -109,8 +114,10 @@ class OidcWebStore implements OidcStore {
     String? managerId,
   ) {
     for (final entry in values.entries) {
-      window.localStorage
-          .setItem(_getKey(namespace, entry.key, managerId), entry.value);
+      window.localStorage.setItem(
+        _getKey(namespace, entry.key, managerId),
+        entry.value,
+      );
     }
   }
 
@@ -141,8 +148,9 @@ class OidcWebStore implements OidcStore {
               .map(
                 (key) => MapEntry(
                   key,
-                  window.sessionStorage
-                      .getItem(_getKey(namespace, key, managerId)),
+                  window.sessionStorage.getItem(
+                    _getKey(namespace, key, managerId),
+                  ),
                 ),
               )
               .purify();
@@ -174,7 +182,9 @@ class OidcWebStore implements OidcStore {
             OidcWebStoreSessionManagementLocation.sessionStorage) {
           for (final element in values.entries) {
             window.sessionStorage.setItem(
-                _getKey(namespace, element.key, managerId), element.value);
+              _getKey(namespace, element.key, managerId),
+              element.value,
+            );
           }
         } else {
           _defaultSetMany(namespace, values, managerId);
@@ -204,8 +214,9 @@ class OidcWebStore implements OidcStore {
         if (webSessionManagementLocation ==
             OidcWebStoreSessionManagementLocation.sessionStorage) {
           for (final element in keys) {
-            window.sessionStorage
-                .removeItem(_getKey(namespace, element, managerId));
+            window.sessionStorage.removeItem(
+              _getKey(namespace, element, managerId),
+            );
           }
         } else {
           _defaultRemoveMany(namespace, keys, managerId);
@@ -221,7 +232,8 @@ class OidcWebStore implements OidcStore {
 
 extension on Iterable<MapEntry<String, String?>> {
   Map<String, String> purify() {
-    return Map.fromEntries(where((element) => element.value != null))
-        .cast<String, String>();
+    return Map.fromEntries(
+      where((element) => element.value != null),
+    ).cast<String, String>();
   }
 }

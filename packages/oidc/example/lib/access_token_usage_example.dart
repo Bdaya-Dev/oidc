@@ -19,9 +19,7 @@ void _tryAppendAccessToken(
 
 /// a Dio interceptor that automatically adds accessToken from the current user.
 class OidcUserManagerInterceptor extends Interceptor {
-  const OidcUserManagerInterceptor({
-    required this.userManager,
-  });
+  const OidcUserManagerInterceptor({required this.userManager});
 
   final OidcUserManager userManager;
 
@@ -34,10 +32,7 @@ class OidcUserManagerInterceptor extends Interceptor {
 
 /// Wraps an http client to automatically add the `Authorization` header.
 class OidcHttpClient extends BaseClient {
-  OidcHttpClient({
-    required this.originalClient,
-    required this.userManager,
-  });
+  OidcHttpClient({required this.originalClient, required this.userManager});
 
   final Client originalClient;
   final OidcUserManager userManager;

@@ -143,40 +143,46 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// from the Authorization Endpoint (such as when using the Authorization Code
   /// Flow).
   @JsonKey(
-      name: OidcConstants_ProviderMetadata.idTokenSigningAlgValuesSupported)
+    name: OidcConstants_ProviderMetadata.idTokenSigningAlgValuesSupported,
+  )
   final List<String>? idTokenSigningAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`alg` values) supported by the OP
   /// for the ID Token to encode the Claims in a JWT.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata.idTokenEncryptionAlgValuesSupported)
+    name: OidcConstants_ProviderMetadata.idTokenEncryptionAlgValuesSupported,
+  )
   final List<String>? idTokenEncryptionAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`enc` values) supported by the OP
   /// for the ID Token to encode the Claims in a JWT.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata.idTokenEncryptionEncValuesSupported)
+    name: OidcConstants_ProviderMetadata.idTokenEncryptionEncValuesSupported,
+  )
   final List<String>? idTokenEncryptionEncValuesSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the
 
   /// UserInfo Endpoint to encode the Claims in a JWT.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata.userinfoSigningAlgValuesSupported)
+    name: OidcConstants_ProviderMetadata.userinfoSigningAlgValuesSupported,
+  )
   final List<String>? userinfoSigningAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`alg` values) supported by the
   /// UserInfo Endpoint to encode the Claims in a JWT.
 
   @JsonKey(
-      name: OidcConstants_ProviderMetadata.userinfoEncryptionAlgValuesSupported)
+    name: OidcConstants_ProviderMetadata.userinfoEncryptionAlgValuesSupported,
+  )
   final List<String>? userinfoEncryptionAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`enc` values) supported by the
   /// UserInfo Endpoint to encode the Claims in a JWT.
 
   @JsonKey(
-      name: OidcConstants_ProviderMetadata.userinfoEncryptionEncValuesSupported)
+    name: OidcConstants_ProviderMetadata.userinfoEncryptionEncValuesSupported,
+  )
   final List<String>? userinfoEncryptionEncValuesSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the OP
@@ -186,8 +192,8 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// (using the request parameter) and when it is passed by reference (using
   /// the requestUri parameter).
   @JsonKey(
-      name:
-          OidcConstants_ProviderMetadata.requestObjectSigningAlgValuesSupported)
+    name: OidcConstants_ProviderMetadata.requestObjectSigningAlgValuesSupported,
+  )
   final List<String>? requestObjectSigningAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`alg` values) supported by the OP
@@ -196,8 +202,9 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// These algorithms are used both when the Request Object is passed by value
   /// and when it is passed by reference.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .requestObjectEncryptionAlgValuesSupported)
+    name: OidcConstants_ProviderMetadata
+        .requestObjectEncryptionAlgValuesSupported,
+  )
   final List<String>? requestObjectEncryptionAlgValuesSupported;
 
   /// A list of the JWE encryption algorithms (`enc` values) supported by the OP
@@ -206,8 +213,9 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// These algorithms are used both when the Request Object is passed by value
   /// and when it is passed by reference.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .requestObjectEncryptionEncValuesSupported)
+    name: OidcConstants_ProviderMetadata
+        .requestObjectEncryptionEncValuesSupported,
+  )
   final List<String>? requestObjectEncryptionEncValuesSupported;
 
   /// A list of Client Authentication methods supported by this Token Endpoint.
@@ -216,7 +224,8 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// `clientSecretJwt`, and `privateKeyJwt`. Other authentication methods
   /// MAY be defined by extensions.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata.tokenEndpointAuthMethodsSupported)
+    name: OidcConstants_ProviderMetadata.tokenEndpointAuthMethodsSupported,
+  )
   final List<String>? tokenEndpointAuthMethodsSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the Token
@@ -224,8 +233,9 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// the Token Endpoint for the `privateKeyJwt` and `clientSecretJwt`
   /// authentication methods.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .tokenEndpointAuthSigningAlgValuesSupported)
+    name: OidcConstants_ProviderMetadata
+        .tokenEndpointAuthSigningAlgValuesSupported,
+  )
   final List<String>? tokenEndpointAuthSigningAlgValuesSupported;
 
   /// A list of the display parameter values that the OpenID Provider supports.
@@ -318,8 +328,8 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// A list of client authentication methods supported by this revocation
   /// endpoint.
   @JsonKey(
-      name:
-          OidcConstants_ProviderMetadata.revocationEndpointAuthMethodsSupported)
+    name: OidcConstants_ProviderMetadata.revocationEndpointAuthMethodsSupported,
+  )
   final List<String>? revocationEndpointAuthMethodsSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the
@@ -327,8 +337,9 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// client at the revocation endpoint for the `privateKeyJwt` and
   /// `clientSecretJwt` authentication methods.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .revocationEndpointAuthSigningAlgValuesSupported)
+    name: OidcConstants_ProviderMetadata
+        .revocationEndpointAuthSigningAlgValuesSupported,
+  )
   final List<String>? revocationEndpointAuthSigningAlgValuesSupported;
 
   /// URL of the authorization server's OAuth 2.0 introspection endpoint.
@@ -338,8 +349,9 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// A list of client authentication methods supported by this introspection
   /// endpoint.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .introspectionEndpointAuthMethodsSupported)
+    name: OidcConstants_ProviderMetadata
+        .introspectionEndpointAuthMethodsSupported,
+  )
   final List<String>? introspectionEndpointAuthMethodsSupported;
 
   /// A list of the JWS signing algorithms (`alg` values) supported by the
@@ -347,8 +359,9 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// the client at the introspection endpoint for the `privateKeyJwt` and
   /// `clientSecretJwt` authentication methods.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata
-          .introspectionEndpointAuthSigningAlgValuesSupported)
+    name: OidcConstants_ProviderMetadata
+        .introspectionEndpointAuthSigningAlgValuesSupported,
+  )
   final List<String>? introspectionEndpointAuthSigningAlgValuesSupported;
 
   /// A list of PKCE code challenge methods supported by this authorization
@@ -362,7 +375,8 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// post an authorization request to exchange for a requestUri value usable
   /// at the authorization server.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata.pushedAuthorizationRequestEndpoint)
+    name: OidcConstants_ProviderMetadata.pushedAuthorizationRequestEndpoint,
+  )
   final Uri? pushedAuthorizationRequestEndpoint;
 
   /// Boolean parameter indicating whether the authorization server accepts
@@ -370,7 +384,8 @@ class OidcProviderMetadata extends JsonBasedResponse {
   ///
   /// If omitted, the default value is false.
   @JsonKey(
-      name: OidcConstants_ProviderMetadata.requirePushedAuthorizationRequests)
+    name: OidcConstants_ProviderMetadata.requirePushedAuthorizationRequests,
+  )
   final bool? requirePushedAuthorizationRequests;
   bool get requirePushedAuthorizationRequestsOrDefault =>
       requirePushedAuthorizationRequests ?? false;

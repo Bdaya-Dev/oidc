@@ -38,8 +38,8 @@ class _SecretPageState extends State<SecretPage> {
           focusNode: FocusNode(),
           selectionControls: kIsWeb
               ? mobilePlatforms.contains(platform)
-                  ? MaterialTextSelectionControls()
-                  : DesktopTextSelectionControls()
+                    ? MaterialTextSelectionControls()
+                    : DesktopTextSelectionControls()
               : MaterialTextSelectionControls(),
           child: ListView(
             children: [
@@ -61,10 +61,7 @@ class _SecretPageState extends State<SecretPage> {
                   try {
                     final res = await manager.loginAuthorizationCodeFlow(
                       // you can change scope too!
-                      scopeOverride: [
-                        ...manager.settings.scope,
-                        'api',
-                      ],
+                      scopeOverride: [...manager.settings.scope, 'api'],
                       promptOverride: ['none'],
                       options: const OidcPlatformSpecificOptions(
                         web: OidcPlatformSpecificOptions_Web(
@@ -77,8 +74,9 @@ class _SecretPageState extends State<SecretPage> {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content:
-                              Text('silently authorized user! ${res?.uid}'),
+                          content: Text(
+                            'silently authorized user! ${res?.uid}',
+                          ),
                         ),
                       );
                     }
@@ -87,8 +85,11 @@ class _SecretPageState extends State<SecretPage> {
                       await manager.forgetUser();
                     }
                   } catch (e, st) {
-                    app_state.exampleLogger
-                        .severe('Failed to silently authorize user', e, st);
+                    app_state.exampleLogger.severe(
+                      'Failed to silently authorize user',
+                      e,
+                      st,
+                    );
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -107,26 +108,29 @@ class _SecretPageState extends State<SecretPage> {
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 DropdownButtonHideUnderline(
-                  child: DropdownButton<
-                      OidcPlatformSpecificOptions_Web_NavigationMode>(
-                    items: OidcPlatformSpecificOptions_Web_NavigationMode.values
-                        .map(
-                          (e) => DropdownMenuItem(
-                            value: e,
-                            child: Text(e.name),
-                          ),
-                        )
-                        .toList(),
-                    value: webNavigationMode,
-                    onChanged: (value) {
-                      if (value == null) {
-                        return;
-                      }
-                      setState(() {
-                        webNavigationMode = value;
-                      });
-                    },
-                  ),
+                  child:
+                      DropdownButton<
+                        OidcPlatformSpecificOptions_Web_NavigationMode
+                      >(
+                        items: OidcPlatformSpecificOptions_Web_NavigationMode
+                            .values
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e,
+                                child: Text(e.name),
+                              ),
+                            )
+                            .toList(),
+                        value: webNavigationMode,
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setState(() {
+                            webNavigationMode = value;
+                          });
+                        },
+                      ),
                 ),
               ],
               ElevatedButton(

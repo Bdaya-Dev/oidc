@@ -121,7 +121,8 @@ class OidcInternalUtilities {
   ];
 
   static Map<String, Object> serializeQueryParameters(
-      Map<String, Object?> input) {
+    Map<String, Object?> input,
+  ) {
     final result = <String, Object>{};
     for (final element in input.entries) {
       final k = element.key;

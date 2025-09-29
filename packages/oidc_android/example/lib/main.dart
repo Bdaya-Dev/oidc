@@ -17,12 +17,8 @@ void main() {
   runApp(
     SharedValue.wrapApp(
       MaterialApp(
-        theme: ThemeData(
-          useMaterial3: true,
-        ),
-        home: const Scaffold(
-          body: Text('Ready!'),
-        ),
+        theme: ThemeData(useMaterial3: true),
+        home: const Scaffold(body: Text('Ready!')),
         builder: (context, child) {
           /// A platform-agnostic way to initialize
           /// the app state before displaying the routes.
@@ -35,9 +31,7 @@ void main() {
                 );
               }
               if (snapshot.hasError) {
-                return Center(
-                  child: Text(snapshot.error.toString()),
-                );
+                return Center(child: Text(snapshot.error.toString()));
               }
               return child!;
             },

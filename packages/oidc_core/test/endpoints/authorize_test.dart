@@ -12,8 +12,9 @@ void main() {
         responseType: [OidcConstants_AuthorizationEndpoint_ResponseType.code],
       );
 
-      final url = request
-          .generateUri(Uri.parse('https://auth.example.com/authorize?tid=123'));
+      final url = request.generateUri(
+        Uri.parse('https://auth.example.com/authorize?tid=123'),
+      );
 
       expect(
         url.toString(),
@@ -36,15 +37,20 @@ void main() {
       //cspell: enable
       for (final inputResponseMode in <String?>[
         null,
-        OidcConstants_AuthorizeRequest_ResponseMode.fragment
+        OidcConstants_AuthorizeRequest_ResponseMode.fragment,
       ]) {
-        final (:parameters, :responseMode) =
-            OidcEndpoints.resolveAuthorizeResponseParameters(
-                responseUri: uri,
-                resolveResponseModeByKey: 'state',
-                responseMode: inputResponseMode);
+        final (
+          :parameters,
+          :responseMode,
+        ) = OidcEndpoints.resolveAuthorizeResponseParameters(
+          responseUri: uri,
+          resolveResponseModeByKey: 'state',
+          responseMode: inputResponseMode,
+        );
         expect(
-            responseMode, OidcConstants_AuthorizeRequest_ResponseMode.fragment);
+          responseMode,
+          OidcConstants_AuthorizeRequest_ResponseMode.fragment,
+        );
         expect(parameters, containsPair('token_type', 'bearer'));
       }
     });
@@ -58,8 +64,10 @@ void main() {
         '&state=$state',
       );
       //cspell: enable
-      final (:parameters, :responseMode) =
-          OidcEndpoints.resolveAuthorizeResponseParameters(
+      final (
+        :parameters,
+        :responseMode,
+      ) = OidcEndpoints.resolveAuthorizeResponseParameters(
         responseUri: uri,
         resolveResponseModeByKey: 'state',
       );
@@ -80,8 +88,11 @@ void main() {
           resolveResponseModeByKey: 'anything',
         ),
         throwsA(
-          isA<OidcException>().having((p0) => p0.message, 'message',
-              contains("Couldn't resolve the response mode")),
+          isA<OidcException>().having(
+            (p0) => p0.message,
+            'message',
+            contains("Couldn't resolve the response mode"),
+          ),
         ),
       );
     });
