@@ -106,7 +106,7 @@ jobs:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         if: ${{ inputs.run_tests }}
         with:
-          file: ${{inputs.working_directory}}/coverage/lcov.info
+          files: ${{inputs.working_directory}}/coverage/lcov.info
           fail_ci_if_error: false        
       # - name: 📊 Check Code Coverage
       #   uses: VeryGoodOpenSource/very_good_coverage@v2
