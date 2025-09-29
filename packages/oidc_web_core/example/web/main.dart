@@ -1,3 +1,5 @@
+import 'dart:js_interop';
+
 import 'package:oidc_web_core/oidc_web_core.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:web/web.dart' as web;
@@ -78,17 +80,18 @@ void registerUserOutput() {
       web.document.querySelector('#userOutput') as web.HTMLDivElement;
   duendeManager.userChanges().listen((user) {
     print('user changed!');
-    element.innerHTML = "";
+    element.innerHTML = "".toJS;
     if (user == null) {
       return;
     }
     element.appendChild(
-      web.document.createElement('span')..text = 'User logged in! claims:',
+      web.document.createElement('span')
+        ..textContent = 'User logged in! claims:',
     );
     element.appendChild(web.document.createElement('br'));
     element.appendChild(
       web.document.createElement('span')
-        ..text = user.aggregatedClaims.toString(),
+        ..textContent = user.aggregatedClaims.toString(),
     );
   });
 }

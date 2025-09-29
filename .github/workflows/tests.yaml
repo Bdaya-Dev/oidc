@@ -40,7 +40,7 @@ jobs:
         uses: ./.github/actions/flutter_base
         with:
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
-          flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}
+          flutter-version: ${{ matrix.sdk == 'min' && '3.35.0' || '' }}
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: "[Verify step] ✨ Format"
