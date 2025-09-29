@@ -1,5 +1,8 @@
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -147,29 +150,56 @@ Future<List<int>?> publishCertificationPackage({
   required Uint8List clientSideData,
 }) async {
   final uri = Uri(path: 'api/plan/$planId/certificationpackage');
-  final formData = FormData();
-  formData.files.add(
-    MapEntry(
-      'clientSideData',
-      MultipartFile.fromBytes(
-        clientSideData,
-        filename: 'client_side_logs.zip',
-        contentType: DioMediaType('application', 'zip'),
-      ),
-    ),
-  );
-  final response = await dio.postUri<List<int>>(
-    uri,
-    data: formData,
-    options: Options(
-      responseType: ResponseType.bytes,
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'Accept': 'application/zip',
-      },
-    ),
-  );
-  return response.data;
+
+  int attempt = 0;
+  const maxAttempts = 5;
+  const initialDelay = Duration(seconds: 1);
+
+  while (true) {
+    try {
+      final formData = FormData();
+      formData.files.add(
+        MapEntry(
+          'clientSideData',
+          MultipartFile.fromBytes(
+            clientSideData,
+            filename: 'client_side_logs.zip',
+            contentType: DioMediaType('application', 'zip'),
+          ),
+        ),
+      );
+      final response = await dio.postUri<Uint8List>(
+        uri,
+        data: formData,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Accept': 'application/zip',
+          },
+        ),
+      );
+      return response.data;
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 422 || attempt >= maxAttempts - 1) {
+        rethrow;
+      }
+
+      // Calculate backoff delay: initialDelay * 2^attempt, with jitter
+      final backoff = initialDelay * (1 << attempt);
+      final jitter = Duration(
+          milliseconds:
+              (backoff.inMilliseconds * 0.2 * (Random().nextDouble() * 2 - 1))
+                  .toInt());
+      final delay = backoff + jitter;
+
+      print(
+        'Retrying publishCertificationPackage (attempt ${attempt + 1}/$maxAttempts) after ${delay.inMilliseconds}ms',
+      );
+      await Future<void>.delayed(delay);
+      attempt++;
+    }
+  }
 }
 
 Future<Map<String, dynamic>> getTestSummary({
