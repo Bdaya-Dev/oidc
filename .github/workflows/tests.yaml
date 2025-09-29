@@ -142,7 +142,15 @@ jobs:
               adb wait-for-device
 
               # Pick the first Android device id
-              EMU_ID="$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')"
+              EMU_ID="$(
+                adb devices |
+                  while read -r serial state _; do
+                    if [ "$state" = "device" ]; then
+                      echo "$serial"
+                      break
+                    fi
+                  done
+              )"
               if [ -z "$EMU_ID" ]; then
                 echo "No Android device found. Available devices:"
                 flutter devices
