@@ -115,7 +115,7 @@ jobs:
         with:
           api-level: ${{ matrix.api-level }}
           arch: ${{ matrix.arch }}
-          target: google_apis 
+          # target: google_apis 
           force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           disable-animations: false
@@ -158,7 +158,7 @@ jobs:
           api-level: ${{ matrix.api-level }}
           arch: ${{ matrix.arch }}
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          target: google_apis 
+          # target: google_apis 
           script: ./android_emulator_ci.sh
       - name: Find .info files and files in coverage folders
         run: |

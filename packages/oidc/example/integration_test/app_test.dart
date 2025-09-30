@@ -42,7 +42,6 @@ void _ensureLoggingConfigured() {
     if (record.stackTrace != null) {
       buffer.write('\n${record.stackTrace}');
     }
-    // ignore: avoid_print
     print(buffer.toString());
   });
   _loggingConfigured = true;
