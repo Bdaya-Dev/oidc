@@ -265,7 +265,8 @@ jobs:
       #     path: packages/oidc/example/coverage/web-coverage.info
 
   macos:
-    runs-on: macos-13
+    runs-on: macos-latest
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -278,7 +279,7 @@ jobs:
         run: flutter precache -v
       - name: Integration Tests
         working-directory: packages/oidc/example
-        run: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d macos --coverage-path coverage/macos-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} -r expanded
+        run: flutter test integration_test --coverage --branch-coverage --coverage-package "oidc*" -d macos --coverage-path coverage/macos-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} -r expanded
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
