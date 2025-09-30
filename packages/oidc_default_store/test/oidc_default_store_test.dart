@@ -1,6 +1,5 @@
 // ignore_for_file: prefer_const_constructors
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
@@ -10,7 +9,6 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   group('OidcDefaultStore', () {
     setUp(() {
-      FlutterSecureStorage.setMockInitialValues({});
       SharedPreferences.setMockInitialValues({});
     });
     test('can be instantiated', () {
@@ -22,7 +20,7 @@ void main() {
       OidcDefaultStore(
         webSessionManagementLocation:
             OidcDefaultStoreWebSessionManagementLocation.localStorage,
-      )
+      ),
     ];
     for (final store in storeConfigs) {
       testWidgets('Full test', (widgetTester) async {

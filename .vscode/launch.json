@@ -27,11 +27,12 @@
             "name": "example flutter web",
             "cwd": "packages/oidc/example",
             "request": "launch",
-            "type": "dart",
+            "type": "dart",            
             "deviceId": "chrome",
             "args": [
                 "--web-port",
-                "22433"
+                "22433",
+                // "--wasm"
             ],
         },
         {
