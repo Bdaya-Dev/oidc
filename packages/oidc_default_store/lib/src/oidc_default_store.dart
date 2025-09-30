@@ -3,10 +3,10 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:simple_secure_storage/simple_secure_storage.dart';
 
 import 'html_stub.dart' if (dart.library.js_interop) 'html_web.dart' as html;
 
@@ -25,12 +25,12 @@ enum OidcDefaultStoreWebSessionManagementLocation {
 /// {@template oidc_default_store}
 /// The default [OidcStore] implementation for `package:oidc`
 /// this relies on:
-/// - for the [OidcStoreNamespace.secureTokens] namespace, we use [FlutterSecureStorage].
+/// - for the [OidcStoreNamespace.secureTokens] namespace, we use [CachedSimpleSecureStorage].
 /// - for the [OidcStoreNamespace.session] namespace
 ///     - we use `dart:html` for web,
 ///         - if [webSessionManagementLocation] is set to [OidcDefaultStoreWebSessionManagementLocation.sessionStorage]
-///           we use [html.window.sessionStorage].
-///         - if it's set to [OidcDefaultStoreWebSessionManagementLocation.sessionStorage] we use [html.window.localStorage].
+///           we use [html.Window.sessionStorage].
+///         - if it's set to [OidcDefaultStoreWebSessionManagementLocation.sessionStorage] we use [html.Window.localStorage].
 ///     - we use [SharedPreferences] for other platforms
 /// - for the [OidcStoreNamespace.state] namespace
 ///     - we use `package:universal_html` + `localStorage` for web.
@@ -41,14 +41,17 @@ enum OidcDefaultStoreWebSessionManagementLocation {
 class OidcDefaultStore implements OidcStore {
   /// {@macro oidc_default_store}
   OidcDefaultStore({
-    FlutterSecureStorage? secureStorageInstance,
+    CachedSimpleSecureStorage? secureStorageInstance,
     SharedPreferences? sharedPreferences,
     this.storagePrefix = 'oidc',
     this.webSessionManagementLocation =
         OidcDefaultStoreWebSessionManagementLocation.sessionStorage,
-  })  : _secureStorage = secureStorageInstance ?? const FlutterSecureStorage(),
+  })  : secureStorage = secureStorageInstance,
         __sharedPreferences = sharedPreferences;
-  final FlutterSecureStorage _secureStorage;
+
+  /// instance of [CachedSimpleSecureStorage] to use for the
+  /// [OidcStoreNamespace.secureTokens] namespace.
+  CachedSimpleSecureStorage? secureStorage;
   SharedPreferences? __sharedPreferences;
   SharedPreferences get _sharedPreferences => __sharedPreferences!;
 
@@ -229,16 +232,21 @@ class OidcDefaultStore implements OidcStore {
         try {
           // secure storage might not be supported in all platforms,
           // so we fallback to normal storage if that's the case.
-          final res = <String, String>{};
-          for (final k in keys) {
-            final v = await _secureStorage.read(
-              key: _getKey(namespace, k, managerId),
-            );
-            if (v != null) {
-              res[k] = v;
+          if (secureStorage case final secureStorage?) {
+            await secureStorage.refreshCache();
+            final res = <String, String>{};
+            for (final k in keys) {
+              final v = secureStorage.read(
+                _getKey(namespace, k, managerId),
+              );
+              if (v != null) {
+                res[k] = v;
+              }
             }
+            return res;
+          } else {
+            return _defaultGetMany(namespace, keys, managerId);
           }
-          return res;
         } catch (e) {
           // coverage:ignore-start
           _logger.warning(
@@ -281,13 +289,15 @@ class OidcDefaultStore implements OidcStore {
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
         try {
-          // optimally we would make these operations concurrent, but due to this issue we can't.
-          // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
-          for (final entry in values.entries) {
-            await _secureStorage.write(
-              key: _getKey(namespace, entry.key, managerId),
-              value: entry.value,
-            );
+          if (secureStorage case final secureStorage?) {
+            for (final entry in values.entries) {
+              await secureStorage.write(
+                _getKey(namespace, entry.key, managerId),
+                entry.value,
+              );
+            }
+          } else {
+            return _defaultSetMany(namespace, values, managerId);
           }
         } catch (e) {
           // coverage:ignore-start
@@ -330,12 +340,12 @@ class OidcDefaultStore implements OidcStore {
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
         try {
-          // optimally we would make these operations concurrent, but due to this issue we can't.
-          // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
-          for (final key in keys) {
-            await _secureStorage.delete(
-              key: _getKey(namespace, key, managerId),
-            );
+          if (secureStorage case final secureStorage?) {
+            for (final key in keys) {
+              await secureStorage.delete(_getKey(namespace, key, managerId));
+            }
+          } else {
+            await _defaultRemoveMany(namespace, keys, managerId);
           }
         } catch (e) {
           // coverage:ignore-start
