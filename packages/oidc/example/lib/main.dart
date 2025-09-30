@@ -4,29 +4,28 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/oidc.dart';
-import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
 import 'package:oidc_example/pages/add_manager_dialog.dart';
 import 'package:oidc_example/pages/auth.dart';
 import 'package:oidc_example/pages/home.dart';
 import 'package:oidc_example/pages/secret_page.dart';
-// you must run this app with --web-port 22433
 
+// you must run this app with --web-port 22433
 void main() {
   usePathUrlStrategy();
 
   Logger.root.level = Level.ALL;
-  Logger.root.onRecord.listen((record) {
-    debugPrint('${record.level.name}: ${record.time}: ${record.message}');
-  });
+  if (!app_state.kIsCI) {
+    Logger.root.onRecord.listen((record) {
+      debugPrint('${record.level.name}: ${record.time}: ${record.message}');
+    });
+  }
 
   runApp(
     SharedValue.wrapApp(
       MaterialApp.router(
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-        ),
+        theme: ThemeData(useMaterial3: true),
         routerConfig: GoRouter(
           routes: [
             ShellRoute(
@@ -63,10 +62,7 @@ void main() {
                           ),
                           child: const Text(
                             'OIDC Example',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                            ),
+                            style: TextStyle(color: Colors.white, fontSize: 24),
                           ),
                         ),
                         const Divider(),
@@ -74,13 +70,12 @@ void main() {
                           padding: EdgeInsets.all(8.0),
                           child: Text(
                             'Select the manager',
-                            style: TextStyle(
-                              fontSize: 16,
-                            ),
+                            style: TextStyle(fontSize: 16),
                           ),
                         ),
-                        for (final manager
-                            in app_state.managersRx.of(context)) ...[
+                        for (final manager in app_state.managersRx.of(
+                          context,
+                        )) ...[
                           ListTile(
                             selected: manager == selectedManager,
                             leading: const Icon(Icons.account_circle),
@@ -98,11 +93,11 @@ void main() {
                             // Show the dialog
                             final newManager =
                                 await showDialog<OidcUserManager>(
-                              context: context,
-                              builder: (context) {
-                                return const AddManagerDialog();
-                              },
-                            );
+                                  context: context,
+                                  builder: (context) {
+                                    return const AddManagerDialog();
+                                  },
+                                );
                             if (newManager == null) {
                               return;
                             }
@@ -171,7 +166,8 @@ void main() {
                     final user = app_state.cachedAuthedUser.of(context);
                     if (user != null) {
                       final originalUri = state
-                          .uri.queryParameters[OidcConstants_Store.originalUri];
+                          .uri
+                          .queryParameters[OidcConstants_Store.originalUri];
                       if (originalUri != null) {
                         return originalUri;
                       }
@@ -197,9 +193,7 @@ void main() {
                 );
               }
               if (snapshot.hasError) {
-                return Center(
-                  child: Text(snapshot.error.toString()),
-                );
+                return Center(child: Text(snapshot.error.toString()));
               }
               return child!;
             },

@@ -7,17 +7,19 @@ class OidcHook<TRequest, TResponse> extends OidcHookBase<TRequest, TResponse> {
     Future<TResponse> Function(
       TRequest response,
       OidcHookExecution<TRequest, TResponse> defaultExecution,
-    )? modifyExecution,
+    )?
+    modifyExecution,
     Future<TResponse> Function(TResponse response)? modifyResponse,
-  })  : modifyRequestFunction = modifyRequest,
-        modifyExecutionFunction = modifyExecution,
-        modifyResponseFunction = modifyResponse;
+  }) : modifyRequestFunction = modifyRequest,
+       modifyExecutionFunction = modifyExecution,
+       modifyResponseFunction = modifyResponse;
 
   Future<TRequest> Function(TRequest request)? modifyRequestFunction;
   Future<TResponse> Function(
     TRequest response,
     OidcHookExecution<TRequest, TResponse> defaultExecution,
-  )? modifyExecutionFunction;
+  )?
+  modifyExecutionFunction;
   Future<TResponse> Function(TResponse response)? modifyResponseFunction;
 
   @override

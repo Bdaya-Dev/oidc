@@ -38,8 +38,9 @@ class OidcHookGroup<TRequest, TResponse>
       if (hook
           case final OidcRequestModifierHookMixin<TRequest, TResponse>
               requestModifierHook) {
-        modifiedRequest =
-            await requestModifierHook.modifyRequest(modifiedRequest);
+        modifiedRequest = await requestModifierHook.modifyRequest(
+          modifiedRequest,
+        );
       }
     }
     return modifiedRequest;
@@ -52,16 +53,19 @@ class OidcHookGroup<TRequest, TResponse>
       if (hook
           case final OidcResponseModifierHookMixin<TRequest, TResponse>
               responseModifierHook) {
-        modifiedResponse =
-            await responseModifierHook.modifyResponse(modifiedResponse);
+        modifiedResponse = await responseModifierHook.modifyResponse(
+          modifiedResponse,
+        );
       }
     }
     return modifiedResponse;
   }
 
   @override
-  Future<TResponse> modifyExecution(TRequest request,
-      OidcHookExecution<TRequest, TResponse> defaultExecution) {
+  Future<TResponse> modifyExecution(
+    TRequest request,
+    OidcHookExecution<TRequest, TResponse> defaultExecution,
+  ) {
     final executionHook = this.executionHook;
     if (executionHook != null) {
       return executionHook.modifyExecution(request, defaultExecution);

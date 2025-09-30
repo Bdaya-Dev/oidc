@@ -26,16 +26,17 @@ android {
     namespace 'com.bdayadev.oidc.example'
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
-    compileOptions {
-      sourceCompatibility JavaVersion.VERSION_1_8
-      targetCompatibility JavaVersion.VERSION_1_8
-    }
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8
-    }
+                compileOptions {
+                    sourceCompatibility JavaVersion.VERSION_17
+                    targetCompatibility JavaVersion.VERSION_17
+                }
+                kotlinOptions {
+                        jvmTarget = JavaVersion.VERSION_17.toString()
+                }
 
     defaultConfig {
         applicationId "com.bdayadev.oidc.example"
+        // minSdk 23 to support flutter_secure_storage
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()

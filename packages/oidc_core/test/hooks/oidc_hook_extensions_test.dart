@@ -116,66 +116,78 @@ void main() {
 
       // Order: modifyRequest -> modifyExecution (with modified request) -> modifyResponse
       expect(
+        result,
+        equals(
+          'test-request-full-req-full-exec-default-full-exec-post-full-resp',
+        ),
+      );
+    });
+
+    test(
+      'handles combination of request and response modifier hooks',
+      () async {
+        final hook = OidcHook<String, String>(
+          modifyRequest: (request) async => '$request-custom-req',
+          modifyResponse: (response) async => '$response-custom-resp',
+        );
+
+        final result = await oidcExecuteHook<String, String>(
+          request: 'test-request',
+          defaultExecution: (request) async => '$request-default',
+          hook: hook,
+        );
+
+        expect(result, equals('test-request-custom-req-default-custom-resp'));
+      },
+    );
+
+    test(
+      'handles combination of request modifier and execution hooks',
+      () async {
+        final hook = OidcHook<String, String>(
+          modifyRequest: (request) async => '$request-custom-req',
+          modifyExecution: (request, defaultExecution) async {
+            final result = await defaultExecution('$request-custom-exec');
+            return '$result-exec-done';
+          },
+        );
+
+        final result = await oidcExecuteHook<String, String>(
+          request: 'test-request',
+          defaultExecution: (request) async => '$request-default',
+          hook: hook,
+        );
+
+        expect(
           result,
-          equals(
-              'test-request-full-req-full-exec-default-full-exec-post-full-resp'));
-    });
+          equals('test-request-custom-req-custom-exec-default-exec-done'),
+        );
+      },
+    );
 
-    test('handles combination of request and response modifier hooks',
-        () async {
-      final hook = OidcHook<String, String>(
-        modifyRequest: (request) async => '$request-custom-req',
-        modifyResponse: (response) async => '$response-custom-resp',
-      );
+    test(
+      'handles combination of response modifier and execution hooks',
+      () async {
+        final hook = OidcHook<String, String>(
+          modifyResponse: (response) async => '$response-custom-resp',
+          modifyExecution: (request, defaultExecution) async {
+            final result = await defaultExecution('$request-custom-exec');
+            return '$result-exec-done';
+          },
+        );
 
-      final result = await oidcExecuteHook<String, String>(
-        request: 'test-request',
-        defaultExecution: (request) async => '$request-default',
-        hook: hook,
-      );
+        final result = await oidcExecuteHook<String, String>(
+          request: 'test-request',
+          defaultExecution: (request) async => '$request-default',
+          hook: hook,
+        );
 
-      expect(result, equals('test-request-custom-req-default-custom-resp'));
-    });
-
-    test('handles combination of request modifier and execution hooks',
-        () async {
-      final hook = OidcHook<String, String>(
-        modifyRequest: (request) async => '$request-custom-req',
-        modifyExecution: (request, defaultExecution) async {
-          final result = await defaultExecution('$request-custom-exec');
-          return '$result-exec-done';
-        },
-      );
-
-      final result = await oidcExecuteHook<String, String>(
-        request: 'test-request',
-        defaultExecution: (request) async => '$request-default',
-        hook: hook,
-      );
-
-      expect(result,
-          equals('test-request-custom-req-custom-exec-default-exec-done'));
-    });
-
-    test('handles combination of response modifier and execution hooks',
-        () async {
-      final hook = OidcHook<String, String>(
-        modifyResponse: (response) async => '$response-custom-resp',
-        modifyExecution: (request, defaultExecution) async {
-          final result = await defaultExecution('$request-custom-exec');
-          return '$result-exec-done';
-        },
-      );
-
-      final result = await oidcExecuteHook<String, String>(
-        request: 'test-request',
-        defaultExecution: (request) async => '$request-default',
-        hook: hook,
-      );
-
-      expect(result,
-          equals('test-request-custom-exec-default-exec-done-custom-resp'));
-    });
+        expect(
+          result,
+          equals('test-request-custom-exec-default-exec-done-custom-resp'),
+        );
+      },
+    );
 
     test('handles empty hook with all mixins but no implementations', () async {
       // Create a hook that has the mixins but doesn't override methods
@@ -223,20 +235,24 @@ void main() {
       );
 
       expect(
-          result,
-          equals(
-              'test-request-full-req-full-exec-executed-full-exec-post-full-resp'));
+        result,
+        equals(
+          'test-request-full-req-full-exec-executed-full-exec-post-full-resp',
+        ),
+      );
     });
 
     test('executes with OidcHook instance', () async {
-      final hook = OidcHook<String, String>(
-        modifyRequest: (request) async => '$request-oidc-req',
-        modifyResponse: (response) async => '$response-oidc-resp',
-        modifyExecution: (request, defaultExecution) async {
-          final result = await defaultExecution('$request-oidc-exec');
-          return '$result-oidc-exec-done';
-        },
-      ) as OidcHookMixin<String, String>?;
+      final hook =
+          OidcHook<String, String>(
+                modifyRequest: (request) async => '$request-oidc-req',
+                modifyResponse: (response) async => '$response-oidc-resp',
+                modifyExecution: (request, defaultExecution) async {
+                  final result = await defaultExecution('$request-oidc-exec');
+                  return '$result-oidc-exec-done';
+                },
+              )
+              as OidcHookMixin<String, String>?;
 
       final result = await hook.execute(
         request: 'test-request',
@@ -244,16 +260,20 @@ void main() {
       );
 
       expect(
-          result,
-          equals(
-              'test-request-oidc-req-oidc-exec-executed-oidc-exec-done-oidc-resp'));
+        result,
+        equals(
+          'test-request-oidc-req-oidc-exec-executed-oidc-exec-done-oidc-resp',
+        ),
+      );
     });
 
     test('preserves execution order across multiple calls', () async {
-      final hook = OidcHook<String, String>(
-        modifyRequest: (request) async => '$request-modified',
-        modifyResponse: (response) async => '$response-modified',
-      ) as OidcHookMixin<String, String>?;
+      final hook =
+          OidcHook<String, String>(
+                modifyRequest: (request) async => '$request-modified',
+                modifyResponse: (response) async => '$response-modified',
+              )
+              as OidcHookMixin<String, String>?;
 
       // Execute multiple times to ensure consistency
       for (var i = 0; i < 3; i++) {

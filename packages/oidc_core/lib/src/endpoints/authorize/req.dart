@@ -279,14 +279,14 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// converts the request into a JSON Map.
   @override
   Map<String, dynamic> toMap() => {
-        ..._$OidcAuthorizeRequestToJson(this),
-        ...super.toMap(),
-      };
+    ..._$OidcAuthorizeRequestToJson(this),
+    ...super.toMap(),
+  };
 
   Uri generateUri(Uri authorizationEndpoint) => authorizationEndpoint.replace(
-        queryParameters: {
-          ...authorizationEndpoint.queryParameters,
-          ...OidcInternalUtilities.serializeQueryParameters(toMap()),
-        },
-      );
+    queryParameters: {
+      ...authorizationEndpoint.queryParameters,
+      ...OidcInternalUtilities.serializeQueryParameters(toMap()),
+    },
+  );
 }

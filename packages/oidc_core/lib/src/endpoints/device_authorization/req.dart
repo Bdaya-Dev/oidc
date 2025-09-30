@@ -44,7 +44,7 @@ class OidcDeviceAuthorizationRequest extends JsonBasedRequest {
   /// converts the request into a JSON Map.
   @override
   Map<String, dynamic> toMap() => {
-        ..._$OidcDeviceAuthorizationRequestToJson(this),
-        ...super.toMap(),
-      };
+    ..._$OidcDeviceAuthorizationRequestToJson(this),
+    ...super.toMap(),
+  };
 }

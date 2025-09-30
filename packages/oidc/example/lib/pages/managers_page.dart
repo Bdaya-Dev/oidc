@@ -56,9 +56,9 @@ class _ManagersPageState extends State<ManagersPage> {
       _clearForm();
       Navigator.of(context).pop();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating manager: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error creating manager: $e')));
     }
   }
 
@@ -145,10 +145,7 @@ class _ManagersPageState extends State<ManagersPage> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: _addManager,
-            child: const Text('Add'),
-          ),
+          ElevatedButton(onPressed: _addManager, child: const Text('Add')),
         ],
       ),
     );

@@ -18,8 +18,9 @@ void main() {
         state: 'my-state',
       );
 
-      final uri = request
-          .generateUri(Uri.parse('https://auth.example.com/logout?tid=123'));
+      final uri = request.generateUri(
+        Uri.parse('https://auth.example.com/logout?tid=123'),
+      );
 
       expect(
         uri.toString(),

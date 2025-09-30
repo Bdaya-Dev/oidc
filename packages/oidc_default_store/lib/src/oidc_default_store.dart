@@ -7,7 +7,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:universal_html/html.dart' as html;
+
+import 'html_stub.dart' if (dart.library.js_interop) 'html_web.dart' as html;
 
 // coverage:ignore-line
 final _logger = Logger('Oidc.DefaultStore');
@@ -117,9 +118,9 @@ class OidcDefaultStore implements OidcStore {
     String? managerId,
   }) async {
     if (testIsWeb) {
-      final keysRaw =
-          html.window.localStorage[_getNamespaceKeys(namespace, managerId)] ??
-              '[]';
+      final keysRaw = html.window.localStorage
+              .getItem(_getNamespaceKeys(namespace, managerId)) ??
+          '[]';
       return (jsonDecode(keysRaw) as List).cast<String>().toSet();
     } else {
       return _sharedPreferences
@@ -135,8 +136,10 @@ class OidcDefaultStore implements OidcStore {
     String? managerId,
   ) async {
     if (testIsWeb) {
-      html.window.localStorage[_getNamespaceKeys(namespace, managerId)] =
-          jsonEncode(keys);
+      html.window.localStorage.setItem(
+        _getNamespaceKeys(namespace, managerId),
+        jsonEncode(keys),
+      );
     } else {
       await _sharedPreferences.setStringList(
         _getNamespaceKeys(namespace, managerId),
@@ -155,7 +158,8 @@ class OidcDefaultStore implements OidcStore {
           .map(
             (key) => MapEntry(
               key,
-              html.window.localStorage[_getKey(namespace, key, managerId)],
+              html.window.localStorage
+                  .getItem(_getKey(namespace, key, managerId)),
             ),
           )
           .purify();
@@ -178,8 +182,8 @@ class OidcDefaultStore implements OidcStore {
   ) async {
     if (testIsWeb) {
       for (final entry in values.entries) {
-        html.window.localStorage[_getKey(namespace, entry.key, managerId)] =
-            entry.value;
+        html.window.localStorage
+            .setItem(_getKey(namespace, entry.key, managerId), entry.value);
       }
     } else {
       await Future.wait(
@@ -200,7 +204,7 @@ class OidcDefaultStore implements OidcStore {
   ) async {
     if (testIsWeb) {
       for (final key in keys) {
-        html.window.localStorage.remove(_getKey(namespace, key, managerId));
+        html.window.localStorage.removeItem(_getKey(namespace, key, managerId));
       }
     } else {
       await Future.wait(
@@ -251,8 +255,8 @@ class OidcDefaultStore implements OidcStore {
               .map(
                 (key) => MapEntry(
                   key,
-                  html.window
-                      .sessionStorage[_getKey(namespace, key, managerId)],
+                  html.window.sessionStorage
+                      .getItem(_getKey(namespace, key, managerId)),
                 ),
               )
               .purify();
@@ -299,8 +303,10 @@ class OidcDefaultStore implements OidcStore {
             webSessionManagementLocation ==
                 OidcDefaultStoreWebSessionManagementLocation.sessionStorage) {
           for (final element in values.entries) {
-            html.window.sessionStorage[
-                _getKey(namespace, element.key, managerId)] = element.value;
+            html.window.sessionStorage.setItem(
+              _getKey(namespace, element.key, managerId),
+              element.value,
+            );
           }
         } else {
           await _defaultSetMany(namespace, values, managerId);
@@ -345,7 +351,7 @@ class OidcDefaultStore implements OidcStore {
                 OidcDefaultStoreWebSessionManagementLocation.sessionStorage) {
           for (final element in keys) {
             html.window.sessionStorage
-                .remove(_getKey(namespace, element, managerId));
+                .removeItem(_getKey(namespace, element, managerId));
           }
         } else {
           await _defaultRemoveMany(namespace, keys, managerId);

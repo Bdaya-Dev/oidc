@@ -42,8 +42,8 @@ class OidcToken {
       ...response.src,
       if (overrideExpiresIn != null)
         OidcConstants_AuthParameters.expiresIn: overrideExpiresIn.inSeconds,
-      OidcConstants_Store.expiresInReferenceDate:
-          creationTime.toIso8601String(),
+      OidcConstants_Store.expiresInReferenceDate: creationTime
+          .toIso8601String(),
       if (sessionState != null)
         OidcConstants_AuthParameters.sessionState: sessionState,
     });
@@ -185,9 +185,9 @@ class OidcToken {
   ///
   /// mainly used to store it.
   Map<String, dynamic> toJson() => {
-        ..._$OidcTokenToJson(this),
-        ...?extra,
-      };
+    ..._$OidcTokenToJson(this),
+    ...?extra,
+  };
 }
 
 Object? _readExtra(Map<dynamic, dynamic> p1, String p2) {

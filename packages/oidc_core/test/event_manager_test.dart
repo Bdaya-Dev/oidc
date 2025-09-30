@@ -24,8 +24,8 @@ void main() {
     OidcConstants_AuthParameters.tokenType: 'Bearer',
     OidcConstants_AuthParameters.refreshToken: '9yNOxJtZa5',
     OidcConstants_AuthParameters.expiresIn: const Duration(hours: 1).inSeconds,
-    OidcConstants_Store.expiresInReferenceDate:
-        pastCreationTime.toIso8601String(),
+    OidcConstants_Store.expiresInReferenceDate: pastCreationTime
+        .toIso8601String(),
   };
 
   group(
@@ -38,13 +38,15 @@ void main() {
           OidcConstants_AuthParameters.expiresIn: null,
         });
 
-        final manager =
-            OidcTokenEventsManager(getExpiringNotificationTime: null);
+        final manager = OidcTokenEventsManager(
+          getExpiringNotificationTime: null,
+        );
         expectLater(
           OidcTokenEventsManager.logger.onRecord,
           emitsThrough(
             _loggerHavingMessage(
-                'expiresInFromNow is null, no timer will be started.'),
+              'expiresInFromNow is null, no timer will be started.',
+            ),
           ),
         );
         manager.load(token);
@@ -52,8 +54,9 @@ void main() {
       group('no getExpiringNotificationTime', () {
         final token = OidcToken.fromJson(src);
 
-        final manager =
-            OidcTokenEventsManager(getExpiringNotificationTime: null);
+        final manager = OidcTokenEventsManager(
+          getExpiringNotificationTime: null,
+        );
         test('start by unloading.', () {
           expect(
             OidcTokenEventsManager.logger.onRecord,
@@ -139,8 +142,11 @@ void main() {
                       'loaded token was already expiring, raised expiring event.',
                     ),
                   ),
-                  emits(_loggerHavingMessage(
-                      'started a timer that will raise the expired event')),
+                  emits(
+                    _loggerHavingMessage(
+                      'started a timer that will raise the expired event',
+                    ),
+                  ),
                 ]),
               );
               //elapsing the time by 51 minutes will fire expiring event
@@ -173,7 +179,7 @@ void main() {
                     _loggerHavingMessage(
                       'loaded token has already expired, raised expired event.',
                     ),
-                  )
+                  ),
                 ]),
               );
               //elapsing the time by 51 minutes will fire expiring event

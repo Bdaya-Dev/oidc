@@ -52,12 +52,11 @@ class _AuthPageState extends State<AuthPage> {
     final currentRoute = GoRouterState.of(context);
     final originalUri =
         currentRoute.uri.queryParameters[OidcConstants_Store.originalUri];
-    final parsedOriginalUri =
-        originalUri == null ? null : Uri.tryParse(originalUri);
+    final parsedOriginalUri = originalUri == null
+        ? null
+        : Uri.tryParse(originalUri);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Auth page'),
-      ),
+      appBar: AppBar(title: const Text('Auth page')),
       body: Padding(
         padding: const EdgeInsets.all(8),
         child: ListView(
@@ -65,15 +64,11 @@ class _AuthPageState extends State<AuthPage> {
             const Text('Resource owner grant'),
             TextField(
               controller: userNameController,
-              decoration: const InputDecoration(
-                labelText: 'username',
-              ),
+              decoration: const InputDecoration(labelText: 'username'),
             ),
             TextField(
               controller: passwordController,
-              decoration: const InputDecoration(
-                labelText: 'password',
-              ),
+              decoration: const InputDecoration(labelText: 'password'),
             ),
             const SizedBox(height: 8),
             ElevatedButton(
@@ -95,11 +90,7 @@ class _AuthPageState extends State<AuthPage> {
                 } catch (e) {
                   app_state.exampleLogger.severe(e.toString());
                   messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'loginPassword failed!',
-                      ),
-                    ),
+                    const SnackBar(content: Text('loginPassword failed!')),
                   );
                 }
               },
@@ -113,12 +104,7 @@ class _AuthPageState extends State<AuthPage> {
               ),
               DropdownButton<OidcPlatformSpecificOptions_Web_NavigationMode>(
                 items: OidcPlatformSpecificOptions_Web_NavigationMode.values
-                    .map(
-                      (e) => DropdownMenuItem(
-                        value: e,
-                        child: Text(e.name),
-                      ),
-                    )
+                    .map((e) => DropdownMenuItem(value: e, child: Text(e.name)))
                     .toList(),
                 value: webNavigationMode,
                 onChanged: (value) {

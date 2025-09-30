@@ -15,14 +15,49 @@ import 'conformance/api.dart';
 import 'conformance/manager.dart';
 import 'helpers.dart';
 
-const String oidcConformanceToken =
-    String.fromEnvironment('OIDC_CONFORMANCE_TOKEN');
+const String oidcConformanceToken = String.fromEnvironment(
+  'OIDC_CONFORMANCE_TOKEN',
+);
+final Logger _testLogger = Logger('oidc.conformance');
+
+bool _loggingConfigured = false;
+
+void _ensureLoggingConfigured() {
+  if (_loggingConfigured) {
+    return;
+  }
+  hierarchicalLoggingEnabled = true;
+  Logger.root.level = Level.ALL;
+  Logger.root.onRecord.listen((record) {
+    final buffer = StringBuffer()
+      ..write('[${record.time.toIso8601String()}]')
+      ..write('[${record.level.name}]')
+      ..write('[${record.loggerName}] ')
+      ..write(record.message);
+    if (record.error != null) {
+      buffer
+        ..write(' | error: ')
+        ..write(record.error);
+    }
+    if (record.stackTrace != null) {
+      buffer.write('\n${record.stackTrace}');
+    }
+    print(buffer.toString());
+  });
+  _loggingConfigured = true;
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  _ensureLoggingConfigured();
+  _testLogger.info(
+    'Starting integration test suite; token provided: ${oidcConformanceToken.isNotEmpty}',
+  );
   group('E2E', () {
     if (oidcConformanceToken.isEmpty) {
       testWidgets('Simple manager initializes correctly', (tester) async {
+        _testLogger.info('Running smoke test path (no OIDC token supplied).');
         print('Starting test: Simple manager initializes correctly');
         example.main();
         print('App main function executed');
@@ -43,30 +78,23 @@ void main() {
       });
     } else {
       testWidgets('OIDC Conformance Test', (tester) async {
-        print('Starting OIDC Conformance Test');
-        print('Token: $oidcConformanceToken');
-
-        print('Executing app main function...');
+        _testLogger.info('Running full OIDC conformance flow.');
         example.main();
-        print('App main function executed');
-
-        print('Pumping and settling widgets...');
+        _testLogger.info(
+          'Example app launched; waiting for first frame to settle.',
+        );
         await tester.pumpAndSettle();
-        print('Widgets settled');
+        _testLogger.info('Initial pumpAndSettle complete.');
 
         const baseUrl = 'https://www.certification.openid.net/';
-        print('Base URL: $baseUrl');
+        _testLogger.fine('Conformance base URL: $baseUrl');
 
         final dio = Dio(
           BaseOptions(
             baseUrl: kIsWeb
                 ? Uri.parse(
-                        'https://cors-proxy.bdaya-dev.workers.dev/corsproxy/')
-                    .replace(
-                    queryParameters: {
-                      'apiurl': baseUrl,
-                    },
-                  ).toString()
+                    'https://cors-proxy.bdaya-dev.workers.dev/corsproxy/',
+                  ).replace(queryParameters: {'apiurl': baseUrl}).toString()
                 : baseUrl,
             headers: {
               'Authorization': 'Bearer $oidcConformanceToken',
@@ -74,27 +102,27 @@ void main() {
             },
           ),
         );
-        print('Dio client initialized');
+        _testLogger.info('Dio client configured for conformance API.');
 
-        print('Fetching server info...');
+        _testLogger.info('Fetching server diagnostics (api/server)...');
         final serverInfo = await dio.get<Map<String, dynamic>>('api/server');
-        print('Server info fetched: ${serverInfo.data}');
+        _testLogger.info('Server info OK (status ${serverInfo.statusCode}).');
         expect(serverInfo.statusCode, 200);
 
-        print('Fetching current user info...');
-        final currentUser =
-            await dio.get<Map<String, dynamic>>('api/currentuser');
-        print('Current user info fetched: ${currentUser.data}');
+        _testLogger.info('Fetching current user (api/currentuser)...');
+        final currentUser = await dio.get<Map<String, dynamic>>(
+          'api/currentuser',
+        );
+        _testLogger.info('Current user OK (status ${currentUser.statusCode}).');
         expect(currentUser.statusCode, 200);
 
         final platform = getPlatformName();
-        print('Platform: $platform');
+        _testLogger.info('Detected platform: $platform');
 
         const clientId = 'my_client';
         const clientSecret = 'my_client_secret';
         final redirectUri = getPlatformRedirectUri();
-        print(
-            'Client ID: $clientId, Client Secret: $clientSecret, Redirect URI: $redirectUri');
+        _testLogger.fine('Client ID: $clientId, redirectUri: $redirectUri');
 
         final (path, body) = prepareTestPlanRequest(
           clientId: clientId,
@@ -108,45 +136,33 @@ void main() {
           frontChannelLogoutUri:
               'http://localhost:22433/redirect.html?requestType=front-channel-logout',
         );
-        print('Test plan request prepared: Path: $path, Body: $body');
+        _testLogger.info('Submitting test plan request to $path...');
 
-        print('Submitting test plan request...');
-        final testPlanResponse =
-            await dio.post<Map<String, dynamic>>(path, data: body);
-        print('Test plan response: ${testPlanResponse.data}');
+        final testPlanResponse = await dio.post<Map<String, dynamic>>(
+          path,
+          data: body,
+        );
+        _testLogger.info(
+          'Test plan response status ${testPlanResponse.statusCode}.',
+        );
         expect(testPlanResponse.data, isMap);
 
         final testPlanData = testPlanResponse.data as Map<String, dynamic>;
         final testPlanId = testPlanData['id'] as String;
-        final testPlanName = testPlanData['name'] as String;
         final testPlanModules = testPlanData['modules'] as List<dynamic>? ?? [];
-        print(
-            'Test Plan ID: $testPlanId, Name: $testPlanName, Modules: $testPlanModules');
+        _testLogger.info(
+          'Test plan created: id=$testPlanId, modules=${testPlanModules.length}.',
+        );
 
-        for (final testPlanModule in testPlanModules) {
-          final moduleName = testPlanModule['testModule'] as String?;
-          expect(moduleName, isNotNull);
-          print('Processing Test Plan Module: $moduleName');
-
-          final variant = testPlanModule['variant'] as Map<String, dynamic>? ??
-              <String, dynamic>{};
-          final clientAuthType = variant['client_auth_type'] as String?;
-          final responseType = variant['response_type'] as String?;
-          final responseMode = variant['response_mode'] as String?;
-          print(
-            'Module: $moduleName, Client Auth Type: $clientAuthType, Response Type: $responseType, Response Mode: $responseMode',
-          );
-        }
         final archive = Archive();
 
         for (final testPlanModule
             in testPlanModules.whereType<Map<String, dynamic>>()) {
           final moduleName = testPlanModule['testModule'] as String;
-
-          print('Creating test instance for module: $moduleName');
-
-          final variant = testPlanModule['variant'] as Map<String, dynamic>? ??
+          final variant =
+              testPlanModule['variant'] as Map<String, dynamic>? ??
               <String, dynamic>{};
+
           final testInstance = await createTestModuleInstance(
             dio: dio,
             planId: testPlanId,
@@ -159,13 +175,12 @@ void main() {
 
           final testInstanceId = testInstance['id'] as String;
           final logger = Logger('oidc.conformance.$moduleName.$testInstanceId');
-          // final logFileName = 'client-logs/$moduleName.log';
+          logger.info('Module starting. Variant: $variant');
           final logsToWrite = <String>[];
           final sub = Logger.root.onRecord.listen((record) {
             final message =
                 '[${record.time} ${record.level.name}][${record.loggerName}]: ${record.message}';
             logsToWrite.add(message);
-            print(message);
           });
           logger.info('Test instance created: $testInstance');
           final url = testInstance['url'] as String;
@@ -185,9 +200,19 @@ void main() {
           logger.info(
             'Monitoring logs for test instance to wait for ready state: $testInstanceId',
           );
+          final setupStopwatch = Stopwatch()..start();
+          var pollCount = 0;
           monitorLogsLoop:
-          await for (final logs
-              in monitorTestLogs(dio: dio, instanceId: testInstanceId)) {
+          await for (final logs in monitorTestLogs(
+            dio: dio,
+            instanceId: testInstanceId,
+          )) {
+            pollCount += 1;
+            if (pollCount % 5 == 0) {
+              logger.info(
+                'Still waiting for setup... polls=$pollCount, elapsed=${setupStopwatch.elapsed}.',
+              );
+            }
             for (final log in logs) {
               logger.fine('Log: $log');
               if (log['msg'] == 'Setup Done') {
@@ -196,29 +221,35 @@ void main() {
               }
             }
           }
+          setupStopwatch.stop();
+          logger.info(
+            'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
+          );
 
-          logger
-              .info('Initializing manager for test instance: $testInstanceId');
+          logger.info(
+            'Initializing manager for test instance: $testInstanceId',
+          );
           await manager.init();
           expect(manager.didInit, true);
           logger.info('Manager initialized');
           if (moduleName == 'oidcc-client-test-discovery-openid-config') {
-            // that's it, do nothing else.
             app_state.currentManagerRx.$ = app_state.managersRx.$.first;
-            app_state.managersRx
-                .update((managers) => managers..remove(manager));
+            app_state.managersRx.update(
+              (managers) => managers..remove(manager),
+            );
+            await sub.cancel();
             continue;
           }
           try {
             logger.info('Starting login authorization code flow...');
             final authResult = await manager.loginAuthorizationCodeFlow();
             if (authResult == null) {
-              logger.info('Login failed, authResult is null');
+              logger.warning('Login failed, authResult is null');
             } else {
               logger.info('Login successful: ${authResult.token.toJson()}');
             }
-          } catch (e) {
-            logger.info('Error during login: $e');
+          } catch (e, stackTrace) {
+            logger.severe('Error during login flow', e, stackTrace);
           }
 
           logger.info('Cleaning up manager for test instance: $testInstanceId');
@@ -228,11 +259,7 @@ void main() {
           if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
             final strToWrite = logsToWrite.join('\n');
             final data = utf8.encode(strToWrite);
-            // var logFile = File(logFileName).absolute;
-            // logFile = await logFile.create(recursive: true);
-            // logFile = await logFile.writeAsString(logsToWrite.join('\n'));
             archive.addFile(ArchiveFile.bytes('$moduleName.log', data));
-            // print('Log file added: ${logFile.path}');
           }
         }
 
@@ -255,15 +282,19 @@ void main() {
               var outputFile = File('client-logs/final.zip').absolute;
               outputFile = await outputFile.create(recursive: true);
               outputFile = await outputFile.writeAsBytes(resultLogs);
-              print(
-                'Saving logs archive at: ${outputFile.path}',
-              );
+              print('Saving logs archive at: ${outputFile.path}');
             }
-          } catch (e) {
+          } catch (e, stackTrace) {
+            _testLogger.severe(
+              'Failed to publish certification package',
+              e,
+              stackTrace,
+            );
             print('failed to zip test logs: $e');
           }
         }
         print('OIDC Conformance Test completed');
+        _testLogger.info('OIDC Conformance Test completed successfully.');
       });
     }
   });

@@ -2,16 +2,16 @@ name: oidc_example_android
 description: Demonstrates how to use the oidc plugin.
 version: 0.1.0+1
 publish_to: none
-
+resolution: workspace
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.9.0 <4.0.0"
 
 dependencies:
   async: ^2.11.0
   bdaya_shared_value: ^3.1.3
   flutter:
     sdk: flutter
-  go_router: ^10.1.2
+  go_router: ^16.2.4
   logging: ^1.2.0
   oidc_android:
     path: ../
@@ -26,7 +26,7 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
-  very_good_analysis: ^5.0.0
+  very_good_analysis: ^10.0.0
 
 flutter:
   uses-material-design: true

@@ -276,8 +276,9 @@ class _AddManagerDialogState extends State<AddManagerDialog> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('Manager "${_managerIdController.text}" added successfully'),
+          content: Text(
+            'Manager "${_managerIdController.text}" added successfully',
+          ),
         ),
       );
     } catch (e) {
@@ -291,8 +292,4 @@ class _AddManagerDialogState extends State<AddManagerDialog> {
   }
 }
 
-enum OidcClientAuthenticationType {
-  none,
-  clientSecretPost,
-  clientSecretBasic,
-}
+enum OidcClientAuthenticationType { none, clientSecretPost, clientSecretBasic }

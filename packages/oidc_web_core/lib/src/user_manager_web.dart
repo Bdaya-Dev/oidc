@@ -64,7 +64,7 @@ class OidcUserManagerWeb extends OidcUserManagerBase {
 
   @override
   Stream<OidcFrontChannelLogoutIncomingRequest>
-      listenToFrontChannelLogoutRequests(
+  listenToFrontChannelLogoutRequests(
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions options,
   ) {

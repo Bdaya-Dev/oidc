@@ -62,13 +62,13 @@ class OidcUserManagerHooks {
   });
   OidcHookMixin<OidcTokenHookRequest, OidcTokenResponse>? token;
   OidcHookMixin<OidcAuthorizationHookRequest, OidcAuthorizeResponse?>?
-      authorization;
+  authorization;
   OidcHookMixin<OidcRevocationHookRequest, OidcRevocationResponse?>? revocation;
 
   Future<OidcTokenResponse> executeToken({
     required OidcTokenHookRequest request,
     required OidcHookExecution<OidcTokenHookRequest, OidcTokenResponse>
-        defaultExecution,
+    defaultExecution,
   }) {
     return token.execute(
       request: request,
@@ -78,9 +78,11 @@ class OidcUserManagerHooks {
 
   Future<OidcAuthorizeResponse?> executeAuthorization({
     required OidcAuthorizationHookRequest request,
-    required OidcHookExecution<OidcAuthorizationHookRequest,
-            OidcAuthorizeResponse?>
-        defaultExecution,
+    required OidcHookExecution<
+      OidcAuthorizationHookRequest,
+      OidcAuthorizeResponse?
+    >
+    defaultExecution,
   }) {
     return authorization.execute(
       request: request,
@@ -90,9 +92,11 @@ class OidcUserManagerHooks {
 
   Future<OidcRevocationResponse?> executeRevocation({
     required OidcRevocationHookRequest request,
-    required OidcHookExecution<OidcRevocationHookRequest,
-            OidcRevocationResponse?>
-        defaultExecution,
+    required OidcHookExecution<
+      OidcRevocationHookRequest,
+      OidcRevocationResponse?
+    >
+    defaultExecution,
   }) {
     return revocation.execute(
       request: request,

@@ -27,9 +27,9 @@ class OidcAuthorizeState extends OidcState {
     super.data,
     super.managerId,
   }) : super(
-          operationDiscriminator:
-              OidcConstants_OperationDiscriminators.authorize,
-        );
+         operationDiscriminator:
+             OidcConstants_OperationDiscriminators.authorize,
+       );
 
   ///
   factory OidcAuthorizeState.fromJson(Map<String, dynamic> src) =>

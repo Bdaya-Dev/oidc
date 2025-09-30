@@ -23,22 +23,20 @@ Future<http.Response> ciHandler(http.Request request) async {
   // intercept requests to duende to avoid flaky tests.
   switch (request) {
     case http.Request(
-        method: 'GET',
-        url: Uri(
-          host: 'demo.duendesoftware.com',
-          pathSegments: [
-            '.well-known',
-            'openid-configuration',
-          ]
-        )
-      ):
+      method: 'GET',
+      url: Uri(
+        host: 'demo.duendesoftware.com',
+        pathSegments: ['.well-known', 'openid-configuration'],
+      ),
+    ):
       return http.Response.bytes(
         utf8.encode(duendeDiscoveryDocument),
         HttpStatus.ok,
       );
     default:
-      exampleLogger
-          .warning('sending out ${request.method} request to ${request.url}');
+      exampleLogger.warning(
+        'sending out ${request.method} request to ${request.url}',
+      );
       final client = http.Client();
       try {
         return http.Response.fromStream(await client.send(request));
@@ -74,9 +72,7 @@ final duendeManager = OidcUserManager.lazy(
   settings: OidcUserManagerSettings(
     frontChannelLogoutUri: Uri(
       path: 'redirect.html',
-      queryParameters: {
-        OidcConstants_Store.managerId: duendeManagerId,
-      },
+      queryParameters: {OidcConstants_Store.managerId: duendeManagerId},
     ),
     uiLocales: ['ar'],
     refreshBefore: (token) {
@@ -90,10 +86,10 @@ final duendeManager = OidcUserManager.lazy(
     postLogoutRedirectUri: kIsWeb
         ? Uri.parse('http://localhost:22433/redirect.html')
         : Platform.isAndroid || Platform.isIOS || Platform.isMacOS
-            ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
-            : Platform.isWindows || Platform.isLinux
-                ? Uri.parse('http://localhost:0')
-                : null,
+        ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
+        : Platform.isWindows || Platform.isLinux
+        ? Uri.parse('http://localhost:0')
+        : null,
     redirectUri: kIsWeb
         // this url must be an actual html page.
         // see the file in /web/redirect.html for an example.
@@ -101,19 +97,19 @@ final duendeManager = OidcUserManager.lazy(
         // for debugging in flutter, you must run this app with --web-port 22433
         ? Uri.parse('http://localhost:22433/redirect.html')
         : Platform.isIOS || Platform.isMacOS || Platform.isAndroid
-            // scheme: reverse domain name notation of your package name.
-            // path: anything.
-            ? Uri.parse('com.bdayadev.oidc.example:/oauth2redirect')
-            : Platform.isWindows || Platform.isLinux
-                // using port 0 means that we don't care which port is used,
-                // and a random unused port will be assigned.
-                //
-                // this is safer than passing a port yourself.
-                //
-                // note that you can also pass a path like /redirect,
-                // but it's completely optional.
-                ? Uri.parse('http://localhost:0')
-                : Uri(),
+        // scheme: reverse domain name notation of your package name.
+        // path: anything.
+        ? Uri.parse('com.bdayadev.oidc.example:/oauth2redirect')
+        : Platform.isWindows || Platform.isLinux
+        // using port 0 means that we don't care which port is used,
+        // and a random unused port will be assigned.
+        //
+        // this is safer than passing a port yourself.
+        //
+        // note that you can also pass a path like /redirect,
+        // but it's completely optional.
+        ? Uri.parse('http://localhost:0')
+        : Uri(),
     hooks: OidcUserManagerHooks(
       token: OidcHookGroup(
         hooks: [
@@ -125,9 +121,7 @@ final duendeManager = OidcUserManager.lazy(
               return Future.value(request);
             },
             modifyResponse: (response) {
-              exampleLogger.info(
-                'Modifying token response: ${response.src}',
-              );
+              exampleLogger.info('Modifying token response: ${response.src}');
               return Future.value(response);
             },
           ),
@@ -138,9 +132,7 @@ final duendeManager = OidcUserManager.lazy(
               'Executing token request: ${request.request.toMap()}',
             );
             final response = await defaultExecution(request);
-            exampleLogger.info(
-              'Executed token request: ${response.src}',
-            );
+            exampleLogger.info('Executed token request: ${response.src}');
             return response;
           },
         ),
@@ -181,14 +173,12 @@ Future<void> initApp() {
   return initMemoizer.runOnce(() async {
     currentManagerRx.streamWithInitial
         .switchMap((manager) => manager.userChanges())
-        .listen(
-      (event) {
-        cachedAuthedUser.$ = event;
-        exampleLogger.info(
-          'User changed: ${event?.claims.toJson()}, info: ${event?.userInfo}',
-        );
-      },
-    );
+        .listen((event) {
+          cachedAuthedUser.$ = event;
+          exampleLogger.info(
+            'User changed: ${event?.claims.toJson()}, info: ${event?.userInfo}',
+          );
+        });
   });
 }
 

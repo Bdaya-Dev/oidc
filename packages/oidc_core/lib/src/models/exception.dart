@@ -18,9 +18,9 @@ class OidcException implements Exception {
     this.rawRequest,
     this.rawResponse,
     String? message,
-  })  : message = message ?? 'Server sent an error response',
-        internalException = null,
-        internalStackTrace = null;
+  }) : message = message ?? 'Server sent an error response',
+       internalException = null,
+       internalStackTrace = null;
 
   final String message;
   final Map<String, dynamic> extra;

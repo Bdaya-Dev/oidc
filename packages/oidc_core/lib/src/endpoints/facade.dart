@@ -84,8 +84,7 @@ class OidcEndpoints {
               ? OidcInternalUtilities.joinSpaceDelimitedList(value)
               : value?.toString(),
         ),
-      )..removeWhere((key, value) => value is! String))
-          .cast<String, String>();
+      )..removeWhere((key, value) => value is! String)).cast<String, String>();
     }
     return req;
   }
@@ -98,7 +97,7 @@ class OidcEndpoints {
   ///
   /// If the [store] parameter is passed, it persists the generated nonce/state.
   static Future<OidcSimpleAuthorizationRequestContainer>
-      prepareAuthorizationCodeFlowRequest({
+  prepareAuthorizationCodeFlowRequest({
     required OidcProviderMetadata metadata,
     required OidcSimpleAuthorizationCodeFlowRequest input,
     OidcStore? store,
@@ -113,13 +112,15 @@ class OidcEndpoints {
     if (supportedCodeChallengeMethods != null &&
         supportedCodeChallengeMethods.isNotEmpty) {
       codeVerifier = OidcPkcePair.generateVerifier();
-      if (supportedCodeChallengeMethods
-          .contains(OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256)) {
+      if (supportedCodeChallengeMethods.contains(
+        OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256,
+      )) {
         codeChallenge = OidcPkcePair.generateS256Challenge(codeVerifier);
         codeChallengeMethod =
             OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256;
-      } else if (supportedCodeChallengeMethods
-          .contains(OidcConstants_AuthorizeRequest_CodeChallengeMethod.plain)) {
+      } else if (supportedCodeChallengeMethods.contains(
+        OidcConstants_AuthorizeRequest_CodeChallengeMethod.plain,
+      )) {
         codeChallenge = OidcPkcePair.generatePlainChallenge(codeVerifier);
         codeChallengeMethod =
             OidcConstants_AuthorizeRequest_CodeChallengeMethod.plain;
@@ -161,7 +162,7 @@ class OidcEndpoints {
 
     final supportsOpenIdScope =
         metadata.scopesSupported?.contains(OidcConstants_Scopes.openid) ??
-            false;
+        false;
 
     final req = OidcAuthorizeRequest(
       state: stateData.id,
@@ -234,7 +235,7 @@ class OidcEndpoints {
 
     final supportsOpenIdScope =
         metadata.scopesSupported?.contains(OidcConstants_Scopes.openid) ??
-            false;
+        false;
 
     return OidcAuthorizeRequest(
       state: stateData.id,
@@ -283,7 +284,7 @@ class OidcEndpoints {
 
   /// takes an input response uri from the /authorize endpoint, and gets the parameters from it.
   static ({Map<String, dynamic> parameters, String responseMode})
-      resolveAuthorizeResponseParameters({
+  resolveAuthorizeResponseParameters({
     required Uri responseUri,
     String? responseMode,
     String? resolveResponseModeByKey,
@@ -309,8 +310,9 @@ class OidcEndpoints {
           resolveResponseModeByKey ?? OidcConstants_AuthParameters.state;
 
       if (responseUri.queryParameters.containsKey(key) ||
-          responseUri.queryParameters
-              .containsKey(OidcConstants_AuthParameters.error)) {
+          responseUri.queryParameters.containsKey(
+            OidcConstants_AuthParameters.error,
+          )) {
         parameters = responseUri.queryParameters;
         resolvedResponseMode =
             OidcConstants_AuthorizeRequest_ResponseMode.query;
@@ -335,7 +337,7 @@ class OidcEndpoints {
         ...parameters,
         OidcConstants_AuthParameters.responseMode: resolvedResponseMode,
       },
-      responseMode: resolvedResponseMode
+      responseMode: resolvedResponseMode,
     );
   }
 
@@ -359,8 +361,10 @@ class OidcEndpoints {
     String? resolveResponseModeByKey,
     Map<String, dynamic>? overrides,
   }) async {
-    final (:parameters, responseMode: resolvedResponseMode) =
-        resolveAuthorizeResponseParameters(
+    final (
+      :parameters,
+      responseMode: resolvedResponseMode,
+    ) = resolveAuthorizeResponseParameters(
       responseUri: responseUri,
       resolveResponseModeByKey: resolveResponseModeByKey,
       responseMode: responseMode,
@@ -448,10 +452,10 @@ class OidcEndpoints {
       },
       bodyFields:
           tokenLocation == OidcUserInfoAccessTokenLocations.formParameter
-              ? {
-                  OidcConstants_AuthParameters.accessToken: accessToken,
-                }
-              : null,
+          ? {
+              OidcConstants_AuthParameters.accessToken: accessToken,
+            }
+          : null,
     );
 
     final resp = await OidcInternalUtilities.sendWithClient(
@@ -509,10 +513,11 @@ class OidcEndpoints {
       return response;
     }
     final neededSources = claimNames.values.toSet();
-    final availableSources = (Map.fromEntries(
-      neededSources.map((e) => MapEntry(e, claimSources[e])),
-    )..removeWhere((key, value) => value == null))
-        .cast<String, OidcClaimSource>();
+    final availableSources =
+        (Map.fromEntries(
+              neededSources.map((e) => MapEntry(e, claimSources[e])),
+            )..removeWhere((key, value) => value == null))
+            .cast<String, OidcClaimSource>();
     if (availableSources.isEmpty) {
       return response;
     }
@@ -526,15 +531,16 @@ class OidcEndpoints {
         final jwt = sourceDesc.jwt;
         final parsedJwt = JsonWebToken.unverified(jwt);
         targetMap.addEntries(
-          parsedJwt.claims
-              .toJson()
-              .entries
-              .where((element) => claimNames.containsKey(element.key)),
+          parsedJwt.claims.toJson().entries.where(
+            (element) => claimNames.containsKey(element.key),
+          ),
         );
       } else if (sourceDesc is OidcDistributedClaimSource) {
         var accessToken = sourceDesc.accessToken;
-        accessToken ??=
-            await getAccessTokenFor?.call(sourceKey, sourceDesc.endpoint);
+        accessToken ??= await getAccessTokenFor?.call(
+          sourceKey,
+          sourceDesc.endpoint,
+        );
 
         final request = http.Request(
           OidcConstants_RequestMethod.get,
@@ -557,10 +563,9 @@ class OidcEndpoints {
           }
           if (parsedJwt != null) {
             targetMap.addEntries(
-              parsedJwt.claims
-                  .toJson()
-                  .entries
-                  .where((element) => claimNames.containsKey(element.key)),
+              parsedJwt.claims.toJson().entries.where(
+                (element) => claimNames.containsKey(element.key),
+              ),
             );
           }
         } else {

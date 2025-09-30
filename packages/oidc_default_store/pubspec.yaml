@@ -3,20 +3,21 @@ description: The default OidcStore implementation for package:oidc
 version: 0.4.0+3
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_default_store
 homepage: https://bdaya-dev.github.io/oidc/
+resolution: workspace
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  sdk: ">=3.5.0 <4.0.0"
   flutter: ">=3.22.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  flutter_secure_storage: ^9.0.0
+  flutter_secure_storage: '>=10.0.0-beta.4 <11.0.0'
   logging: ^1.2.0
   oidc_core: ^0.14.2+1
   shared_preferences: ^2.2.1
-  universal_html: ^2.2.3
+  web: ^1.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  mocktail: ^0.3.0
-  very_good_analysis: ^5.0.0
+  mocktail: ^1.0.3
+  very_good_analysis: ^10.0.0

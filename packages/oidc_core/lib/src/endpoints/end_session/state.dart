@@ -21,9 +21,9 @@ class OidcEndSessionState extends OidcState {
     super.id,
     super.managerId,
   }) : super(
-          operationDiscriminator:
-              OidcConstants_OperationDiscriminators.endSession,
-        );
+         operationDiscriminator:
+             OidcConstants_OperationDiscriminators.endSession,
+       );
 
   ///
   factory OidcEndSessionState.fromJson(Map<String, dynamic> src) =>

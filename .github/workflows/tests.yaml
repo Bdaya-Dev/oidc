@@ -40,7 +40,7 @@ jobs:
         uses: ./.github/actions/flutter_base
         with:
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
-          flutter-version: ${{ matrix.sdk == 'min' && '3.22.0' || '' }}
+          flutter-version: ${{ matrix.sdk == 'min' && '3.35.4' || '' }}
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: "[Verify step] ✨ Format"
@@ -79,7 +79,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        api-level: [29]
+        api-level: [33]
+        arch: [x86_64]
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -105,21 +106,49 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-${{ matrix.api-level }}
+          # include arch to avoid reusing old 32-bit images
+          key: avd-${{ matrix.api-level }}-${{ matrix.arch }}-novulkan
 
       - name: create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          arch: ${{ matrix.arch }}
+          # target: google_apis 
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
       - name: Run flutter precache
         run: flutter precache -v
       - name: Run flutter doctor
         run: flutter doctor -v
+      - name: Prepare Android integration script
+        run: |
+          cat <<'EOF' > android_emulator_ci.sh
+          #!/usr/bin/env bash
+          set -eo pipefail
+
+          echo "ADB devices before:"
+          adb devices -l || true
+
+          # Wait for a device to be 'device' (boot completed)
+          adb wait-for-device
+
+          # Pick the first Android device id
+          EMU_ID="$(adb devices | while read -r serial state _; do if [ "$state" = "device" ]; then echo "$serial"; break; fi; done)"
+          if [ -z "$EMU_ID" ]; then
+            echo "No Android device found. Available devices:"
+            flutter devices
+            exit 1
+          fi
+
+          echo "Using device: $EMU_ID"
+          flutter devices
+          flutter test integration_test --coverage --coverage-package "oidc*" --branch-coverage -d "$EMU_ID" --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
+          EOF
+          chmod +x android_emulator_ci.sh
       - name: Run Android Emulator and Integration Tests
         uses: reactivecircus/android-emulator-runner@v2
         env:
@@ -127,7 +156,10 @@ jobs:
         with:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
-          script: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d android --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
+          arch: ${{ matrix.arch }}
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          # target: google_apis 
+          script: ./android_emulator_ci.sh
       - name: Find .info files and files in coverage folders
         run: |
           echo "Listing all .info files and files inside any coverage/ directory:"
@@ -153,9 +185,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
-        with:
-          channel: master
-          flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
+        # with:
+        #   channel: master
+        #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Start Simulator
         # Start an iPhone simulator
         run: |
@@ -233,7 +265,8 @@ jobs:
       #     path: packages/oidc/example/coverage/web-coverage.info
 
   macos:
-    runs-on: macos-13
+    runs-on: macos-latest
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -246,7 +279,7 @@ jobs:
         run: flutter precache -v
       - name: Integration Tests
         working-directory: packages/oidc/example
-        run: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d macos --coverage-path coverage/macos-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} -r expanded
+        run: flutter test integration_test --coverage --branch-coverage --coverage-package "oidc*" -d macos --coverage-path coverage/macos-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} -r expanded
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
@@ -304,7 +337,7 @@ jobs:
           name: oidc-client-logs
           path: packages/oidc/example/client-logs/final.zip
           include-hidden-files: true
-          if-no-files-found: error
+          if-no-files-found: warn
   windows:
     runs-on: windows-latest
     defaults:
@@ -340,7 +373,7 @@ jobs:
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Download unit test coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: package-coverage
           path: coverage/downloaded/
@@ -351,7 +384,7 @@ jobs:
           rm -rf coverage/downloaded
           ls -lR coverage
       - name: Download integration coverages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: packages/oidc/example/coverage/
           pattern: "*-integration-coverage"
@@ -376,5 +409,5 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
-          file: coverage/lcov.info
+          files: coverage/lcov.info          
           fail_ci_if_error: false

@@ -74,7 +74,7 @@ class OidcUserManagerSettings {
   ///
   /// [frontChannelLogoutUri] must be set for this to work.
   final OidcFrontChannelRequestListeningOptions
-      frontChannelRequestListeningOptions;
+  frontChannelRequestListeningOptions;
 
   /// see [OidcAuthorizeRequest.scope].
   final List<String> scope;
@@ -170,7 +170,7 @@ class OidcUserInfoSettings {
   /// this function gets called whenever there is an endpoint with no access token,
   /// to try and get the access token.
   final Future<String?> Function(String, Uri)?
-      getAccessTokenForDistributedSource;
+  getAccessTokenForDistributedSource;
 }
 
 ///

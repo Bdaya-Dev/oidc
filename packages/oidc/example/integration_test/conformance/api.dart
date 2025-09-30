@@ -30,10 +30,7 @@ import 'package:dio/dio.dart';
   };
   final uri = Uri(
     path: '/api/plan',
-    queryParameters: {
-      'planName': planName,
-      'variant': jsonEncode(variant),
-    },
+    queryParameters: {'planName': planName, 'variant': jsonEncode(variant)},
   );
   final body = {
     'description': description,
@@ -59,22 +56,15 @@ Future<Map<String, dynamic>> getPlan({
 }) async {
   final uri = Uri(
     path: 'api/plan/$planId',
-    queryParameters: {
-      'public': public.toString(),
-    },
+    queryParameters: {'public': public.toString()},
   );
   // Assuming you have a Dio instance or similar HTTP client
   final response = await dio.getUri<Map<String, dynamic>>(uri);
   return response.data ?? {};
 }
 
-Future<void> deletePlan({
-  required Dio dio,
-  required String planId,
-}) async {
-  final uri = Uri(
-    path: 'api/plan/$planId',
-  );
+Future<void> deletePlan({required Dio dio, required String planId}) async {
+  final uri = Uri(path: 'api/plan/$planId');
   // Assuming you have a Dio instance or similar HTTP client
   await dio.deleteUri<void>(uri);
 }
@@ -188,9 +178,10 @@ Future<List<int>?> publishCertificationPackage({
       // Calculate backoff delay: initialDelay * 2^attempt, with jitter
       final backoff = initialDelay * (1 << attempt);
       final jitter = Duration(
-          milliseconds:
-              (backoff.inMilliseconds * 0.2 * (Random().nextDouble() * 2 - 1))
-                  .toInt());
+        milliseconds:
+            (backoff.inMilliseconds * 0.2 * (Random().nextDouble() * 2 - 1))
+                .toInt(),
+      );
       final delay = backoff + jitter;
 
       print(

@@ -3,8 +3,9 @@ description: Web implementation of the oidc plugin
 version: 0.6.0+9
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_web
 homepage: https://bdaya-dev.github.io/oidc/
+resolution: workspace
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  sdk: ">=3.5.0 <4.0.0"
   flutter: ">=3.22.0"
 
 flutter:
@@ -28,4 +29,4 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  very_good_analysis: ">=5.0.0 <9.0.0"
+  very_good_analysis: ^10.0.0

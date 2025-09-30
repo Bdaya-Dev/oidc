@@ -36,10 +36,12 @@ void main() async {
   if (user == null) {
     print('failed to get the user.');
   } else {
-    print('user validated!\n'
-        'subject: ${user.claims.subject}\n'
-        'claims: ${user.aggregatedClaims}\n'
-        'userInfo: ${user.userInfo}');
+    print(
+      'user validated!\n'
+      'subject: ${user.claims.subject}\n'
+      'claims: ${user.aggregatedClaims}\n'
+      'userInfo: ${user.userInfo}',
+    );
 
     print('Logging out the user again:');
 

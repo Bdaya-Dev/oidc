@@ -12,38 +12,38 @@ final _utf8ThenBase64 = utf8.fuse(base64);
 class OidcClientAuthentication {
   const OidcClientAuthentication.none({
     required this.clientId,
-  })  : location = OidcConstants_ClientAuthenticationMethods.none,
-        clientSecret = null,
-        clientAssertion = null,
-        clientAssertionType = null;
+  }) : location = OidcConstants_ClientAuthenticationMethods.none,
+       clientSecret = null,
+       clientAssertion = null,
+       clientAssertionType = null;
 
   const OidcClientAuthentication.clientSecretBasic({
     required this.clientId,
     required String this.clientSecret,
-  })  : location = OidcConstants_ClientAuthenticationMethods.clientSecretBasic,
-        clientAssertionType = null,
-        clientAssertion = null;
+  }) : location = OidcConstants_ClientAuthenticationMethods.clientSecretBasic,
+       clientAssertionType = null,
+       clientAssertion = null;
 
   const OidcClientAuthentication.clientSecretPost({
     required this.clientId,
     required String this.clientSecret,
-  })  : location = OidcConstants_ClientAuthenticationMethods.clientSecretPost,
-        clientAssertionType = null,
-        clientAssertion = null;
+  }) : location = OidcConstants_ClientAuthenticationMethods.clientSecretPost,
+       clientAssertionType = null,
+       clientAssertion = null;
 
   const OidcClientAuthentication.clientSecretJwt({
     required this.clientId,
     required String this.clientAssertion,
-  })  : location = OidcConstants_ClientAuthenticationMethods.clientSecretJwt,
-        clientAssertionType = OidcConstants_ClientAssertionTypes.jwtBearer,
-        clientSecret = null;
+  }) : location = OidcConstants_ClientAuthenticationMethods.clientSecretJwt,
+       clientAssertionType = OidcConstants_ClientAssertionTypes.jwtBearer,
+       clientSecret = null;
 
   const OidcClientAuthentication.privateKeyJwt({
     required this.clientId,
     required String this.clientAssertion,
-  })  : location = OidcConstants_ClientAuthenticationMethods.privateKeyJwt,
-        clientAssertionType = OidcConstants_ClientAssertionTypes.jwtBearer,
-        clientSecret = null;
+  }) : location = OidcConstants_ClientAuthenticationMethods.privateKeyJwt,
+       clientAssertionType = OidcConstants_ClientAssertionTypes.jwtBearer,
+       clientSecret = null;
 
   @JsonKey(includeToJson: false)
   final String location;

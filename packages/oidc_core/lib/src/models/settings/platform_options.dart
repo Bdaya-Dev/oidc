@@ -49,8 +49,7 @@ class OidcPlatformSpecificOptions {
 
   factory OidcPlatformSpecificOptions.fromJson(
     Map<String, dynamic> src,
-  ) =>
-      _$OidcPlatformSpecificOptionsFromJson(src);
+  ) => _$OidcPlatformSpecificOptionsFromJson(src);
 }
 
 ///
@@ -70,8 +69,7 @@ class OidcPlatformSpecificOptions_AppAuth_Android {
 
   factory OidcPlatformSpecificOptions_AppAuth_Android.fromJson(
     Map<String, dynamic> src,
-  ) =>
-      _$OidcPlatformSpecificOptions_AppAuth_AndroidFromJson(src);
+  ) => _$OidcPlatformSpecificOptions_AppAuth_AndroidFromJson(src);
 }
 
 ///
@@ -92,8 +90,7 @@ class OidcPlatformSpecificOptions_AppAuth_IosMacos {
 
   factory OidcPlatformSpecificOptions_AppAuth_IosMacos.fromJson(
     Map<String, dynamic> src,
-  ) =>
-      _$OidcPlatformSpecificOptions_AppAuth_IosMacosFromJson(src);
+  ) => _$OidcPlatformSpecificOptions_AppAuth_IosMacosFromJson(src);
 }
 
 ///
@@ -125,8 +122,7 @@ class OidcPlatformSpecificOptions_Native {
 
   factory OidcPlatformSpecificOptions_Native.fromJson(
     Map<String, dynamic> src,
-  ) =>
-      _$OidcPlatformSpecificOptions_NativeFromJson(src);
+  ) => _$OidcPlatformSpecificOptions_NativeFromJson(src);
 }
 
 /// The possible navigation modes to use for web.
@@ -211,7 +207,7 @@ enum OidcAppAuthExternalUserAgent {
   /// Note that as this does not follow the best practices on using the
   /// appropriate native APIs based on the OS version, developers should use
   /// this at their own discretion.
-  sfSafariViewController
+  sfSafariViewController,
 }
 
 ///
@@ -257,6 +253,5 @@ class OidcPlatformSpecificOptions_Web {
 
   factory OidcPlatformSpecificOptions_Web.fromJson(
     Map<String, dynamic> src,
-  ) =>
-      _$OidcPlatformSpecificOptions_WebFromJson(src);
+  ) => _$OidcPlatformSpecificOptions_WebFromJson(src);
 }

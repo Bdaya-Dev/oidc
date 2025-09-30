@@ -80,8 +80,11 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
     required String key,
     String? managerId,
   }) {
-    return getMany(namespace, keys: {key}, managerId: managerId)
-        .then((value) => value.values.firstOrNull);
+    return getMany(
+      namespace,
+      keys: {key},
+      managerId: managerId,
+    ).then((value) => value.values.firstOrNull);
   }
 
   /// Gets the current state from the session namespace.
@@ -92,37 +95,39 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
 
   /// Gets the current nonce from the session namespace.
   Future<String?> getCurrentNonce({String? managerId}) => get(
-        OidcStoreNamespace.secureTokens,
-        key: OidcConstants_AuthParameters.nonce,
-        managerId: managerId,
-      );
+    OidcStoreNamespace.secureTokens,
+    key: OidcConstants_AuthParameters.nonce,
+    managerId: managerId,
+  );
 
   /// Gets the stateData (value) of a [state] (key).
   Future<String?> getStateData(String state) => get(
-        OidcStoreNamespace.state,
-        key: state,
-      );
+    OidcStoreNamespace.state,
+    key: state,
+  );
 
   /// Gets the stateData (value) of a [state] (key).
   Future<String?> getStateResponseData(String state) => get(
-        OidcStoreNamespace.stateResponse,
-        key: state,
-      );
+    OidcStoreNamespace.stateResponse,
+    key: state,
+  );
 
   /// Gets the current
   Future<String?> getCurrentFrontChannelLogoutRequest() => get(
-        OidcStoreNamespace.request,
-        key: OidcConstants_Store.frontChannelLogout,
-      );
+    OidcStoreNamespace.request,
+    key: OidcConstants_Store.frontChannelLogout,
+  );
 
   Future<Map<String, ({String stateData, String stateResponse})>>
-      getStatesWithResponses() async {
+  getStatesWithResponses() async {
     final responseKeys = await getAllKeys(OidcStoreNamespace.stateResponse);
     if (responseKeys.isEmpty) {
       return {};
     }
-    final allResponses =
-        await getMany(OidcStoreNamespace.stateResponse, keys: responseKeys);
+    final allResponses = await getMany(
+      OidcStoreNamespace.stateResponse,
+      keys: responseKeys,
+    );
     if (allResponses.isEmpty) {
       return {};
     }
@@ -173,17 +178,17 @@ extension OidcStoreExt on OidcStore {
   /// Sending null will remove the key.
   Future<void> setCurrentNonce(String? nonce, {String? managerId}) =>
       nonce == null
-          ? remove(
-              OidcStoreNamespace.secureTokens,
-              key: OidcConstants_AuthParameters.nonce,
-              managerId: managerId,
-            )
-          : set(
-              OidcStoreNamespace.secureTokens,
-              key: OidcConstants_AuthParameters.nonce,
-              value: nonce,
-              managerId: managerId,
-            );
+      ? remove(
+          OidcStoreNamespace.secureTokens,
+          key: OidcConstants_AuthParameters.nonce,
+          managerId: managerId,
+        )
+      : set(
+          OidcStoreNamespace.secureTokens,
+          key: OidcConstants_AuthParameters.nonce,
+          value: nonce,
+          managerId: managerId,
+        );
 
   /// Sets the [stateData] (value) of a [state] (key).
   ///
@@ -191,17 +196,16 @@ extension OidcStoreExt on OidcStore {
   Future<void> setStateData({
     required String state,
     required String? stateData,
-  }) =>
-      stateData == null
-          ? remove(
-              OidcStoreNamespace.state,
-              key: state,
-            )
-          : set(
-              OidcStoreNamespace.state,
-              key: state,
-              value: stateData,
-            );
+  }) => stateData == null
+      ? remove(
+          OidcStoreNamespace.state,
+          key: state,
+        )
+      : set(
+          OidcStoreNamespace.state,
+          key: state,
+          value: stateData,
+        );
 
   /// Sets the [stateData] (value) of a [state] (key).
   ///
@@ -209,34 +213,33 @@ extension OidcStoreExt on OidcStore {
   Future<void> setStateResponseData({
     required String state,
     required String? stateData,
-  }) =>
-      stateData == null
-          ? remove(
-              OidcStoreNamespace.stateResponse,
-              key: state,
-            )
-          : set(
-              OidcStoreNamespace.stateResponse,
-              key: state,
-              value: stateData,
-            );
+  }) => stateData == null
+      ? remove(
+          OidcStoreNamespace.stateResponse,
+          key: state,
+        )
+      : set(
+          OidcStoreNamespace.stateResponse,
+          key: state,
+          value: stateData,
+        );
 
   /// Gets the stateData (value) of a [state] (key).
   Future<void> removeStateResponseData(String state) => setStateData(
-        state: state,
-        stateData: null,
-      );
+    state: state,
+    stateData: null,
+  );
 
   /// Gets the current
   Future<void> setCurrentFrontChannelLogoutRequest(String? value) =>
       value == null
-          ? remove(
-              OidcStoreNamespace.request,
-              key: OidcConstants_Store.frontChannelLogout,
-            )
-          : set(
-              OidcStoreNamespace.request,
-              key: OidcConstants_Store.frontChannelLogout,
-              value: value,
-            );
+      ? remove(
+          OidcStoreNamespace.request,
+          key: OidcConstants_Store.frontChannelLogout,
+        )
+      : set(
+          OidcStoreNamespace.request,
+          key: OidcConstants_Store.frontChannelLogout,
+          value: value,
+        );
 }
