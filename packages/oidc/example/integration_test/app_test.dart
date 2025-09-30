@@ -81,7 +81,9 @@ void main() {
       testWidgets('OIDC Conformance Test', (tester) async {
         _testLogger.info('Running full OIDC conformance flow.');
         example.main();
-        _testLogger.info('Example app launched; waiting for first frame to settle.');
+        _testLogger.info(
+          'Example app launched; waiting for first frame to settle.',
+        );
         await tester.pumpAndSettle();
         _testLogger.info('Initial pumpAndSettle complete.');
 
@@ -284,7 +286,11 @@ void main() {
               print('Saving logs archive at: ${outputFile.path}');
             }
           } catch (e, stackTrace) {
-            _testLogger.severe('Failed to publish certification package', e, stackTrace);
+            _testLogger.severe(
+              'Failed to publish certification package',
+              e,
+              stackTrace,
+            );
             print('failed to zip test logs: $e');
           }
         }
