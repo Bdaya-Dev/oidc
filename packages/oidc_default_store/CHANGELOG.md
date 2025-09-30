@@ -1,3 +1,10 @@
+## 0.5.0
+
+> Note: This release has breaking changes.
+
+ - **BREAKING** **FIX**: migrate to simple_secure_storage ([#270](https://github.com/Bdaya-Dev/oidc/issues/270)). ([723560a7](https://github.com/Bdaya-Dev/oidc/commit/723560a7e7d212290205724d7af6799f217ab778))
+ - **BREAKING** **FEAT**: Support WASM ([#253](https://github.com/Bdaya-Dev/oidc/issues/253)). ([8b2931ef](https://github.com/Bdaya-Dev/oidc/commit/8b2931ef64c7b25609db563e3d14bf37f5504922))
+
 ## 0.4.0+3
 
  - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
