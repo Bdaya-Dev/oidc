@@ -9,6 +9,7 @@ environment:
   flutter: ">=3.22.0"
 
 dependencies:
+  async: ^2.13.0
   flutter:
     sdk: flutter
   logging: ^1.2.0
