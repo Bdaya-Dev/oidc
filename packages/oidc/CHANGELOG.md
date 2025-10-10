@@ -1,3 +1,12 @@
+## 0.13.0
+
+> Note: This release has breaking changes.
+
+ - **FEAT**: add OIDC conformance test suite with API client and test runner. ([a651a7d8](https://github.com/Bdaya-Dev/oidc/commit/a651a7d814a424683d141fcc66156e5d17112baa))
+ - **BREAKING** **FIX**: hasInit is set to true too early in init() of OidcUserManagerBase ([#275](https://github.com/Bdaya-Dev/oidc/issues/275)). ([d704aa5f](https://github.com/Bdaya-Dev/oidc/commit/d704aa5fe7449051831fc062919712a1c5075a13))
+ - **BREAKING** **FIX**: migrate to simple_secure_storage ([#270](https://github.com/Bdaya-Dev/oidc/issues/270)). ([723560a7](https://github.com/Bdaya-Dev/oidc/commit/723560a7e7d212290205724d7af6799f217ab778))
+ - **BREAKING** **FEAT**: Support WASM ([#253](https://github.com/Bdaya-Dev/oidc/issues/253)). ([8b2931ef](https://github.com/Bdaya-Dev/oidc/commit/8b2931ef64c7b25609db563e3d14bf37f5504922))
+
 ## 0.12.1+2
 
  - **DOCS**: Add openid certification mark ([#240](https://github.com/Bdaya-Dev/oidc/issues/240)). ([89313199](https://github.com/Bdaya-Dev/oidc/commit/8931319937b9c263abae9ac873433dd6bd5fa637))
