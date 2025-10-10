@@ -28,10 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.x
       - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV 
@@ -44,7 +44,7 @@ jobs:
       - run: pip install mkdocs mkdocs-material click-man
       - run: mkdocs build
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           # Upload specific path
           path: 'site'
