@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,7 +11,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
 import 'package:oidc_example/main.dart' as example;
-import 'package:archive/archive.dart';
+
 import 'conformance/api.dart';
 import 'conformance/manager.dart';
 import 'helpers.dart';

@@ -31,109 +31,102 @@ void main() {
             ShellRoute(
               builder: (context, state, child) {
                 final selectedManager = app_state.currentManagerRx.of(context);
-                return Scaffold(
-                  appBar: AppBar(
-                    title: const Text('OIDC Example App'),
-                    actions: [
-                      if (!selectedManager.didInit)
-                        IconButton(
-                          icon: const Icon(Icons.play_circle),
-                          tooltip: 'Initialize the manager',
-                          color: Colors.green,
-                          onPressed: () async {
-                            await selectedManager.init();
-                            // This will initialize the app state.
-                            // await app_state.initApp();
-                            //trigger a rebuild after initialization.
-                            // app_state.currentManagerRx.$ = x;
-                          },
-                        )
-                      else
-                        const SizedBox.shrink(),
-                    ],
-                  ),
-                  drawer: Drawer(
-                    child: ListView(
-                      padding: EdgeInsets.zero,
-                      children: [
-                        DrawerHeader(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          child: const Text(
-                            'OIDC Example',
-                            style: TextStyle(color: Colors.white, fontSize: 24),
-                          ),
-                        ),
-                        const Divider(),
-                        const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text(
-                            'Select the manager',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        ),
-                        for (final manager in app_state.managersRx.of(
-                          context,
-                        )) ...[
-                          ListTile(
-                            selected: manager == selectedManager,
-                            leading: const Icon(Icons.account_circle),
-                            title: Text(manager.id ?? '<No Id>'),
-                            onTap: () {
-                              app_state.currentManagerRx.$ = manager;
-                            },
-                          ),
+                return FutureBuilder<void>(
+                  future: selectedManager.init(),
+                  builder: (context, asyncSnapshot) {
+                    return Scaffold(
+                      appBar: AppBar(
+                        title: const Text('OIDC Example App'),
+                        actions: [
+                          if (asyncSnapshot.connectionState ==
+                              ConnectionState.waiting)
+                            const CircularProgressIndicator(),
                         ],
-                        ListTile(
-                          leading: const Icon(Icons.add),
-                          title: const Text('Add a new manager'),
-                          onTap: () async {
-                            // This will add a new manager.
-                            // Show the dialog
-                            final newManager =
-                                await showDialog<OidcUserManager>(
-                                  context: context,
-                                  builder: (context) {
-                                    return const AddManagerDialog();
-                                  },
-                                );
-                            if (newManager == null) {
-                              return;
-                            }
-                            app_state.managersRx.update((managers) {
-                              managers.add(newManager);
-                              return managers;
-                            });
-                            app_state.currentManagerRx.$ = newManager;
-                          },
+                      ),
+                      drawer: Drawer(
+                        child: ListView(
+                          padding: EdgeInsets.zero,
+                          children: [
+                            DrawerHeader(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              child: const Text(
+                                'OIDC Example',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                ),
+                              ),
+                            ),
+                            const Divider(),
+                            const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Text(
+                                'Select the manager',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                            ),
+                            for (final manager in app_state.managersRx.of(
+                              context,
+                            )) ...[
+                              ListTile(
+                                selected: manager == selectedManager,
+                                leading: const Icon(Icons.account_circle),
+                                title: Text(manager.id ?? '<No Id>'),
+                                onTap: () {
+                                  app_state.currentManagerRx.$ = manager;
+                                },
+                              ),
+                            ],
+                            ListTile(
+                              leading: const Icon(Icons.add),
+                              title: const Text('Add a new manager'),
+                              onTap: () async {
+                                // This will add a new manager.
+                                // Show the dialog
+                                final newManager =
+                                    await showDialog<OidcUserManager>(
+                                      context: context,
+                                      builder: (context) {
+                                        return const AddManagerDialog();
+                                      },
+                                    );
+                                if (newManager == null) {
+                                  return;
+                                }
+                                app_state.managersRx.update((managers) {
+                                  managers.add(newManager);
+                                  return managers;
+                                });
+                                app_state.currentManagerRx.$ = newManager;
+                              },
+                            ),
+                            // const Divider(),
+                            // ListTile(
+                            //   leading: const Icon(Icons.home),
+                            //   title: const Text('Home'),
+                            //   onTap: () => context.go('/'),
+                            // ),
+                            // ListTile(
+                            //   leading: const Icon(Icons.lock),
+                            //   title: const Text('Secret Page'),
+                            //   onTap: () => context.go('/secret-route'),
+                            // ),
+                            // ListTile(
+                            //   leading: const Icon(Icons.login),
+                            //   title: const Text('Login'),
+                            //   onTap: () => context.go('/auth'),
+                            // ),
+                          ],
                         ),
-                        // const Divider(),
-                        // ListTile(
-                        //   leading: const Icon(Icons.home),
-                        //   title: const Text('Home'),
-                        //   onTap: () => context.go('/'),
-                        // ),
-                        // ListTile(
-                        //   leading: const Icon(Icons.lock),
-                        //   title: const Text('Secret Page'),
-                        //   onTap: () => context.go('/secret-route'),
-                        // ),
-                        // ListTile(
-                        //   leading: const Icon(Icons.login),
-                        //   title: const Text('Login'),
-                        //   onTap: () => context.go('/auth'),
-                        // ),
-                      ],
-                    ),
-                  ),
-                  body: selectedManager.didInit
-                      ? child
-                      : const Center(
-                          child: Text(
-                            'Initialize the manager first! Click on the green play button',
-                          ),
-                        ),
+                      ),
+                      body:
+                          asyncSnapshot.connectionState == ConnectionState.done
+                          ? child
+                          : null,
+                    );
+                  },
                 );
               },
               routes: [

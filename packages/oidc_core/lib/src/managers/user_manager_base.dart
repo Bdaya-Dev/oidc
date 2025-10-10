@@ -1535,6 +1535,9 @@ abstract class OidcUserManagerBase {
   /// true if [init] has been called with no exceptions.
   bool get didInit => initMemoizer.hasRun;
 
+  /// A future that completes when [init] completes.
+  Future<void> get initFuture => initMemoizer.future;
+
   @protected
   AsyncMemoizer<void> initMemoizer = AsyncMemoizer();
 
@@ -1551,8 +1554,9 @@ abstract class OidcUserManagerBase {
 
   /// Initializes the user manager, this also gets the [discoveryDocument] if it
   /// wasn't provided.
-  Future<void> init() async {
-    await initMemoizer.runOnce(() async {
+  Future<void> init() {
+    return initMemoizer.runOnce(() async {
+      await Future.delayed(const Duration(seconds: 5));
       await store.init();
       await ensureDiscoveryDocument();
       final jwksUri = discoveryDocument.jwksUri;
