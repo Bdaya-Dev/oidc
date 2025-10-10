@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import 'package:async/async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
@@ -69,8 +70,11 @@ class OidcDefaultStore implements OidcStore {
       webSessionManagementLocation;
 
   /// true if [init] has been called with no exceptions.
-  bool get didInit => _hasInit;
-  bool _hasInit = false;
+  bool get didInit => initMemoizer.hasRun;
+
+  /// Memoizer for the initialization process.
+  @protected
+  AsyncMemoizer<void> initMemoizer = AsyncMemoizer<void>();
 
   String _getKey(OidcStoreNamespace namespace, String key, String? managerId) {
     return [storagePrefix, managerId, namespace.value, key].nonNulls.join('.');
@@ -84,15 +88,9 @@ class OidcDefaultStore implements OidcStore {
 
   @override
   Future<void> init() async {
-    if (_hasInit) return;
-    try {
-      _hasInit = true;
+    await initMemoizer.runOnce(() async {
       __sharedPreferences ??= await SharedPreferences.getInstance();
-    } catch (e) {
-      // coverage:ignore-line
-      _hasInit = false;
-      rethrow;
-    }
+    });
   }
 
   Future<void> _registerKeyForNamespace(

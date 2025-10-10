@@ -1,25 +1,43 @@
-plugins {
-    id "com.android.library"
-    id "kotlin-android"
-}
-
 group 'com.bdayadev.oidc'
 version '1.0-SNAPSHOT'
 
-allprojects {
+buildscript {
+    ext.kotlin_version = '2.2.10'
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.12.1'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+rootProject.allprojects {
     repositories {
         google()
         mavenCentral()
     }
 }
 
-android {    
+allprojects {
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile) {
+            options.compilerArgs << "-Xlint:unchecked" << "-Xlint:deprecation"
+        }
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+android {
     // Conditional for compatibility with AGP <4.2.
     if (project.android.hasProperty("namespace")) {
         namespace 'com.bdayadev.oidc'
     }
     
-    compileSdk 34
+    compileSdk flutter.compileSdkVersion
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -32,11 +50,11 @@ android {
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
-        test.java.srcDirs += 'src/test/kotlin'
     }
 
     defaultConfig {
-        minSdkVersion 19
+        minSdkVersion 21
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     dependencies {
@@ -45,13 +63,14 @@ android {
     }
 
     testOptions {
-      unitTests.all {
-        useJUnitPlatform()
-        testLogging {
-          events "passed", "skipped", "failed", "standardOut", "standardError"
-          outputs.upToDateWhen {false}
-          showStandardStreams = true
+        unitTests.includeAndroidResources = true
+        unitTests.returnDefaultValues = true
+        unitTests.all {
+            testLogging {
+                events "passed", "skipped", "failed", "standardOut", "standardError"
+                outputs.upToDateWhen {false}
+                showStandardStreams = true
+            }
         }
-      }
     }
 }

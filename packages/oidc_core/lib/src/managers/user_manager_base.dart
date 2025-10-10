@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+
+import 'package:async/async.dart';
 import 'package:http/http.dart' as http;
 import 'package:jose_plus/jose.dart';
 import 'package:logging/logging.dart';
@@ -98,7 +100,7 @@ abstract class OidcUserManagerBase {
 
   @protected
   void ensureInit() {
-    if (!hasInit) {
+    if (!didInit) {
       logAndThrow(
         "discoveryDocument hasn't been fetched yet, "
         'please call init() first.',
@@ -970,12 +972,12 @@ abstract class OidcUserManagerBase {
           switch (event) {
             case OidcValidMonitorSessionResult(changed: final changed):
               if (changed) {
-                sessionSub?.cancel();
-                reAuthorizeUser();
+                unawaited(sessionSub?.cancel());
+                unawaited(reAuthorizeUser());
               }
             case OidcErrorMonitorSessionResult():
               if (settings.sessionManagementSettings.stopIfErrorReceived) {
-                sessionSub?.cancel();
+                unawaited(sessionSub?.cancel());
               }
             case OidcUnknownMonitorSessionResult():
           }
@@ -1531,9 +1533,13 @@ abstract class OidcUserManagerBase {
   }
 
   /// true if [init] has been called with no exceptions.
-  bool get didInit => hasInit;
+  bool get didInit => initMemoizer.hasRun;
+
+  /// A future that completes when [init] completes.
+  Future<void> get initFuture => initMemoizer.future;
+
   @protected
-  bool hasInit = false;
+  AsyncMemoizer<void> initMemoizer = AsyncMemoizer();
 
   @protected
   final toDispose = <StreamSubscription<dynamic>>[];
@@ -1548,12 +1554,8 @@ abstract class OidcUserManagerBase {
 
   /// Initializes the user manager, this also gets the [discoveryDocument] if it
   /// wasn't provided.
-  Future<void> init() async {
-    if (hasInit) {
-      return;
-    }
-    try {
-      hasInit = true;
+  Future<void> init() {
+    return initMemoizer.runOnce(() async {
       await store.init();
       await ensureDiscoveryDocument();
       final jwksUri = discoveryDocument.jwksUri;
@@ -1589,10 +1591,7 @@ abstract class OidcUserManagerBase {
         ..add(userSubject.listen(listenToUserSessionIfSupported))
         ..add(tokenEvents.expiring.listen(handleTokenExpiring))
         ..add(tokenEvents.expired.listen(handleTokenExpired));
-    } catch (e) {
-      hasInit = false;
-      rethrow;
-    }
+    });
   }
 
   /// Disposes the resources used by this class.
