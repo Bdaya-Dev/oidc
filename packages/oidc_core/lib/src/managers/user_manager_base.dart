@@ -1556,7 +1556,6 @@ abstract class OidcUserManagerBase {
   /// wasn't provided.
   Future<void> init() {
     return initMemoizer.runOnce(() async {
-      await Future.delayed(const Duration(seconds: 5));
       await store.init();
       await ensureDiscoveryDocument();
       final jwksUri = discoveryDocument.jwksUri;
