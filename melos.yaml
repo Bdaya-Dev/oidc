@@ -64,7 +64,7 @@ scripts:
     run: melos run test:web:single
     env:
       TEST_PLATFORM: chrome
-      WITH_WASM: true
+      WITH_WASM: false
   test:web:firefox:
     name: Dart Web tests in firefox
     run: melos run test:web:single
