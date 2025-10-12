@@ -89,6 +89,7 @@ class OidcDefaultStore implements OidcStore {
   @override
   Future<void> init() async {
     await initMemoizer.runOnce(() async {
+      html.initWeb();
       __sharedPreferences ??= await SharedPreferences.getInstance();
     });
   }

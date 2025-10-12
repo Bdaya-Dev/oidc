@@ -77,11 +77,11 @@ final duendeManager = OidcUserManager.lazy(
     ),
     uiLocales: ['ar'],
     refreshBefore: (token) {
-      return const Duration(seconds: 1);
+      return const Duration(seconds: 5);
     },
     strictJwtVerification: true,
     // set to true to enable offline auth
-    supportOfflineAuth: false,
+    supportOfflineAuth: true,
     // scopes supported by the provider and needed by the client.
     scope: ['openid', 'profile', 'email', 'offline_access'],
     postLogoutRedirectUri: kIsWeb

@@ -8,3 +8,4 @@ export 'models/_exports.dart';
 export 'pkce.dart';
 export 'state_store.dart';
 export 'utils.dart';
+export 'utils/offline_auth_error_handler.dart';

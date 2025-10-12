@@ -8,6 +8,25 @@ Duration? defaultRefreshBefore(OidcToken token) {
   return const Duration(minutes: 1);
 }
 
+/// The callback used to determine the retry delay for offline mode refresh attempts.
+typedef OidcOfflineRefreshRetryDelayCallback =
+    Duration Function(
+      int consecutiveFailures,
+    );
+
+/// Default threshold for emitting repeat refresh failure warnings.
+
+/// The default retry delay function with exponential backoff.
+/// Returns delays of: 30s, 1m, 2m, 4m, 5m (capped at 5 minutes).
+Duration defaultOfflineRefreshRetryDelay(int consecutiveFailures) {
+  // Exponential backoff: 30s, 1m, 2m, 4m, 5m (capped)
+  final baseDelay = const Duration(seconds: 30);
+  final exponentialDelay = baseDelay * (1 << (consecutiveFailures - 1));
+  const maxDelay = Duration(minutes: 5);
+
+  return exponentialDelay > maxDelay ? maxDelay : exponentialDelay;
+}
+
 ///
 class OidcUserManagerSettings {
   ///
@@ -35,6 +54,8 @@ class OidcUserManagerSettings {
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
     this.supportOfflineAuth = false,
+    this.offlineRefreshRetryDelay = defaultOfflineRefreshRetryDelay,
+    this.offlineRepeatFailureWarningThreshold = 3,
     this.hooks,
     this.extraRevocationParameters,
     this.extraRevocationHeaders,
@@ -58,6 +79,26 @@ class OidcUserManagerSettings {
   ///
   /// This parameter is disabled by default due to security concerns.
   final bool supportOfflineAuth;
+
+  /// The retry delay calculation for offline mode refresh attempts.
+  ///
+  /// This callback receives the number of consecutive refresh failures and
+  /// returns the duration to wait before the next retry attempt.
+  ///
+  /// The default implementation uses exponential backoff:
+  /// - 1st failure: 30 seconds
+  /// - 2nd failure: 1 minute
+  /// - 3rd failure: 2 minutes
+  /// - 4th failure: 4 minutes
+  /// - 5th+ failure: 5 minutes (capped)
+  ///
+  /// This helps reduce battery usage and server load during extended outages.
+  final OidcOfflineRefreshRetryDelayCallback offlineRefreshRetryDelay;
+
+  /// The number of consecutive refresh failures before emitting a warning.
+  ///
+  /// Set to `0` or a negative value to disable repeat failure warnings.
+  final int offlineRepeatFailureWarningThreshold;
 
   /// see [OidcAuthorizeRequest.redirectUri].
   final Uri redirectUri;

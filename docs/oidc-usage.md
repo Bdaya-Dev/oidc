@@ -115,6 +115,9 @@ settings to control the behavior of the instance.
         Enabling offline auth can be a security risk, as it allows the app to keep tokens that are no longer valid.
         And it may open up unexpected attack vectors.
 
+    !!! Tip
+        For detailed information about offline authentication, including security best practices, error handling, and implementation examples, see the [Offline Authentication Guide](oidc-offline-auth.md).
+
 - `bool strictJwtVerification = false`: whether JWTs are strictly verified.
 - `Uri redirectUri`: the redirect uri that was configured with the provider.
 - `Uri? postLogoutRedirectUri`: the post logout redirect uri that was configured with the provider.

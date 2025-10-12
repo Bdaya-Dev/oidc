@@ -40,12 +40,10 @@ class OidcToken {
     creationTime ??= clock.now().toUtc();
     return OidcToken.fromJson({
       ...response.src,
-      if (overrideExpiresIn != null)
-        OidcConstants_AuthParameters.expiresIn: overrideExpiresIn.inSeconds,
+      OidcConstants_AuthParameters.expiresIn: ?overrideExpiresIn?.inSeconds,
       OidcConstants_Store.expiresInReferenceDate: creationTime
           .toIso8601String(),
-      if (sessionState != null)
-        OidcConstants_AuthParameters.sessionState: sessionState,
+      OidcConstants_AuthParameters.sessionState: ?sessionState,
     });
   }
 

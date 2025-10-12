@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:async/async.dart';
+import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
 import 'package:jose_plus/jose.dart';
 import 'package:logging/logging.dart';
@@ -68,6 +69,23 @@ abstract class OidcUserManagerBase {
 
   @protected
   final eventsController = StreamController<OidcEvent>.broadcast();
+
+  /// Tracks when offline mode was entered, null if not in offline mode
+  @protected
+  DateTime? offlineModeStartedAt;
+
+  /// Gets the last time the manager successfully communicated with the server.
+  /// This can be useful for displaying "Last synced" information in the UI.
+  /// Returns null if no successful server contact has been made yet.
+  @protected
+  DateTime? lastSuccessfulServerContact;
+
+  /// Counter for consecutive refresh failures
+  @protected
+  int consecutiveRefreshFailures = 0;
+
+  /// Returns true if the manager is currently in offline mode.
+  bool get isInOfflineMode => offlineModeStartedAt != null;
 
   @protected
   Logger get logger => _logger;
@@ -667,6 +685,7 @@ abstract class OidcUserManagerBase {
             originalUri: originalUri,
             options: getSerializableOptions(options),
             data: extraStateData,
+            managerId: id,
           );
     if (stateData != null) {
       await store.setStateData(
@@ -989,6 +1008,76 @@ abstract class OidcUserManagerBase {
     getExpiringNotificationTime: settings.refreshBefore,
   );
 
+  /// Records a successful contact with the authorization server and optionally
+  /// exits offline mode when connectivity is restored.
+  @protected
+  void recordSuccessfulServerContact({
+    OidcToken? newToken,
+    bool exitOffline = true,
+  }) {
+    lastSuccessfulServerContact = clock.now();
+    consecutiveRefreshFailures = 0;
+    if (exitOffline && isInOfflineMode) {
+      exitOfflineMode(
+        networkRestored: true,
+        newToken: newToken,
+      );
+    }
+  }
+
+  /// Centralized handler for transitioning into offline mode when recoverable
+  /// network issues occur during token operations.
+  @protected
+  bool handleOfflineEligibleFailure({
+    required Object error,
+    required OidcToken? fallbackToken,
+    bool scheduleRetry = false,
+    void Function(Duration retryDelay)? onRetryScheduled,
+    bool emitRepeatFailureWarning = false,
+  }) {
+    if (!settings.supportOfflineAuth) {
+      return false;
+    }
+
+    final errorType = OidcOfflineAuthErrorHandler.categorizeError(error);
+    final canContinue = OidcOfflineAuthErrorHandler.shouldContinueInOfflineMode(
+      error: errorType,
+      supportOfflineAuth: settings.supportOfflineAuth,
+    );
+    if (!canContinue) {
+      return false;
+    }
+
+    consecutiveRefreshFailures++;
+
+    enterOfflineMode(
+      reason: OidcOfflineAuthErrorHandler.getOfflineModeReason(errorType),
+      currentToken: fallbackToken,
+      error: error,
+    );
+
+    if (emitRepeatFailureWarning) {
+      final threshold = settings.offlineRepeatFailureWarningThreshold;
+      if (threshold > 0 && consecutiveRefreshFailures >= threshold) {
+        emitOfflineAuthWarning(
+          warningType: OfflineAuthWarningType.repeatRefreshFailure,
+          message:
+              'Token refresh has failed $consecutiveRefreshFailures consecutive times',
+        );
+      }
+    }
+
+    if (scheduleRetry && onRetryScheduled != null) {
+      final retryDelay = calculateRetryDelay();
+      logger.info(
+        'Automatic token refresh failed (offline mode), will retry in $retryDelay',
+      );
+      onRetryScheduled(retryDelay);
+    }
+
+    return true;
+  }
+
   /// Refreshes the token manually.
   ///
   /// If token can't be refreshed `null` will be returned.
@@ -1023,44 +1112,64 @@ abstract class OidcUserManagerBase {
       return null;
     }
 
-    final tokenResponse = await (settings.hooks?.token).execute(
-      request: OidcTokenHookRequest(
-        metadata: discoveryDocument,
-        tokenEndpoint: discoveryDocument.tokenEndpoint!,
-        request: OidcTokenRequest.refreshToken(
-          refreshToken: refreshToken,
-          clientId: clientCredentials.clientId,
-          clientSecret: clientCredentials.clientSecret,
-          extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
-          scope: settings.scope,
+    try {
+      final tokenResponse = await (settings.hooks?.token).execute(
+        request: OidcTokenHookRequest(
+          metadata: discoveryDocument,
+          tokenEndpoint: discoveryDocument.tokenEndpoint!,
+          request: OidcTokenRequest.refreshToken(
+            refreshToken: refreshToken,
+            clientId: clientCredentials.clientId,
+            clientSecret: clientCredentials.clientSecret,
+            extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
+            scope: settings.scope,
+          ),
+          credentials: clientCredentials,
+          headers: settings.extraTokenHeaders,
+          client: httpClient,
+          options: settings.options,
         ),
-        credentials: clientCredentials,
-        headers: settings.extraTokenHeaders,
-        client: httpClient,
-        options: settings.options,
-      ),
-      defaultExecution: (tokenHookRequest) async {
-        return OidcEndpoints.token(
-          tokenEndpoint: tokenHookRequest.tokenEndpoint,
-          credentials: tokenHookRequest.credentials,
-          client: tokenHookRequest.client,
-          headers: tokenHookRequest.headers,
-          request: tokenHookRequest.request,
-        );
-      },
-    );
-
-    return createUserFromToken(
-      token: OidcToken.fromResponse(
+        defaultExecution: (tokenHookRequest) async {
+          return OidcEndpoints.token(
+            tokenEndpoint: tokenHookRequest.tokenEndpoint,
+            credentials: tokenHookRequest.credentials,
+            client: tokenHookRequest.client,
+            headers: tokenHookRequest.headers,
+            request: tokenHookRequest.request,
+          );
+        },
+      );
+      final token = OidcToken.fromResponse(
         tokenResponse,
         overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
         sessionState: currentUser?.token.sessionState,
-      ),
-      nonce: null,
-      userInfo: null,
-      attributes: null,
-      metadata: discoveryDocument,
-    );
+      );
+
+      // Successful refresh - update last server contact and exit offline mode
+      recordSuccessfulServerContact(newToken: token);
+      return await createUserFromToken(
+        token: token,
+        nonce: null,
+        userInfo: null,
+        attributes: null,
+        metadata: discoveryDocument,
+      );
+    } catch (e) {
+      // Handle errors based on offline auth settings
+      final handledOffline = handleOfflineEligibleFailure(
+        error: e,
+        fallbackToken: currentUser?.token,
+        emitRepeatFailureWarning: true,
+      );
+
+      if (handledOffline) {
+        // Return the same user - callers will continue with cached state
+        return currentUser;
+      }
+
+      // Non-network error or offline auth not supported - rethrow
+      rethrow;
+    }
   }
 
   @protected
@@ -1136,11 +1245,110 @@ abstract class OidcUserManagerBase {
         userInfo: null,
         metadata: discoveryDocument,
       );
+
+      // Successful refresh - update last server contact and exit offline mode
+      recordSuccessfulServerContact(newToken: newUser?.token);
     } catch (e) {
-      //swallow errors on fail, but unload the event manager.
-      tokenEvents.unload();
+      final handledOffline = handleOfflineEligibleFailure(
+        error: e,
+        fallbackToken: event,
+        scheduleRetry: true,
+        onRetryScheduled: (retryDelay) {
+          Timer(retryDelay, () {
+            if (currentUser?.token == event) {
+              tokenEvents.load(event);
+            }
+          });
+        },
+      );
+
+      if (!handledOffline) {
+        // Non-network error or offline auth not supported - unload event manager
+        logger.warning(
+          'Token refresh failed, unloading token events manager',
+          e,
+        );
+        tokenEvents.unload();
+      } else {
+        return;
+      }
     }
     logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
+  }
+
+  /// Calculates retry delay using the configured callback
+  @protected
+  Duration calculateRetryDelay() {
+    return settings.offlineRefreshRetryDelay(consecutiveRefreshFailures);
+  }
+
+  /// Enters offline mode and emits appropriate events
+  @protected
+  void enterOfflineMode({
+    required OfflineModeReason reason,
+    OidcToken? currentToken,
+    Object? error,
+  }) {
+    if (offlineModeStartedAt == null) {
+      offlineModeStartedAt = clock.now();
+      eventsController.add(
+        OidcOfflineModeEnteredEvent.now(
+          reason: reason,
+          currentToken: currentToken,
+          lastSuccessfulServerContact: lastSuccessfulServerContact,
+          error: error,
+        ),
+      );
+      logger.info('Entered offline mode: $reason');
+    }
+  }
+
+  /// Exits offline mode and emits appropriate events
+  @protected
+  void exitOfflineMode({
+    required bool networkRestored,
+    required OidcToken? newToken,
+  }) {
+    if (offlineModeStartedAt != null) {
+      offlineModeStartedAt = null;
+      consecutiveRefreshFailures = 0;
+      eventsController.add(
+        OidcOfflineModeExitedEvent.now(
+          networkRestored: networkRestored,
+          newToken: newToken,
+          lastSuccessfulServerContact: lastSuccessfulServerContact,
+        ),
+      );
+      logger.info('Exited offline mode');
+    }
+  }
+
+  /// Emits a warning event for offline auth security concerns
+  @protected
+  void emitOfflineAuthWarning({
+    required OfflineAuthWarningType warningType,
+    required String message,
+    Duration? tokenExpiredSince,
+  }) {
+    eventsController.add(
+      OidcOfflineAuthWarningEvent.now(
+        warningType: warningType,
+        message: message,
+        tokenExpiredSince: tokenExpiredSince,
+      ),
+    );
+  }
+
+  /// Checks if the offline duration exceeds safe limits
+  @protected
+  bool isOfflineDurationExcessive() {
+    if (offlineModeStartedAt == null) return false;
+
+    final offlineDuration = clock.now().difference(offlineModeStartedAt!);
+    // Default to 7 days as maximum offline duration
+    const maxOfflineDuration = Duration(days: 7);
+
+    return offlineDuration > maxOfflineDuration;
   }
 
   @protected
@@ -1151,6 +1359,27 @@ abstract class OidcUserManagerBase {
 
     if (!settings.supportOfflineAuth) {
       forgetUser();
+    } else {
+      // Only emit warning if we're actually in offline mode
+      // (not just because offline auth is enabled)
+      if (offlineModeStartedAt != null) {
+        final user = currentUser;
+        Duration? tokenExpiredSince;
+        if (user != null) {
+          final expiry = user.parsedIdToken.claims.expiry;
+          if (expiry != null) {
+            tokenExpiredSince = clock.now().difference(expiry);
+          }
+        }
+
+        emitOfflineAuthWarning(
+          warningType: OfflineAuthWarningType.usingExpiredToken,
+          message: 'Using expired ID token in offline mode',
+          tokenExpiredSince: tokenExpiredSince,
+        );
+      }
+      // If not in offline mode, the token will be automatically refreshed
+      // by handleTokenExpiring, so no warning is needed
     }
   }
 
@@ -1189,6 +1418,7 @@ abstract class OidcUserManagerBase {
     var actualUser = user;
     final errors = validateUser(user: actualUser, metadata: metadata);
     OidcUserInfoResponse? userInfoResp;
+    var userInfoFailed = false;
 
     if (errors.isEmpty) {
       final userInfoEP = metadata.userinfoEndpoint;
@@ -1216,11 +1446,46 @@ abstract class OidcUserManagerBase {
               const OidcException("UserInfo didn't return the same subject."),
             );
           }
+
+          // Successfully contacted server - update last contact time
+          recordSuccessfulServerContact(
+            newToken: actualUser.token,
+            exitOffline: false,
+          );
         } catch (e, st) {
           logger.severe('UserInfo endpoint threw an exception!', e, st);
+          userInfoFailed = true;
+
+          // Check if this is a network/server error that should enter offline mode
+          if (settings.supportOfflineAuth) {
+            final errorType = OidcOfflineAuthErrorHandler.categorizeError(e);
+            if (errorType == OfflineAuthErrorType.networkUnavailable ||
+                errorType == OfflineAuthErrorType.networkTimeout) {
+              enterOfflineMode(
+                reason: OfflineModeReason.userInfoUnavailable,
+                currentToken: actualUser.token,
+                error: e,
+              );
+              emitOfflineAuthWarning(
+                warningType: OfflineAuthWarningType.staleUserInfo,
+                message: 'Using cached user information due to network error',
+              );
+            } else if (errorType == OfflineAuthErrorType.serverError) {
+              enterOfflineMode(
+                reason: OfflineModeReason.serverUnavailable,
+                currentToken: actualUser.token,
+                error: e,
+              );
+            }
+          }
         }
       }
     }
+
+    // Check if we're using expired tokens in offline mode
+    final hasExpiredTokenError = errors.any(
+      (e) => e is JoseException && e.message.startsWith('JWT expired.'),
+    );
 
     if (errors.isEmpty ||
         //keep going if the only error is that the token expired,
@@ -1229,6 +1494,30 @@ abstract class OidcUserManagerBase {
             errors.every(
               (e) => e is JoseException && e.message.startsWith('JWT expired.'),
             ))) {
+      // Check if offline duration is excessive
+      if (settings.supportOfflineAuth && isOfflineDurationExcessive()) {
+        emitOfflineAuthWarning(
+          warningType: OfflineAuthWarningType.extendedOfflineDuration,
+          message: 'User has been in offline mode for an extended period',
+        );
+      }
+
+      // If validation passed with no errors and we were in offline mode, exit it
+      if (errors.isEmpty && offlineModeStartedAt != null && !userInfoFailed) {
+        exitOfflineMode(
+          networkRestored: true,
+          newToken: actualUser.token,
+        );
+      }
+
+      // Emit warning if token validation was skipped
+      if (hasExpiredTokenError && settings.supportOfflineAuth) {
+        emitOfflineAuthWarning(
+          warningType: OfflineAuthWarningType.tokenValidationSkipped,
+          message: 'Token validation skipped in offline mode',
+        );
+      }
+
       // apply userinfo if present
       if (userInfoResp != null) {
         actualUser = actualUser.withUserInfo(userInfoResp.src);
@@ -1417,14 +1706,23 @@ abstract class OidcUserManagerBase {
         if (token.refreshToken != null &&
             (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
           try {
-            loadedUser = await refreshToken(
+            final refreshedUser = await refreshToken(
               overrideRefreshToken: token.refreshToken,
             );
+            if (refreshedUser != null) {
+              loadedUser = refreshedUser;
+            }
           } catch (e) {
             // An app might go offline during token refresh, so we consult the
             // supportOfflineAuth setting to check whether this is an issue or
             // not.
-            if (!settings.supportOfflineAuth) {
+            final handledOffline = handleOfflineEligibleFailure(
+              error: e,
+              fallbackToken: token,
+              emitRepeatFailureWarning: true,
+            );
+
+            if (!handledOffline) {
               rethrow;
             }
           }

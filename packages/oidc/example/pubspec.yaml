@@ -23,6 +23,7 @@ dependencies:
   oidc_default_store: ^0.5.0
   rxdart: ^0.27.7
   simple_secure_storage: ^0.3.4
+  clock: ^1.1.2
 
 dev_dependencies:
   archive: ^4.0.7
