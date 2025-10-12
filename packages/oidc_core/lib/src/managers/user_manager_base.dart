@@ -71,17 +71,14 @@ abstract class OidcUserManagerBase {
   final eventsController = StreamController<OidcEvent>.broadcast();
 
   /// Tracks when offline mode was entered, null if not in offline mode
-  @protected
   DateTime? offlineModeStartedAt;
 
   /// Gets the last time the manager successfully communicated with the server.
   /// This can be useful for displaying "Last synced" information in the UI.
   /// Returns null if no successful server contact has been made yet.
-  @protected
   DateTime? lastSuccessfulServerContact;
 
   /// Counter for consecutive refresh failures
-  @protected
   int consecutiveRefreshFailures = 0;
 
   /// Returns true if the manager is currently in offline mode.
