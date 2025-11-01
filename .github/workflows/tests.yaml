@@ -373,7 +373,7 @@ jobs:
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Download unit test coverage
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: package-coverage
           path: coverage/downloaded/
@@ -384,7 +384,7 @@ jobs:
           rm -rf coverage/downloaded
           ls -lR coverage
       - name: Download integration coverages
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: packages/oidc/example/coverage/
           pattern: "*-integration-coverage"
