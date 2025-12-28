@@ -27,6 +27,9 @@ workspace:
 dev_dependencies:
   melos: ^7.1.1
 
+dependency_overrides:
+  matcher: 0.12.18
+
 
 melos:
   repository: https://github.com/Bdaya-Dev/oidc
