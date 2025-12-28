@@ -12,13 +12,22 @@ const _issuer = 'https://test.example.com';
 const _audience = 'test-client';
 const _testSubject = 'user-123';
 
+var _appStarted = false;
+
+Future<void> _ensureAppStarted(WidgetTester tester) async {
+  if (!_appStarted) {
+    example.main();
+    _appStarted = true;
+  }
+  await tester.pumpAndSettle();
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('Offline mode integration', () {
     testWidgets('enters offline mode after refresh failure', (tester) async {
-      example.main();
-      await tester.pumpAndSettle();
+      await _ensureAppStarted(tester);
 
       final tokenQueue = Queue<dynamic>()
         ..add(const SocketException('Network unreachable'));
@@ -48,8 +57,7 @@ void main() {
     });
 
     testWidgets('exits offline mode after subsequent success', (tester) async {
-      example.main();
-      await tester.pumpAndSettle();
+      await _ensureAppStarted(tester);
 
       final tokenQueue = Queue<dynamic>()
         ..add(const SocketException('Temporary failure'))
@@ -86,8 +94,7 @@ void main() {
     testWidgets('emits warning after repeated refresh failures', (
       tester,
     ) async {
-      example.main();
-      await tester.pumpAndSettle();
+      await _ensureAppStarted(tester);
 
       final tokenQueue = Queue<dynamic>()
         ..add(const SocketException('failure-1'))

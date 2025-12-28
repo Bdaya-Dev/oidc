@@ -33,6 +33,7 @@ jobs:
         sdk: [min, stable, beta]
     env:
       TEST_PRESET: all
+      CHROME_FLAGS: --no-sandbox --disable-dev-shm-usage --disable-gpu
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
@@ -41,6 +42,10 @@ jobs:
         with:
           channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
           flutter-version: ${{ matrix.sdk == 'min' && '3.35.4' || '' }}
+      - name: Install Xvfb (for web tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: "[Verify step] ✨ Format"
@@ -352,7 +357,7 @@ jobs:
         run: flutter precache -v
       - name: Integration Tests
         working-directory: packages/oidc/example
-        run: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d windows --coverage-path coverage/windows-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
+        run: flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d windows --coverage-path coverage/windows-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} -r expanded
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         shell: bash
