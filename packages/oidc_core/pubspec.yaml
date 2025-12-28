@@ -18,7 +18,7 @@ dependencies:
   nonce: ^1.2.0
   logging: ^1.2.0
   clock: ^1.1.1
-  copy_with_extension: ^10.0.0
+  copy_with_extension: ^9.0.0
   rxdart: ">=0.27.7 <2.0.0"
   async: ^2.13.0
 
@@ -31,4 +31,4 @@ dev_dependencies:
   collection: ^1.18.0
   fake_async: ^1.3.1
   oidc_loopback_listener: ^0.3.0
-  copy_with_extension_gen: ^10.0.0
+  copy_with_extension_gen: ^9.0.0
