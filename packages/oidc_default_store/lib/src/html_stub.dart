@@ -1,3 +1,5 @@
+void initWeb() {}
+
 class Storage {
   final Map<String, String> _storage = <String, String>{};
 

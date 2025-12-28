@@ -6,11 +6,13 @@ class OidcPreLogoutEvent extends OidcEvent {
   const OidcPreLogoutEvent({
     required this.currentUser,
     required super.at,
+    super.additionalInfo,
   });
 
   ///
   OidcPreLogoutEvent.now({
     required this.currentUser,
+    super.additionalInfo,
   }) : super.now();
 
   /// The current user that will get logged out.

@@ -153,12 +153,13 @@ abstract class _$OidcProviderMetadataCWProxy {
     List<String>? userinfoEncryptionEncValuesSupported,
   );
 
-  /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `OidcProviderMetadata(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
+  /// Creates a new instance with the provided field values.
+  /// Passing `null` to a nullable field nullifies it, while `null` for a non-nullable field is ignored. To update a single field use `OidcProviderMetadata(...).copyWith.fieldName(value)`.
   ///
-  /// Usage
+  /// Example:
   /// ```dart
   /// OidcProviderMetadata(...).copyWith(id: 12, name: "My name")
-  /// ````
+  /// ```
   OidcProviderMetadata call({
     Map<String, dynamic> src,
     Uri? issuer,
@@ -210,7 +211,8 @@ abstract class _$OidcProviderMetadataCWProxy {
   });
 }
 
-/// Proxy class for `copyWith` functionality. This is a callable class and can be used as follows: `instanceOfOidcProviderMetadata.copyWith(...)`. Additionally contains functions for specific fields e.g. `instanceOfOidcProviderMetadata.copyWith.fieldName(...)`
+/// Callable proxy for `copyWith` functionality.
+/// Use as `instanceOfOidcProviderMetadata.copyWith(...)` or call `instanceOfOidcProviderMetadata.copyWith.fieldName(value)` for a single field.
 class _$OidcProviderMetadataCWProxyImpl
     implements _$OidcProviderMetadataCWProxy {
   const _$OidcProviderMetadataCWProxyImpl(this._value);
@@ -218,73 +220,73 @@ class _$OidcProviderMetadataCWProxyImpl
   final OidcProviderMetadata _value;
 
   @override
-  OidcProviderMetadata src(Map<String, dynamic> src) => this(src: src);
+  OidcProviderMetadata src(Map<String, dynamic> src) => call(src: src);
 
   @override
-  OidcProviderMetadata issuer(Uri? issuer) => this(issuer: issuer);
+  OidcProviderMetadata issuer(Uri? issuer) => call(issuer: issuer);
 
   @override
   OidcProviderMetadata authorizationEndpoint(Uri? authorizationEndpoint) =>
-      this(authorizationEndpoint: authorizationEndpoint);
+      call(authorizationEndpoint: authorizationEndpoint);
 
   @override
-  OidcProviderMetadata jwksUri(Uri? jwksUri) => this(jwksUri: jwksUri);
+  OidcProviderMetadata jwksUri(Uri? jwksUri) => call(jwksUri: jwksUri);
 
   @override
   OidcProviderMetadata responseTypesSupported(
     List<String>? responseTypesSupported,
-  ) => this(responseTypesSupported: responseTypesSupported);
+  ) => call(responseTypesSupported: responseTypesSupported);
 
   @override
   OidcProviderMetadata subjectTypesSupported(
     List<String>? subjectTypesSupported,
-  ) => this(subjectTypesSupported: subjectTypesSupported);
+  ) => call(subjectTypesSupported: subjectTypesSupported);
 
   @override
   OidcProviderMetadata idTokenSigningAlgValuesSupported(
     List<String>? idTokenSigningAlgValuesSupported,
-  ) => this(idTokenSigningAlgValuesSupported: idTokenSigningAlgValuesSupported);
+  ) => call(idTokenSigningAlgValuesSupported: idTokenSigningAlgValuesSupported);
 
   @override
   OidcProviderMetadata tokenEndpoint(Uri? tokenEndpoint) =>
-      this(tokenEndpoint: tokenEndpoint);
+      call(tokenEndpoint: tokenEndpoint);
 
   @override
   OidcProviderMetadata userinfoEndpoint(Uri? userinfoEndpoint) =>
-      this(userinfoEndpoint: userinfoEndpoint);
+      call(userinfoEndpoint: userinfoEndpoint);
 
   @override
   OidcProviderMetadata registrationEndpoint(Uri? registrationEndpoint) =>
-      this(registrationEndpoint: registrationEndpoint);
+      call(registrationEndpoint: registrationEndpoint);
 
   @override
   OidcProviderMetadata scopesSupported(List<String>? scopesSupported) =>
-      this(scopesSupported: scopesSupported);
+      call(scopesSupported: scopesSupported);
 
   @override
   OidcProviderMetadata responseModesSupported(
     List<String>? responseModesSupported,
-  ) => this(responseModesSupported: responseModesSupported);
+  ) => call(responseModesSupported: responseModesSupported);
 
   @override
   OidcProviderMetadata grantTypesSupported(List<String>? grantTypesSupported) =>
-      this(grantTypesSupported: grantTypesSupported);
+      call(grantTypesSupported: grantTypesSupported);
 
   @override
   OidcProviderMetadata acrValuesSupported(List<String>? acrValuesSupported) =>
-      this(acrValuesSupported: acrValuesSupported);
+      call(acrValuesSupported: acrValuesSupported);
 
   @override
   OidcProviderMetadata idTokenEncryptionAlgValuesSupported(
     List<String>? idTokenEncryptionAlgValuesSupported,
-  ) => this(
+  ) => call(
     idTokenEncryptionAlgValuesSupported: idTokenEncryptionAlgValuesSupported,
   );
 
   @override
   OidcProviderMetadata requestObjectSigningAlgValuesSupported(
     List<String>? requestObjectSigningAlgValuesSupported,
-  ) => this(
+  ) => call(
     requestObjectSigningAlgValuesSupported:
         requestObjectSigningAlgValuesSupported,
   );
@@ -292,7 +294,7 @@ class _$OidcProviderMetadataCWProxyImpl
   @override
   OidcProviderMetadata requestObjectEncryptionAlgValuesSupported(
     List<String>? requestObjectEncryptionAlgValuesSupported,
-  ) => this(
+  ) => call(
     requestObjectEncryptionAlgValuesSupported:
         requestObjectEncryptionAlgValuesSupported,
   );
@@ -300,7 +302,7 @@ class _$OidcProviderMetadataCWProxyImpl
   @override
   OidcProviderMetadata requestObjectEncryptionEncValuesSupported(
     List<String>? requestObjectEncryptionEncValuesSupported,
-  ) => this(
+  ) => call(
     requestObjectEncryptionEncValuesSupported:
         requestObjectEncryptionEncValuesSupported,
   );
@@ -308,7 +310,7 @@ class _$OidcProviderMetadataCWProxyImpl
   @override
   OidcProviderMetadata tokenEndpointAuthSigningAlgValuesSupported(
     List<String>? tokenEndpointAuthSigningAlgValuesSupported,
-  ) => this(
+  ) => call(
     tokenEndpointAuthSigningAlgValuesSupported:
         tokenEndpointAuthSigningAlgValuesSupported,
   );
@@ -316,93 +318,93 @@ class _$OidcProviderMetadataCWProxyImpl
   @override
   OidcProviderMetadata tokenEndpointAuthMethodsSupported(
     List<String>? tokenEndpointAuthMethodsSupported,
-  ) => this(
+  ) => call(
     tokenEndpointAuthMethodsSupported: tokenEndpointAuthMethodsSupported,
   );
 
   @override
   OidcProviderMetadata displayValuesSupported(
     List<String>? displayValuesSupported,
-  ) => this(displayValuesSupported: displayValuesSupported);
+  ) => call(displayValuesSupported: displayValuesSupported);
 
   @override
   OidcProviderMetadata claimTypesSupported(List<String>? claimTypesSupported) =>
-      this(claimTypesSupported: claimTypesSupported);
+      call(claimTypesSupported: claimTypesSupported);
 
   @override
   OidcProviderMetadata claimsSupported(List<String>? claimsSupported) =>
-      this(claimsSupported: claimsSupported);
+      call(claimsSupported: claimsSupported);
 
   @override
   OidcProviderMetadata serviceDocumentation(Uri? serviceDocumentation) =>
-      this(serviceDocumentation: serviceDocumentation);
+      call(serviceDocumentation: serviceDocumentation);
 
   @override
   OidcProviderMetadata claimsLocalesSupported(
     List<String>? claimsLocalesSupported,
-  ) => this(claimsLocalesSupported: claimsLocalesSupported);
+  ) => call(claimsLocalesSupported: claimsLocalesSupported);
 
   @override
   OidcProviderMetadata uiLocalesSupported(List<String>? uiLocalesSupported) =>
-      this(uiLocalesSupported: uiLocalesSupported);
+      call(uiLocalesSupported: uiLocalesSupported);
 
   @override
   OidcProviderMetadata pushedAuthorizationRequestEndpoint(
     Uri? pushedAuthorizationRequestEndpoint,
-  ) => this(
+  ) => call(
     pushedAuthorizationRequestEndpoint: pushedAuthorizationRequestEndpoint,
   );
 
   @override
   OidcProviderMetadata claimsParameterSupported(
     bool? claimsParameterSupported,
-  ) => this(claimsParameterSupported: claimsParameterSupported);
+  ) => call(claimsParameterSupported: claimsParameterSupported);
 
   @override
   OidcProviderMetadata requestParameterSupported(
     bool? requestParameterSupported,
-  ) => this(requestParameterSupported: requestParameterSupported);
+  ) => call(requestParameterSupported: requestParameterSupported);
 
   @override
   OidcProviderMetadata requireRequestUriRegistration(
     bool? requireRequestUriRegistration,
-  ) => this(requireRequestUriRegistration: requireRequestUriRegistration);
+  ) => call(requireRequestUriRegistration: requireRequestUriRegistration);
 
   @override
   OidcProviderMetadata requestUriParameterSupported(
     bool? requestUriParameterSupported,
-  ) => this(requestUriParameterSupported: requestUriParameterSupported);
+  ) => call(requestUriParameterSupported: requestUriParameterSupported);
 
   @override
   OidcProviderMetadata requirePushedAuthorizationRequests(
     bool? requirePushedAuthorizationRequests,
-  ) => this(
+  ) => call(
     requirePushedAuthorizationRequests: requirePushedAuthorizationRequests,
   );
 
   @override
   OidcProviderMetadata opPolicyUri(Uri? opPolicyUri) =>
-      this(opPolicyUri: opPolicyUri);
+      call(opPolicyUri: opPolicyUri);
 
   @override
-  OidcProviderMetadata opTosUri(Uri? opTosUri) => this(opTosUri: opTosUri);
+  OidcProviderMetadata opTosUri(Uri? opTosUri) => call(opTosUri: opTosUri);
 
   @override
   OidcProviderMetadata checkSessionIframe(Uri? checkSessionIframe) =>
-      this(checkSessionIframe: checkSessionIframe);
+      call(checkSessionIframe: checkSessionIframe);
 
   @override
   OidcProviderMetadata endSessionEndpoint(Uri? endSessionEndpoint) =>
-      this(endSessionEndpoint: endSessionEndpoint);
+      call(endSessionEndpoint: endSessionEndpoint);
 
   @override
   OidcProviderMetadata revocationEndpoint(Uri? revocationEndpoint) =>
-      this(revocationEndpoint: revocationEndpoint);
+      call(revocationEndpoint: revocationEndpoint);
 
   @override
   OidcProviderMetadata revocationEndpointAuthMethodsSupported(
     List<String>? revocationEndpointAuthMethodsSupported,
-  ) => this(
+  ) => call(
     revocationEndpointAuthMethodsSupported:
         revocationEndpointAuthMethodsSupported,
   );
@@ -410,19 +412,19 @@ class _$OidcProviderMetadataCWProxyImpl
   @override
   OidcProviderMetadata revocationEndpointAuthSigningAlgValuesSupported(
     List<String>? revocationEndpointAuthSigningAlgValuesSupported,
-  ) => this(
+  ) => call(
     revocationEndpointAuthSigningAlgValuesSupported:
         revocationEndpointAuthSigningAlgValuesSupported,
   );
 
   @override
   OidcProviderMetadata introspectionEndpoint(Uri? introspectionEndpoint) =>
-      this(introspectionEndpoint: introspectionEndpoint);
+      call(introspectionEndpoint: introspectionEndpoint);
 
   @override
   OidcProviderMetadata introspectionEndpointAuthMethodsSupported(
     List<String>? introspectionEndpointAuthMethodsSupported,
-  ) => this(
+  ) => call(
     introspectionEndpointAuthMethodsSupported:
         introspectionEndpointAuthMethodsSupported,
   );
@@ -430,7 +432,7 @@ class _$OidcProviderMetadataCWProxyImpl
   @override
   OidcProviderMetadata introspectionEndpointAuthSigningAlgValuesSupported(
     List<String>? introspectionEndpointAuthSigningAlgValuesSupported,
-  ) => this(
+  ) => call(
     introspectionEndpointAuthSigningAlgValuesSupported:
         introspectionEndpointAuthSigningAlgValuesSupported,
   );
@@ -438,43 +440,44 @@ class _$OidcProviderMetadataCWProxyImpl
   @override
   OidcProviderMetadata codeChallengeMethodsSupported(
     List<String>? codeChallengeMethodsSupported,
-  ) => this(codeChallengeMethodsSupported: codeChallengeMethodsSupported);
+  ) => call(codeChallengeMethodsSupported: codeChallengeMethodsSupported);
 
   @override
   OidcProviderMetadata idTokenEncryptionEncValuesSupported(
     List<String>? idTokenEncryptionEncValuesSupported,
-  ) => this(
+  ) => call(
     idTokenEncryptionEncValuesSupported: idTokenEncryptionEncValuesSupported,
   );
 
   @override
   OidcProviderMetadata userinfoSigningAlgValuesSupported(
     List<String>? userinfoSigningAlgValuesSupported,
-  ) => this(
+  ) => call(
     userinfoSigningAlgValuesSupported: userinfoSigningAlgValuesSupported,
   );
 
   @override
   OidcProviderMetadata userinfoEncryptionAlgValuesSupported(
     List<String>? userinfoEncryptionAlgValuesSupported,
-  ) => this(
+  ) => call(
     userinfoEncryptionAlgValuesSupported: userinfoEncryptionAlgValuesSupported,
   );
 
   @override
   OidcProviderMetadata userinfoEncryptionEncValuesSupported(
     List<String>? userinfoEncryptionEncValuesSupported,
-  ) => this(
+  ) => call(
     userinfoEncryptionEncValuesSupported: userinfoEncryptionEncValuesSupported,
   );
 
   @override
-  /// This function **does support** nullification of nullable fields. All `null` values passed to `non-nullable` fields will be ignored. You can also use `OidcProviderMetadata(...).copyWith.fieldName(...)` to override fields one at a time with nullification support.
+  /// Creates a new instance with the provided field values.
+  /// Passing `null` to a nullable field nullifies it, while `null` for a non-nullable field is ignored. To update a single field use `OidcProviderMetadata(...).copyWith.fieldName(value)`.
   ///
-  /// Usage
+  /// Example:
   /// ```dart
   /// OidcProviderMetadata(...).copyWith(id: 12, name: "My name")
-  /// ````
+  /// ```
   OidcProviderMetadata call({
     Object? src = const $CopyWithPlaceholder(),
     Object? issuer = const $CopyWithPlaceholder(),
@@ -533,7 +536,7 @@ class _$OidcProviderMetadataCWProxyImpl
     Object? userinfoEncryptionEncValuesSupported = const $CopyWithPlaceholder(),
   }) {
     return OidcProviderMetadata._(
-      src: src == const $CopyWithPlaceholder()
+      src: src == const $CopyWithPlaceholder() || src == null
           ? _value.src
           // ignore: cast_nullable_to_non_nullable
           : src as Map<String, dynamic>,
@@ -761,7 +764,8 @@ class _$OidcProviderMetadataCWProxyImpl
 }
 
 extension $OidcProviderMetadataCopyWith on OidcProviderMetadata {
-  /// Returns a callable class that can be used as follows: `instanceOfOidcProviderMetadata.copyWith(...)` or like so:`instanceOfOidcProviderMetadata.copyWith.fieldName(...)`.
+  /// Returns a callable class used to build a new instance with modified fields.
+  /// Example: `instanceOfOidcProviderMetadata.copyWith(...)` or `instanceOfOidcProviderMetadata.copyWith.fieldName(...)`.
   // ignore: library_private_types_in_public_api
   _$OidcProviderMetadataCWProxy get copyWith =>
       _$OidcProviderMetadataCWProxyImpl(this);

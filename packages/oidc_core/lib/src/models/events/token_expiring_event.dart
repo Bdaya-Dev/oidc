@@ -6,11 +6,13 @@ class OidcTokenExpiringEvent extends OidcEvent {
   const OidcTokenExpiringEvent({
     required this.currentToken,
     required super.at,
+    super.additionalInfo,
   });
 
   ///
   OidcTokenExpiringEvent.now({
     required this.currentToken,
+    super.additionalInfo,
   }) : super.now();
 
   /// The current token that is expiring.

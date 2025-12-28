@@ -9,38 +9,31 @@ part of 'req.dart';
 Map<String, dynamic> _$OidcAuthorizeRequestToJson(
   OidcAuthorizeRequest instance,
 ) => <String, dynamic>{
-  if (OidcInternalUtilities.joinSpaceDelimitedList(instance.scope)
-      case final value?)
-    'scope': value,
-  if (OidcInternalUtilities.joinSpaceDelimitedList(instance.responseType)
-      case final value?)
-    'response_type': value,
+  'scope': ?OidcInternalUtilities.joinSpaceDelimitedList(instance.scope),
+  'response_type': ?OidcInternalUtilities.joinSpaceDelimitedList(
+    instance.responseType,
+  ),
   'client_id': instance.clientId,
   'redirect_uri': instance.redirectUri.toString(),
-  if (instance.state case final value?) 'state': value,
-  if (instance.responseMode case final value?) 'response_mode': value,
-  if (instance.nonce case final value?) 'nonce': value,
-  if (instance.display case final value?) 'display': value,
-  if (OidcInternalUtilities.joinSpaceDelimitedList(instance.prompt)
-      case final value?)
-    'prompt': value,
-  if (_$JsonConverterToJson<int, Duration>(
-        instance.maxAge,
-        const OidcDurationSecondsConverter().toJson,
-      )
-      case final value?)
-    'max_age': value,
-  if (OidcInternalUtilities.joinSpaceDelimitedList(instance.uiLocales)
-      case final value?)
-    'ui_locales': value,
-  if (instance.idTokenHint case final value?) 'id_token_hint': value,
-  if (instance.loginHint case final value?) 'login_hint': value,
-  if (OidcInternalUtilities.joinSpaceDelimitedList(instance.acrValues)
-      case final value?)
-    'acr_values': value,
-  if (instance.codeChallenge case final value?) 'code_challenge': value,
-  if (instance.codeChallengeMethod case final value?)
-    'code_challenge_method': value,
+  'state': ?instance.state,
+  'response_mode': ?instance.responseMode,
+  'nonce': ?instance.nonce,
+  'display': ?instance.display,
+  'prompt': ?OidcInternalUtilities.joinSpaceDelimitedList(instance.prompt),
+  'max_age': ?_$JsonConverterToJson<int, Duration>(
+    instance.maxAge,
+    const OidcDurationSecondsConverter().toJson,
+  ),
+  'ui_locales': ?OidcInternalUtilities.joinSpaceDelimitedList(
+    instance.uiLocales,
+  ),
+  'id_token_hint': ?instance.idTokenHint,
+  'login_hint': ?instance.loginHint,
+  'acr_values': ?OidcInternalUtilities.joinSpaceDelimitedList(
+    instance.acrValues,
+  ),
+  'code_challenge': ?instance.codeChallenge,
+  'code_challenge_method': ?instance.codeChallengeMethod,
 };
 
 Json? _$JsonConverterToJson<Json, Value>(

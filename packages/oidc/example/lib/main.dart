@@ -1,4 +1,5 @@
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +27,14 @@ void main() {
       MaterialApp.router(
         debugShowCheckedModeBanner: false,
         theme: ThemeData(useMaterial3: true),
+        scrollBehavior: const MaterialScrollBehavior().copyWith(
+          dragDevices: {
+            PointerDeviceKind.touch,
+            PointerDeviceKind.mouse,
+            PointerDeviceKind.stylus,
+            PointerDeviceKind.trackpad,
+          },
+        ),
         routerConfig: GoRouter(
           routes: [
             ShellRoute(
@@ -102,22 +111,39 @@ void main() {
                                 app_state.currentManagerRx.$ = newManager;
                               },
                             ),
-                            // const Divider(),
-                            // ListTile(
-                            //   leading: const Icon(Icons.home),
-                            //   title: const Text('Home'),
-                            //   onTap: () => context.go('/'),
-                            // ),
-                            // ListTile(
-                            //   leading: const Icon(Icons.lock),
-                            //   title: const Text('Secret Page'),
-                            //   onTap: () => context.go('/secret-route'),
-                            // ),
-                            // ListTile(
-                            //   leading: const Icon(Icons.login),
-                            //   title: const Text('Login'),
-                            //   onTap: () => context.go('/auth'),
-                            // ),
+                            const Divider(),
+                            ListTile(
+                              leading: const Icon(Icons.home),
+                              title: const Text('Home'),
+                              onTap: () {
+                                context.go('/');
+                                Navigator.pop(context);
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.cloud_off),
+                              title: const Text('Offline Mode Demo'),
+                              onTap: () {
+                                context.go('/offline-demo');
+                                Navigator.pop(context);
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.lock),
+                              title: const Text('Secret Page'),
+                              onTap: () {
+                                context.go('/secret-route');
+                                Navigator.pop(context);
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.login),
+                              title: const Text('Login'),
+                              onTap: () {
+                                context.go('/auth');
+                                Navigator.pop(context);
+                              },
+                            ),
                           ],
                         ),
                       ),

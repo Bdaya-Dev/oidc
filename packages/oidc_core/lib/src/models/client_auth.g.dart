@@ -10,8 +10,7 @@ Map<String, dynamic> _$OidcClientAuthenticationToJson(
   OidcClientAuthentication instance,
 ) => <String, dynamic>{
   'client_id': instance.clientId,
-  if (instance.clientSecret case final value?) 'client_secret': value,
-  if (instance.clientAssertionType case final value?)
-    'client_assertion_type': value,
-  if (instance.clientAssertion case final value?) 'client_assertion': value,
+  'client_secret': ?instance.clientSecret,
+  'client_assertion_type': ?instance.clientAssertionType,
+  'client_assertion': ?instance.clientAssertion,
 };

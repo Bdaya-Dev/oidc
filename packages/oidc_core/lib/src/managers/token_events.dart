@@ -46,7 +46,9 @@ class OidcTokenEventsManager {
       logger.finest(
         'loaded token was already expiring, raised expiring event.',
       );
-      _expiringController.add(token);
+      if (!_expiringController.isClosed) {
+        _expiringController.add(token);
+      }
     } else {
       final timeUntilExpiring = expiresInFromNow - expiringNotificationTime;
       logger.finest(
@@ -56,14 +58,18 @@ class OidcTokenEventsManager {
       //start a timer that will fire the expiring controller.
       _expiringTimer = Timer(timeUntilExpiring, () {
         logger.finest('raising expiring event.');
-        _expiringController.add(token);
+        if (!_expiringController.isClosed) {
+          _expiringController.add(token);
+        }
       });
     }
     if (expiresInFromNow.isNegative) {
       //already expired.
       //there is no need to run a timer for a token that's already expired.
       logger.finest('loaded token has already expired, raised expired event.');
-      _expiredController.add(token);
+      if (!_expiredController.isClosed) {
+        _expiredController.add(token);
+      }
     } else {
       logger.finest(
         'started a timer that will raise the expired event '
@@ -71,7 +77,9 @@ class OidcTokenEventsManager {
       );
       _expiredTimer = Timer(expiresInFromNow, () {
         logger.finest('raising expired event.');
-        _expiredController.add(token);
+        if (!_expiredController.isClosed) {
+          _expiredController.add(token);
+        }
       });
     }
   }
