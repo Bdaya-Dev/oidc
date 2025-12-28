@@ -1508,7 +1508,9 @@ abstract class OidcUserManagerBase {
       }
 
       // Emit warning if token validation was skipped
-      if (hasExpiredTokenError && settings.supportOfflineAuth) {
+      if (hasExpiredTokenError &&
+          settings.supportOfflineAuth &&
+          isInOfflineMode) {
         emitOfflineAuthWarning(
           warningType: OfflineAuthWarningType.tokenValidationSkipped,
           message: 'Token validation skipped in offline mode',

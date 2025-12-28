@@ -6,6 +6,7 @@ import 'package:clock/clock.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:oidc/oidc.dart';
+import 'package:oidc_example/main.dart' as example;
 
 const _issuer = 'https://test.example.com';
 const _audience = 'test-client';
@@ -13,6 +14,7 @@ const _testSubject = 'user-123';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  example.main();
 
   group('Offline mode integration', () {
     testWidgets('enters offline mode after refresh failure', (tester) async {
