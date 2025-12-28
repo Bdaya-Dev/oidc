@@ -14,10 +14,12 @@ const _testSubject = 'user-123';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  example.main();
 
   group('Offline mode integration', () {
     testWidgets('enters offline mode after refresh failure', (tester) async {
+      example.main();
+      await tester.pumpAndSettle();
+
       final tokenQueue = Queue<dynamic>()
         ..add(const SocketException('Network unreachable'));
       final manager = createManager(tokenQueue: tokenQueue);
@@ -46,6 +48,9 @@ void main() {
     });
 
     testWidgets('exits offline mode after subsequent success', (tester) async {
+      example.main();
+      await tester.pumpAndSettle();
+
       final tokenQueue = Queue<dynamic>()
         ..add(const SocketException('Temporary failure'))
         ..add(_buildTokenResponse('refreshed'));
@@ -81,6 +86,9 @@ void main() {
     testWidgets('emits warning after repeated refresh failures', (
       tester,
     ) async {
+      example.main();
+      await tester.pumpAndSettle();
+
       final tokenQueue = Queue<dynamic>()
         ..add(const SocketException('failure-1'))
         ..add(const SocketException('failure-2'));

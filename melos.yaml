@@ -77,17 +77,23 @@ scripts:
       if [ "$TARGET_DART_SDK" = "min" ]; then
         if [ "${TEST_PLATFORM}" = "firefox" ] && command -v xvfb-run >/dev/null 2>&1; then
           xvfb-run -a dart test --platform ${TEST_PLATFORM} --chain-stack-traces
+        elif [ "${TEST_PLATFORM}" = "chrome" ] && command -v xvfb-run >/dev/null 2>&1; then
+          xvfb-run -a dart test --platform ${TEST_PLATFORM} --chain-stack-traces
         else
           dart test --platform ${TEST_PLATFORM} --chain-stack-traces
         fi
       else
         if [ "${TEST_PLATFORM}" = "firefox" ] && command -v xvfb-run >/dev/null 2>&1; then
           xvfb-run -a dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+        elif [ "${TEST_PLATFORM}" = "chrome" ] && command -v xvfb-run >/dev/null 2>&1; then
+          xvfb-run -a dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
         else
           dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
         fi
         if [ "$WITH_WASM" = "true" ]; then
           if [ "${TEST_PLATFORM}" = "firefox" ] && command -v xvfb-run >/dev/null 2>&1; then
+            xvfb-run -a dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
+          elif [ "${TEST_PLATFORM}" = "chrome" ] && command -v xvfb-run >/dev/null 2>&1; then
             xvfb-run -a dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
           else
             dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm

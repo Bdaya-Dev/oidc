@@ -18,9 +18,7 @@ OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
       clientId: json['client_id'] as String,
       extraTokenParams: json['extraTokenParams'] as Map<String, dynamic>?,
       extraTokenHeaders: (json['extraTokenHeaders'] as Map<String, dynamic>?)
-          ?.map(
-            (k, e) => MapEntry(k, e as String),
-          ),
+          ?.map((k, e) => MapEntry(k, e as String)),
       options: json['options'] as Map<String, dynamic>?,
       id: json['id'] as String?,
       createdAt: _$JsonConverterFromJson<int, DateTime>(

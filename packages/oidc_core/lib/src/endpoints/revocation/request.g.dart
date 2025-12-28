@@ -10,7 +10,7 @@ Map<String, dynamic> _$OidcRevocationRequestToJson(
   OidcRevocationRequest instance,
 ) => <String, dynamic>{
   'token': instance.token,
-  if (instance.tokenTypeHint case final value?) 'token_type_hint': value,
-  if (instance.clientId case final value?) 'client_id': value,
-  if (instance.clientSecret case final value?) 'client_secret': value,
+  'token_type_hint': ?instance.tokenTypeHint,
+  'client_id': ?instance.clientId,
+  'client_secret': ?instance.clientSecret,
 };
