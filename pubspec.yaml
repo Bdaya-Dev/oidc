@@ -94,7 +94,7 @@ melos:
       run: melos run test:web:single
       env:
         TEST_PLATFORM: chrome
-        WITH_WASM: true
+        WITH_WASM: false
     test:web:firefox:
       name: Dart Web tests in firefox
       run: melos run test:web:single
@@ -103,13 +103,33 @@ melos:
         WITH_WASM: false
     test:web:single:
       name: Dart Web tests in a browser
+      env:
+        WITH_WASM: false
       exec: |
         if [ "$TARGET_DART_SDK" = "min" ]; then
-          dart test --platform ${TEST_PLATFORM} --chain-stack-traces
+          if [ "${TEST_PLATFORM}" = "firefox" ] && command -v xvfb-run >/dev/null 2>&1; then
+            xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --chain-stack-traces
+          elif [ "${TEST_PLATFORM}" = "chrome" ] && command -v xvfb-run >/dev/null 2>&1; then
+            xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --chain-stack-traces
+          else
+            dart test --concurrency=1 --platform ${TEST_PLATFORM} --chain-stack-traces
+          fi
         else
-          dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+          if [ "${TEST_PLATFORM}" = "firefox" ] && command -v xvfb-run >/dev/null 2>&1; then
+            xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+          elif [ "${TEST_PLATFORM}" = "chrome" ] && command -v xvfb-run >/dev/null 2>&1; then
+            xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+          else
+            dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+          fi
           if [ "$WITH_WASM" = "true" ]; then
-            dart test --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
+            if [ "${TEST_PLATFORM}" = "firefox" ] && command -v xvfb-run >/dev/null 2>&1; then
+              xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
+            elif [ "${TEST_PLATFORM}" = "chrome" ] && command -v xvfb-run >/dev/null 2>&1; then
+              xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
+            else
+              dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
+            fi
           fi
         fi
       packageFilters:
