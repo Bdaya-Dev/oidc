@@ -3,6 +3,69 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2025-12-28
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v0.14.0`](#oidc---v0140)
+ - [`oidc_core` - `v0.16.0`](#oidc_core---v0160)
+ - [`oidc_default_store` - `v0.6.0`](#oidc_default_store---v060)
+
+Packages with other changes:
+
+ - [`oidc_android` - `v0.8.0+1`](#oidc_android---v0801)
+ - [`oidc_desktop` - `v0.7.0+1`](#oidc_desktop---v0701)
+ - [`oidc_flutter_appauth` - `v0.7.0+1`](#oidc_flutter_appauth---v0701)
+ - [`oidc_ios` - `v0.8.0+1`](#oidc_ios---v0801)
+ - [`oidc_linux` - `v0.5.0+1`](#oidc_linux---v0501)
+ - [`oidc_macos` - `v0.8.0+1`](#oidc_macos---v0801)
+ - [`oidc_platform_interface` - `v0.7.0+1`](#oidc_platform_interface---v0701)
+ - [`oidc_web` - `v0.7.0+1`](#oidc_web---v0701)
+ - [`oidc_web_core` - `v0.4.0+1`](#oidc_web_core---v0401)
+ - [`oidc_windows` - `v0.4.0+1`](#oidc_windows---v0401)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_android` - `v0.8.0+1`
+ - `oidc_desktop` - `v0.7.0+1`
+ - `oidc_flutter_appauth` - `v0.7.0+1`
+ - `oidc_ios` - `v0.8.0+1`
+ - `oidc_linux` - `v0.5.0+1`
+ - `oidc_macos` - `v0.8.0+1`
+ - `oidc_platform_interface` - `v0.7.0+1`
+ - `oidc_web` - `v0.7.0+1`
+ - `oidc_web_core` - `v0.4.0+1`
+ - `oidc_windows` - `v0.4.0+1`
+
+---
+
+#### `oidc` - `v0.14.0`
+
+ - **FEAT**: improve offline mode integration tests with app startup handling. ([18a586c9](https://github.com/Bdaya-Dev/oidc/commit/18a586c933ddfdbf416510e95c63281d3401bedc))
+ - **FEAT**: update dependencies and enhance offline mode test handling. ([a57d6490](https://github.com/Bdaya-Dev/oidc/commit/a57d64906bef50ac362bea16045ea6ba98f7b3f0))
+ - **FEAT**: enhance offline mode handling in tests and user manager. ([e0cae79a](https://github.com/Bdaya-Dev/oidc/commit/e0cae79adf3fa8ccf18a530dbdda7cc339a75c0d))
+ - **BREAKING** **FEAT**: Add offline mode events and error handling. ([7479fd15](https://github.com/Bdaya-Dev/oidc/commit/7479fd15cf0029e9b865333709a98363b5119d64))
+
+#### `oidc_core` - `v0.16.0`
+
+ - **REFACTOR**: remove unnecessary @protected annotations from offline mode tracking variables. ([56da9bab](https://github.com/Bdaya-Dev/oidc/commit/56da9bab4d555c8134d68c7e0151e7fe6d3753be))
+ - **FEAT**: update copy_with_extension and copy_with_extension_gen dependencies to support version range. ([3569919e](https://github.com/Bdaya-Dev/oidc/commit/3569919ecd6e7575b792d5c3a4e7c503265fc456))
+ - **FEAT**: update dependencies and adjust test configurations for improved compatibility. ([18fef073](https://github.com/Bdaya-Dev/oidc/commit/18fef073f4a66e3e9dda7f73e756992ecd47c587))
+ - **FEAT**: update dependencies and enhance offline mode test handling. ([a57d6490](https://github.com/Bdaya-Dev/oidc/commit/a57d64906bef50ac362bea16045ea6ba98f7b3f0))
+ - **FEAT**: enhance offline mode handling in tests and user manager. ([e0cae79a](https://github.com/Bdaya-Dev/oidc/commit/e0cae79adf3fa8ccf18a530dbdda7cc339a75c0d))
+ - **BREAKING** **FEAT**: Add offline mode events and error handling. ([7479fd15](https://github.com/Bdaya-Dev/oidc/commit/7479fd15cf0029e9b865333709a98363b5119d64))
+
+#### `oidc_default_store` - `v0.6.0`
+
+ - **BREAKING** **FEAT**: Add offline mode events and error handling. ([7479fd15](https://github.com/Bdaya-Dev/oidc/commit/7479fd15cf0029e9b865333709a98363b5119d64))
+
+
 ## 2025-10-10
 
 ### Changes
