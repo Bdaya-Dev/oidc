@@ -12,10 +12,10 @@ dependencies:
   async: ^2.13.0
   flutter:
     sdk: flutter
+  flutter_secure_storage: ^10.0.0
   logging: ^1.2.0
   oidc_core: ^0.15.0
   shared_preferences: ^2.2.1
-  simple_secure_storage: ^0.3.4
   web: ^1.1.1
 dev_dependencies:
   flutter_test:

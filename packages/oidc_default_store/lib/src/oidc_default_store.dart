@@ -4,10 +4,10 @@ import 'dart:convert';
 
 import 'package:async/async.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:simple_secure_storage/simple_secure_storage.dart';
 
 import 'html_stub.dart' if (dart.library.js_interop) 'html_web.dart' as html;
 
@@ -26,7 +26,7 @@ enum OidcDefaultStoreWebSessionManagementLocation {
 /// {@template oidc_default_store}
 /// The default [OidcStore] implementation for `package:oidc`
 /// this relies on:
-/// - for the [OidcStoreNamespace.secureTokens] namespace, we use [CachedSimpleSecureStorage].
+/// - for the [OidcStoreNamespace.secureTokens] namespace, we use [FlutterSecureStorage].
 /// - for the [OidcStoreNamespace.session] namespace
 ///     - we use `dart:html` for web,
 ///         - if [webSessionManagementLocation] is set to [OidcDefaultStoreWebSessionManagementLocation.sessionStorage]
@@ -42,7 +42,7 @@ enum OidcDefaultStoreWebSessionManagementLocation {
 class OidcDefaultStore implements OidcStore {
   /// {@macro oidc_default_store}
   OidcDefaultStore({
-    CachedSimpleSecureStorage? secureStorageInstance,
+    FlutterSecureStorage? secureStorageInstance,
     SharedPreferences? sharedPreferences,
     this.storagePrefix = 'oidc',
     this.webSessionManagementLocation =
@@ -50,9 +50,9 @@ class OidcDefaultStore implements OidcStore {
   })  : secureStorage = secureStorageInstance,
         __sharedPreferences = sharedPreferences;
 
-  /// instance of [CachedSimpleSecureStorage] to use for the
+  /// instance of [FlutterSecureStorage] to use for the
   /// [OidcStoreNamespace.secureTokens] namespace.
-  CachedSimpleSecureStorage? secureStorage;
+  FlutterSecureStorage? secureStorage;
   SharedPreferences? __sharedPreferences;
   SharedPreferences get _sharedPreferences => __sharedPreferences!;
 
@@ -232,11 +232,10 @@ class OidcDefaultStore implements OidcStore {
           // secure storage might not be supported in all platforms,
           // so we fallback to normal storage if that's the case.
           if (secureStorage case final secureStorage?) {
-            await secureStorage.refreshCache();
             final res = <String, String>{};
             for (final k in keys) {
-              final v = secureStorage.read(
-                _getKey(namespace, k, managerId),
+              final v = await secureStorage.read(
+                key: _getKey(namespace, k, managerId),
               );
               if (v != null) {
                 res[k] = v;
@@ -291,8 +290,8 @@ class OidcDefaultStore implements OidcStore {
           if (secureStorage case final secureStorage?) {
             for (final entry in values.entries) {
               await secureStorage.write(
-                _getKey(namespace, entry.key, managerId),
-                entry.value,
+                key: _getKey(namespace, entry.key, managerId),
+                value: entry.value,
               );
             }
           } else {
@@ -341,7 +340,8 @@ class OidcDefaultStore implements OidcStore {
         try {
           if (secureStorage case final secureStorage?) {
             for (final key in keys) {
-              await secureStorage.delete(_getKey(namespace, key, managerId));
+              await secureStorage.delete(
+                  key: _getKey(namespace, key, managerId),);
             }
           } else {
             await _defaultRemoveMany(namespace, keys, managerId);

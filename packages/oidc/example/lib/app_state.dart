@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:async/async.dart';
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart' as http;
 import 'package:logging/logging.dart';
@@ -13,7 +14,6 @@ import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
 import 'package:oidc_example/mock.dart';
 import 'package:rxdart/rxdart.dart' as rx;
-import 'package:simple_secure_storage/simple_secure_storage.dart';
 
 //This file represents a global state, which is bad
 //in a production app (since you can't test it).
@@ -175,18 +175,7 @@ Future<void> initApp() {
     // Set up the secure storage for the default store.
     try {
       (duendeManager.store as OidcDefaultStore).secureStorage =
-          await CachedSimpleSecureStorage.getInstance(
-            kIsWeb || kIsWasm
-                ? WebInitializationOptions(
-                    keyPassword: 'ChangeThisInProduction',
-                    encryptionSalt: 'ChangeThisInProduction',
-                    appName: 'oidc_example',
-                  )
-                : const InitializationOptions(
-                    appName: 'oidc_example',
-                    namespace: 'SimpleSecureStorage',
-                  ),
-          );
+          const FlutterSecureStorage();
     } catch (e) {
       exampleLogger.severe('Failed to initialize secure storage', e);
     }

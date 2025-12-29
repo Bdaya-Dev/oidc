@@ -14,7 +14,7 @@ dependencies:
     sdk: flutter
   bdaya_shared_value: ^3.1.3
   dio: ^5.3.3
-  go_router: ^16.2.4
+  go_router: ^17.0.1
   http: ^1.1.0
   logging: ^1.2.0
   oidc:
@@ -22,9 +22,9 @@ dependencies:
   oidc_core: ^0.15.0
   oidc_default_store: ^0.5.0
   rxdart: ^0.27.7
-  simple_secure_storage: ^0.3.4
   clock: ^1.1.2
 
+  flutter_secure_storage: any
 dev_dependencies:
   archive: ^4.0.7
   flutter_driver:
