@@ -100,6 +100,14 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Configure Android AVD home
+        run: |
+          # GitHub hosted runners have more free space under /mnt than $HOME.
+          # This prevents "Not enough space to create userdata partition" errors.
+          echo "ANDROID_SDK_HOME=/mnt/.android" >> $GITHUB_ENV
+          echo "ANDROID_AVD_HOME=/mnt/.android/avd" >> $GITHUB_ENV
+          mkdir -p /mnt/.android/avd
+
       - name: Gradle cache
         uses: gradle/actions/setup-gradle@v5
       - name: Run flutter precache
@@ -109,8 +117,8 @@ jobs:
         id: avd-cache
         with:
           path: |
-            ~/.android/avd/*
-            ~/.android/adb*
+            /mnt/.android/avd/*
+            /mnt/.android/adb*
           # include arch to avoid reusing old 32-bit images
           key: avd-${{ matrix.api-level }}-${{ matrix.arch }}-novulkan
 
@@ -122,8 +130,9 @@ jobs:
           arch: ${{ matrix.arch }}
           # target: google_apis 
           force-avd-creation: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
-          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none -no-snapshot
+          disable-animations: true
+          emulator-boot-timeout: 900
           script: echo "Generated AVD snapshot for caching."
       - name: Run flutter precache
         run: flutter precache -v
@@ -162,7 +171,9 @@ jobs:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
           arch: ${{ matrix.arch }}
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none -no-snapshot
+          disable-animations: true
+          emulator-boot-timeout: 900
           # target: google_apis 
           script: ./android_emulator_ci.sh
       - name: Find .info files and files in coverage folders

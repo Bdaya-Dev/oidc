@@ -136,6 +136,8 @@ melos:
       packageFilters:
         dirExists: test
         flutter: false
+        ignore:
+          - oidc_cli
     remove_dart_test_yaml:
       name: Remove dart_test.yaml
       run: find . -type f -name 'dart_test.yaml' -delete
