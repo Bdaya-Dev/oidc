@@ -341,7 +341,8 @@ class OidcDefaultStore implements OidcStore {
           if (secureStorage case final secureStorage?) {
             for (final key in keys) {
               await secureStorage.delete(
-                  key: _getKey(namespace, key, managerId),);
+                key: _getKey(namespace, key, managerId),
+              );
             }
           } else {
             await _defaultRemoveMany(namespace, keys, managerId);
