@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
-import '../app_state.dart';
+import 'package:oidc_example/app_state.dart';
 
 class ManagersPage extends StatefulWidget {
   const ManagersPage({super.key});

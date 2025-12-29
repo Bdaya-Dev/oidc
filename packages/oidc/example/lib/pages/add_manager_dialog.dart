@@ -96,7 +96,7 @@ class _AddManagerDialogState extends State<AddManagerDialog> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<OidcClientAuthenticationType>(
-                  value: _authType,
+                  initialValue: _authType,
                   decoration: const InputDecoration(
                     labelText: 'Client Authentication Type',
                   ),

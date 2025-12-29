@@ -70,7 +70,7 @@ void main() {
                             ),
                             const Divider(),
                             const Padding(
-                              padding: EdgeInsets.all(8.0),
+                              padding: EdgeInsets.all(8),
                               child: Text(
                                 'Select the manager',
                                 style: TextStyle(fontSize: 16),

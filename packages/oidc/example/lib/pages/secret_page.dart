@@ -118,7 +118,7 @@ class _SecretPageState extends State<SecretPage>
         actions: [
           if (isOffline)
             const Padding(
-              padding: EdgeInsets.all(16.0),
+              padding: EdgeInsets.all(16),
               child: Row(
                 children: [
                   Icon(Icons.cloud_off, size: 20),
@@ -158,7 +158,7 @@ class _SecretPageState extends State<SecretPage>
         Card(
           color: isOffline ? Colors.red.shade50 : Colors.green.shade50,
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -429,9 +429,7 @@ class _SecretPageState extends State<SecretPage>
                       ),
                       ElevatedButton.icon(
                         onPressed: () {
-                          setState(() {
-                            _eventLog.clear();
-                          });
+                          setState(_eventLog.clear);
                         },
                         icon: const Icon(Icons.clear_all, size: 16),
                         label: const Text('Clear Log'),
@@ -613,8 +611,8 @@ class _SecretPageState extends State<SecretPage>
       } else if (!wasOffline && nowOffline) {
         // Just entered offline mode - event listener already logged it
         messenger.showSnackBar(
-          SnackBar(
-            content: const Row(
+          const SnackBar(
+            content: Row(
               children: [
                 Icon(Icons.cloud_off, color: Colors.white),
                 SizedBox(width: 12),
@@ -626,7 +624,7 @@ class _SecretPageState extends State<SecretPage>
               ],
             ),
             backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 3),
+            duration: Duration(seconds: 3),
           ),
         );
       } else {
@@ -657,11 +655,10 @@ class _SecretPageState extends State<SecretPage>
             children: [
               const Icon(Icons.error, color: Colors.white),
               const SizedBox(width: 12),
-              Expanded(child: Text('Refresh failed: ${e.toString()}')),
+              Expanded(child: Text('Refresh failed: $e')),
             ],
           ),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
         ),
       );
     }
