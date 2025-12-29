@@ -104,6 +104,15 @@ jobs:
           echo ""
           echo "Top directories under /mnt, /home, /usr, /opt (depth 2):"
           sudo du -xh --max-depth=2 /mnt /home /usr /opt 2>/dev/null | sort -hr | head -n 50
+      - name: Free disk space
+        run: |
+          set -euxo pipefail
+          df -h
+          # Keep Android SDK (we need it). Remove other heavy toolchains.
+          sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune --all --force || true
+          sudo docker builder prune -a --force || true
+          df -h
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -141,7 +150,8 @@ jobs:
           arch: ${{ matrix.arch }}
           # target: google_apis 
           force-avd-creation: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none -no-snapshot
+          # For snapshot caching, do NOT use -no-snapshot.
+          emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none
           disable-animations: true
           emulator-boot-timeout: 900
           script: echo "Generated AVD snapshot for caching."
@@ -182,7 +192,8 @@ jobs:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
           arch: ${{ matrix.arch }}
-          emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none -no-snapshot
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none
           disable-animations: true
           emulator-boot-timeout: 900
           # target: google_apis 
