@@ -10,6 +10,7 @@ workspace:
   - packages/oidc/example
   - packages/oidc_android
   - packages/oidc_android/example
+  - packages/oidc_cli
   - packages/oidc_core
   - packages/oidc_default_store
   - packages/oidc_desktop
@@ -230,4 +231,8 @@ melos:
         melos run coverage:format
         dart pub global run combine_coverage --repo-path=$pwd
         dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$'
+
+    oidc:activate:
+      name: Activate OIDC CLI locally
+      run: dart pub global activate --source path packages/oidc_cli
 
