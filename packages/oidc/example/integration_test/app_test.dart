@@ -43,7 +43,7 @@ void _ensureLoggingConfigured() {
     if (record.stackTrace != null) {
       buffer.write('\n${record.stackTrace}');
     }
-    print(buffer.toString());
+    print(buffer);
   });
   _loggingConfigured = true;
 }
@@ -148,7 +148,7 @@ void main() {
         );
         expect(testPlanResponse.data, isMap);
 
-        final testPlanData = testPlanResponse.data as Map<String, dynamic>;
+        final testPlanData = testPlanResponse.data!;
         final testPlanId = testPlanData['id'] as String;
         final testPlanModules = testPlanData['modules'] as List<dynamic>? ?? [];
         _testLogger.info(

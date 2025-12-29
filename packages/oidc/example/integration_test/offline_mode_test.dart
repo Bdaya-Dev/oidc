@@ -155,7 +155,6 @@ OfflineTestUserManager createManager({
     redirectUri: Uri.parse('com.example.test:/callback'),
     scope: const ['openid', 'offline_access'],
     supportOfflineAuth: true,
-    strictJwtVerification: false,
     offlineRepeatFailureWarningThreshold: warningThreshold,
     userInfoSettings: const OidcUserInfoSettings(sendUserInfoRequest: false),
     refreshBefore: (_) => null,
@@ -170,7 +169,7 @@ OfflineTestUserManager createManager({
             return entry;
           }
           if (entry is Future<OidcTokenResponse>) {
-            return await entry;
+            return entry;
           }
           if (entry is OidcTokenResponse Function(OidcTokenHookRequest)) {
             return entry(request);

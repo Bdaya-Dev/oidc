@@ -141,7 +141,7 @@ Future<List<int>?> publishCertificationPackage({
 }) async {
   final uri = Uri(path: 'api/plan/$planId/certificationpackage');
 
-  int attempt = 0;
+  var attempt = 0;
   const maxAttempts = 5;
   const initialDelay = Duration(seconds: 1);
 
