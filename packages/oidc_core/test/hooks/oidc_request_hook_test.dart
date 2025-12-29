@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:oidc_core/src/hooks/oidc_hook.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('OidcRequestHook', () {

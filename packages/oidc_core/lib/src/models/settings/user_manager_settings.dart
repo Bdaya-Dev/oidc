@@ -20,7 +20,7 @@ typedef OidcOfflineRefreshRetryDelayCallback =
 /// Returns delays of: 30s, 1m, 2m, 4m, 5m (capped at 5 minutes).
 Duration defaultOfflineRefreshRetryDelay(int consecutiveFailures) {
   // Exponential backoff: 30s, 1m, 2m, 4m, 5m (capped)
-  final baseDelay = const Duration(seconds: 30);
+  const baseDelay = Duration(seconds: 30);
   final exponentialDelay = baseDelay * (1 << (consecutiveFailures - 1));
   const maxDelay = Duration(minutes: 5);
 

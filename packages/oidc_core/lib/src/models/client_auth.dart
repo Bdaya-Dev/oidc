@@ -3,7 +3,7 @@ import 'package:json_annotation/json_annotation.dart';
 import 'package:oidc_core/oidc_core.dart';
 part 'client_auth.g.dart';
 
-final _utf8ThenBase64 = utf8.fuse(base64);
+final Codec<String, String> _utf8ThenBase64 = utf8.fuse(base64);
 
 @JsonSerializable(
   createFactory: false,

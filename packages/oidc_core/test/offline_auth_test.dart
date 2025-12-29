@@ -1,4 +1,3 @@
-// ignore_for_file: lines_longer_than_80_chars
 
 import 'dart:async';
 import 'dart:convert';
@@ -66,7 +65,7 @@ void main() {
 
       test('should handle DNS resolution failures gracefully', () async {
         // Test DNS failure
-        final dnsError = SocketException(
+        const dnsError = SocketException(
           'Failed host lookup: test.example.com',
         );
         final errorType = OidcOfflineAuthErrorHandler.categorizeError(dnsError);
@@ -323,7 +322,6 @@ void main() {
 
           final settings = OidcUserManagerSettings(
             redirectUri: Uri.parse('https://test.example.com/callback'),
-            supportOfflineAuth: false,
             scope: ['openid'],
           );
 
@@ -398,7 +396,7 @@ void main() {
         'should use cached discovery document when server is unreachable',
         () async {
           // Pre-cache a discovery document
-          final docUri =
+          const docUri =
               'https://test.example.com/.well-known/openid-configuration';
           await testStore.set(
             OidcStoreNamespace.discoveryDocument,
@@ -417,7 +415,7 @@ void main() {
 
           // Create client that fails all requests
           final mockClient = MockClient((request) async {
-            throw SocketException('Network unreachable');
+            throw const SocketException('Network unreachable');
           });
 
           // The cached document should be usable even when network fails
@@ -438,7 +436,7 @@ void main() {
         'should fail gracefully when no cached discovery document exists',
         () async {
           // Verify empty store doesn't have discovery document
-          final docUri =
+          const docUri =
               'https://nonexistent.example.com/.well-known/openid-configuration';
           final cachedDoc = await testStore.get(
             OidcStoreNamespace.discoveryDocument,
@@ -458,7 +456,7 @@ void main() {
 
       test('should cache discovery document for offline use', () async {
         // Verify discovery document can be cached
-        final docUri =
+        const docUri =
             'https://cache-test.example.com/.well-known/openid-configuration';
 
         await testStore.set(
@@ -886,7 +884,6 @@ void main() {
         () async {
           final settings = OidcUserManagerSettings(
             redirectUri: Uri.parse('https://test.example.com/callback'),
-            supportOfflineAuth: false,
             scope: ['openid'],
           );
 
@@ -910,7 +907,6 @@ void main() {
         () async {
           final settings = OidcUserManagerSettings(
             redirectUri: Uri.parse('https://test.example.com/callback'),
-            supportOfflineAuth: false,
             scope: ['openid'],
           );
 

@@ -1,5 +1,5 @@
 // coverage:ignore-file
-// ignore_for_file: camel_case_types, lines_longer_than_80_chars
+// ignore_for_file: camel_case_types
 //==========================================================================================================
 // This file was collected from https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml  ||
 //==========================================================================================================

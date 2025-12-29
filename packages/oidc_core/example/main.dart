@@ -9,7 +9,7 @@ import 'cli_user_manager.dart';
 // https://demo.duendesoftware.com idp from the cli.
 // you can login with google, or with bob/bob, or with alice/alice.
 
-final idp = Uri.parse('https://demo.duendesoftware.com/');
+final Uri idp = Uri.parse('https://demo.duendesoftware.com/');
 const String clientId = 'interactive.public';
 final store = OidcMemoryStore();
 

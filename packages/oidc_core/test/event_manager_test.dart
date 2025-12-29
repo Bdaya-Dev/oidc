@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_redundant_argument_values, cascade_invocations
+// ignore_for_file: avoid_redundant_argument_values
 
 import 'package:clock/clock.dart';
 import 'package:fake_async/fake_async.dart';
