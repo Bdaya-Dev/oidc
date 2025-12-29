@@ -65,10 +65,10 @@ class OidcWebCore {
 
     void eventFunction(MessageEvent event) {
       final data = event.data;
-      if (data is! JSString) {
+      if (!data.isA<JSString>()) {
         return;
       }
-      final parsed = Uri.tryParse(data.toDart);
+      final parsed = Uri.tryParse((data! as JSString).toDart);
       if (parsed == null) {
         return;
       }
@@ -248,12 +248,12 @@ class OidcWebCore {
       }
 
       final dataJs = event.data;
-      if (dataJs is! JSString) {
+      if (!dataJs.isA<JSString>()) {
         logger.finer('Received non-string data: $dataJs');
         return;
       }
 
-      final data = dataJs.toDart;
+      final data = (dataJs! as JSString).toDart;
       final uri = Uri.tryParse(data);
       if (uri == null) {
         logger.finer('Failed to parse data into uri: $data');
@@ -351,13 +351,13 @@ class OidcWebCore {
         return;
       }
       final eventDataJs = event.data;
-      if (eventDataJs is! JSString) {
+      if (!eventDataJs.isA<JSString>()) {
         logger.warning(
           'Received iframe message was not a string: $eventDataJs',
         );
         return;
       }
-      final eventData = eventDataJs.toDart;
+      final eventData = (eventDataJs! as JSString).toDart;
       switch (eventData) {
         case 'error':
           logger.warning('Received error iframe message');
@@ -401,11 +401,11 @@ class OidcWebCore {
               (computationCount) => computationCount,
             ).startWith(-1).listen((_) {
               final iframe = document.getElementById(iframeId);
-              if (iframe is! HTMLIFrameElement) {
+              if (!iframe.isA<HTMLIFrameElement>()) {
                 return;
               }
               try {
-                final cw = iframe.contentWindow;
+                final cw = (iframe! as HTMLIFrameElement).contentWindow;
                 if (cw == null) {
                   return;
                 }
