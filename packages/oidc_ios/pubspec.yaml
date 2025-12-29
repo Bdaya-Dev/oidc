@@ -15,12 +15,13 @@ flutter:
       ios:
         pluginClass: OidcPlugin
         dartPluginClass: OidcIOS
+        swiftPackageManager: true
 
 dependencies:
   flutter:
     sdk: flutter
-  flutter_appauth: ^10.0.0
-  flutter_appauth_platform_interface: ^10.0.0
+  flutter_appauth: ^11.0.0
+  flutter_appauth_platform_interface: ^11.0.0
   oidc_core: ^0.15.0
   oidc_flutter_appauth: ^0.7.0
   oidc_platform_interface: ^0.7.0
