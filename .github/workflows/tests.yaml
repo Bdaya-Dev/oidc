@@ -30,7 +30,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sdk: [min, stable, beta]
+        include:
+          - sdk: stable
+            flutter_version: ""
+          - sdk: beta
+            flutter_version: ""
+          # Example pinned Flutter version run (still uses the stable channel)
+          # - sdk: stable
+          #   flutter_version: 3.35.4
     env:
       TEST_PRESET: all
       CHROME_FLAGS: --headless --no-sandbox --disable-dev-shm-usage --disable-gpu
@@ -40,8 +47,8 @@ jobs:
       - name: Set up Environment
         uses: ./.github/actions/flutter_base
         with:
-          channel: ${{ matrix.sdk == 'min' && 'stable' || matrix.sdk }}
-          flutter-version: ${{ matrix.sdk == 'min' && '3.35.4' || '' }}
+          channel: ${{ matrix.sdk }}
+          flutter-version: ${{ matrix.flutter_version }}
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: "[Verify step] ✨ Format"
