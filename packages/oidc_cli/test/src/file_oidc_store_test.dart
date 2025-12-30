@@ -41,7 +41,8 @@ void main() {
       final config = await store.getConfig();
       expect(config['issuer'], 'https://example.com');
 
-      final raw = jsonDecode(storeFile.readAsStringSync()) as Map<String, dynamic>;
+      final raw =
+          jsonDecode(storeFile.readAsStringSync()) as Map<String, dynamic>;
       expect(raw['config'], isA<Map>());
     });
 
@@ -131,7 +132,8 @@ void main() {
 
       await store.removeAll('oidc');
 
-      final raw = jsonDecode(storeFile.readAsStringSync()) as Map<String, dynamic>;
+      final raw =
+          jsonDecode(storeFile.readAsStringSync()) as Map<String, dynamic>;
       expect(raw.keys, {'config'});
       expect((raw['config'] as Map)['issuer'], 'https://example.com');
 

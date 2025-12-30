@@ -90,133 +90,147 @@ String _unsignedJwt({
 
 void main() {
   group('OidcUserManagerBase.loginDeviceCodeFlow', () {
-    test('polls until success; handles authorization_pending and slow_down', () {
-      fakeAsync((async) {
-        const issuer = 'https://server.example.com';
-        final deviceEndpoint = Uri.parse('$issuer/device');
-        final tokenEndpoint = Uri.parse('$issuer/token');
+    test(
+      'polls until success; handles authorization_pending and slow_down',
+      () {
+        fakeAsync((async) {
+          const issuer = 'https://server.example.com';
+          final deviceEndpoint = Uri.parse('$issuer/device');
+          final tokenEndpoint = Uri.parse('$issuer/token');
 
-        final metadata = OidcProviderMetadata.fromJson({
-          'issuer': issuer,
-          'token_endpoint': tokenEndpoint.toString(),
-          'device_authorization_endpoint': deviceEndpoint.toString(),
-        });
+          final metadata = OidcProviderMetadata.fromJson({
+            'issuer': issuer,
+            'token_endpoint': tokenEndpoint.toString(),
+            'device_authorization_endpoint': deviceEndpoint.toString(),
+          });
 
-        final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-        final idToken = _unsignedJwt(
-          issuer: issuer,
-          audience: 'client',
-          subject: 'user',
-          issuedAt: nowSeconds,
-          expiresAt: nowSeconds + 3600,
-        );
+          final nowSeconds =
+              DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+          final idToken = _unsignedJwt(
+            issuer: issuer,
+            audience: 'client',
+            subject: 'user',
+            issuedAt: nowSeconds,
+            expiresAt: nowSeconds + 3600,
+          );
 
-        var tokenCalls = 0;
-        final tokenCallOffsets = <Duration>[];
-        var verificationCalls = 0;
+          var tokenCalls = 0;
+          final tokenCallOffsets = <Duration>[];
+          var verificationCalls = 0;
 
-        final client = MockClient((request) async {
-          if (request.url == deviceEndpoint) {
-            return http.Response(
-              jsonEncode({
-                'device_code': 'device-code',
-                'user_code': 'user-code',
-                'verification_uri': '$issuer/verify',
-                'expires_in': 60,
-                'interval': 1,
-              }),
-              200,
-            );
-          }
-
-          if (request.url == tokenEndpoint) {
-            tokenCalls++;
-            tokenCallOffsets.add(async.elapsed);
-            if (tokenCalls == 1) {
+          final client = MockClient((request) async {
+            if (request.url == deviceEndpoint) {
               return http.Response(
-                jsonEncode({'error': 'authorization_pending'}),
-                400,
+                jsonEncode({
+                  'device_code': 'device-code',
+                  'user_code': 'user-code',
+                  'verification_uri': '$issuer/verify',
+                  'expires_in': 60,
+                  'interval': 1,
+                }),
+                200,
               );
             }
-            if (tokenCalls == 2) {
-              return http.Response(jsonEncode({'error': 'slow_down'}), 400);
+
+            if (request.url == tokenEndpoint) {
+              tokenCalls++;
+              tokenCallOffsets.add(async.elapsed);
+              if (tokenCalls == 1) {
+                return http.Response(
+                  jsonEncode({'error': 'authorization_pending'}),
+                  400,
+                );
+              }
+              if (tokenCalls == 2) {
+                return http.Response(jsonEncode({'error': 'slow_down'}), 400);
+              }
+
+              return http.Response(
+                jsonEncode({
+                  'access_token': 'access-token',
+                  'id_token': idToken,
+                  'token_type': 'Bearer',
+                  'expires_in': 3600,
+                }),
+                200,
+              );
             }
 
-            return http.Response(
-              jsonEncode({
-                'access_token': 'access-token',
-                'id_token': idToken,
-                'token_type': 'Bearer',
-                'expires_in': 3600,
-              }),
-              200,
-            );
-          }
+            return http.Response('Not found', 404);
+          });
 
-          return http.Response('Not found', 404);
+          final settings = OidcUserManagerSettings(
+            redirectUri: Uri.parse('com.example:/callback'),
+            scope: const ['openid'],
+            userInfoSettings: const OidcUserInfoSettings(
+              sendUserInfoRequest: false,
+            ),
+          );
+
+          final manager = _TestUserManager(
+            discoveryDocument: metadata,
+            clientCredentials: const OidcClientAuthentication.none(
+              clientId: 'client',
+            ),
+            store: OidcMemoryStore(),
+            settings: settings,
+            httpClient: client,
+          );
+
+          OidcUser? result;
+          Object? error;
+
+          manager
+              .init()
+              .then((_) {
+                return manager.loginDeviceCodeFlow(
+                  onVerification: (resp) async {
+                    verificationCalls++;
+                    expect(resp.deviceCode, 'device-code');
+                    expect(resp.userCode, 'user-code');
+                    expect(resp.interval, const Duration(seconds: 1));
+                  },
+                );
+              })
+              .then<void>((u) => result = u)
+              .catchError((e) => error = e);
+
+          async.flushMicrotasks();
+
+          // First poll interval.
+          async.elapse(const Duration(seconds: 1));
+          async.flushMicrotasks();
+
+          // Second poll interval.
+          async.elapse(const Duration(seconds: 1));
+          async.flushMicrotasks();
+
+          // After slow_down, interval increases by 5 seconds.
+          async.elapse(const Duration(seconds: 6));
+          async.flushMicrotasks();
+
+          expect(error, isNull);
+          expect(result, isNotNull);
+          expect(result!.token.accessToken, 'access-token');
+
+          expect(verificationCalls, 1);
+          expect(tokenCalls, 3);
+
+          expect(tokenCallOffsets, hasLength(3));
+          expect(
+            tokenCallOffsets[1] - tokenCallOffsets[0],
+            const Duration(seconds: 1),
+          );
+          expect(
+            tokenCallOffsets[2] - tokenCallOffsets[1],
+            const Duration(seconds: 6),
+          );
+
+          manager.dispose();
+          async.flushMicrotasks();
         });
-
-        final settings = OidcUserManagerSettings(
-          redirectUri: Uri.parse('com.example:/callback'),
-          scope: const ['openid'],
-          userInfoSettings: const OidcUserInfoSettings(sendUserInfoRequest: false),
-        );
-
-        final manager = _TestUserManager(
-          discoveryDocument: metadata,
-          clientCredentials: const OidcClientAuthentication.none(clientId: 'client'),
-          store: OidcMemoryStore(),
-          settings: settings,
-          httpClient: client,
-        );
-
-        OidcUser? result;
-        Object? error;
-
-        manager
-            .init()
-            .then((_) {
-              return manager.loginDeviceCodeFlow(
-                onVerification: (resp) async {
-                  verificationCalls++;
-                  expect(resp.deviceCode, 'device-code');
-                  expect(resp.userCode, 'user-code');
-                  expect(resp.interval, const Duration(seconds: 1));
-                },
-              );
-            })
-            .then<void>((u) => result = u)
-            .catchError((e) => error = e);
-
-        async.flushMicrotasks();
-
-        // First poll interval.
-        async.elapse(const Duration(seconds: 1));
-        async.flushMicrotasks();
-
-        // Second poll interval.
-        async.elapse(const Duration(seconds: 1));
-        async.flushMicrotasks();
-
-        // After slow_down, interval increases by 5 seconds.
-        async.elapse(const Duration(seconds: 6));
-        async.flushMicrotasks();
-
-        expect(error, isNull);
-        expect(result, isNotNull);
-        expect(result!.token.accessToken, 'access-token');
-
-        expect(verificationCalls, 1);
-        expect(tokenCalls, 3);
-
-        expect(tokenCallOffsets, hasLength(3));
-        expect(tokenCallOffsets[1] - tokenCallOffsets[0], const Duration(seconds: 1));
-        expect(tokenCallOffsets[2] - tokenCallOffsets[1], const Duration(seconds: 6));
-
-        manager.dispose();
-        async.flushMicrotasks();
-      });
-    });
+      },
+    );
 
     test('returns null on access_denied', () {
       fakeAsync((async) {
@@ -254,12 +268,16 @@ void main() {
         final settings = OidcUserManagerSettings(
           redirectUri: Uri.parse('com.example:/callback'),
           scope: const ['openid'],
-          userInfoSettings: const OidcUserInfoSettings(sendUserInfoRequest: false),
+          userInfoSettings: const OidcUserInfoSettings(
+            sendUserInfoRequest: false,
+          ),
         );
 
         final manager = _TestUserManager(
           discoveryDocument: metadata,
-          clientCredentials: const OidcClientAuthentication.none(clientId: 'client'),
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'client',
+          ),
           store: OidcMemoryStore(),
           settings: settings,
           httpClient: client,
@@ -327,12 +345,16 @@ void main() {
         final settings = OidcUserManagerSettings(
           redirectUri: Uri.parse('com.example:/callback'),
           scope: const ['openid'],
-          userInfoSettings: const OidcUserInfoSettings(sendUserInfoRequest: false),
+          userInfoSettings: const OidcUserInfoSettings(
+            sendUserInfoRequest: false,
+          ),
         );
 
         final manager = _TestUserManager(
           discoveryDocument: metadata,
-          clientCredentials: const OidcClientAuthentication.none(clientId: 'client'),
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'client',
+          ),
           store: OidcMemoryStore(),
           settings: settings,
           httpClient: client,

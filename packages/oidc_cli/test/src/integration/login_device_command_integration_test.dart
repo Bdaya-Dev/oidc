@@ -85,8 +85,9 @@ void main() {
           return _writeJson(request.response, {
             'issuer': issuer.toString(),
             'token_endpoint': issuer.replace(path: '/token').toString(),
-            'device_authorization_endpoint':
-                issuer.replace(path: '/device').toString(),
+            'device_authorization_endpoint': issuer
+                .replace(path: '/device')
+                .toString(),
             // omit userinfo_endpoint to avoid userinfo calls in validation
           });
         }
@@ -97,10 +98,14 @@ void main() {
             'device_code': 'device-code-123',
             'user_code': 'USER-CODE',
             'verification_uri': issuer.replace(path: '/verify').toString(),
-            'verification_uri_complete':
-                issuer.replace(path: '/verify', queryParameters: {
-              'user_code': 'USER-CODE',
-            }).toString(),
+            'verification_uri_complete': issuer
+                .replace(
+                  path: '/verify',
+                  queryParameters: {
+                    'user_code': 'USER-CODE',
+                  },
+                )
+                .toString(),
             'expires_in': 30,
             'interval': 0,
           });
