@@ -120,30 +120,6 @@ void main() {
       expect(remaining, {'k1': 'v1'});
     });
 
-    test('removeAll preserves config and clears other keys', () async {
-      await store.setConfig({'issuer': 'https://example.com'});
-      await store.setMany(
-        OidcStoreNamespace.secureTokens,
-        managerId: 'm1',
-        values: {
-          'k1': 'v1',
-        },
-      );
-
-      await store.removeAll('oidc');
-
-      final raw =
-          jsonDecode(storeFile.readAsStringSync()) as Map<String, dynamic>;
-      expect(raw.keys, {'config'});
-      expect((raw['config'] as Map)['issuer'], 'https://example.com');
-
-      final keys = await store.getAllKeys(
-        OidcStoreNamespace.secureTokens,
-        managerId: 'm1',
-      );
-      expect(keys, isEmpty);
-    });
-
     test('invalid JSON store content is treated as empty (no throw)', () async {
       storeFile
         ..createSync(recursive: true)

@@ -3,7 +3,6 @@ export 'login/login_command.dart';
 export 'logout_command.dart';
 export 'proxy/dart_proxy_command.dart';
 export 'proxy/flutter_proxy_command.dart';
-export 'sample_command.dart';
 export 'status_command.dart';
 export 'store_path_command.dart';
 export 'token/token_command.dart';

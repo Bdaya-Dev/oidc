@@ -53,7 +53,6 @@ class OidcCliCommandRunner extends CompletionCommandRunner<int> {
       );
 
     // Add sub commands
-    addCommand(SampleCommand(logger: _logger));
     addCommand(UpdateCommand(logger: _logger, pubUpdater: _pubUpdater));
     addCommand(LoginCommand(logger: _logger));
     addCommand(DiscoveryCommand(logger: _logger));

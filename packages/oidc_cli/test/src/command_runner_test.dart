@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:args/command_runner.dart';
 import 'package:cli_completion/cli_completion.dart';
 import 'package:mason_logger/mason_logger.dart';
@@ -97,19 +99,33 @@ void main() {
       });
 
       test('enables verbose logging for sub commands', () async {
-        final result = await commandRunner.run([
-          '--verbose',
-          'sample',
-          '--cyan',
-        ]);
-        expect(result, equals(ExitCode.success.code));
+        final tempDir = Directory.systemTemp.createTempSync(
+          'oidc_cli_command_runner_test_',
+        );
+        try {
+          final storePath = '${tempDir.path}/store.json';
+          final result = await commandRunner.run([
+            '--verbose',
+            '--store',
+            storePath,
+            'discovery',
+            '--issuer',
+            '',
+          ]);
+          expect(result, equals(ExitCode.usage.code));
 
-        verify(() => logger.detail('Argument information:')).called(1);
-        verify(() => logger.detail('  Top level options:')).called(1);
-        verify(() => logger.detail('  - verbose: true')).called(1);
-        verify(() => logger.detail('  Command: sample')).called(1);
-        verify(() => logger.detail('    Command options:')).called(1);
-        verify(() => logger.detail('    - cyan: true')).called(1);
+          verify(() => logger.detail('Argument information:')).called(1);
+          verify(() => logger.detail('  Top level options:')).called(1);
+          verify(() => logger.detail('  - verbose: true')).called(1);
+          verify(() => logger.detail('  - store: $storePath')).called(1);
+          verify(() => logger.detail('  Command: discovery')).called(1);
+          verify(() => logger.detail('    Command options:')).called(1);
+          verify(() => logger.detail('    - issuer: ')).called(1);
+        } finally {
+          if (tempDir.existsSync()) {
+            tempDir.deleteSync(recursive: true);
+          }
+        }
       });
     });
   });

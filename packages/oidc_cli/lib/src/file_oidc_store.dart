@@ -145,26 +145,4 @@ class FileOidcStore implements OidcStore {
     data['config'] = config;
     await _write(data);
   }
-
-  /// Removes all keys except the persisted CLI configuration.
-  Future<void> removeAll(String namespace) async {
-    // This helper is for the CLI to clear "everything OIDC related" possibly?
-    // But OidcStore uses namespaces enum.
-    // The CLI "logout" wanted to clear sessions.
-    // We can implement a "clearAll" method.
-    final data = await _read();
-    data.removeWhere((key, value) => key.startsWith(namespace));
-    // Wait, namespace here is String in my previous code, but enum in OidcStore.
-    // I'll leave this simple helper for the specific LogoutCommand usage if needed,
-    // but strictly speaking LogoutCommand should likely just use removeMany on known namespaces
-    // or I can iterate all namespaces.
-    // For now, let's just make it clear everything NOT config.
-
-    final config = data['config'];
-    data.clear();
-    if (config != null) {
-      data['config'] = config;
-    }
-    await _write(data);
-  }
 }

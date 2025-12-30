@@ -33,14 +33,7 @@ class LogoutCommand extends OidcBaseCommand {
         await manager.dispose();
       }
     }
-    try {
-      // ensure store is cleared of tokens
-      await store.removeAll('oidc');
-      logger.success('Logged out successfully.');
-      return ExitCode.success.code;
-    } on Exception catch (e) {
-      logger.err('Error clearing local store: $e');
-      return ExitCode.software.code;
-    }
+    logger.success('Logged out successfully.');
+    return ExitCode.success.code;
   }
 }
