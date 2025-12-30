@@ -101,6 +101,7 @@ melos:
       run: melos run test:web:single
       env:
         TEST_PLATFORM: firefox
+        MOZ_HEADLESS: "1"
         WITH_WASM: false
     test:web:single:
       name: Dart Web tests in a browser

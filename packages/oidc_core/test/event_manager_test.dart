@@ -41,7 +41,7 @@ void main() {
         final manager = OidcTokenEventsManager(
           getExpiringNotificationTime: null,
         );
-        await expectLater(
+        final expectation = expectLater(
           OidcTokenEventsManager.logger.onRecord,
           emitsThrough(
             _loggerHavingMessage(
@@ -50,6 +50,7 @@ void main() {
           ),
         );
         manager.load(token);
+        await expectation;
       });
       group('no getExpiringNotificationTime', () {
         final token = OidcToken.fromJson(src);
