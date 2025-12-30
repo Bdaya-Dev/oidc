@@ -228,9 +228,7 @@ void main() {
             ..info(
               'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
             )
-            ..info(
-              'Initializing manager for test instance: $testInstanceId',
-            );
+            ..info('Initializing manager for test instance: $testInstanceId');
           await manager.init();
           expect(manager.didInit, true);
           logger.info('Manager initialized');
