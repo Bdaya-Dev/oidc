@@ -30,8 +30,9 @@ Future<void> _writeJson(HttpResponse response, Object json) async {
   await response.close();
 }
 
-
-Future<HttpServer> _startServer(Future<void> Function(HttpRequest) handler) async {
+Future<HttpServer> _startServer(
+  Future<void> Function(HttpRequest) handler,
+) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   // Keep the server running in the background for the duration of the test.
   server.listen((request) async {
