@@ -94,16 +94,6 @@ jobs:
         uses: actions/checkout@v5
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
-      - name: Disk usage (largest folders)
-        run: |
-          set -euxo pipefail
-          df -h
-          echo ""
-          echo "Top directories under / (depth 1):"
-          sudo du -xh --max-depth=1 / 2>/dev/null | sort -hr | head -n 30
-          echo ""
-          echo "Top directories under /mnt, /home, /usr, /opt (depth 2):"
-          sudo du -xh --max-depth=2 /mnt /home /usr /opt 2>/dev/null | sort -hr | head -n 50
       - name: Free disk space
         run: |
           set -euxo pipefail
