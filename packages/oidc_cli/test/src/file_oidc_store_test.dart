@@ -43,7 +43,7 @@ void main() {
 
       final raw =
           jsonDecode(storeFile.readAsStringSync()) as Map<String, dynamic>;
-      expect(raw['config'], isA<Map>());
+      expect(raw['config'], isA<Map<String, dynamic>>());
     });
 
     test('setMany/getMany are namespaced and manager-scoped', () async {

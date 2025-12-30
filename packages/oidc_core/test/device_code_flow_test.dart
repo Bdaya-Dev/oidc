@@ -13,7 +13,6 @@ class _TestUserManager extends OidcUserManagerBase {
     required super.store,
     required super.settings,
     super.httpClient,
-    super.id,
   });
 
   @override
@@ -161,7 +160,6 @@ void main() {
 
           final settings = OidcUserManagerSettings(
             redirectUri: Uri.parse('com.example:/callback'),
-            scope: const ['openid'],
             userInfoSettings: const OidcUserInfoSettings(
               sendUserInfoRequest: false,
             ),
@@ -193,7 +191,7 @@ void main() {
                 );
               })
               .then<void>((u) => result = u)
-              .catchError((e) => error = e);
+              .catchError((Object e) => error = e);
 
           async.flushMicrotasks();
 
@@ -267,7 +265,6 @@ void main() {
 
         final settings = OidcUserManagerSettings(
           redirectUri: Uri.parse('com.example:/callback'),
-          scope: const ['openid'],
           userInfoSettings: const OidcUserInfoSettings(
             sendUserInfoRequest: false,
           ),
@@ -290,7 +287,7 @@ void main() {
             .init()
             .then((_) => manager.loginDeviceCodeFlow())
             .then<void>((u) => result = u)
-            .catchError((e) => error = e);
+          .catchError((Object e) => error = e);
 
         async.flushMicrotasks();
 
@@ -344,7 +341,6 @@ void main() {
 
         final settings = OidcUserManagerSettings(
           redirectUri: Uri.parse('com.example:/callback'),
-          scope: const ['openid'],
           userInfoSettings: const OidcUserInfoSettings(
             sendUserInfoRequest: false,
           ),
@@ -367,7 +363,7 @@ void main() {
             .init()
             .then((_) => manager.loginDeviceCodeFlow())
             .then<void>((u) => result = u)
-            .catchError((e) => error = e);
+          .catchError((Object e) => error = e);
 
         async.flushMicrotasks();
 

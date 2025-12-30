@@ -30,9 +30,8 @@ Future<void> _writeJson(HttpResponse response, Object json) async {
   await response.close();
 }
 
-typedef _RequestHandler = Future<void> Function(HttpRequest request);
 
-Future<HttpServer> _startServer(_RequestHandler handler) async {
+Future<HttpServer> _startServer(Future<void> Function(HttpRequest) handler) async {
   final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
   // Keep the server running in the background for the duration of the test.
   server.listen((request) async {
@@ -59,7 +58,7 @@ void main() {
 
     test('runs device flow and prints access token', () async {
       final infoMessages = <String>[];
-      when(() => logger.info(any(), style: null)).thenAnswer((invocation) {
+      when(() => logger.info(any())).thenAnswer((invocation) {
         final message = invocation.positionalArguments.first;
         if (message is String) {
           infoMessages.add(message);
