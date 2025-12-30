@@ -127,21 +127,6 @@ oidc login device \
 	--client-id <clientId>
 ```
 
-### `login client-credentials`
-
-Request an access token using the OAuth 2.0 `client_credentials` grant.
-
-```bash
-oidc login client-credentials \
-	--issuer <issuer> \
-	--client-id <clientId>
-```
-
-Notes:
-
-- Passing `--password` on the command line can leak into shell history/process listings. Use with care.
-- The command saves the same CLI `config` as `login` (issuer/client/scopes/etc), so subsequent commands (like `token`, `status`) work the same way.
-
 ### `token`
 
 Token-related commands.
@@ -196,24 +181,6 @@ The proxy reads configuration from the CLI store (`config.issuer`, `config.clien
 
 - To use a different store/session: use the global `--store <path>` option (or `OIDC_CLI_STORE`).
 - To override the hosted URL without changing your saved config: use `--hosted-url <url>`.
-
-If you don’t have an active interactive session saved (no stored user/token), you can ask the proxy to fetch a token on-demand using the OAuth 2.0 `client_credentials` grant:
-
-```bash
-oidc flutter pub \
-	--hosted-url https://pub.example.com \
-	--client-credentials \
-	--issuer https://issuer.example.com \
-	--client-id your-client-id \
-	--client-secret your-client-secret \
-	--scopes "openid profile email" \
-	get
-```
-
-Notes:
-
-- Many providers require a confidential client (client secret) for `client_credentials`.
-- If you already ran `oidc login --add-to-dart-pub <hostedUrl>`, you typically don’t need `--client-credentials`.
 
 ### `status`
 

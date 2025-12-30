@@ -1,4 +1,3 @@
-import 'package:oidc_cli/src/commands/login/login_client_credentials_command.dart';
 import 'package:oidc_cli/src/commands/login/login_device_command.dart';
 import 'package:oidc_cli/src/commands/login/login_interactive_command.dart';
 import 'package:oidc_cli/src/commands/login/login_password_command.dart';
@@ -11,7 +10,6 @@ class LoginCommand extends OidcBaseCommand {
     addSubcommand(LoginInteractiveCommand(logger: logger));
     addSubcommand(LoginPasswordCommand(logger: logger));
     addSubcommand(LoginDeviceCommand(logger: logger));
-    addSubcommand(LoginClientCredentialsCommand(logger: logger));
   }
 
   @override

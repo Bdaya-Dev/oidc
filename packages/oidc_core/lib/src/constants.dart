@@ -61,6 +61,32 @@ class OidcConstants_GrantType {
   static const String umaTicket = 'urn:ietf:params:oauth:grant-type:uma-ticket';
 }
 
+/// RFC 8628 (OAuth 2.0 Device Authorization Grant) error codes.
+///
+/// These are returned from the token endpoint while polling.
+class OidcConstants_DeviceAuthorizationErrors {
+  /// The user hasn't finished authorization yet.
+  static const authorizationPending = 'authorization_pending';
+
+  /// Same as [authorizationPending], but polling must slow down.
+  static const slowDown = 'slow_down';
+
+  /// The user denied the authorization request.
+  static const accessDenied = 'access_denied';
+
+  /// The device_code has expired.
+  static const expiredToken = 'expired_token';
+}
+
+/// RFC 8628 polling defaults.
+class OidcConstants_DeviceAuthorizationPolling {
+  /// RFC 8628 Section 3.5: default polling interval if the server omits it.
+  static const defaultInterval = Duration(seconds: 5);
+
+  /// RFC 8628 Section 3.5: required increase when receiving `slow_down`.
+  static const slowDownIncrement = Duration(seconds: 5);
+}
+
 class OidcConstants_Scopes {
   static const openid = 'openid';
   static const profile = 'profile';

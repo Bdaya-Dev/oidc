@@ -1,7 +1,6 @@
 import 'package:mason_logger/mason_logger.dart' show ExitCode;
 import 'package:oidc_cli/src/commands/oidc_base_command.dart';
 import 'package:oidc_cli/src/utils/dart_pub.dart';
-import 'package:oidc_cli/src/utils/oauth_grants.dart';
 
 /// Logs in using the `device_code` grant.
 class LoginDeviceCommand extends OidcBaseCommand {
@@ -73,26 +72,54 @@ class LoginDeviceCommand extends OidcBaseCommand {
         ? hostedUrlArg
         : (existingConfig['hostedUrl'] as String?);
 
-    final token = await requestDeviceCodeAccessToken(
-      logger: logger,
-      issuer: issuer,
-      clientId: clientId,
-      clientSecret: clientSecret,
-      scopes: scopes,
-    );
+    // Persist config first (mirrors interactive login behavior).
+    final config = {
+      ...existingConfig,
+      'issuer': issuer,
+      'clientId': clientId,
+      'clientSecret': clientSecret,
+      'scopes': scopes,
+      'hostedUrl': ?hostedUrl,
+    };
+    await store.setConfig(config);
 
-    if (token == null || token.trim().isEmpty) {
-      logger.err('No access token returned.');
+    final manager = await getManager(store: store, configOverride: config);
+    if (manager == null) {
+      logger.err('Failed to create manager.');
       return ExitCode.software.code;
     }
 
-    // Token output is intentionally plain text for easy scripting.
-    logger.info(token);
+    try {
+      logger.info('Initializing manager...');
+      await manager.init();
 
-    if (hostedUrl != null && hostedUrl.trim().isNotEmpty) {
-      await addToDartPub(logger: logger, hostedUrl: hostedUrl, token: token);
+      final user = await manager.loginDeviceCodeFlow(
+        scopeOverride: scopes,
+        onVerification: (resp) {
+          final verificationUri =
+              resp.verificationUriComplete ?? resp.verificationUri;
+          logger.info('Open this URL to authenticate: $verificationUri');
+          if (resp.verificationUriComplete == null) {
+            logger.info('User code: ${resp.userCode}');
+          }
+        },
+      );
+      final token = user?.token.accessToken;
+      if (token == null || token.trim().isEmpty) {
+        logger.err('Device authorization did not complete.');
+        return ExitCode.software.code;
+      }
+
+      // Token output is intentionally plain text for easy scripting.
+      logger.info(token);
+
+      if (hostedUrl != null && hostedUrl.trim().isNotEmpty) {
+        await addToDartPub(logger: logger, hostedUrl: hostedUrl, token: token);
+      }
+
+      return ExitCode.success.code;
+    } finally {
+      await manager.dispose();
     }
-
-    return ExitCode.success.code;
   }
 }
