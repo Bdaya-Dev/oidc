@@ -558,7 +558,7 @@ class OidcEndpoints {
           JsonWebToken? parsedJwt;
           try {
             parsedJwt = JsonWebToken.unverified(endpointResp.body);
-          } catch (_) {
+          } on Object {
             parsedJwt = null;
           }
           if (parsedJwt != null) {

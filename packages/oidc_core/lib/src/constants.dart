@@ -627,7 +627,6 @@ class OidcConstants_AuthorizeRequest_ResponseMode {
 /// The response_type options defined by the spec
 class OidcConstants_AuthorizationEndpoint_ResponseType {
   /// `id_token token`, used for the implicit flow
-  // ignore: constant_identifier_names
   static const idToken_Token = <String>[idToken, token];
 
   /// Authorization Code Flow

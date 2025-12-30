@@ -1082,7 +1082,7 @@ abstract class OidcUserManagerBase {
 
   @protected
   void listenToUserSessionIfSupported(OidcUser? user) {
-    sessionSub?.cancel();
+    unawaited(sessionSub?.cancel());
     sessionSub = null;
     if (user == null) {
       return;
@@ -1276,7 +1276,7 @@ abstract class OidcUserManagerBase {
         attributes: null,
         metadata: discoveryDocument,
       );
-    } catch (e) {
+    } on Object catch (e) {
       // Handle errors based on offline auth settings
       final handledOffline = handleOfflineEligibleFailure(
         error: e,
@@ -1370,7 +1370,7 @@ abstract class OidcUserManagerBase {
 
       // Successful refresh - update last server contact and exit offline mode
       recordSuccessfulServerContact(newToken: newUser?.token);
-    } catch (e) {
+    } on Object catch (e) {
       final handledOffline = handleOfflineEligibleFailure(
         error: e,
         fallbackToken: event,
@@ -1480,7 +1480,7 @@ abstract class OidcUserManagerBase {
     );
 
     if (!settings.supportOfflineAuth) {
-      forgetUser();
+      unawaited(forgetUser());
     } else {
       // Only emit warning if we're actually in offline mode
       // (not just because offline auth is enabled)
@@ -1574,7 +1574,7 @@ abstract class OidcUserManagerBase {
             newToken: actualUser.token,
             exitOffline: false,
           );
-        } catch (e, st) {
+        } on Object catch (e, st) {
           logger.severe('UserInfo endpoint threw an exception!', e, st);
           userInfoFailed = true;
 
@@ -1735,7 +1735,7 @@ abstract class OidcUserManagerBase {
         currentDiscoveryDocument = OidcProviderMetadata.fromJson(
           jsonDecode(cachedDocument) as Map<String, dynamic>,
         );
-      } catch (e, st) {
+      } on Object catch (e, st) {
         //swallow error.
         //remove the cached document.
         logger.warning(
@@ -1864,7 +1864,7 @@ abstract class OidcUserManagerBase {
           'Found a cached token, but the user could not be created or validated',
         );
       }
-    } catch (e) {
+    } on Object catch (_) {
       if (!settings.supportOfflineAuth) {
         // remove invalid tokens, so that they don't get used again.
         await store.removeMany(

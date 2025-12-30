@@ -32,7 +32,7 @@ void main() {
     'OidcTokenEventsManager',
     timeout: const Timeout(Duration(seconds: 5)),
     () {
-      test('unknown expiresIn', () {
+      test('unknown expiresIn', () async {
         final token = OidcToken.fromJson({
           ...src,
           OidcConstants_AuthParameters.expiresIn: null,
@@ -41,7 +41,7 @@ void main() {
         final manager = OidcTokenEventsManager(
           getExpiringNotificationTime: null,
         );
-        expectLater(
+        await expectLater(
           OidcTokenEventsManager.logger.onRecord,
           emitsThrough(
             _loggerHavingMessage(

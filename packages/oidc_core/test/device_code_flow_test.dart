@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:fake_async/fake_async.dart';
@@ -178,34 +179,34 @@ void main() {
           OidcUser? result;
           Object? error;
 
-          manager
-              .init()
-              .then((_) {
-                return manager.loginDeviceCodeFlow(
-                  onVerification: (resp) async {
-                    verificationCalls++;
-                    expect(resp.deviceCode, 'device-code');
-                    expect(resp.userCode, 'user-code');
-                    expect(resp.interval, const Duration(seconds: 1));
-                  },
-                );
-              })
-              .then<void>((u) => result = u)
-              .catchError((Object e) => error = e);
+          unawaited(
+            manager
+                .init()
+                .then((_) {
+                  return manager.loginDeviceCodeFlow(
+                    onVerification: (resp) async {
+                      verificationCalls++;
+                      expect(resp.deviceCode, 'device-code');
+                      expect(resp.userCode, 'user-code');
+                      expect(resp.interval, const Duration(seconds: 1));
+                    },
+                  );
+                })
+                .then<void>((u) => result = u)
+                .catchError((Object e) => error = e),
+          );
 
-          async.flushMicrotasks();
-
-          // First poll interval.
-          async.elapse(const Duration(seconds: 1));
-          async.flushMicrotasks();
-
-          // Second poll interval.
-          async.elapse(const Duration(seconds: 1));
-          async.flushMicrotasks();
-
-          // After slow_down, interval increases by 5 seconds.
-          async.elapse(const Duration(seconds: 6));
-          async.flushMicrotasks();
+          async
+            ..flushMicrotasks()
+            // First poll interval.
+            ..elapse(const Duration(seconds: 1))
+            ..flushMicrotasks()
+            // Second poll interval.
+            ..elapse(const Duration(seconds: 1))
+            ..flushMicrotasks()
+            // After slow_down, interval increases by 5 seconds.
+            ..elapse(const Duration(seconds: 6))
+            ..flushMicrotasks();
 
           expect(error, isNull);
           expect(result, isNotNull);
@@ -224,7 +225,7 @@ void main() {
             const Duration(seconds: 6),
           );
 
-          manager.dispose();
+          unawaited(manager.dispose());
           async.flushMicrotasks();
         });
       },
@@ -283,22 +284,24 @@ void main() {
         OidcUser? result;
         Object? error;
 
-        manager
-            .init()
-            .then((_) => manager.loginDeviceCodeFlow())
-            .then<void>((u) => result = u)
-            .catchError((Object e) => error = e);
+        unawaited(
+          manager
+              .init()
+              .then((_) => manager.loginDeviceCodeFlow())
+              .then<void>((u) => result = u)
+              .catchError((Object e) => error = e),
+        );
 
-        async.flushMicrotasks();
-
-        async.elapse(const Duration(seconds: 1));
-        async.flushMicrotasks();
+        async
+          ..flushMicrotasks()
+          ..elapse(const Duration(seconds: 1))
+          ..flushMicrotasks();
 
         expect(error, isNull);
         expect(result, isNull);
         expect(tokenCalls, 1);
 
-        manager.dispose();
+        unawaited(manager.dispose());
         async.flushMicrotasks();
       });
     });
@@ -359,25 +362,27 @@ void main() {
         OidcUser? result;
         Object? error;
 
-        manager
-            .init()
-            .then((_) => manager.loginDeviceCodeFlow())
-            .then<void>((u) => result = u)
-            .catchError((Object e) => error = e);
-
-        async.flushMicrotasks();
+        unawaited(
+          manager
+              .init()
+              .then((_) => manager.loginDeviceCodeFlow())
+              .then<void>((u) => result = u)
+              .catchError((Object e) => error = e),
+        );
 
         // Two poll attempts occur before expiry.
-        async.elapse(const Duration(seconds: 1));
-        async.flushMicrotasks();
-        async.elapse(const Duration(seconds: 1));
-        async.flushMicrotasks();
+        async
+          ..flushMicrotasks()
+          ..elapse(const Duration(seconds: 1))
+          ..flushMicrotasks()
+          ..elapse(const Duration(seconds: 1))
+          ..flushMicrotasks();
 
         expect(error, isNull);
         expect(result, isNull);
         expect(tokenCalls, 2);
 
-        manager.dispose();
+        unawaited(manager.dispose());
         async.flushMicrotasks();
       });
     });

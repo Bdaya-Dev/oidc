@@ -38,7 +38,7 @@ Future<HttpServer> _startServer(
   server.listen((request) async {
     try {
       await handler(request);
-    } catch (_) {
+    } on Object {
       // Keep test server resilient; surface failures via assertions instead.
       request.response.statusCode = HttpStatus.internalServerError;
       await request.response.close();

@@ -145,8 +145,9 @@ void main() {
     });
 
     test('invalid JSON store content is treated as empty (no throw)', () async {
-      storeFile.createSync(recursive: true);
-      storeFile.writeAsStringSync('this is not json');
+      storeFile
+        ..createSync(recursive: true)
+        ..writeAsStringSync('this is not json');
 
       final config = await store.getConfig();
       expect(config, isEmpty);

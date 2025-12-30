@@ -283,15 +283,14 @@ class _SecretPageState extends State<SecretPage>
                               ),
                             ),
                           );
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Silently authorized user! ${res?.uid}',
-                                ),
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Silently authorized user! ${res?.uid}',
                               ),
-                            );
-                          }
+                            ),
+                          );
                         } on OidcException catch (e) {
                           if (e.errorResponse != null) {
                             await manager.forgetUser();
