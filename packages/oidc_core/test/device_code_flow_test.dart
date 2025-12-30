@@ -287,7 +287,7 @@ void main() {
             .init()
             .then((_) => manager.loginDeviceCodeFlow())
             .then<void>((u) => result = u)
-          .catchError((Object e) => error = e);
+            .catchError((Object e) => error = e);
 
         async.flushMicrotasks();
 
@@ -363,7 +363,7 @@ void main() {
             .init()
             .then((_) => manager.loginDeviceCodeFlow())
             .then<void>((u) => result = u)
-          .catchError((Object e) => error = e);
+            .catchError((Object e) => error = e);
 
         async.flushMicrotasks();
 
