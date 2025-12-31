@@ -35,11 +35,11 @@ const _envOidcScopes = String.fromEnvironment(
 );
 const _envOidcRedirectUri = String.fromEnvironment(
   'OIDC_REDIRECT_URI',
-  defaultValue: 'http://localhost:22433/redirect.html',
+  defaultValue: 'redirect.html',
 );
 const _envOidcPostLogoutRedirectUri = String.fromEnvironment(
   'OIDC_POST_LOGOUT_REDIRECT_URI',
-  defaultValue: 'http://localhost:22433/redirect.html',
+  defaultValue: 'redirect.html',
 );
 
 List<String> _parseScopes(String scopes) {
@@ -49,6 +49,56 @@ List<String> _parseScopes(String scopes) {
       .map((e) => e.trim())
       .where((e) => e.isNotEmpty)
       .toList(growable: false);
+}
+
+Uri _toAbsoluteWebUri(
+  String configuredUri, {
+  Map<String, String>? queryParameters,
+}) {
+  final trimmed = configuredUri.trim();
+  if (trimmed.isEmpty) {
+    throw ArgumentError.value(
+      configuredUri,
+      'configuredUri',
+      'must not be empty',
+    );
+  }
+
+  final base = Uri.base;
+  final origin = Uri.parse(base.origin);
+
+  // Determine the current directory for the SPA route.
+  // Example:
+  // - /oidc-example/secret-route -> /oidc-example/
+  // - /oidc-example/            -> /oidc-example/
+  final basePath = base.path;
+  final directoryPath = basePath.endsWith('/')
+      ? basePath
+      : basePath.substring(0, basePath.lastIndexOf('/') + 1);
+
+  final parsed = Uri.parse(trimmed);
+
+  Uri result;
+  if (parsed.hasScheme) {
+    result = parsed;
+  } else if (trimmed.startsWith('/')) {
+    result = origin.replace(path: parsed.path);
+  } else {
+    result = origin.replace(path: '$directoryPath${parsed.path}');
+  }
+
+  final mergedQueryParameters = <String, String>{
+    ...result.queryParameters,
+    ...parsed.queryParameters,
+    if (queryParameters != null) ...queryParameters,
+  };
+
+  return result.replace(
+    queryParameters: mergedQueryParameters.isEmpty
+        ? null
+        : mergedQueryParameters,
+    fragment: '',
+  );
 }
 
 Future<http.Response> ciHandler(http.Request request) async {
@@ -102,10 +152,15 @@ final duendeManager = OidcUserManager.lazy(
   httpClient: client,
   // keyStore: JsonWebKeyStore(),
   settings: OidcUserManagerSettings(
-    frontChannelLogoutUri: Uri(
-      path: 'redirect.html',
-      queryParameters: {OidcConstants_Store.managerId: duendeManagerId},
-    ),
+    frontChannelLogoutUri: kIsWeb
+        ? _toAbsoluteWebUri(
+            'redirect.html',
+            queryParameters: {OidcConstants_Store.managerId: duendeManagerId},
+          )
+        : Uri(
+            path: 'redirect.html',
+            queryParameters: {OidcConstants_Store.managerId: duendeManagerId},
+          ),
     uiLocales: ['ar'],
     refreshBefore: (token) {
       return const Duration(seconds: 5);
@@ -117,7 +172,7 @@ final duendeManager = OidcUserManager.lazy(
     // Configure via: --dart-define=OIDC_SCOPES=openid,profile,email,offline_access
     scope: _parseScopes(_envOidcScopes),
     postLogoutRedirectUri: kIsWeb
-        ? Uri.parse(_envOidcPostLogoutRedirectUri)
+        ? _toAbsoluteWebUri(_envOidcPostLogoutRedirectUri)
         : Platform.isAndroid || Platform.isIOS || Platform.isMacOS
         ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
         : Platform.isWindows || Platform.isLinux
@@ -128,7 +183,7 @@ final duendeManager = OidcUserManager.lazy(
         // see the file in /web/redirect.html for an example.
         //
         // for debugging in flutter, you must run this app with --web-port 22433
-        ? Uri.parse(_envOidcRedirectUri)
+        ? _toAbsoluteWebUri(_envOidcRedirectUri)
         : Platform.isIOS || Platform.isMacOS || Platform.isAndroid
         // scheme: reverse domain name notation of your package name.
         // path: anything.

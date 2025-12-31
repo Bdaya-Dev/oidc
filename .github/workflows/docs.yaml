@@ -1,5 +1,5 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy MkDocs to Pages
+# Deploy MkDocs docs to GitHub Pages and Firebase Hosting
+name: Deploy Docs
 
 on:
   # Runs on pushes targeting the default branch
@@ -8,7 +8,8 @@ on:
     paths:
       - ".github/workflows/docs.yaml"
       - "docs/**"
-      - mkdocs.yml  
+      - mkdocs.yml
+      - ".firebaserc"
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
@@ -34,20 +35,50 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
-      - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV 
       - uses: actions/cache@v4
         with:
-          key: mkdocs-material-${{ env.cache_id }}
+          key: mkdocs-material-${{ runner.os }}-${{ hashFiles('mkdocs.yml') }}
           path: .cache
           restore-keys: |
-            mkdocs-material-
+            mkdocs-material-${{ runner.os }}-
       - run: pip install mkdocs mkdocs-material click-man
       - run: mkdocs build
+
+      - name: Copy MkDocs site for Firebase
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist/oidc-docs
+          mkdir -p dist/oidc-docs
+          cp -R site/. dist/oidc-docs/
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
           # Upload specific path
           path: 'site'
+
+      - name: Setup Node (Firebase CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Firebase CLI
+        run: npm i -g firebase-tools
+
+      - name: Authenticate to Google Cloud
+        env:
+          FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC }}
+        run: |
+          if [ -z "${FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC}" ]; then
+            echo "Missing secret: FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC" >&2
+            exit 1
+          fi
+          echo "${FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC}" > "$RUNNER_TEMP/gcp-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/gcp-sa.json" >> $GITHUB_ENV
+
+      - name: Deploy Docs to Firebase Hosting
+        run: firebase deploy --project bdaya-oidc --only hosting:oidc-flutter-docs
   deploy:
     permissions:
       pages: write      # to deploy to Pages

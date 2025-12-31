@@ -1,0 +1,107 @@
+name: Firebase Hosting Previews (Docs + Example)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - ".github/workflows/firebase_preview.yaml"
+      - "firebase.json"
+      - ".firebaserc"
+      - "docs/**"
+      - "mkdocs.yml"
+      - "packages/oidc/example/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: "firebase-preview-${{ github.event.pull_request.number }}"
+  cancel-in-progress: true
+
+jobs:
+  build-and-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          cache-key: flutter-:os:-:channel:-:arch:-:hash:-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.x
+
+      - name: Restore MkDocs cache
+        uses: actions/cache@v4
+        with:
+          key: mkdocs-material-${{ runner.os }}-${{ hashFiles('mkdocs.yml') }}
+          path: .cache
+          restore-keys: |
+            mkdocs-material-${{ runner.os }}-
+
+      - name: Install MkDocs
+        run: pip install mkdocs mkdocs-material click-man
+
+      - name: Build Docs (MkDocs)
+        run: mkdocs build --site-dir dist/oidc-docs
+
+      - name: Build Example (Flutter web + wasm)
+        shell: bash
+        env:
+          OIDC_ISSUER: https://demo.duendesoftware.com
+          OIDC_CLIENT_ID: interactive.public.short
+          OIDC_SCOPES: openid profile email offline_access
+        run: |
+          set -euo pipefail
+
+          BASE_HREF="/"
+          OIDC_REDIRECT_URI="redirect.html"
+          OIDC_POST_LOGOUT_REDIRECT_URI="redirect.html"
+
+          pushd packages/oidc/example
+          flutter pub get
+          flutter build web --release --wasm --base-href "${BASE_HREF}" \
+            --dart-define=OIDC_ISSUER="${OIDC_ISSUER}" \
+            --dart-define=OIDC_CLIENT_ID="${OIDC_CLIENT_ID}" \
+            --dart-define=OIDC_SCOPES="${OIDC_SCOPES}" \
+            --dart-define=OIDC_REDIRECT_URI="${OIDC_REDIRECT_URI}" \
+            --dart-define=OIDC_POST_LOGOUT_REDIRECT_URI="${OIDC_POST_LOGOUT_REDIRECT_URI}"
+          popd
+
+          mkdir -p dist/oidc-example
+          rm -rf dist/oidc-example/*
+          cp -R packages/oidc/example/build/web/. dist/oidc-example/
+
+      - name: Deploy Docs Preview to Firebase Hosting
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC }}
+          projectId: bdaya-oidc
+          target: oidc-flutter-docs
+          channelId: pr-${{ github.event.pull_request.number }}-docs
+          expires: 7d
+
+      - name: Deploy Example Preview to Firebase Hosting
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC }}
+          projectId: bdaya-oidc
+          target: oidc-flutter-example
+          channelId: pr-${{ github.event.pull_request.number }}-example
+          expires: 7d
+
+      - name: Note for forked PRs
+        if: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          echo "This PR comes from a fork; secrets are not available, so Firebase preview deploy is skipped."

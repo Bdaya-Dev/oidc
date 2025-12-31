@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "bdaya-oidc"
+  },
+  "targets": {
+    "bdaya-oidc": {
+      "hosting": {
+        "oidc-flutter-example": [
+          "oidc-flutter-example"
+        ],
+        "oidc-flutter-docs": [
+          "oidc-flutter-docs"
+        ]
+      }
+    }
+  }
+}
