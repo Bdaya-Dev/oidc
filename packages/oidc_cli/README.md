@@ -4,6 +4,12 @@ A small provider-agnostic CLI for authenticating against an OpenID Connect (OIDC
 
 This is primarily intended for local development and scripting.
 
+## Documentation
+
+The full CLI reference (all commands/options) lives in the docs site:
+
+- https://bdaya-dev.github.io/oidc/oidc_cli/
+
 ## Install / activate
 
 From the repo root:
