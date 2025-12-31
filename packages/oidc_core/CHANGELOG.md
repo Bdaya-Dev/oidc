@@ -1,3 +1,14 @@
+## 0.16.0
+
+> Note: This release has breaking changes.
+
+ - **REFACTOR**: remove unnecessary @protected annotations from offline mode tracking variables. ([56da9bab](https://github.com/Bdaya-Dev/oidc/commit/56da9bab4d555c8134d68c7e0151e7fe6d3753be))
+ - **FEAT**: update copy_with_extension and copy_with_extension_gen dependencies to support version range. ([3569919e](https://github.com/Bdaya-Dev/oidc/commit/3569919ecd6e7575b792d5c3a4e7c503265fc456))
+ - **FEAT**: update dependencies and adjust test configurations for improved compatibility. ([18fef073](https://github.com/Bdaya-Dev/oidc/commit/18fef073f4a66e3e9dda7f73e756992ecd47c587))
+ - **FEAT**: update dependencies and enhance offline mode test handling. ([a57d6490](https://github.com/Bdaya-Dev/oidc/commit/a57d64906bef50ac362bea16045ea6ba98f7b3f0))
+ - **FEAT**: enhance offline mode handling in tests and user manager. ([e0cae79a](https://github.com/Bdaya-Dev/oidc/commit/e0cae79adf3fa8ccf18a530dbdda7cc339a75c0d))
+ - **BREAKING** **FEAT**: Add offline mode events and error handling. ([7479fd15](https://github.com/Bdaya-Dev/oidc/commit/7479fd15cf0029e9b865333709a98363b5119d64))
+
 ## 0.15.0
 
 > Note: This release has breaking changes.

@@ -1,3 +1,10 @@
+## 0.6.0
+
+> Note: This release has breaking changes.
+
+ - **BREAKING** **FEAT**(oidc_default_store): use flutter_secure_storage. ([a9441511](https://github.com/Bdaya-Dev/oidc/commit/a9441511a9f27aa742cde2459b0654541b0aa356))
+ - **BREAKING** **FEAT**: Add offline mode events and error handling. ([7479fd15](https://github.com/Bdaya-Dev/oidc/commit/7479fd15cf0029e9b865333709a98363b5119d64))
+
 ## 0.5.0
 
 > Note: This release has breaking changes.

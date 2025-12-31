@@ -1,3 +1,13 @@
+## 0.14.0
+
+> Note: This release has breaking changes.
+
+ - **FEAT**: improve offline mode integration tests with app startup handling. ([18a586c9](https://github.com/Bdaya-Dev/oidc/commit/18a586c933ddfdbf416510e95c63281d3401bedc))
+ - **FEAT**: update dependencies and enhance offline mode test handling. ([a57d6490](https://github.com/Bdaya-Dev/oidc/commit/a57d64906bef50ac362bea16045ea6ba98f7b3f0))
+ - **FEAT**: enhance offline mode handling in tests and user manager. ([e0cae79a](https://github.com/Bdaya-Dev/oidc/commit/e0cae79adf3fa8ccf18a530dbdda7cc339a75c0d))
+ - **BREAKING** **FEAT**(oidc_default_store): use flutter_secure_storage. ([a9441511](https://github.com/Bdaya-Dev/oidc/commit/a9441511a9f27aa742cde2459b0654541b0aa356))
+ - **BREAKING** **FEAT**: Add offline mode events and error handling. ([7479fd15](https://github.com/Bdaya-Dev/oidc/commit/7479fd15cf0029e9b865333709a98363b5119d64))
+
 ## 0.13.0
 
 > Note: This release has breaking changes.
