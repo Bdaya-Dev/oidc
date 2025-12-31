@@ -12,6 +12,10 @@ The full CLI reference (all commands/options) lives in the docs site:
 
 ## Install / activate
 
+From pub.dev:
+
+- `dart pub global activate oidc_cli`
+
 From the repo root:
 
 - Activate locally via Melos:
@@ -31,7 +35,7 @@ To see all commands:
 
 These options apply to all commands.
 
-- `--version`: Print the current CLI version.
+- `--version`, `-v`: Print the current CLI version.
 - `--[no-]verbose`: Enable verbose logging (includes shell commands executed).
 
 - `--store <path>`: Override the path to the local JSON store file.
