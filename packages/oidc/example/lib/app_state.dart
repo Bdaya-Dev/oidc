@@ -97,7 +97,6 @@ Uri _toAbsoluteWebUri(
     queryParameters: mergedQueryParameters.isEmpty
         ? null
         : mergedQueryParameters,
-    fragment: '',
   );
 }
 
