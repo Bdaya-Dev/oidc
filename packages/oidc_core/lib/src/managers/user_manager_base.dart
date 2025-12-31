@@ -1163,7 +1163,7 @@ abstract class OidcUserManagerBase {
 
     final errorType = OidcOfflineAuthErrorHandler.categorizeError(error);
     final canContinue = OidcOfflineAuthErrorHandler.shouldContinueInOfflineMode(
-      error: errorType,
+      error: error,
       supportOfflineAuth: settings.supportOfflineAuth,
     );
     if (!canContinue) {

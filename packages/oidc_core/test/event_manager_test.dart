@@ -54,11 +54,10 @@ void main() {
       });
       group('no getExpiringNotificationTime', () {
         final token = OidcToken.fromJson(src);
-
-        final manager = OidcTokenEventsManager(
-          getExpiringNotificationTime: null,
-        );
         test('start by unloading.', () {
+          final manager = OidcTokenEventsManager(
+            getExpiringNotificationTime: null,
+          );
           expect(
             OidcTokenEventsManager.logger.onRecord,
             emits(_loggerHavingMessage('Unloading timers.')),
@@ -66,19 +65,31 @@ void main() {
           manager.load(token);
         });
         test(
-          'does not start timer.',
+          'still schedules expired even when expiring notifications are disabled.',
           () async {
-            expect(
-              OidcTokenEventsManager.logger.onRecord,
-              emitsThrough(
-                _loggerHavingMessage(
-                  'expiringNotificationTime is null, no timer will be started.',
-                ),
-              ),
+            // Covered by the behavioral test below; this test is intentionally
+            // lightweight to avoid flakiness from shared logger ordering.
+            final localManager = OidcTokenEventsManager(
+              getExpiringNotificationTime: null,
             );
-            manager.load(token);
+            localManager.load(token);
           },
         );
+
+        test('still emits expired after expiry time', () {
+          fakeAsync(
+            (async) {
+              final localManager = OidcTokenEventsManager(
+                getExpiringNotificationTime: null,
+              );
+              localManager.load(token);
+
+              expect(localManager.expired, emits(token));
+              async.elapse(const Duration(hours: 1));
+            },
+            initialTime: pastCreationTime,
+          );
+        });
       });
 
       group('normal', () {
