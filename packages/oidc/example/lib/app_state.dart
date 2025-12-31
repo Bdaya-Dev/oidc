@@ -20,6 +20,37 @@ import 'package:rxdart/rxdart.dart' as rx;
 
 const kIsCI = bool.fromEnvironment('CI');
 final http.Client client = kIsCI ? http.MockClient(ciHandler) : http.Client();
+
+const _envOidcIssuer = String.fromEnvironment(
+  'OIDC_ISSUER',
+  defaultValue: 'https://demo.duendesoftware.com',
+);
+const _envOidcClientId = String.fromEnvironment(
+  'OIDC_CLIENT_ID',
+  defaultValue: 'interactive.public.short',
+);
+const _envOidcScopes = String.fromEnvironment(
+  'OIDC_SCOPES',
+  defaultValue: 'openid,profile,email,offline_access',
+);
+const _envOidcRedirectUri = String.fromEnvironment(
+  'OIDC_REDIRECT_URI',
+  defaultValue: 'http://localhost:22433/redirect.html',
+);
+const _envOidcPostLogoutRedirectUri = String.fromEnvironment(
+  'OIDC_POST_LOGOUT_REDIRECT_URI',
+  defaultValue: 'http://localhost:22433/redirect.html',
+);
+
+List<String> _parseScopes(String scopes) {
+  return scopes
+      .trim()
+      .split(RegExp(r'[\s,]+'))
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toList(growable: false);
+}
+
 Future<http.Response> ciHandler(http.Request request) async {
   // intercept requests to duende to avoid flaky tests.
   switch (request) {
@@ -60,12 +91,12 @@ const duendeManagerId = 'duende';
 final duendeManager = OidcUserManager.lazy(
   id: duendeManagerId,
   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
-    Uri.parse('https://demo.duendesoftware.com'),
+    Uri.parse(_envOidcIssuer),
   ),
   // this is a public client,
   // so we use [OidcClientAuthentication.none] constructor.
   clientCredentials: const OidcClientAuthentication.none(
-    clientId: 'interactive.public.short',
+    clientId: _envOidcClientId,
   ),
   store: OidcDefaultStore(),
   httpClient: client,
@@ -82,10 +113,11 @@ final duendeManager = OidcUserManager.lazy(
     strictJwtVerification: true,
     // set to true to enable offline auth
     supportOfflineAuth: true,
-    // scopes supported by the provider and needed by the client.
-    scope: ['openid', 'profile', 'email', 'offline_access'],
+    // Scopes supported by the provider and needed by the client.
+    // Configure via: --dart-define=OIDC_SCOPES=openid,profile,email,offline_access
+    scope: _parseScopes(_envOidcScopes),
     postLogoutRedirectUri: kIsWeb
-        ? Uri.parse('http://localhost:22433/redirect.html')
+        ? Uri.parse(_envOidcPostLogoutRedirectUri)
         : Platform.isAndroid || Platform.isIOS || Platform.isMacOS
         ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
         : Platform.isWindows || Platform.isLinux
@@ -96,7 +128,7 @@ final duendeManager = OidcUserManager.lazy(
         // see the file in /web/redirect.html for an example.
         //
         // for debugging in flutter, you must run this app with --web-port 22433
-        ? Uri.parse('http://localhost:22433/redirect.html')
+        ? Uri.parse(_envOidcRedirectUri)
         : Platform.isIOS || Platform.isMacOS || Platform.isAndroid
         // scheme: reverse domain name notation of your package name.
         // path: anything.
