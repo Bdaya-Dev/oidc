@@ -121,14 +121,6 @@ void main() {
                               },
                             ),
                             ListTile(
-                              leading: const Icon(Icons.cloud_off),
-                              title: const Text('Offline Mode Demo'),
-                              onTap: () {
-                                context.go('/offline-demo');
-                                Navigator.pop(context);
-                              },
-                            ),
-                            ListTile(
                               leading: const Icon(Icons.lock),
                               title: const Text('Secret Page'),
                               onTap: () {

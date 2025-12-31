@@ -19,7 +19,7 @@ class _SecretPageState extends State<SecretPage>
   OidcPlatformSpecificOptions_Web_NavigationMode webNavigationMode =
       OidcPlatformSpecificOptions_Web_NavigationMode.newPage;
 
-  // Offline mode demo state
+  // Offline mode state
   final List<String> _eventLog = [];
   String? _offlineModeReason;
   StreamSubscription<OidcEvent>? _eventSubscription;

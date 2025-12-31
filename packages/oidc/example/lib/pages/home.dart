@@ -27,9 +27,7 @@ class _HomePageState extends State<HomePage> {
             onPressed: () {
               GoRouter.of(context).go('/secret-route');
             },
-            child: const Text(
-              'Go to Protected Area (includes Offline Mode demo)',
-            ),
+            child: const Text('Go to Protected Area'),
           ),
         ],
       ),
