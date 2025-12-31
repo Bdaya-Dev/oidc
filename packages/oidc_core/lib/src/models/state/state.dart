@@ -90,7 +90,7 @@ class OidcState {
           if (state.createdAt.isBefore(cutoff)) {
             remove = true;
           }
-        } catch (err) {
+        } on Object {
           remove = true;
         }
       } else {

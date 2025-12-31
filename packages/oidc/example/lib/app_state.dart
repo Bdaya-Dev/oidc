@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:async/async.dart';
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart' as http;
 import 'package:logging/logging.dart';
@@ -13,13 +14,92 @@ import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
 import 'package:oidc_example/mock.dart';
 import 'package:rxdart/rxdart.dart' as rx;
-import 'package:simple_secure_storage/simple_secure_storage.dart';
 
 //This file represents a global state, which is bad
 //in a production app (since you can't test it).
 
 const kIsCI = bool.fromEnvironment('CI');
 final http.Client client = kIsCI ? http.MockClient(ciHandler) : http.Client();
+
+const _envOidcIssuer = String.fromEnvironment(
+  'OIDC_ISSUER',
+  defaultValue: 'https://demo.duendesoftware.com',
+);
+const _envOidcClientId = String.fromEnvironment(
+  'OIDC_CLIENT_ID',
+  defaultValue: 'interactive.public.short',
+);
+const _envOidcScopes = String.fromEnvironment(
+  'OIDC_SCOPES',
+  defaultValue: 'openid,profile,email,offline_access',
+);
+const _envOidcRedirectUri = String.fromEnvironment(
+  'OIDC_REDIRECT_URI',
+  defaultValue: 'redirect.html',
+);
+const _envOidcPostLogoutRedirectUri = String.fromEnvironment(
+  'OIDC_POST_LOGOUT_REDIRECT_URI',
+  defaultValue: 'redirect.html',
+);
+
+List<String> _parseScopes(String scopes) {
+  return scopes
+      .trim()
+      .split(RegExp(r'[\s,]+'))
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toList(growable: false);
+}
+
+Uri _toAbsoluteWebUri(
+  String configuredUri, {
+  Map<String, String>? queryParameters,
+}) {
+  final trimmed = configuredUri.trim();
+  if (trimmed.isEmpty) {
+    throw ArgumentError.value(
+      configuredUri,
+      'configuredUri',
+      'must not be empty',
+    );
+  }
+
+  final base = Uri.base;
+  final origin = Uri.parse(base.origin);
+
+  // Determine the current directory for the SPA route.
+  // Example:
+  // - /oidc-example/secret-route -> /oidc-example/
+  // - /oidc-example/            -> /oidc-example/
+  final basePath = base.path;
+  final directoryPath = basePath.endsWith('/')
+      ? basePath
+      : basePath.substring(0, basePath.lastIndexOf('/') + 1);
+
+  final parsed = Uri.parse(trimmed);
+
+  Uri result;
+  if (parsed.hasScheme) {
+    result = parsed;
+  } else if (trimmed.startsWith('/')) {
+    result = origin.replace(path: parsed.path);
+  } else {
+    result = origin.replace(path: '$directoryPath${parsed.path}');
+  }
+
+  final mergedQueryParameters = <String, String>{
+    ...result.queryParameters,
+    ...parsed.queryParameters,
+    if (queryParameters != null) ...queryParameters,
+  };
+
+  return result.replace(
+    queryParameters: mergedQueryParameters.isEmpty
+        ? null
+        : mergedQueryParameters,
+  );
+}
+
 Future<http.Response> ciHandler(http.Request request) async {
   // intercept requests to duende to avoid flaky tests.
   switch (request) {
@@ -60,21 +140,26 @@ const duendeManagerId = 'duende';
 final duendeManager = OidcUserManager.lazy(
   id: duendeManagerId,
   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
-    Uri.parse('https://demo.duendesoftware.com'),
+    Uri.parse(_envOidcIssuer),
   ),
   // this is a public client,
   // so we use [OidcClientAuthentication.none] constructor.
   clientCredentials: const OidcClientAuthentication.none(
-    clientId: 'interactive.public.short',
+    clientId: _envOidcClientId,
   ),
   store: OidcDefaultStore(),
   httpClient: client,
   // keyStore: JsonWebKeyStore(),
   settings: OidcUserManagerSettings(
-    frontChannelLogoutUri: Uri(
-      path: 'redirect.html',
-      queryParameters: {OidcConstants_Store.managerId: duendeManagerId},
-    ),
+    frontChannelLogoutUri: kIsWeb
+        ? _toAbsoluteWebUri(
+            'redirect.html',
+            queryParameters: {OidcConstants_Store.managerId: duendeManagerId},
+          )
+        : Uri(
+            path: 'redirect.html',
+            queryParameters: {OidcConstants_Store.managerId: duendeManagerId},
+          ),
     uiLocales: ['ar'],
     refreshBefore: (token) {
       return const Duration(seconds: 5);
@@ -82,10 +167,11 @@ final duendeManager = OidcUserManager.lazy(
     strictJwtVerification: true,
     // set to true to enable offline auth
     supportOfflineAuth: true,
-    // scopes supported by the provider and needed by the client.
-    scope: ['openid', 'profile', 'email', 'offline_access'],
+    // Scopes supported by the provider and needed by the client.
+    // Configure via: --dart-define=OIDC_SCOPES=openid,profile,email,offline_access
+    scope: _parseScopes(_envOidcScopes),
     postLogoutRedirectUri: kIsWeb
-        ? Uri.parse('http://localhost:22433/redirect.html')
+        ? _toAbsoluteWebUri(_envOidcPostLogoutRedirectUri)
         : Platform.isAndroid || Platform.isIOS || Platform.isMacOS
         ? Uri.parse('com.bdayadev.oidc.example:/endsessionredirect')
         : Platform.isWindows || Platform.isLinux
@@ -96,7 +182,7 @@ final duendeManager = OidcUserManager.lazy(
         // see the file in /web/redirect.html for an example.
         //
         // for debugging in flutter, you must run this app with --web-port 22433
-        ? Uri.parse('http://localhost:22433/redirect.html')
+        ? _toAbsoluteWebUri(_envOidcRedirectUri)
         : Platform.isIOS || Platform.isMacOS || Platform.isAndroid
         // scheme: reverse domain name notation of your package name.
         // path: anything.
@@ -175,18 +261,7 @@ Future<void> initApp() {
     // Set up the secure storage for the default store.
     try {
       (duendeManager.store as OidcDefaultStore).secureStorage =
-          await CachedSimpleSecureStorage.getInstance(
-            kIsWeb || kIsWasm
-                ? WebInitializationOptions(
-                    keyPassword: 'ChangeThisInProduction',
-                    encryptionSalt: 'ChangeThisInProduction',
-                    appName: 'oidc_example',
-                  )
-                : const InitializationOptions(
-                    appName: 'oidc_example',
-                    namespace: 'SimpleSecureStorage',
-                  ),
-          );
+          const FlutterSecureStorage();
     } catch (e) {
       exampleLogger.severe('Failed to initialize secure storage', e);
     }

@@ -34,35 +34,38 @@ class OidcTokenEventsManager {
       // there is no way to determine when will it expire.
       return;
     }
+
+    // Schedule expiring notification if enabled.
     final expiringNotificationTime = getExpiringNotificationTime?.call(token);
     if (expiringNotificationTime == null) {
       logger.finest(
-        'expiringNotificationTime is null, no timer will be started.',
+        'expiringNotificationTime is null, expiring notifications are disabled.',
       );
-      return;
-    }
-    if (expiresInFromNow < expiringNotificationTime) {
-      //going to expire.
-      logger.finest(
-        'loaded token was already expiring, raised expiring event.',
-      );
-      if (!_expiringController.isClosed) {
-        _expiringController.add(token);
-      }
     } else {
-      final timeUntilExpiring = expiresInFromNow - expiringNotificationTime;
-      logger.finest(
-        'started a timer that will raise the expiring event '
-        'after: $timeUntilExpiring',
-      );
-      //start a timer that will fire the expiring controller.
-      _expiringTimer = Timer(timeUntilExpiring, () {
-        logger.finest('raising expiring event.');
+      if (expiresInFromNow < expiringNotificationTime) {
+        //going to expire.
+        logger.finest(
+          'loaded token was already expiring, raised expiring event.',
+        );
         if (!_expiringController.isClosed) {
           _expiringController.add(token);
         }
-      });
+      } else {
+        final timeUntilExpiring = expiresInFromNow - expiringNotificationTime;
+        logger.finest(
+          'started a timer that will raise the expiring event '
+          'after: $timeUntilExpiring',
+        );
+        //start a timer that will fire the expiring controller.
+        _expiringTimer = Timer(timeUntilExpiring, () {
+          logger.finest('raising expiring event.');
+          if (!_expiringController.isClosed) {
+            _expiringController.add(token);
+          }
+        });
+      }
     }
+
     if (expiresInFromNow.isNegative) {
       //already expired.
       //there is no need to run a timer for a token that's already expired.

@@ -43,16 +43,17 @@ void main() async {
 
 Future<void> init() async {
   final element = web.document.querySelector('#output') as web.HTMLDivElement;
-  element.text = "initializing user manager...";
+  element.textContent = 'initializing user manager...';
   await duendeManager.init();
   element.textContent = null;
   element.appendChild(
-    web.document.createElement('span')..text = 'User manager is initialized!',
+    web.document.createElement('span')
+      ..textContent = 'User manager is initialized!',
   );
   element.appendChild(web.document.createElement('br'));
   element.appendChild(
     web.document.createElement('span')
-      ..text = duendeManager.discoveryDocument.src.toString(),
+      ..textContent = duendeManager.discoveryDocument.src.toString(),
   );
 }
 

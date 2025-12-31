@@ -307,6 +307,131 @@ abstract class OidcUserManagerBase {
     );
   }
 
+  /// Attempts to login the user via the OAuth2 Device Authorization Grant.
+  ///
+  /// This adapts RFC 8628.
+  ///
+  /// The [onVerification] callback can be used by UIs/CLIs to display the
+  /// verification URI/user code to the end-user.
+  Future<OidcUser?> loginDeviceCodeFlow({
+    List<String>? scopeOverride,
+    OidcProviderMetadata? discoveryDocumentOverride,
+    Map<String, dynamic>? extraTokenParameters,
+    Map<String, String>? extraTokenHeaders,
+    FutureOr<void> Function(OidcDeviceAuthorizationResponse response)?
+    onVerification,
+  }) async {
+    ensureInit();
+
+    final metadata = discoveryDocumentOverride ?? discoveryDocument;
+    final tokenEndpoint = metadata.tokenEndpoint;
+    if (tokenEndpoint == null) {
+      logAndThrow("This provider doesn't provide a token endpoint");
+    }
+
+    final deviceAuthEndpointValue = metadata
+        .src[OidcConstants_ProviderMetadata.deviceAuthorizationEndpoint];
+    if (deviceAuthEndpointValue == null) {
+      logAndThrow(
+        "This provider doesn't provide the device_authorization_endpoint",
+      );
+    }
+    final deviceAuthorizationEndpoint = Uri.parse(
+      deviceAuthEndpointValue.toString(),
+    );
+
+    final deviceResp = await OidcEndpoints.deviceAuthorization(
+      deviceAuthorizationEndpoint: deviceAuthorizationEndpoint,
+      credentials: clientCredentials,
+      request: OidcDeviceAuthorizationRequest(
+        scope: scopeOverride ?? settings.scope,
+      ),
+      client: httpClient,
+    );
+
+    await onVerification?.call(deviceResp);
+
+    final deadline = clock.now().add(deviceResp.expiresIn);
+    var pollInterval =
+        deviceResp.interval ??
+        OidcConstants_DeviceAuthorizationPolling.defaultInterval;
+
+    while (clock.now().isBefore(deadline)) {
+      await Future<void>.delayed(pollInterval);
+      try {
+        final tokenResp = await (settings.hooks?.token).execute(
+          request: OidcTokenHookRequest(
+            metadata: metadata,
+            tokenEndpoint: tokenEndpoint,
+            request: OidcTokenRequest.deviceCode(
+              deviceCode: deviceResp.deviceCode,
+              clientId: clientCredentials.clientId,
+              scope: scopeOverride ?? settings.scope,
+              extra: {
+                ...?settings.extraTokenParameters,
+                ...?extraTokenParameters,
+              },
+            ),
+            credentials: clientCredentials,
+            headers: {
+              ...?settings.extraTokenHeaders,
+              ...?extraTokenHeaders,
+            },
+            client: httpClient,
+            options: settings.options,
+          ),
+          defaultExecution: (hookRequest) {
+            return OidcEndpoints.token(
+              tokenEndpoint: hookRequest.tokenEndpoint,
+              credentials: hookRequest.credentials,
+              headers: hookRequest.headers,
+              request: hookRequest.request,
+              client: hookRequest.client,
+            );
+          },
+        );
+
+        final token = OidcToken.fromResponse(
+          tokenResp,
+          overrideExpiresIn: settings.getExpiresIn?.call(tokenResp),
+          sessionState: tokenResp.sessionState,
+        );
+
+        // If an id_token is not returned, we cannot construct an OIDC user.
+        if (!token.isOidc) {
+          throw const OidcException(
+            "Server didn't return the id_token. Ensure `openid` scope is included.",
+          );
+        }
+
+        return createUserFromToken(
+          token: token,
+          nonce: null,
+          attributes: null,
+          userInfo: null,
+          metadata: metadata,
+        );
+      } on OidcException catch (e) {
+        final code = e.errorResponse?.error;
+        switch (code) {
+          case OidcConstants_DeviceAuthorizationErrors.authorizationPending:
+            continue;
+          case OidcConstants_DeviceAuthorizationErrors.slowDown:
+            pollInterval +=
+                OidcConstants_DeviceAuthorizationPolling.slowDownIncrement;
+            continue;
+          case OidcConstants_DeviceAuthorizationErrors.accessDenied:
+          case OidcConstants_DeviceAuthorizationErrors.expiredToken:
+            return null;
+          default:
+            rethrow;
+        }
+      }
+    }
+
+    return null;
+  }
+
   @protected
   Future<OidcUser?> tryGetAuthResponse({
     required OidcAuthorizeRequest request,
@@ -957,7 +1082,7 @@ abstract class OidcUserManagerBase {
 
   @protected
   void listenToUserSessionIfSupported(OidcUser? user) {
-    sessionSub?.cancel();
+    unawaited(sessionSub?.cancel());
     sessionSub = null;
     if (user == null) {
       return;
@@ -1038,7 +1163,7 @@ abstract class OidcUserManagerBase {
 
     final errorType = OidcOfflineAuthErrorHandler.categorizeError(error);
     final canContinue = OidcOfflineAuthErrorHandler.shouldContinueInOfflineMode(
-      error: errorType,
+      error: error,
       supportOfflineAuth: settings.supportOfflineAuth,
     );
     if (!canContinue) {
@@ -1151,7 +1276,7 @@ abstract class OidcUserManagerBase {
         attributes: null,
         metadata: discoveryDocument,
       );
-    } catch (e) {
+    } on Object catch (e) {
       // Handle errors based on offline auth settings
       final handledOffline = handleOfflineEligibleFailure(
         error: e,
@@ -1245,7 +1370,7 @@ abstract class OidcUserManagerBase {
 
       // Successful refresh - update last server contact and exit offline mode
       recordSuccessfulServerContact(newToken: newUser?.token);
-    } catch (e) {
+    } on Object catch (e) {
       final handledOffline = handleOfflineEligibleFailure(
         error: e,
         fallbackToken: event,
@@ -1355,7 +1480,7 @@ abstract class OidcUserManagerBase {
     );
 
     if (!settings.supportOfflineAuth) {
-      forgetUser();
+      unawaited(forgetUser());
     } else {
       // Only emit warning if we're actually in offline mode
       // (not just because offline auth is enabled)
@@ -1449,7 +1574,7 @@ abstract class OidcUserManagerBase {
             newToken: actualUser.token,
             exitOffline: false,
           );
-        } catch (e, st) {
+        } on Object catch (e, st) {
           logger.severe('UserInfo endpoint threw an exception!', e, st);
           userInfoFailed = true;
 
@@ -1610,7 +1735,7 @@ abstract class OidcUserManagerBase {
         currentDiscoveryDocument = OidcProviderMetadata.fromJson(
           jsonDecode(cachedDocument) as Map<String, dynamic>,
         );
-      } catch (e, st) {
+      } on Object catch (e, st) {
         //swallow error.
         //remove the cached document.
         logger.warning(
@@ -1739,7 +1864,7 @@ abstract class OidcUserManagerBase {
           'Found a cached token, but the user could not be created or validated',
         );
       }
-    } catch (e) {
+    } on Object catch (_) {
       if (!settings.supportOfflineAuth) {
         // remove invalid tokens, so that they don't get used again.
         await store.removeMany(

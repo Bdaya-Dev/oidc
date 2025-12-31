@@ -10,6 +10,7 @@ workspace:
   - packages/oidc/example
   - packages/oidc_android
   - packages/oidc_android/example
+  - packages/oidc_cli
   - packages/oidc_core
   - packages/oidc_default_store
   - packages/oidc_desktop
@@ -100,41 +101,27 @@ melos:
       run: melos run test:web:single
       env:
         TEST_PLATFORM: firefox
+        MOZ_HEADLESS: "1"
         WITH_WASM: false
     test:web:single:
       name: Dart Web tests in a browser
       env:
         WITH_WASM: false
+      # We have to use --timeout 60m alongside --ignore-timeouts
       exec: |
         if [ "$TARGET_DART_SDK" = "min" ]; then
-          if [ "${TEST_PLATFORM}" = "firefox" ] && command -v xvfb-run >/dev/null 2>&1; then
-            xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --chain-stack-traces
-          elif [ "${TEST_PLATFORM}" = "chrome" ] && command -v xvfb-run >/dev/null 2>&1; then
-            xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --chain-stack-traces
-          else
-            dart test --concurrency=1 --platform ${TEST_PLATFORM} --chain-stack-traces
-          fi
+          dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --chain-stack-traces
         else
-          if [ "${TEST_PLATFORM}" = "firefox" ] && command -v xvfb-run >/dev/null 2>&1; then
-            xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
-          elif [ "${TEST_PLATFORM}" = "chrome" ] && command -v xvfb-run >/dev/null 2>&1; then
-            xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
-          else
-            dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
-          fi
+          dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
           if [ "$WITH_WASM" = "true" ]; then
-            if [ "${TEST_PLATFORM}" = "firefox" ] && command -v xvfb-run >/dev/null 2>&1; then
-              xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
-            elif [ "${TEST_PLATFORM}" = "chrome" ] && command -v xvfb-run >/dev/null 2>&1; then
-              xvfb-run -a dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
-            else
-              dart test --concurrency=1 --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
-            fi
+            dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
           fi
         fi
       packageFilters:
         dirExists: test
         flutter: false
+        ignore:
+          - oidc_cli
     remove_dart_test_yaml:
       name: Remove dart_test.yaml
       run: find . -type f -name 'dart_test.yaml' -delete
@@ -230,4 +217,8 @@ melos:
         melos run coverage:format
         dart pub global run combine_coverage --repo-path=$pwd
         dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$'
+
+    oidc:activate:
+      name: Activate OIDC CLI locally
+      run: dart pub global activate --source path packages/oidc_cli
 

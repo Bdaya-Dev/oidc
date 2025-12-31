@@ -11,6 +11,7 @@ nav:
       - 'Usage': oidc-usage.md
       - 'Access token usage': 'oidc-usage-accesstoken.md'
       - 'Offline Authentication': 'oidc-offline-auth.md'
+    - 'package:oidc_cli': oidc_cli.md
     - 'package:oidc_core': oidc_core.md
     - 'package:oidc_web_core': oidc_web_core.md
     - 'OidcStore':

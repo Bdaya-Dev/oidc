@@ -1,0 +1,123 @@
+name: Deploy Example to Firebase Hosting
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/deploy_firebase.yaml"
+      - "firebase.json"
+      - ".firebaserc"
+      - "packages/oidc/example/**"
+  workflow_dispatch:
+    inputs:
+      oidc_issuer:
+        description: "OIDC issuer URL (used to derive the discovery document)"
+        required: false
+        type: string
+        default: "https://demo.duendesoftware.com"
+      oidc_client_id:
+        description: "OIDC clientId"
+        required: false
+        type: string
+        default: "interactive.public.short"
+      oidc_scopes:
+        description: "Scopes (comma and/or space separated)"
+        required: false
+        type: string
+        default: "openid profile email offline_access"
+      oidc_redirect_uri:
+        description: "Redirect URI (defaults to the Firebase hosted redirect.html)"
+        required: false
+        type: string
+        default: ""
+      oidc_post_logout_redirect_uri:
+        description: "Post logout redirect URI (defaults to the Firebase hosted redirect.html)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "firebase-hosting"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          cache-key: flutter-:os:-:channel:-:arch:-:hash:-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: Build Example (Flutter web + wasm)
+        shell: bash
+        env:
+          OIDC_ISSUER: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.oidc_issuer) || 'https://demo.duendesoftware.com' }}
+          OIDC_CLIENT_ID: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.oidc_client_id) || 'interactive.public.short' }}
+          OIDC_SCOPES: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.oidc_scopes) || 'openid profile email offline_access' }}
+          OIDC_REDIRECT_URI_INPUT: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.oidc_redirect_uri) || '' }}
+          OIDC_POST_LOGOUT_REDIRECT_URI_INPUT: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.oidc_post_logout_redirect_uri) || '' }}
+        run: |
+          set -euo pipefail
+
+          # For multi-site Firebase Hosting, the app is at the site root.
+          BASE_HREF="/"
+
+          DEFAULT_REDIRECT_URI="redirect.html"
+
+          if [ -n "${OIDC_REDIRECT_URI_INPUT}" ]; then
+            OIDC_REDIRECT_URI="${OIDC_REDIRECT_URI_INPUT}"
+          else
+            OIDC_REDIRECT_URI="${DEFAULT_REDIRECT_URI}"
+          fi
+
+          if [ -n "${OIDC_POST_LOGOUT_REDIRECT_URI_INPUT}" ]; then
+            OIDC_POST_LOGOUT_REDIRECT_URI="${OIDC_POST_LOGOUT_REDIRECT_URI_INPUT}"
+          else
+            OIDC_POST_LOGOUT_REDIRECT_URI="${DEFAULT_REDIRECT_URI}"
+          fi
+
+          pushd packages/oidc/example
+          flutter pub get
+          flutter build web --release --wasm --base-href "${BASE_HREF}" \
+            --dart-define=OIDC_ISSUER="${OIDC_ISSUER}" \
+            --dart-define=OIDC_CLIENT_ID="${OIDC_CLIENT_ID}" \
+            --dart-define=OIDC_SCOPES="${OIDC_SCOPES}" \
+            --dart-define=OIDC_REDIRECT_URI="${OIDC_REDIRECT_URI}" \
+            --dart-define=OIDC_POST_LOGOUT_REDIRECT_URI="${OIDC_POST_LOGOUT_REDIRECT_URI}"
+          popd
+
+          mkdir -p dist/oidc-example
+          rm -rf dist/oidc-example/*
+          cp -R packages/oidc/example/build/web/. dist/oidc-example/
+
+      - name: Setup Node (Firebase CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Firebase CLI
+        run: npm i -g firebase-tools
+
+      - name: Authenticate to Google Cloud
+        env:
+          FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC }}
+        run: |
+          if [ -z "${FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC}" ]; then
+            echo "Missing secret: FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC" >&2
+            exit 1
+          fi
+          echo "${FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC}" > "$RUNNER_TEMP/gcp-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/gcp-sa.json" >> $GITHUB_ENV
+
+      - name: Deploy Example to Firebase Hosting
+        run: firebase deploy --project bdaya-oidc --only hosting:oidc-flutter-example

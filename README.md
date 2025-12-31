@@ -15,6 +15,7 @@ This is a Mono repo of multiple packages:
     The main dart package, it implements the basic openid/oauth specification, except the platform specific parts (like redirection)
  - [oidc](packages/oidc/README.md): builds on top of `oidc_core`, and adds platform-specific parts, this also contains the `UserManager` class.
  - [oidc_default_store](packages/oidc_default_store/README.md): the default `OidcStore` store implementation.
+ - [oidc_cli](packages/oidc_cli/README.md): a provider-agnostic CLI for authenticating against an OIDC provider.
 
 Make sure you read the [![Static Badge](https://img.shields.io/badge/wiki-purple)](https://bdaya-dev.github.io/oidc/) for extra information.
 

@@ -1,0 +1,39 @@
+{
+  "hosting": [
+    {
+      "target": "oidc-flutter-example",
+      "public": "dist/oidc-example",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "headers": [
+        {
+          "source": "**/*.wasm",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/wasm"
+            }
+          ]
+        }
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    {
+      "target": "oidc-flutter-docs",
+      "public": "dist/oidc-docs",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
+    }
+  ]
+}

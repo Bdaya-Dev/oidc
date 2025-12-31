@@ -1,5 +1,5 @@
 // coverage:ignore-file
-// ignore_for_file: camel_case_types, lines_longer_than_80_chars
+// ignore_for_file: camel_case_types
 //==========================================================================================================
 // This file was collected from https://www.iana.org/assignments/oauth-parameters/oauth-parameters.xhtml  ||
 //==========================================================================================================
@@ -59,6 +59,32 @@ class OidcConstants_GrantType {
 
   static const String jwtBearer = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
   static const String umaTicket = 'urn:ietf:params:oauth:grant-type:uma-ticket';
+}
+
+/// RFC 8628 (OAuth 2.0 Device Authorization Grant) error codes.
+///
+/// These are returned from the token endpoint while polling.
+class OidcConstants_DeviceAuthorizationErrors {
+  /// The user hasn't finished authorization yet.
+  static const authorizationPending = 'authorization_pending';
+
+  /// Same as [authorizationPending], but polling must slow down.
+  static const slowDown = 'slow_down';
+
+  /// The user denied the authorization request.
+  static const accessDenied = 'access_denied';
+
+  /// The device_code has expired.
+  static const expiredToken = 'expired_token';
+}
+
+/// RFC 8628 polling defaults.
+class OidcConstants_DeviceAuthorizationPolling {
+  /// RFC 8628 Section 3.5: default polling interval if the server omits it.
+  static const defaultInterval = Duration(seconds: 5);
+
+  /// RFC 8628 Section 3.5: required increase when receiving `slow_down`.
+  static const slowDownIncrement = Duration(seconds: 5);
 }
 
 class OidcConstants_Scopes {
@@ -601,7 +627,6 @@ class OidcConstants_AuthorizeRequest_ResponseMode {
 /// The response_type options defined by the spec
 class OidcConstants_AuthorizationEndpoint_ResponseType {
   /// `id_token token`, used for the implicit flow
-  // ignore: constant_identifier_names
   static const idToken_Token = <String>[idToken, token];
 
   /// Authorization Code Flow

@@ -401,7 +401,7 @@ class OidcEndpoints {
       method: OidcConstants_RequestMethod.post,
       uri: tokenEndpoint,
       headers: {
-        if (authHeader != null) _authorizationHeaderKey: authHeader,
+        _authorizationHeaderKey: ?authHeader,
         ...?headers,
       },
       contentType: _formUrlEncoded,
@@ -558,7 +558,7 @@ class OidcEndpoints {
           JsonWebToken? parsedJwt;
           try {
             parsedJwt = JsonWebToken.unverified(endpointResp.body);
-          } catch (_) {
+          } on Object {
             parsedJwt = null;
           }
           if (parsedJwt != null) {
@@ -610,7 +610,7 @@ class OidcEndpoints {
       method: OidcConstants_RequestMethod.post,
       uri: deviceAuthorizationEndpoint,
       headers: {
-        if (authHeader != null) _authorizationHeaderKey: authHeader,
+        _authorizationHeaderKey: ?authHeader,
         ...?headers,
       },
       contentType: _formUrlEncoded,
@@ -647,7 +647,7 @@ class OidcEndpoints {
       uri: revocationEndpoint,
       contentType: _formUrlEncoded,
       headers: {
-        if (authHeader != null) _authorizationHeaderKey: authHeader,
+        _authorizationHeaderKey: ?authHeader,
         ...?headers,
       },
       bodyFields: {

@@ -70,7 +70,7 @@ void main() {
                             ),
                             const Divider(),
                             const Padding(
-                              padding: EdgeInsets.all(8.0),
+                              padding: EdgeInsets.all(8),
                               child: Text(
                                 'Select the manager',
                                 style: TextStyle(fontSize: 16),
@@ -117,14 +117,6 @@ void main() {
                               title: const Text('Home'),
                               onTap: () {
                                 context.go('/');
-                                Navigator.pop(context);
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.cloud_off),
-                              title: const Text('Offline Mode Demo'),
-                              onTap: () {
-                                context.go('/offline-demo');
                                 Navigator.pop(context);
                               },
                             ),

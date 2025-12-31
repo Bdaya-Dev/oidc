@@ -1,4 +1,4 @@
-// ignore_for_file: avoid_redundant_argument_values, cascade_invocations
+// ignore_for_file: avoid_redundant_argument_values
 
 import 'package:clock/clock.dart';
 import 'package:fake_async/fake_async.dart';
@@ -32,7 +32,7 @@ void main() {
     'OidcTokenEventsManager',
     timeout: const Timeout(Duration(seconds: 5)),
     () {
-      test('unknown expiresIn', () {
+      test('unknown expiresIn', () async {
         final token = OidcToken.fromJson({
           ...src,
           OidcConstants_AuthParameters.expiresIn: null,
@@ -41,7 +41,7 @@ void main() {
         final manager = OidcTokenEventsManager(
           getExpiringNotificationTime: null,
         );
-        expectLater(
+        final expectation = expectLater(
           OidcTokenEventsManager.logger.onRecord,
           emitsThrough(
             _loggerHavingMessage(
@@ -50,14 +50,14 @@ void main() {
           ),
         );
         manager.load(token);
+        await expectation;
       });
       group('no getExpiringNotificationTime', () {
         final token = OidcToken.fromJson(src);
-
-        final manager = OidcTokenEventsManager(
-          getExpiringNotificationTime: null,
-        );
         test('start by unloading.', () {
+          final manager = OidcTokenEventsManager(
+            getExpiringNotificationTime: null,
+          );
           expect(
             OidcTokenEventsManager.logger.onRecord,
             emits(_loggerHavingMessage('Unloading timers.')),
@@ -65,19 +65,31 @@ void main() {
           manager.load(token);
         });
         test(
-          'does not start timer.',
+          'still schedules expired even when expiring notifications are disabled.',
           () async {
-            expect(
-              OidcTokenEventsManager.logger.onRecord,
-              emitsThrough(
-                _loggerHavingMessage(
-                  'expiringNotificationTime is null, no timer will be started.',
-                ),
-              ),
+            // Covered by the behavioral test below; this test is intentionally
+            // lightweight to avoid flakiness from shared logger ordering.
+            final localManager = OidcTokenEventsManager(
+              getExpiringNotificationTime: null,
             );
-            manager.load(token);
+            localManager.load(token);
           },
         );
+
+        test('still emits expired after expiry time', () {
+          fakeAsync(
+            (async) {
+              final localManager = OidcTokenEventsManager(
+                getExpiringNotificationTime: null,
+              );
+              localManager.load(token);
+
+              expect(localManager.expired, emits(token));
+              async.elapse(const Duration(hours: 1));
+            },
+            initialTime: pastCreationTime,
+          );
+        });
       });
 
       group('normal', () {

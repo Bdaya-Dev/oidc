@@ -43,7 +43,7 @@ void _ensureLoggingConfigured() {
     if (record.stackTrace != null) {
       buffer.write('\n${record.stackTrace}');
     }
-    print(buffer.toString());
+    print(buffer);
   });
   _loggingConfigured = true;
 }
@@ -103,9 +103,9 @@ void main() {
             },
           ),
         );
-        _testLogger.info('Dio client configured for conformance API.');
-
-        _testLogger.info('Fetching server diagnostics (api/server)...');
+        _testLogger
+          ..info('Dio client configured for conformance API.')
+          ..info('Fetching server diagnostics (api/server)...');
         final serverInfo = await dio.get<Map<String, dynamic>>('api/server');
         _testLogger.info('Server info OK (status ${serverInfo.statusCode}).');
         expect(serverInfo.statusCode, 200);
@@ -148,7 +148,7 @@ void main() {
         );
         expect(testPlanResponse.data, isMap);
 
-        final testPlanData = testPlanResponse.data as Map<String, dynamic>;
+        final testPlanData = testPlanResponse.data!;
         final testPlanId = testPlanData['id'] as String;
         final testPlanModules = testPlanData['modules'] as List<dynamic>? ?? [];
         _testLogger.info(
@@ -176,16 +176,17 @@ void main() {
 
           final testInstanceId = testInstance['id'] as String;
           final logger = Logger('oidc.conformance.$moduleName.$testInstanceId');
-          logger.info('Module starting. Variant: $variant');
           final logsToWrite = <String>[];
           final sub = Logger.root.onRecord.listen((record) {
             final message =
                 '[${record.time} ${record.level.name}][${record.loggerName}]: ${record.message}';
             logsToWrite.add(message);
           });
-          logger.info('Test instance created: $testInstance');
           final url = testInstance['url'] as String;
-          logger.info('Test Instance ID: $testInstanceId, URL: $url');
+          logger
+            ..info('Module starting. Variant: $variant')
+            ..info('Test instance created: $testInstance')
+            ..info('Test Instance ID: $testInstanceId, URL: $url');
 
           final manager = conformanceManager(
             url,
@@ -223,13 +224,11 @@ void main() {
             }
           }
           setupStopwatch.stop();
-          logger.info(
-            'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
-          );
-
-          logger.info(
-            'Initializing manager for test instance: $testInstanceId',
-          );
+          logger
+            ..info(
+              'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
+            )
+            ..info('Initializing manager for test instance: $testInstanceId');
           await manager.init();
           expect(manager.didInit, true);
           logger.info('Manager initialized');
