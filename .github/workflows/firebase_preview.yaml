@@ -12,6 +12,7 @@ on:
       - "packages/oidc/example/**"
 
 permissions:
+  checks: write
   contents: read
   pull-requests: write
 
