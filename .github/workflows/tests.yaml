@@ -36,7 +36,7 @@ jobs:
       CHROME_FLAGS: --no-sandbox --disable-dev-shm-usage --disable-gpu
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/flutter_base
         with:
@@ -91,7 +91,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Enable KVM
@@ -187,7 +187,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
         # with:
@@ -238,7 +238,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
@@ -277,7 +277,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Run flutter precache
@@ -317,7 +317,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Install Dependencies
@@ -363,7 +363,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Run flutter precache
@@ -400,7 +400,7 @@ jobs:
     needs: [unit_tests, android, ios, macos, linux, windows]
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Download unit test coverage
