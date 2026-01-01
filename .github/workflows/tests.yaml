@@ -76,7 +76,7 @@ jobs:
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run coverage:combine
       - name: Upload Unit Test Coverage Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         if: ${{ matrix.sdk == 'stable' }}
         with:
           name: package-coverage
@@ -198,7 +198,7 @@ jobs:
           echo "$GITHUB_WORKSPACE"
           find "$GITHUB_WORKSPACE" \( -name "*.info" -o -path "*/coverage/*" \) -type f -exec ls -l {} +
       - name: Upload Coverage Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: android-integration-coverage
           path: packages/oidc/example/coverage/android-coverage.info
@@ -249,7 +249,7 @@ jobs:
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ios-integration-coverage
           path: packages/oidc/example/coverage/ios-coverage.info
@@ -290,7 +290,7 @@ jobs:
 
       # web has no test coverage for now
       # - name: Upload Coverage Report
-      #   uses: actions/upload-artifact@v5
+      #   uses: actions/upload-artifact@v6
       #   with:
       #     name: web-coverage
       #     path: packages/oidc/example/coverage/web-coverage.info
@@ -327,7 +327,7 @@ jobs:
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
       - name: Upload Coverage Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: macos-integration-coverage
           path: packages/oidc/example/coverage/macos-*-coverage.info
@@ -369,14 +369,14 @@ jobs:
           ./.ci/scripts/set_default_linux_apps.sh
           xvfb-run --auto-servernum flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN -r expanded
       - name: Upload Coverage Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: linux-integration-coverage
           path: packages/oidc/example/coverage/linux-coverage.info
           include-hidden-files: true
           if-no-files-found: error
       - name: Upload Conformance Logs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: oidc-client-logs
           path: packages/oidc/example/client-logs/final.zip
@@ -414,7 +414,7 @@ jobs:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         shell: bash
       - name: Upload Coverage Report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: windows-integration-coverage
           path: packages/oidc/example/coverage/windows-*-coverage.info
@@ -457,7 +457,7 @@ jobs:
           dart pub global run combine_coverage --repo-path="$REPO_PATH"
       # Upload
       - name: Upload the final coverage as an artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: final-coverage
           path: coverage/lcov.info
