@@ -1,5 +1,9 @@
 # oidc_cli
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Bdaya-Dev/oidc/main/logo.svg" alt="oidc_cli logo" width="200">
+</p>
+
 A small provider-agnostic CLI for authenticating against an OpenID Connect (OIDC) provider using the Authorization Code flow with a local loopback redirect.
 
 This is primarily intended for local development and scripting.

@@ -3,6 +3,10 @@ description: Web implementation of the oidc plugin
 version: 0.7.0+1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_web
 homepage: https://bdaya-dev.github.io/oidc/
+topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
+screenshots:
+  - description: 'oidc_web logo'
+    path: logo.png
 resolution: workspace
 environment:
   sdk: ">=3.5.0 <4.0.0"

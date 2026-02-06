@@ -60,8 +60,7 @@ jobs:
       - name: Setup Node (Firebase CLI)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 24
 
       - name: Install Firebase CLI
         run: npm i -g firebase-tools

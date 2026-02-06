@@ -3,6 +3,10 @@ description: Android implementation of the oidc plugin
 version: 0.8.0+1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_android
 homepage: https://bdaya-dev.github.io/oidc/
+topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
+screenshots:
+  - description: 'oidc_android logo'
+    path: logo.png
 resolution: workspace
 
 environment:

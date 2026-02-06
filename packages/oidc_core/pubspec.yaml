@@ -4,6 +4,9 @@ version: 0.16.0
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_core
 topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
 homepage: https://bdaya-dev.github.io/oidc/
+screenshots:
+  - description: 'oidc_core logo'
+    path: logo.png
 resolution: workspace
 environment:
   sdk: ^3.9.0
