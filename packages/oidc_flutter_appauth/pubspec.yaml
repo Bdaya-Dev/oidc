@@ -1,6 +1,6 @@
 name: oidc_flutter_appauth
 description: Base Implementation connecting oidc_* packages with flutter_appauth
-version: 0.7.0+1
+version: 0.7.0+2
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_flutter_appauth
 homepage: https://bdaya-dev.github.io/oidc/
 topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
@@ -16,8 +16,8 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_appauth: ^11.0.0
-  oidc_core: ^0.16.0
-  oidc_platform_interface: ^0.7.0+1
+  oidc_core: ^0.16.1
+  oidc_platform_interface: ^0.7.0+2
   
 
 dev_dependencies:
