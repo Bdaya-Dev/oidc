@@ -263,6 +263,7 @@ abstract class OidcUserManagerBase {
     List<String>? scopeOverride,
     OidcProviderMetadata? discoveryDocumentOverride,
     Map<String, dynamic>? extraBodyFields,
+    Map<String, String>? extraTokenHeaders,
   }) async {
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
@@ -279,7 +280,10 @@ abstract class OidcUserManagerBase {
           extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
         ),
         credentials: clientCredentials,
-        headers: settings.extraTokenHeaders,
+        headers: {
+          ...?settings.extraTokenHeaders,
+          ...?extraTokenHeaders,
+        },
         client: httpClient,
         options: settings.options,
       ),
