@@ -1,3 +1,7 @@
+## 0.16.1+1
+
+ - **DOCS**: remove logo branding from screenshots. ([2acf65d3](https://github.com/Bdaya-Dev/oidc/commit/2acf65d34fb47c0449653a73373168df3deb1735))
+
 ## 0.16.1
 
  - **FEAT**(oidc_core): add extraTokenHeaders parameter to loginPassword. ([e00c753b](https://github.com/Bdaya-Dev/oidc/commit/e00c753be7f774b23b8a585c590df8936deaaf97))

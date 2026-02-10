@@ -1,6 +1,6 @@
 name: oidc_linux
 description: Linux implementation of the oidc plugin
-version: 0.5.0+2
+version: 0.5.0+3
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_linux
 homepage: https://bdaya-dev.github.io/oidc/
 topics: ["oidc", "openidconnect", "oauth", "authentication"]
@@ -21,9 +21,9 @@ dependencies:
   flutter:
     sdk: flutter
   logging: ^1.2.0
-  oidc_core: ^0.16.1
-  oidc_desktop: ^0.7.0+2
-  oidc_platform_interface: ^0.7.0+2
+  oidc_core: ^0.16.1+1
+  oidc_desktop: ^0.7.0+3
+  oidc_platform_interface: ^0.7.0+3
 
 dev_dependencies:
   flutter_test:
