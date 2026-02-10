@@ -1,6 +1,6 @@
 name: oidc_windows
 description: Windows implementation of the oidc plugin
-version: 0.4.0+1
+version: 0.4.0+2
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_windows
 homepage: https://bdaya-dev.github.io/oidc/
 topics: ["oidc", "openidconnect", "oauth", "authentication"]
@@ -22,9 +22,9 @@ dependencies:
   flutter:
     sdk: flutter
   logging: ^1.2.0
-  oidc_core: ^0.16.0
-  oidc_desktop: ^0.7.0+1
-  oidc_platform_interface: ^0.7.0+1
+  oidc_core: ^0.16.1
+  oidc_desktop: ^0.7.0+2
+  oidc_platform_interface: ^0.7.0+2
 
 dev_dependencies:
   flutter_test:

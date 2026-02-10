@@ -1,6 +1,6 @@
 name: oidc_cli
 description: A small provider-agnostic CLI for authenticating against an OpenID Connect (OIDC) provider.
-version: 0.0.2
+version: 0.0.2+1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_cli
 homepage: https://bdaya-dev.github.io/oidc/
 topics: ["oidc", "openidconnect", "oauth", "authentication"]
@@ -14,7 +14,7 @@ dependencies:
   cli_completion: ^0.5.1
   http: ^1.1.0
   mason_logger: ^0.3.3
-  oidc_core: ^0.16.0
+  oidc_core: ^0.16.1
   oidc_loopback_listener: ^0.3.0
   path: ^1.9.1
   pub_updater: ^0.5.0

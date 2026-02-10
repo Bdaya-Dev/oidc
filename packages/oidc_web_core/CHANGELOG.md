@@ -1,3 +1,7 @@
+## 0.4.0+2
+
+ - Update a dependency to the latest release.
+
 ## 0.4.0+1
 
  - **FIX**(oidc_web_core): use isA() for JS interop checks. ([724c9a2a](https://github.com/Bdaya-Dev/oidc/commit/724c9a2a0ce9792653c58d17ec5f4122750278f3))

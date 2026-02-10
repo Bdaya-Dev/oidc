@@ -3,6 +3,58 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-02-10
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_core` - `v0.16.1`](#oidc_core---v0161)
+ - [`oidc` - `v0.14.0+1`](#oidc---v01401)
+ - [`oidc_android` - `v0.8.0+2`](#oidc_android---v0802)
+ - [`oidc_cli` - `v0.0.2+1`](#oidc_cli---v0021)
+ - [`oidc_default_store` - `v0.6.0+1`](#oidc_default_store---v0601)
+ - [`oidc_desktop` - `v0.7.0+2`](#oidc_desktop---v0702)
+ - [`oidc_flutter_appauth` - `v0.7.0+2`](#oidc_flutter_appauth---v0702)
+ - [`oidc_ios` - `v0.8.0+2`](#oidc_ios---v0802)
+ - [`oidc_linux` - `v0.5.0+2`](#oidc_linux---v0502)
+ - [`oidc_macos` - `v0.8.0+2`](#oidc_macos---v0802)
+ - [`oidc_platform_interface` - `v0.7.0+2`](#oidc_platform_interface---v0702)
+ - [`oidc_web` - `v0.7.0+2`](#oidc_web---v0702)
+ - [`oidc_web_core` - `v0.4.0+2`](#oidc_web_core---v0402)
+ - [`oidc_windows` - `v0.4.0+2`](#oidc_windows---v0402)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc` - `v0.14.0+1`
+ - `oidc_android` - `v0.8.0+2`
+ - `oidc_cli` - `v0.0.2+1`
+ - `oidc_default_store` - `v0.6.0+1`
+ - `oidc_desktop` - `v0.7.0+2`
+ - `oidc_flutter_appauth` - `v0.7.0+2`
+ - `oidc_ios` - `v0.8.0+2`
+ - `oidc_linux` - `v0.5.0+2`
+ - `oidc_macos` - `v0.8.0+2`
+ - `oidc_platform_interface` - `v0.7.0+2`
+ - `oidc_web` - `v0.7.0+2`
+ - `oidc_web_core` - `v0.4.0+2`
+ - `oidc_windows` - `v0.4.0+2`
+
+---
+
+#### `oidc_core` - `v0.16.1`
+
+ - **FEAT**(oidc_core): add extraTokenHeaders parameter to loginPassword. ([e00c753b](https://github.com/Bdaya-Dev/oidc/commit/e00c753be7f774b23b8a585c590df8936deaaf97))
+
+
 ## 2025-12-31
 
 ### Changes
