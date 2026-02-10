@@ -1,3 +1,7 @@
+## 0.0.2+1
+
+ - Update a dependency to the latest release.
+
 ## 0.0.2
 
  - **FIX**(oidc_cli): relax build_runner to avoid Flutter SDK pin conflicts. ([b8697530](https://github.com/Bdaya-Dev/oidc/commit/b86975307bde79bd00ba4b0ddacc558a875ed2f8))

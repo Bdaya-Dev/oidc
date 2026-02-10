@@ -1,3 +1,7 @@
+## 0.16.1
+
+ - **FEAT**(oidc_core): add extraTokenHeaders parameter to loginPassword. ([e00c753b](https://github.com/Bdaya-Dev/oidc/commit/e00c753be7f774b23b8a585c590df8936deaaf97))
+
 ## 0.16.0
 
 > Note: This release has breaking changes.
