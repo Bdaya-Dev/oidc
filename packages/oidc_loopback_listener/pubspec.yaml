@@ -3,13 +3,10 @@ description: A server that listens on loopback address for an authorization resp
 version: 0.3.0
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_loopback_listener
 homepage: https://bdaya-dev.github.io/oidc/
-topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
-screenshots:
-  - description: 'oidc_loopback_listener logo'
-    path: logo.png
+topics: ["oidc", "openidconnect", "oauth", "authentication"]
 resolution: workspace
 environment:
-  sdk: ">=3.9.0 <4.0.0"  
+  sdk: ">=3.9.0 <4.0.0"
 dependencies:
   meta: ^1.9.1
 

@@ -3,10 +3,7 @@ description: A common platform interface for the oidc plugin.
 version: 0.7.0+1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_platform_interface
 homepage: https://bdaya-dev.github.io/oidc/
-topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
-screenshots:
-  - description: 'oidc_platform_interface logo'
-    path: logo.png
+topics: ["oidc", "openidconnect", "oauth", "authentication"]
 resolution: workspace
 environment:
   sdk: ">=3.5.0 <4.0.0"

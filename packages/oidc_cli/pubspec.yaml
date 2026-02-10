@@ -3,11 +3,7 @@ description: A small provider-agnostic CLI for authenticating against an OpenID 
 version: 0.0.2
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_cli
 homepage: https://bdaya-dev.github.io/oidc/
-topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
-screenshots:
-  - description: 'oidc_cli logo'
-    path: logo.png
-
+topics: ["oidc", "openidconnect", "oauth", "authentication"]
 resolution: workspace
 
 environment:

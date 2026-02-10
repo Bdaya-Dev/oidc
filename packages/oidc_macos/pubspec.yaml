@@ -3,10 +3,7 @@ description: MacOS implementation of the oidc plugin
 version: 0.8.0+1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_macos
 homepage: https://bdaya-dev.github.io/oidc/
-topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
-screenshots:
-  - description: 'oidc_macos logo'
-    path: logo.png
+topics: ["oidc", "openidconnect", "oauth", "authentication"]
 resolution: workspace
 environment:
   sdk: ">=3.5.0 <4.0.0"

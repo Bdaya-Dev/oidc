@@ -2,11 +2,8 @@ name: oidc
 description: A comprehensive OpenIdConnect plugin that works on all platforms (android, ios, windows, linux, web, macos)
 version: 0.14.0
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc
-topics: ['oidc', 'openidconnect', 'oauth', 'authentication']
+topics: ["oidc", "openidconnect", "oauth", "authentication"]
 homepage: https://bdaya-dev.github.io/oidc/
-screenshots:
-  - description: 'oidc logo'
-    path: logo.png
 resolution: workspace
 environment:
   sdk: ">=3.5.0 <4.0.0"
