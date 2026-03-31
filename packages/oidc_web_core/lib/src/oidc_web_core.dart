@@ -125,6 +125,7 @@ class OidcWebCore {
               c.completeError(
                 const OidcException(
                   'The authentication window was closed before the flow completed.',
+                  extra: {'reason': 'window_closed'},
                 ),
               );
             },
