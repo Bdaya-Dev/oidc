@@ -65,6 +65,7 @@ class OidcWebCore {
     final channel = BroadcastChannel(options.broadcastChannel);
     final c = Completer<Uri>();
     Timer? preparedWindowClosedTimer;
+    var canDetectPreparedWindowClosure = false;
 
     void eventFunction(MessageEvent event) {
       if (c.isCompleted) {
@@ -119,7 +120,17 @@ class OidcWebCore {
           preparedWindowClosedTimer = Timer.periodic(
             _windowCloseCheckInterval,
             (_) {
-              if (c.isCompleted || !preparedWindow.closed) {
+              if (c.isCompleted) {
+                return;
+              }
+              if (!preparedWindow.closed) {
+                canDetectPreparedWindowClosure = true;
+                return;
+              }
+              if (!canDetectPreparedWindowClosure) {
+                // COOP can sever the WindowProxy and report `closed == true`
+                // even while the auth window is still open.
+                preparedWindowClosedTimer?.cancel();
                 return;
               }
               c.completeError(
