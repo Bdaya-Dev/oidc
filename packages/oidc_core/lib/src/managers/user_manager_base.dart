@@ -1022,9 +1022,10 @@ abstract class OidcUserManagerBase {
     required Map<String, dynamic>? attributes,
     required Map<String, dynamic>? userInfo,
     required OidcProviderMetadata metadata,
+    OidcUser? currentUserOverride,
     bool validateAndSave = true,
   }) async {
-    final currentUser = this.currentUser;
+    final currentUser = currentUserOverride ?? this.currentUser;
     OidcUser? newUser;
     final idTokenOverride = await settings.getIdToken?.call(token);
     if (currentUser == null) {
@@ -1039,11 +1040,14 @@ abstract class OidcUserManagerBase {
         cacheStore: store,
       );
     } else {
+      final reusesExistingIdToken =
+          idTokenOverride == null && token.idToken == null;
       newUser = await currentUser.replaceToken(
         token,
         idTokenOverride: idTokenOverride,
         strictVerification: settings.strictJwtVerification,
         cacheStore: store,
+        allowExpiredIdToken: reusesExistingIdToken,
       );
       if (attributes != null) {
         newUser = newUser.setAttributes(attributes);
@@ -1220,10 +1224,24 @@ abstract class OidcUserManagerBase {
     String? overrideRefreshToken,
     OidcProviderMetadata? discoveryDocumentOverride,
     Map<String, dynamic>? extraBodyFields,
+  }) {
+    return _refreshToken(
+      overrideRefreshToken: overrideRefreshToken,
+      discoveryDocumentOverride: discoveryDocumentOverride,
+      extraBodyFields: extraBodyFields,
+    );
+  }
+
+  Future<OidcUser?> _refreshToken({
+    String? overrideRefreshToken,
+    OidcProviderMetadata? discoveryDocumentOverride,
+    Map<String, dynamic>? extraBodyFields,
+    OidcUser? currentUserOverride,
   }) async {
     ensureInit();
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
+    final existingUser = currentUserOverride ?? currentUser;
     if (!discoveryDocument.grantTypesSupportedOrDefault.contains(
       OidcConstants_GrantType.refreshToken,
     )) {
@@ -1232,7 +1250,7 @@ abstract class OidcUserManagerBase {
     }
 
     final refreshToken =
-        overrideRefreshToken ?? currentUser?.token.refreshToken;
+        overrideRefreshToken ?? existingUser?.token.refreshToken;
     if (refreshToken == null) {
       // Can't refresh the access token anyway.
       return null;
@@ -1268,7 +1286,7 @@ abstract class OidcUserManagerBase {
       final token = OidcToken.fromResponse(
         tokenResponse,
         overrideExpiresIn: settings.getExpiresIn?.call(tokenResponse),
-        sessionState: currentUser?.token.sessionState,
+        sessionState: existingUser?.token.sessionState,
       );
 
       // Successful refresh - update last server contact and exit offline mode
@@ -1279,18 +1297,19 @@ abstract class OidcUserManagerBase {
         userInfo: null,
         attributes: null,
         metadata: discoveryDocument,
+        currentUserOverride: existingUser,
       );
     } on Object catch (e) {
       // Handle errors based on offline auth settings
       final handledOffline = handleOfflineEligibleFailure(
         error: e,
-        fallbackToken: currentUser?.token,
+        fallbackToken: existingUser?.token,
         emitRepeatFailureWarning: true,
       );
 
       if (handledOffline) {
         // Return the same user - callers will continue with cached state
-        return currentUser;
+        return existingUser;
       }
 
       // Non-network error or offline auth not supported - rethrow
@@ -1521,6 +1540,9 @@ abstract class OidcUserManagerBase {
         expiryTolerance: settings.expiryTolerance,
       ),
     ];
+    if (user.token.allowExpiredIdToken) {
+      errors.removeWhere(_isJwtExpiredError);
+    }
     if (user.parsedIdToken.claims.subject == null) {
       errors.add(
         JoseException('id token is missing a `sub` claim.'),
@@ -1534,6 +1556,9 @@ abstract class OidcUserManagerBase {
 
     return errors;
   }
+
+  bool _isJwtExpiredError(Exception error) =>
+      error is JoseException && error.message.startsWith('JWT expired.');
 
   /// This function validates that a user claims
   @protected
@@ -1609,17 +1634,12 @@ abstract class OidcUserManagerBase {
     }
 
     // Check if we're using expired tokens in offline mode
-    final hasExpiredTokenError = errors.any(
-      (e) => e is JoseException && e.message.startsWith('JWT expired.'),
-    );
+    final hasExpiredTokenError = errors.any(_isJwtExpiredError);
 
     if (errors.isEmpty ||
         //keep going if the only error is that the token expired,
         //and it's allowed in settings.
-        (settings.supportOfflineAuth &&
-            errors.every(
-              (e) => e is JoseException && e.message.startsWith('JWT expired.'),
-            ))) {
+        (settings.supportOfflineAuth && errors.every(_isJwtExpiredError))) {
       // Check if offline duration is excessive
       if (settings.supportOfflineAuth && isOfflineDurationExcessive()) {
         emitOfflineAuthWarning(
@@ -1834,8 +1854,9 @@ abstract class OidcUserManagerBase {
         if (token.refreshToken != null &&
             (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
           try {
-            final refreshedUser = await refreshToken(
+            final refreshedUser = await _refreshToken(
               overrideRefreshToken: token.refreshToken,
+              currentUserOverride: loadedUser,
             );
             if (refreshedUser != null) {
               loadedUser = refreshedUser;

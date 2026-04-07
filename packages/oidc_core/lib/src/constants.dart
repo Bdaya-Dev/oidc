@@ -717,6 +717,7 @@ class OidcConstants_AuthorizeRequest_CodeChallengeMethod {
 class OidcConstants_Store {
   static const expiresAt = 'expiresAt';
   static const expiresInReferenceDate = 'expiresInReferenceDate';
+  static const allowExpiredIdToken = 'allowExpiredIdToken';
   static const currentUserAttributes = 'userAttributes';
   static const currentUserInfo = 'userInfo';
   static const originalUri = 'original_uri';
