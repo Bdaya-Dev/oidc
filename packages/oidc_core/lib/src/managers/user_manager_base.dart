@@ -1558,7 +1558,7 @@ abstract class OidcUserManagerBase {
   }
 
   bool _isJwtExpiredError(Exception error) =>
-      error is JoseException && error.message.startsWith('JWT expired.');
+      error is JoseException && error.message.startsWith('JWT expired');
 
   /// This function validates that a user claims
   @protected
