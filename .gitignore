@@ -11,3 +11,6 @@ build/
 doc/api/
 
 jose.iml
+
+# oh-my-claudecode local state
+.omc/
