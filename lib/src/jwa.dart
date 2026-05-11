@@ -174,16 +174,16 @@ class JsonWebAlgorithm {
       JsonWebAlgorithm('ECDH-ES', type: 'EC', use: 'key', curve: 'P-256');
 
   /// ECDH-ES using Concat KDF and A128KW wrapping
-  static const ecdh_es_a128kw =
-      JsonWebAlgorithm('ECDH-ES+A128KW', type: 'EC', use: 'key', curve: 'P-256');
+  static const ecdh_es_a128kw = JsonWebAlgorithm('ECDH-ES+A128KW',
+      type: 'EC', use: 'key', curve: 'P-256');
 
   /// ECDH-ES using Concat KDF and A192KW wrapping
-  static const ecdh_es_a192kw =
-      JsonWebAlgorithm('ECDH-ES+A192KW', type: 'EC', use: 'key', curve: 'P-256');
+  static const ecdh_es_a192kw = JsonWebAlgorithm('ECDH-ES+A192KW',
+      type: 'EC', use: 'key', curve: 'P-256');
 
   /// ECDH-ES using Concat KDF and A256KW wrapping
-  static const ecdh_es_a256kw =
-      JsonWebAlgorithm('ECDH-ES+A256KW', type: 'EC', use: 'key', curve: 'P-256');
+  static const ecdh_es_a256kw = JsonWebAlgorithm('ECDH-ES+A256KW',
+      type: 'EC', use: 'key', curve: 'P-256');
 
   /// AES_128_CBC_HMAC_SHA_256 authenticated encryption algorithm
   static const a128cbc_hs256 = JsonWebAlgorithm('A128CBC-HS256',

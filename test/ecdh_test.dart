@@ -265,7 +265,8 @@ void main() {
       // The decrypted content is the inner JWS compact serialization
       // which contains the base64url-encoded claims
       final jwsParts = innerContent.split('.');
-      final claimsJson = utf8.decode(base64Url.decode(base64Url.normalize(jwsParts[1])));
+      final claimsJson =
+          utf8.decode(base64Url.decode(base64Url.normalize(jwsParts[1])));
       expect(claimsJson, contains('John Doe'));
     });
   });

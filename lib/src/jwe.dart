@@ -76,9 +76,8 @@ class JsonWebEncryption extends JoseObject {
               // General JSON Serialization
               return (json['recipients'] as List).map(
                 (v) => _JweRecipient._(
-                  header: v['header'] == null
-                      ? null
-                      : JsonObject.from(v['header']),
+                  header:
+                      v['header'] == null ? null : JsonObject.from(v['header']),
                   encryptedKey: decodeBase64EncodedBytes(v['encrypted_key']),
                 ),
               );
@@ -220,10 +219,12 @@ class JsonWebEncryption extends JoseObject {
       final keyLen = ecdhKeyDataLen(header.algorithm!, encAlgorithm);
 
       final apu = header.agreementPartyUInfo != null
-          ? Uint8List.fromList(decodeBase64EncodedBytes(header.agreementPartyUInfo!))
+          ? Uint8List.fromList(
+              decodeBase64EncodedBytes(header.agreementPartyUInfo!))
           : null;
       final apv = header.agreementPartyVInfo != null
-          ? Uint8List.fromList(decodeBase64EncodedBytes(header.agreementPartyVInfo!))
+          ? Uint8List.fromList(
+              decodeBase64EncodedBytes(header.agreementPartyVInfo!))
           : null;
 
       final derivedKey = ecdhEsDecrypt(
@@ -245,8 +246,7 @@ class JsonWebEncryption extends JoseObject {
         })!;
       } else {
         // ECDH-ES+A*KW — derived key unwraps the CEK
-        final unwrappedCekBytes =
-            ecdhEsUnwrapKey(derivedKey, recipient.data);
+        final unwrappedCekBytes = ecdhEsUnwrapKey(derivedKey, recipient.data);
         cek = JsonWebKey.fromJson({
           'kty': 'oct',
           'k': encodeBase64EncodedBytes(unwrappedCekBytes),

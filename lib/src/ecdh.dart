@@ -38,9 +38,8 @@ class _ECPoint {
   _ECPoint double_(BigInt p, BigInt a) {
     if (isInfinity || y == BigInt.zero) return _ECPoint.infinity();
 
-    final lambda = ((BigInt.from(3) * x * x + a) *
-            (BigInt.from(2) * y).modInverse(p)) %
-        p;
+    final lambda =
+        ((BigInt.from(3) * x * x + a) * (BigInt.from(2) * y).modInverse(p)) % p;
     final rx = (lambda * lambda - BigInt.from(2) * x) % p;
     final ry = (lambda * (x - rx) - y) % p;
     return _ECPoint(rx, ry);
@@ -186,8 +185,7 @@ BigInt _ecdhAgreement(EcPrivateKey privateKey, EcPublicKey publicKey) {
   return result.x;
 }
 
-int _fieldSizeForCurve(String curveName) =>
-    _curveForName(curveName).fieldSize;
+int _fieldSizeForCurve(String curveName) => _curveForName(curveName).fieldSize;
 
 // ---------------------------------------------------------------------------
 // Concat KDF  (NIST SP 800-56A, RFC 7518 §4.6.2)
@@ -369,8 +367,7 @@ Uint8List ecdhEsDecrypt({
   final recipientCurve = recipientPrivateKey['crv'] as String;
   final ephemeralCurve = ephemeralPublicKey['crv'] as String;
   if (recipientCurve != ephemeralCurve) {
-    throw ArgumentError(
-        'Ephemeral key curve ($ephemeralCurve) does not match '
+    throw ArgumentError('Ephemeral key curve ($ephemeralCurve) does not match '
         'recipient key curve ($recipientCurve)');
   }
 
