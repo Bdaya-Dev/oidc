@@ -4,69 +4,140 @@ import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_ios/oidc_ios.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
-import 'duende_discovery.dart';
+OidcAuthorizeRequest _authRequest() => OidcAuthorizeRequest(
+      clientId: 'client-1',
+      redirectUri: Uri.parse('com.example.app://callback'),
+      responseType: const [
+        OidcConstants_AuthorizationEndpoint_ResponseType.code,
+      ],
+      scope: const ['openid'],
+      state: 'state-1',
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('OidcIOS', () {
-    late OidcIOS oidc;
-    late List<MethodCall> log;
-    const methodChannel =
-        MethodChannel('crossingthestreams.io/flutter_appauth');
-    const mockAuthResponse = {
-      'authorizationCode': '1234',
-      'codeVerifier': '12344321',
-      'nonce': 'abcd',
-      'authorizationAdditionalParameters': {
-        'hello': 'world',
-      },
-    };
-    final metadata = OidcProviderMetadata.fromJson(testDiscoveryRaw);
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
-    setUp(() async {
-      oidc = OidcIOS();
+  final metadata = OidcProviderMetadata.fromJson(const {
+    'issuer': 'https://op.example.com',
+    'authorization_endpoint': 'https://op.example.com/authorize',
+    'token_endpoint': 'https://op.example.com/token',
+    'end_session_endpoint': 'https://op.example.com/logout',
+  });
 
-      log = <MethodCall>[];
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(methodChannel, (methodCall) async {
-        log.add(methodCall);
-        switch (methodCall.method) {
-          case 'authorize':
-            return mockAuthResponse;
-          default:
-            throw UnimplementedError();
-        }
-      });
-    });
-    tearDown(() => log.clear());
+  tearDown(() => messenger.setMockMethodCallHandler(OidcIOS.channel, null));
 
-    test('can be registered', () {
-      OidcIOS.registerWith();
-      expect(OidcPlatform.instance, isA<OidcIOS>());
+  test('can be registered', () {
+    OidcIOS.registerWith();
+    expect(OidcPlatform.instance, isA<OidcIOS>());
+  });
+
+  test(
+      'getAuthorizationResponse builds the URL in Dart and parses the native '
+      'ASWebAuthenticationSession redirect', () async {
+    Map<Object?, Object?>? received;
+    messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
+      expect(call.method, 'authorize');
+      received = call.arguments as Map<Object?, Object?>;
+      final url = Uri.parse(received!['url']! as String);
+      expect(url.queryParameters['client_id'], 'client-1');
+      expect(url.queryParameters['state'], 'state-1');
+      return 'com.example.app://callback?code=code-1&state=state-1';
     });
 
-    test('getAuthorizationResponse', () async {
-      final response = await oidc.getAuthorizationResponse(
-        metadata,
-        OidcAuthorizeRequest(
-          responseType: ['code'],
-          clientId: 'someClientId',
-          redirectUri: Uri.parse('hello:/world'),
-          scope: ['openid'],
+    final resp = await OidcIOS().getAuthorizationResponse(
+      metadata,
+      _authRequest(),
+      const OidcPlatformSpecificOptions(),
+      const {},
+    );
+
+    expect(resp, isNotNull);
+    expect(resp!.code, 'code-1');
+    expect(resp.state, 'state-1');
+    expect(received!['callbackScheme'], 'com.example.app');
+    // default external user agent is non-ephemeral.
+    expect(received!['preferEphemeral'], false);
+  });
+
+  test('passes preferEphemeral=true for the ephemeral external user agent',
+      () async {
+    Map<Object?, Object?>? received;
+    messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
+      received = call.arguments as Map<Object?, Object?>;
+      return 'com.example.app://callback?code=c&state=state-1';
+    });
+
+    await OidcIOS().getAuthorizationResponse(
+      metadata,
+      _authRequest(),
+      const OidcPlatformSpecificOptions(
+        ios: OidcPlatformSpecificOptions_AppAuth_IosMacos(
+          externalUserAgent:
+              OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession,
         ),
-        const OidcPlatformSpecificOptions(),
-        {},
-      );
-      expect(response, isNotNull);
-      expect(response!.code, mockAuthResponse['authorizationCode']);
-      expect(response.codeVerifier, mockAuthResponse['codeVerifier']);
-      expect(response.nonce, mockAuthResponse['nonce']);
-      expect(
-        response.src['hello'],
-        (mockAuthResponse['authorizationAdditionalParameters']
-            as Map<String, dynamic>?)?['hello'],
+      ),
+      const {},
+    );
+
+    expect(received!['preferEphemeral'], true);
+  });
+
+  test('getAuthorizationResponse returns null on USER_CANCELLED', () async {
+    messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
+      throw PlatformException(code: 'USER_CANCELLED', message: 'cancelled');
+    });
+
+    final resp = await OidcIOS().getAuthorizationResponse(
+      metadata,
+      _authRequest(),
+      const OidcPlatformSpecificOptions(),
+      const {},
+    );
+    expect(resp, isNull);
+  });
+
+  test('getEndSessionResponse parses the post-logout redirect state', () async {
+    messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
+      expect(call.method, 'endSession');
+      return 'com.example.app://logout?state=logout-state';
+    });
+
+    final resp = await OidcIOS().getEndSessionResponse(
+      metadata,
+      OidcEndSessionRequest(
+        postLogoutRedirectUri: Uri.parse('com.example.app://logout'),
+        state: 'logout-state',
+      ),
+      const OidcPlatformSpecificOptions(),
+      const {},
+    );
+
+    expect(resp, isNotNull);
+    expect(resp!.state, 'logout-state');
+  });
+
+  test(
+      'getEndSessionResponse treats PRESENTATION_CONTEXT_INVALID (the '
+      'iOS + Azure "-3" case) as a closed session (null)', () async {
+    messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
+      throw PlatformException(
+        code: 'PRESENTATION_CONTEXT_INVALID',
+        message: '-3',
       );
     });
+
+    final resp = await OidcIOS().getEndSessionResponse(
+      metadata,
+      OidcEndSessionRequest(
+        postLogoutRedirectUri: Uri.parse('com.example.app://logout'),
+        state: 'logout-state',
+      ),
+      const OidcPlatformSpecificOptions(),
+      const {},
+    );
+    expect(resp, isNull);
   });
 }

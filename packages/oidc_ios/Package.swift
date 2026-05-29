@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "oidc_ios",
     platforms: [
-        .iOS("12.0")
+        .iOS("13.0")
     ],
     products: [
         .library(name: "oidc-ios", targets: ["oidc_ios"])
