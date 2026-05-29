@@ -56,7 +56,8 @@ void main() {
     );
   });
 
-  test('getAuthorizationResponse builds the URL in Dart and parses the native '
+  test(
+      'getAuthorizationResponse builds the URL in Dart and parses the native '
       'redirect (the Custom Tabs primitive only opens the URL)', () async {
     Map<Object?, Object?>? received;
     messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
@@ -97,7 +98,8 @@ void main() {
     expect(resp, isNull);
   });
 
-  test('getAuthorizationResponse rethrows other native errors as '
+  test(
+      'getAuthorizationResponse rethrows other native errors as '
       'OidcException', () async {
     messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
       throw PlatformException(code: 'PLATFORM_ERROR', message: 'boom');
