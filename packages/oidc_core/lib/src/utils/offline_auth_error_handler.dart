@@ -1,19 +1,25 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:oidc_core/oidc_core.dart';
+
+import '_io_error_checker_stub.dart'
+    if (dart.library.io) '_io_error_checker_io.dart' as io_checker;
 
 /// Utility class to categorize errors for offline authentication handling.
 ///
 /// This helps distinguish between network errors (device offline),
 /// server errors (server unavailable), and authentication errors
 /// (invalid credentials, expired tokens).
+///
+/// Network error detection uses conditional imports to check for `dart:io`
+/// types (`SocketException`, `HandshakeException`) on native platforms,
+/// while remaining fully compatible with web.
 class OidcOfflineAuthErrorHandler {
   /// Categorizes an error to determine how it should be handled in offline mode.
   static OfflineAuthErrorType categorizeError(Object error) {
-    // Network connectivity issues
-    if (error is SocketException) {
+    // Network connectivity issues (dart:io types, only on native platforms).
+    if (io_checker.isSocketException(error)) {
       return OfflineAuthErrorType.networkUnavailable;
     }
 
@@ -21,8 +27,16 @@ class OidcOfflineAuthErrorHandler {
       return OfflineAuthErrorType.networkTimeout;
     }
 
-    if (error is HandshakeException) {
+    if (io_checker.isHandshakeException(error)) {
       return OfflineAuthErrorType.sslError;
+    }
+
+    // On web (and whenever the HTTP client wraps a transport failure), network
+    // errors surface as [http.ClientException] instead of a `dart:io`
+    // `SocketException`. Treat these as network-unavailable so offline handling
+    // behaves consistently across all platforms (including web/WASM).
+    if (error is http.ClientException) {
+      return OfflineAuthErrorType.networkUnavailable;
     }
 
     // HTTP response errors
@@ -165,7 +179,7 @@ class OidcOfflineAuthErrorHandler {
 
 /// Types of errors that can occur during authentication.
 enum OfflineAuthErrorType {
-  /// Network is unavailable (SocketException).
+  /// Network is unavailable (e.g. SocketException on native platforms).
   networkUnavailable,
 
   /// Network request timed out.
