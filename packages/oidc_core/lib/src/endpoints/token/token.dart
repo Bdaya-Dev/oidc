@@ -76,6 +76,9 @@ class OidcToken {
 
   bool get isOidc => idToken?.isNotEmpty ?? false;
 
+  bool get allowExpiredIdToken =>
+      extra?[OidcConstants_Store.allowExpiredIdToken] == true;
+
   /// RECOMMENDED.
   ///
   /// The lifetime in seconds of the access token.

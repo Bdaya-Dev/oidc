@@ -124,6 +124,20 @@ void main() {
               isExpired,
             );
           });
+          test('preserves allowExpiredIdToken when stored', () {
+            final src = {
+              OidcConstants_AuthParameters.accessToken: 'TlBN45jURg',
+              OidcConstants_AuthParameters.tokenType: 'Bearer',
+              OidcConstants_AuthParameters.refreshToken: '9yNOxJtZa5',
+              OidcConstants_AuthParameters.expiresIn: expiresIn.inSeconds,
+              OidcConstants_Store.expiresInReferenceDate: createdAt
+                  .toIso8601String(),
+              OidcConstants_Store.allowExpiredIdToken: true,
+            };
+            final obj = OidcToken.fromJson(src);
+            expect(obj.allowExpiredIdToken, isTrue);
+            expect(obj.toJson(), src);
+          });
         });
       }
     });

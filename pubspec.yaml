@@ -6,6 +6,9 @@ environment:
   flutter: '>=3.35.0 <4.0.0'
 
 workspace:
+  - packages/crypto_keys_plus
+  - packages/x509_plus
+  - packages/jose_plus
   - packages/oidc
   - packages/oidc/example
   - packages/oidc_android
