@@ -4,70 +4,113 @@ import 'package:oidc_android/oidc_android.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
-import 'duende_discovery.dart';
+OidcAuthorizeRequest _authRequest() => OidcAuthorizeRequest(
+      clientId: 'client-1',
+      redirectUri: Uri.parse('com.example.app://callback'),
+      responseType: const [
+        OidcConstants_AuthorizationEndpoint_ResponseType.code,
+      ],
+      scope: const ['openid'],
+      state: 'state-1',
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('OidcAndroid', () {
-    late OidcAndroid oidc;
-    late List<MethodCall> log;
-    const methodChannel =
-        MethodChannel('crossingthestreams.io/flutter_appauth');
-    const mockAuthResponse = {
-      'authorizationCode': '1234',
-      'codeVerifier': '12344321',
-      'nonce': 'abcd',
-      'authorizationAdditionalParameters': {
-        'hello': 'world',
-      },
-    };
-    final metadata = OidcProviderMetadata.fromJson(testDiscoveryRaw);
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
-    setUp(() async {
-      oidc = OidcAndroid();
+  final metadata = OidcProviderMetadata.fromJson(const {
+    'issuer': 'https://op.example.com',
+    'authorization_endpoint': 'https://op.example.com/authorize',
+    'token_endpoint': 'https://op.example.com/token',
+    'end_session_endpoint': 'https://op.example.com/logout',
+  });
 
-      log = <MethodCall>[];
+  tearDown(
+    () => messenger.setMockMethodCallHandler(OidcAndroid.channel, null),
+  );
 
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(methodChannel, (methodCall) async {
-        log.add(methodCall);
-        switch (methodCall.method) {
-          case 'authorize':
-            return mockAuthResponse;
-          default:
-            throw UnimplementedError();
-        }
-      });
+  test('can be registered', () {
+    OidcAndroid.registerWith();
+    expect(OidcPlatform.instance, isA<OidcAndroid>());
+  });
+
+  test('getAuthorizationResponse builds the URL in Dart and parses the native '
+      'redirect (the Custom Tabs primitive only opens the URL)', () async {
+    Map<Object?, Object?>? received;
+    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
+      expect(call.method, 'authorize');
+      received = call.arguments as Map<Object?, Object?>;
+      final url = Uri.parse(received!['url']! as String);
+      expect(url.queryParameters['client_id'], 'client-1');
+      expect(url.queryParameters['state'], 'state-1');
+      expect(url.queryParameters['response_type'], 'code');
+      return 'com.example.app://callback?code=code-1&state=state-1';
     });
 
-    tearDown(() => log.clear());
-    test('can be registered', () {
-      OidcAndroid.registerWith();
-      expect(OidcPlatform.instance, isA<OidcAndroid>());
+    final resp = await OidcAndroid().getAuthorizationResponse(
+      metadata,
+      _authRequest(),
+      const OidcPlatformSpecificOptions(),
+      const {},
+    );
+
+    expect(resp, isNotNull);
+    expect(resp!.code, 'code-1');
+    expect(resp.state, 'state-1');
+    expect(received!['callbackScheme'], 'com.example.app');
+    expect(received!['redirectUri'], 'com.example.app://callback');
+  });
+
+  test('getAuthorizationResponse returns null on USER_CANCELLED', () async {
+    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
+      throw PlatformException(code: 'USER_CANCELLED', message: 'cancelled');
     });
 
-    test('getAuthorizationResponse', () async {
-      final response = await oidc.getAuthorizationResponse(
+    final resp = await OidcAndroid().getAuthorizationResponse(
+      metadata,
+      _authRequest(),
+      const OidcPlatformSpecificOptions(),
+      const {},
+    );
+    expect(resp, isNull);
+  });
+
+  test('getAuthorizationResponse rethrows other native errors as '
+      'OidcException', () async {
+    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
+      throw PlatformException(code: 'PLATFORM_ERROR', message: 'boom');
+    });
+
+    await expectLater(
+      OidcAndroid().getAuthorizationResponse(
         metadata,
-        OidcAuthorizeRequest(
-          responseType: ['code'],
-          clientId: 'someClientId',
-          redirectUri: Uri.parse('hello:/world'),
-          scope: ['openid'],
-        ),
+        _authRequest(),
         const OidcPlatformSpecificOptions(),
-        {},
-      );
-      expect(response, isNotNull);
-      expect(response!.code, mockAuthResponse['authorizationCode']);
-      expect(response.codeVerifier, mockAuthResponse['codeVerifier']);
-      expect(response.nonce, mockAuthResponse['nonce']);
-      expect(
-        response.src['hello'],
-        (mockAuthResponse['authorizationAdditionalParameters']
-            as Map<String, dynamic>?)?['hello'],
-      );
+        const {},
+      ),
+      throwsA(isA<OidcException>()),
+    );
+  });
+
+  test('getEndSessionResponse parses the post-logout redirect state', () async {
+    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
+      expect(call.method, 'endSession');
+      return 'com.example.app://logout?state=logout-state';
     });
+
+    final resp = await OidcAndroid().getEndSessionResponse(
+      metadata,
+      OidcEndSessionRequest(
+        postLogoutRedirectUri: Uri.parse('com.example.app://logout'),
+        state: 'logout-state',
+      ),
+      const OidcPlatformSpecificOptions(),
+      const {},
+    );
+
+    expect(resp, isNotNull);
+    expect(resp!.state, 'logout-state');
   });
 }
