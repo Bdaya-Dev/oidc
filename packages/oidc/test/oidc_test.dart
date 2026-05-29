@@ -177,6 +177,231 @@ void main() {
             );
           });
           test(
+            'With expired token and refresh response without id_token should keep cached expired id_token',
+            () async {
+              client = createMockOidcClient(
+                beforeDefault: (request) async {
+                  final pathSegments = request.url.pathSegments;
+                  if (pathSegments.length == 2 &&
+                      pathSegments[0] == '.well-known' &&
+                      pathSegments[1] == 'openid-configuration') {
+                    return Response(jsonEncode(mockProviderMetadata), 200);
+                  }
+                  if (pathSegments.isNotEmpty &&
+                      pathSegments.first == 'token') {
+                    final tokenResponse = createMockTokenResponse(
+                      claimsJson: defaultIdTokenClaimsJson(),
+                    )..remove('id_token');
+                    return Response(jsonEncode(tokenResponse), 200);
+                  }
+                  throw UnimplementedError(
+                    "Don't know how to handle the request ${request.url}",
+                  );
+                },
+              );
+              manager = OidcUserManager(
+                id: managerId,
+                discoveryDocument: doc,
+                clientCredentials: clientCredentials,
+                store: store,
+                settings: settings,
+                httpClient: client,
+              );
+
+              final nowMock = tokenCreatedAt.add(const Duration(hours: 2));
+              nowClock = Clock.fixed(nowMock);
+
+              await withClock(nowClock, () async {
+                await manager.init();
+              });
+
+              expect(manager.didInit, isTrue);
+              expect(manager.currentUser, isNotNull);
+
+              final newToken = manager.currentUser!.token;
+              expect(newToken.creationTime, nowMock);
+              expect(newToken.idToken, cachedTokenJson['id_token']);
+              expect(newToken.allowExpiredIdToken, isTrue);
+              expect(newToken.accessToken, isNot(equals('SlAV32hkKG')));
+
+              final storedToken = await store.get(
+                OidcStoreNamespace.secureTokens,
+                key: OidcConstants_Store.currentToken,
+                managerId: managerId,
+              );
+              expect(storedToken, isNotNull);
+
+              final decodedStoredToken =
+                  jsonDecode(storedToken!) as Map<String, dynamic>;
+              expect(
+                decodedStoredToken[OidcConstants_AuthParameters.idToken],
+                cachedTokenJson['id_token'],
+              );
+              expect(
+                decodedStoredToken[OidcConstants_Store.allowExpiredIdToken],
+                isTrue,
+              );
+            },
+          );
+          test(
+            'Should reload a refreshed token without re-rejecting the reused expired id_token',
+            () async {
+              client = createMockOidcClient(
+                beforeDefault: (request) async {
+                  final pathSegments = request.url.pathSegments;
+                  if (pathSegments.length == 2 &&
+                      pathSegments[0] == '.well-known' &&
+                      pathSegments[1] == 'openid-configuration') {
+                    return Response(jsonEncode(mockProviderMetadata), 200);
+                  }
+                  if (pathSegments.isNotEmpty &&
+                      pathSegments.first == 'token') {
+                    final tokenResponse = createMockTokenResponse(
+                      claimsJson: defaultIdTokenClaimsJson(),
+                    )..remove('id_token');
+                    return Response(jsonEncode(tokenResponse), 200);
+                  }
+                  throw UnimplementedError(
+                    "Don't know how to handle the request ${request.url}",
+                  );
+                },
+              );
+              manager = OidcUserManager(
+                id: managerId,
+                discoveryDocument: doc,
+                clientCredentials: clientCredentials,
+                store: store,
+                settings: settings,
+                httpClient: client,
+              );
+
+              final refreshedAt = tokenCreatedAt.add(const Duration(hours: 2));
+              await withClock(Clock.fixed(refreshedAt), () async {
+                await manager.init();
+              });
+              expect(manager.currentUser, isNotNull);
+
+              client = createMockOidcClient(
+                beforeDefault: (request) async {
+                  throw StateError(
+                      'Unexpected network request: ${request.url}');
+                },
+              );
+              manager = OidcUserManager(
+                id: managerId,
+                discoveryDocument: doc,
+                clientCredentials: clientCredentials,
+                store: store,
+                settings: settings,
+                httpClient: client,
+              );
+
+              final reloadAt = refreshedAt.add(const Duration(minutes: 30));
+              await withClock(Clock.fixed(reloadAt), () async {
+                await manager.init();
+              });
+
+              final reloadedToken = manager.currentUser?.token;
+              expect(reloadedToken, isNotNull);
+              expect(reloadedToken!.allowExpiredIdToken, isTrue);
+              expect(reloadedToken.idToken, cachedTokenJson['id_token']);
+              expect(reloadedToken.creationTime, refreshedAt);
+            },
+          );
+          test(
+            'Should not emit token expired when refresh succeeds without id_token',
+            () async {
+              final createdAt = DateTime.now().toUtc();
+              cachedTokenJson = {
+                "scope": OidcInternalUtilities.joinSpaceDelimitedList([
+                  OidcConstants_Scopes.openid,
+                  OidcConstants_Scopes.profile,
+                  OidcConstants_Scopes.email,
+                  "offline_access"
+                ]),
+                "access_token": "short-lived-token",
+                "token_type": "Bearer",
+                "refresh_token": "8xLOxBtZp8",
+                "expires_in": const Duration(seconds: 1).inSeconds,
+                "id_token": createIdToken(
+                  claimsJson: defaultIdTokenClaimsJson(
+                    iat: createdAt,
+                    exp: createdAt.add(const Duration(hours: 1)),
+                  ),
+                ),
+                "expiresInReferenceDate": createdAt.toIso8601String(),
+                "session_state":
+                    "YaSjXERcv7iG5F9euVQ_F4smjyt0jD3sYxARlJdBMVE.9A5536CDE44A8BE6D4F2A9E2ABD73ECF"
+              };
+              await store.set(
+                OidcStoreNamespace.secureTokens,
+                key: OidcConstants_Store.currentToken,
+                value: jsonEncode(cachedTokenJson),
+                managerId: managerId,
+              );
+
+              var refreshRequestCount = 0;
+              client = createMockOidcClient(
+                beforeDefault: (request) async {
+                  final pathSegments = request.url.pathSegments;
+                  if (pathSegments.length == 2 &&
+                      pathSegments[0] == '.well-known' &&
+                      pathSegments[1] == 'openid-configuration') {
+                    return Response(jsonEncode(mockProviderMetadata), 200);
+                  }
+                  if (pathSegments.isNotEmpty &&
+                      pathSegments.first == 'token') {
+                    refreshRequestCount++;
+                    final tokenResponse = createMockTokenResponse(
+                      claimsJson: defaultIdTokenClaimsJson(),
+                    )..remove('id_token');
+                    return Response(jsonEncode(tokenResponse), 200);
+                  }
+                  throw UnimplementedError(
+                    "Don't know how to handle the request ${request.url}",
+                  );
+                },
+              );
+
+              final eventSettings = OidcUserManagerSettings(
+                redirectUri: settings.redirectUri,
+                refreshBefore: (_) => const Duration(milliseconds: 700),
+              );
+              manager = OidcUserManager(
+                id: managerId,
+                discoveryDocument: doc,
+                clientCredentials: clientCredentials,
+                store: store,
+                settings: eventSettings,
+                httpClient: client,
+              );
+
+              await manager.init();
+              expect(manager.currentUser, isNotNull);
+
+              final events = <OidcEvent>[];
+              final sub = manager.events().listen(events.add);
+
+              await Future<void>.delayed(const Duration(milliseconds: 450));
+
+              expect(refreshRequestCount, equals(1));
+              expect(
+                events.whereType<OidcTokenExpiringEvent>(),
+                hasLength(1),
+              );
+              expect(events.whereType<OidcTokenExpiredEvent>(), isEmpty);
+              expect(manager.currentUser, isNotNull);
+              expect(manager.currentUser!.token.allowExpiredIdToken, isTrue);
+
+              await Future<void>.delayed(const Duration(milliseconds: 750));
+
+              expect(events.whereType<OidcTokenExpiredEvent>(), isEmpty);
+
+              await sub.cancel();
+              await manager.dispose();
+            },
+          );
+          test(
               'With expired token and no refresh token available, should remove the token',
               () async {
             cachedTokenJson.remove('refresh_token');

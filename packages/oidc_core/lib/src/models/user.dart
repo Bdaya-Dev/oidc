@@ -156,6 +156,7 @@ class OidcUser {
     String? idTokenOverride,
     bool strictVerification = false,
     OidcStore? cacheStore,
+    bool allowExpiredIdToken = false,
   }) async {
     final idToken = idTokenOverride ?? newToken.idToken ?? this.idToken;
 
@@ -172,14 +173,21 @@ class OidcUser {
       webToken = parsedIdToken;
     }
 
+    final mergedTokenJson = {
+      // keep old data and override the new data.
+      ...token.toJson(),
+      ...newToken.toJson(),
+    };
+    if (allowExpiredIdToken) {
+      mergedTokenJson[OidcConstants_Store.allowExpiredIdToken] = true;
+    } else {
+      mergedTokenJson.remove(OidcConstants_Store.allowExpiredIdToken);
+    }
+
     return OidcUser._(
       idToken: idToken,
       parsedIdToken: webToken,
-      token: OidcToken.fromJson({
-        // keep old data and override the new data.
-        ...token.toJson(),
-        ...newToken.toJson(),
-      }),
+      token: OidcToken.fromJson(mergedTokenJson),
       attributes: attributes,
       allowedAlgorithms: allowedAlgorithms,
       keystore: keystore,
