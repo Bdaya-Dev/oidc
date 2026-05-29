@@ -117,30 +117,29 @@ class OidcWebCore {
             );
           }
           preparedWindow.location.replace(uri.toString());
-          preparedWindowClosedTimer = Timer.periodic(
-            _windowCloseCheckInterval,
-            (_) {
-              if (c.isCompleted) {
-                return;
-              }
-              if (!preparedWindow.closed) {
-                canDetectPreparedWindowClosure = true;
-                return;
-              }
-              if (!canDetectPreparedWindowClosure) {
-                // COOP can sever the WindowProxy and report `closed == true`
-                // even while the auth window is still open.
-                preparedWindowClosedTimer?.cancel();
-                return;
-              }
-              c.completeError(
-                const OidcException(
-                  'The authentication window was closed before the flow completed.',
-                  extra: {'reason': 'window_closed'},
-                ),
-              );
-            },
-          );
+          preparedWindowClosedTimer = Timer.periodic(_windowCloseCheckInterval, (
+            _,
+          ) {
+            if (c.isCompleted) {
+              return;
+            }
+            if (!preparedWindow.closed) {
+              canDetectPreparedWindowClosure = true;
+              return;
+            }
+            if (!canDetectPreparedWindowClosure) {
+              // COOP can sever the WindowProxy and report `closed == true`
+              // even while the auth window is still open.
+              preparedWindowClosedTimer?.cancel();
+              return;
+            }
+            c.completeError(
+              const OidcException(
+                'The authentication window was closed before the flow completed.',
+                extra: {'reason': 'window_closed'},
+              ),
+            );
+          });
           //listen to response uri.
           final res = await c.future;
           preparedWindowClosedTimer.cancel();
