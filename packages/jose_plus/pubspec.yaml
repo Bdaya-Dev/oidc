@@ -1,0 +1,44 @@
+name: jose_plus
+description: Javascript Object Signing and Encryption (JOSE) library supporting JWE, JWS, JWK and JWT
+version: 0.5.0
+homepage: https://github.com/Bdaya-Dev/jose
+funding:
+  - https://github.com/sponsors/rbellens
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  crypto_keys_plus: ">=0.4.0 <1.0.0"
+  meta: ^1.1.6
+  typed_data: ^1.0.0
+  x509_plus: ">=0.3.3 <1.0.0"
+  http: ">=0.13.0 <2.0.0"
+  http_parser: ^4.0.0
+  asn1lib: ^1.0.0
+  clock: ^1.1.1
+  archive: '>=3.6.1 <5.0.0'
+
+dev_dependencies:
+  test: ^1.24.4
+  lints: ^6.0.0
+  melos: ^7.0.0
+
+melos:
+  useRootAsPackage: true
+
+  ide:
+    intellij: false
+
+  command:
+    version:
+      linkToCommits: true
+      workspaceChangelog: false
+
+  scripts:
+    preversion: 
+      exec: dart test -j 1  
+
+false_secrets:
+  - test/pem/*
+  - example/*.key
