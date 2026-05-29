@@ -47,3 +47,6 @@ build/
 .classpath
 .settings
 pubspec_overrides.yaml
+
+# oh-my-claudecode local session/state, plans, research & logs (not source)
+.omc/
