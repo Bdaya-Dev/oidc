@@ -43,17 +43,19 @@ void main() {
       },
     );
 
-    test('parses an application/jwt response with a charset parameter',
-        () async {
-      final resp = await fetch(
-        http.Response(
-          _compactJwt({'sub': 'user-456'}),
-          200,
-          headers: const {'content-type': 'application/jwt; charset=utf-8'},
-        ),
-      );
-      expect(resp.sub, equals('user-456'));
-    });
+    test(
+      'parses an application/jwt response with a charset parameter',
+      () async {
+        final resp = await fetch(
+          http.Response(
+            _compactJwt({'sub': 'user-456'}),
+            200,
+            headers: const {'content-type': 'application/jwt; charset=utf-8'},
+          ),
+        );
+        expect(resp.sub, equals('user-456'));
+      },
+    );
 
     test('still parses a plain application/json response', () async {
       final resp = await fetch(
