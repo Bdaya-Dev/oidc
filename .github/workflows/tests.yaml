@@ -367,12 +367,19 @@ jobs:
           google-chrome --version
           chmod +x .ci/scripts/set_default_linux_apps.sh
           ./.ci/scripts/set_default_linux_apps.sh
-          xvfb-run --auto-servernum flutter test integration_test --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN -r expanded
+          # Work around flaky desktop integration test runs when executing
+          # multiple test entrypoints in a single `flutter test integration_test`
+          # (same workaround already used by the macOS and Windows jobs above):
+          # run each entrypoint in its own invocation, otherwise the second app
+          # launch fails with "Unable to start the app on the device".
+          xvfb-run --auto-servernum flutter test integration_test/app_test.dart --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-app-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN -r expanded
+
+          xvfb-run --auto-servernum flutter test integration_test/offline_mode_test.dart --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-offline-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN -r expanded
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v5
         with:
           name: linux-integration-coverage
-          path: packages/oidc/example/coverage/linux-coverage.info
+          path: packages/oidc/example/coverage/linux-*-coverage.info
           include-hidden-files: true
           if-no-files-found: error
       - name: Upload Conformance Logs
