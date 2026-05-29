@@ -4,7 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:oidc_core/oidc_core.dart';
 
 import '_io_error_checker_stub.dart'
-    if (dart.library.io) '_io_error_checker_io.dart' as io_checker;
+    if (dart.library.io) '_io_error_checker_io.dart'
+    as io_checker;
 
 /// Utility class to categorize errors for offline authentication handling.
 ///

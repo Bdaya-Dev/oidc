@@ -32,23 +32,25 @@ void main() {
         );
       });
 
-      test('continues in offline mode for a ClientException only when enabled',
-          () {
-        expect(
-          OidcOfflineAuthErrorHandler.shouldContinueInOfflineMode(
-            error: http.ClientException('offline'),
-            supportOfflineAuth: true,
-          ),
-          isTrue,
-        );
-        expect(
-          OidcOfflineAuthErrorHandler.shouldContinueInOfflineMode(
-            error: http.ClientException('offline'),
-            supportOfflineAuth: false,
-          ),
-          isFalse,
-        );
-      });
+      test(
+        'continues in offline mode for a ClientException only when enabled',
+        () {
+          expect(
+            OidcOfflineAuthErrorHandler.shouldContinueInOfflineMode(
+              error: http.ClientException('offline'),
+              supportOfflineAuth: true,
+            ),
+            isTrue,
+          );
+          expect(
+            OidcOfflineAuthErrorHandler.shouldContinueInOfflineMode(
+              error: http.ClientException('offline'),
+              supportOfflineAuth: false,
+            ),
+            isFalse,
+          );
+        },
+      );
     });
 
     group('HTTP response status codes', () {
