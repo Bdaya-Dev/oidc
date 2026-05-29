@@ -1,0 +1,17 @@
+name: crypto_keys
+
+repository: https://github.com/Bdaya-dev/crypto_keys
+
+packages:
+  - .
+
+ide:
+  intellij: false
+
+command:
+  version:
+    linkToCommits: true
+
+scripts:
+  preversion:
+    exec: dart test -j 1
