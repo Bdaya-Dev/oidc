@@ -15,6 +15,8 @@ class OidcWebCore {
   /// {@macro oidc_web_core}
   const OidcWebCore();
 
+  static const _windowCloseCheckInterval = Duration(milliseconds: 250);
+
   String _calculatePopupOptions(OidcPlatformSpecificOptions_Web options) {
     final h = options.popupHeight;
     final w = options.popupWidth;
@@ -62,8 +64,13 @@ class OidcWebCore {
   }) async {
     final channel = BroadcastChannel(options.broadcastChannel);
     final c = Completer<Uri>();
+    Timer? preparedWindowClosedTimer;
+    var canDetectPreparedWindowClosure = false;
 
     void eventFunction(MessageEvent event) {
+      if (c.isCompleted) {
+        return;
+      }
       final data = event.data;
       if (!data.isA<JSString>()) {
         return;
@@ -110,8 +117,33 @@ class OidcWebCore {
             );
           }
           preparedWindow.location.replace(uri.toString());
+          preparedWindowClosedTimer = Timer.periodic(
+            _windowCloseCheckInterval,
+            (_) {
+              if (c.isCompleted) {
+                return;
+              }
+              if (!preparedWindow.closed) {
+                canDetectPreparedWindowClosure = true;
+                return;
+              }
+              if (!canDetectPreparedWindowClosure) {
+                // COOP can sever the WindowProxy and report `closed == true`
+                // even while the auth window is still open.
+                preparedWindowClosedTimer?.cancel();
+                return;
+              }
+              c.completeError(
+                const OidcException(
+                  'The authentication window was closed before the flow completed.',
+                  extra: {'reason': 'window_closed'},
+                ),
+              );
+            },
+          );
           //listen to response uri.
           final res = await c.future;
+          preparedWindowClosedTimer.cancel();
           if (!preparedWindow.closed) {
             preparedWindow.close();
           }
@@ -133,6 +165,7 @@ class OidcWebCore {
           return res;
       }
     } finally {
+      preparedWindowClosedTimer?.cancel();
       channel.close();
     }
   }
