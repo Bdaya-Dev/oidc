@@ -19,12 +19,14 @@ class OidcAndroid extends OidcPlatform {
 
   /// The platform channel that talks to the native Android plugin.
   @visibleForTesting
-  static const MethodChannel channel = MethodChannel('oidc_android');
+  static const MethodChannel channel =
+      MethodChannel(OidcNativeChannels.android);
 
   @override
   Map<String, dynamic> prepareForRedirectFlow(
     OidcPlatformSpecificOptions options,
-  ) => const {};
+  ) =>
+      const {};
 
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
@@ -41,7 +43,7 @@ class OidcAndroid extends OidcPlatform {
     }
     final url = request.generateUri(authorizationEndpoint);
     final responseUrl = await _authenticate(
-      method: 'authorize',
+      method: OidcNativeMethods.authorize,
       url: url,
       redirectUri: request.redirectUri,
     );
@@ -72,7 +74,7 @@ class OidcAndroid extends OidcPlatform {
     }
     final url = request.generateUri(endSessionEndpoint);
     final responseUrl = await _authenticate(
-      method: 'endSession',
+      method: OidcNativeMethods.endSession,
       url: url,
       redirectUri: request.postLogoutRedirectUri,
     );
@@ -97,10 +99,19 @@ class OidcAndroid extends OidcPlatform {
           'callbackScheme': redirectUri.scheme,
         },
       });
+    } on MissingPluginException catch (e, st) {
+      // The native Android plugin isn't registered. Surface a clear,
+      // actionable error instead of leaking the raw exception.
+      throw OidcException(
+        'The native oidc_android plugin is not available. Ensure the app '
+        'runs on Android with the plugin registered.',
+        internalException: e,
+        internalStackTrace: st,
+      );
     } on PlatformException catch (e, st) {
       // A cancelled flow is benign and maps to `null` (matching the
       // null-means-cancelled contract used by the other platforms).
-      if (e.code == 'USER_CANCELLED') {
+      if (e.code == OidcNativeErrorCodes.userCancelled) {
         return null;
       }
       throw OidcException(
@@ -116,11 +127,13 @@ class OidcAndroid extends OidcPlatform {
       listenToFrontChannelLogoutRequests(
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions options,
-  ) => const Stream.empty();
+  ) =>
+          const Stream.empty();
 
   @override
   Stream<OidcMonitorSessionResult> monitorSessionStatus({
     required Uri checkSessionIframe,
     required OidcMonitorSessionStatusRequest request,
-  }) => const Stream.empty();
+  }) =>
+      const Stream.empty();
 }

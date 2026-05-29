@@ -14,10 +14,14 @@ public class OidcPlugin: NSObject, FlutterPlugin {
   // is deallocated while the session is in flight the app crashes with
   // EXC_BAD_ACCESS (#213).
   private var contextProvider: OidcPresentationContextProvider?
+  // Held so an in-flight flow can be resolved exactly once — by the session
+  // completion handler, an explicit `cancel`, or being superseded by a new
+  // flow.
+  private var pendingResult: FlutterResult?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
-      name: "oidc_ios", binaryMessenger: registrar.messenger())
+      name: "com.bdayadev.oidc/ios", binaryMessenger: registrar.messenger())
     registrar.addMethodCallDelegate(OidcPlugin(), channel: channel)
   }
 
@@ -27,12 +31,41 @@ public class OidcPlugin: NSObject, FlutterPlugin {
     case "authorize", "endSession":
       startSession(call, result)
     case "cancel":
-      session?.cancel()
-      session = nil
-      contextProvider = nil
-      result(nil)
+      cancelInFlight()
+      reply(result, nil)
     default:
-      result(FlutterMethodNotImplemented)
+      reply(result, FlutterMethodNotImplemented)
+    }
+  }
+
+  /// Flutter requires every `FlutterResult` to be invoked on the platform
+  /// (main) thread. `ASWebAuthenticationSession`'s completion handler carries
+  /// no documented thread guarantee, so all replies are funneled through here.
+  private func reply(_ result: @escaping FlutterResult, _ value: Any?) {
+    onMain { result(value) }
+  }
+
+  private func onMain(_ work: @escaping () -> Void) {
+    if Thread.isMainThread {
+      work()
+    } else {
+      DispatchQueue.main.async(execute: work)
+    }
+  }
+
+  /// Resolves an in-flight flow as cancelled and tears it down. Calling
+  /// `cancel()` on the session does NOT invoke its completion handler, so the
+  /// pending Dart Future must be resolved here explicitly. All session /
+  /// provider state is UIKit-adjacent, so this runs on the main thread.
+  private func cancelInFlight() {
+    onMain {
+      self.session?.cancel()
+      if let pending = self.pendingResult {
+        self.pendingResult = nil
+        pending(OidcPlugin.cancelledError())
+      }
+      self.session = nil
+      self.contextProvider = nil
     }
   }
 
@@ -43,25 +76,62 @@ public class OidcPlugin: NSObject, FlutterPlugin {
       let urlString = args["url"] as? String,
       let url = URL(string: urlString)
     else {
-      result(
+      reply(
+        result,
         FlutterError(
           code: "BAD_ARGS", message: "Missing or invalid `url` argument",
           details: nil))
       return
     }
     let callbackScheme = args["callbackScheme"] as? String
+    let redirectUriString = args["redirectUri"] as? String
     let preferEphemeral = (args["preferEphemeral"] as? Bool) ?? false
 
-    let newSession = ASWebAuthenticationSession(
-      url: url, callbackURLScheme: callbackScheme
-    ) { [weak self] callbackURL, error in
-      self?.session = nil
-      self?.contextProvider = nil
-      if let error = error as NSError? {
-        result(OidcPlugin.mapError(error))
-        return
+    // Supersede any flow still in flight (resolving its Future as cancelled)
+    // before starting a new one, so we never silently leak a pending session.
+    cancelInFlight()
+
+    // All `pendingResult`/session/provider mutation + the reply stay on the
+    // main thread; the completion handler carries no documented thread
+    // guarantee and may run off it.
+    let completion: (URL?, Error?) -> Void = { [weak self] callbackURL, error in
+      guard let self = self else { return }
+      self.onMain {
+        guard let pending = self.pendingResult else { return }
+        self.pendingResult = nil
+        self.session = nil
+        self.contextProvider = nil
+        if let error = error as NSError? {
+          pending(OidcPlugin.mapError(error))
+        } else {
+          pending(callbackURL?.absoluteString)
+        }
       }
-      result(callbackURL?.absoluteString)
+    }
+
+    let newSession: ASWebAuthenticationSession
+    // `init(url:callbackURLScheme:)` is deprecated on iOS 17.4; the newer
+    // `init(url:callback:)` additionally supports https / Universal-Link
+    // redirects via `Callback.https(host:path:)`.
+    if #available(iOS 17.4, *), let scheme = callbackScheme {
+      let callback: ASWebAuthenticationSession.Callback
+      if scheme.caseInsensitiveCompare("https") == .orderedSame,
+        let redirectUriString,
+        let redirectUrl = URL(string: redirectUriString),
+        let host = redirectUrl.host
+      {
+        // Universal-Link redirect. NOTE: this requires the consuming app to
+        // declare an Associated Domains entitlement (`webcredentials:<host>`).
+        callback = .https(host: host, path: redirectUrl.path)
+      } else {
+        callback = .customScheme(scheme)
+      }
+      newSession = ASWebAuthenticationSession(
+        url: url, callback: callback, completionHandler: completion)
+    } else {
+      newSession = ASWebAuthenticationSession(
+        url: url, callbackURLScheme: callbackScheme,
+        completionHandler: completion)
     }
 
     let provider = OidcPresentationContextProvider()
@@ -69,11 +139,14 @@ public class OidcPlugin: NSObject, FlutterPlugin {
     newSession.presentationContextProvider = provider
     newSession.prefersEphemeralWebBrowserSession = preferEphemeral
     session = newSession
+    pendingResult = result
 
     if !newSession.start() {
+      pendingResult = nil
       session = nil
       contextProvider = nil
-      result(
+      reply(
+        result,
         FlutterError(
           code: "START_FAILED",
           message: "ASWebAuthenticationSession.start() returned false",
@@ -81,24 +154,31 @@ public class OidcPlugin: NSObject, FlutterPlugin {
     }
   }
 
+  private static func cancelledError() -> FlutterError {
+    return FlutterError(
+      code: "USER_CANCELLED",
+      message: "The flow was cancelled by the user", details: nil)
+  }
+
   private static func mapError(_ error: NSError) -> FlutterError {
     if error.domain == ASWebAuthenticationSessionError.errorDomain {
       switch error.code {
       case ASWebAuthenticationSessionError.canceledLogin.rawValue:
-        return FlutterError(
-          code: "USER_CANCELLED",
-          message: "The flow was cancelled by the user", details: nil)
+        return cancelledError()
       case ASWebAuthenticationSessionError.presentationContextNotProvided.rawValue,
         ASWebAuthenticationSessionError.presentationContextInvalid.rawValue:
         return FlutterError(
           code: "PRESENTATION_CONTEXT_INVALID",
-          message: error.localizedDescription, details: nil)
+          message: error.localizedDescription,
+          // Preserve the original numeric code for diagnosability.
+          details: ["code": error.code])
       default:
         break
       }
     }
     return FlutterError(
-      code: "PLATFORM_ERROR", message: error.localizedDescription, details: nil)
+      code: "PLATFORM_ERROR", message: error.localizedDescription,
+      details: ["domain": error.domain, "code": error.code])
   }
 }
 
@@ -120,7 +200,16 @@ private final class OidcPresentationContextProvider: NSObject,
         return keyWindow
       }
     }
-    return UIApplication.shared.windows.first { $0.isKeyWindow }
-      ?? ASPresentationAnchor()
+    if let keyWindow = UIApplication.shared.windows.first(where: { $0.isKeyWindow }) {
+      return keyWindow
+    }
+    // Fall back to any window of the first connected scene rather than a bare,
+    // unattached anchor (which iOS rejects with presentationContextInvalid).
+    let anyWindow =
+      UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+      .first
+    return anyWindow ?? ASPresentationAnchor()
   }
 }

@@ -2,7 +2,7 @@ package com.bdayadev.oidc
 
 import android.app.Activity
 import android.app.Application
-import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.os.Bundle
 import androidx.browser.customtabs.CustomTabsIntent
@@ -11,7 +11,6 @@ import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
-import io.flutter.plugin.common.PluginRegistry
 
 /**
  * First-party Android implementation of the oidc browser primitive.
@@ -22,15 +21,18 @@ import io.flutter.plugin.common.PluginRegistry
  * logic lives here — this replaces the `flutter_appauth` dependency with a
  * thin, dependency-light native primitive.
  *
- * The redirect is delivered back to the app's launcher Activity, so the
- * consuming app must declare an `intent-filter` for its `redirect_uri` scheme
- * on that Activity (see the package README).
+ * The redirect is captured by the plugin-owned [OidcRedirectActivity], declared
+ * in this package's `AndroidManifest.xml` with an intent-filter whose
+ * `<data android:scheme="${oidcRedirectScheme}"/>` is driven by a single
+ * manifest placeholder. The consuming app sets ONE line in its
+ * `app/build.gradle` (`manifestPlaceholders += ['oidcRedirectScheme': ...]`) —
+ * no `<intent-filter>` and no `launchMode`/`taskAffinity` changes on its own
+ * Activity (which closes the #174 class of misconfiguration at the root).
  */
 class OidcPlugin :
     FlutterPlugin,
     ActivityAware,
-    MethodChannel.MethodCallHandler,
-    PluginRegistry.NewIntentListener {
+    MethodChannel.MethodCallHandler {
 
     private lateinit var channel: MethodChannel
     private var binding: ActivityPluginBinding? = null
@@ -42,7 +44,8 @@ class OidcPlugin :
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        channel = MethodChannel(binding.binaryMessenger, "oidc_android")
+        // Must match `OidcNativeChannels.android` in oidc_platform_interface.
+        channel = MethodChannel(binding.binaryMessenger, "com.bdayadev.oidc/android")
         channel.setMethodCallHandler(this)
     }
 
@@ -50,13 +53,12 @@ class OidcPlugin :
         channel.setMethodCallHandler(null)
     }
 
-    // region ActivityAware
+    // region ActivityAware — we only need the Activity to launch the Custom Tab
+    // and to observe its lifecycle for cancellation; the redirect itself is
+    // captured by OidcRedirectActivity, not by an Activity intent-filter.
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         this.binding = binding
         this.activity = binding.activity
-        binding.addOnNewIntentListener(this)
-        // Handle a redirect that (re)started the Activity on a cold start.
-        binding.activity.intent?.let { handleRedirect(it) }
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) =
@@ -67,7 +69,6 @@ class OidcPlugin :
     override fun onDetachedFromActivity() = detachActivity()
 
     private fun detachActivity() {
-        binding?.removeOnNewIntentListener(this)
         unregisterLifecycle()
         binding = null
         activity = null
@@ -97,37 +98,32 @@ class OidcPlugin :
             result.error("BAD_ARGS", "Missing `url` argument", null)
             return
         }
-        // Cancel any in-flight request so we never leak a pending result.
+        // Supersede any in-flight request so we never leak a pending result.
         finishWithCancel()
 
         pendingResult = result
         expectedRedirect = call.argument<String>("redirectUri")?.let(Uri::parse)
         redirectHandled = false
+        activeInstance = this
         registerLifecycle(currentActivity)
 
         try {
             val customTabs = CustomTabsIntent.Builder().build()
+            // launchUrl issues an ACTION_VIEW intent, which already falls back
+            // to the default browser when no Custom Tabs provider is present;
+            // the only un-handled case is "no browser installed at all".
             customTabs.launchUrl(currentActivity, Uri.parse(url))
-        } catch (e: Exception) {
-            // No Custom Tabs provider; fall back to the default browser.
-            try {
-                currentActivity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-            } catch (e2: Exception) {
-                pendingResult = null
-                unregisterLifecycle()
-                result.error("START_FAILED", "Could not launch a browser: ${e2.message}", null)
-            }
+        } catch (e: ActivityNotFoundException) {
+            cleanup()
+            result.error("START_FAILED", "No browser available to launch: ${e.message}", null)
         }
     }
 
-    override fun onNewIntent(intent: Intent): Boolean {
-        activity?.intent = intent
-        return handleRedirect(intent)
-    }
-
-    private fun handleRedirect(intent: Intent): Boolean {
-        // #128: a null data Intent is not a failure, just not our redirect.
-        val data = intent.data ?: return false
+    /**
+     * Called by [OidcRedirectActivity] with the captured redirect URI. Returns
+     * true if the in-flight flow consumed it. Runs on the main thread.
+     */
+    private fun onRedirect(data: Uri): Boolean {
         val expected = expectedRedirect ?: return false
         if (!data.scheme.equals(expected.scheme, ignoreCase = true)) return false
         // Custom-scheme redirects may omit a host; match host only when present.
@@ -138,8 +134,7 @@ class OidcPlugin :
         }
         redirectHandled = true
         val result = pendingResult
-        pendingResult = null
-        unregisterLifecycle()
+        cleanup()
         result?.success(data.toString())
         return true
     }
@@ -180,10 +175,32 @@ class OidcPlugin :
         lifecycleCallbacks = null
     }
 
+    private fun cleanup() {
+        pendingResult = null
+        expectedRedirect = null
+        unregisterLifecycle()
+        if (activeInstance === this) activeInstance = null
+    }
+
     private fun finishWithCancel() {
         val result = pendingResult ?: return
-        pendingResult = null
-        unregisterLifecycle()
+        cleanup()
         result.error("USER_CANCELLED", "The flow was cancelled by the user", null)
+    }
+
+    companion object {
+        // The plugin instance currently awaiting a redirect. Set while a flow
+        // is in flight so OidcRedirectActivity can deliver the captured URI
+        // without needing an Activity/Binding reference.
+        @Volatile
+        private var activeInstance: OidcPlugin? = null
+
+        /**
+         * Delivers a captured redirect URI from [OidcRedirectActivity] to the
+         * in-flight flow. Returns true if a flow consumed it. Invoked on the
+         * main (UI) thread from the Activity lifecycle.
+         */
+        @JvmStatic
+        fun handleRedirect(data: Uri): Boolean = activeInstance?.onRedirect(data) ?: false
     }
 }

@@ -20,7 +20,7 @@ class OidcIOS extends OidcPlatform {
 
   /// The platform channel that talks to the native iOS plugin.
   @visibleForTesting
-  static const MethodChannel channel = MethodChannel('oidc_ios');
+  static const MethodChannel channel = MethodChannel(OidcNativeChannels.ios);
 
   /// Whether to use an ephemeral `ASWebAuthenticationSession` (no shared
   /// cookies/cache), derived from the iOS external-user-agent option.
@@ -50,7 +50,7 @@ class OidcIOS extends OidcPlatform {
     }
     final url = request.generateUri(authorizationEndpoint);
     final responseUrl = await _authenticate(
-      method: 'authorize',
+      method: OidcNativeMethods.authorize,
       url: url,
       redirectUri: request.redirectUri,
       options: options,
@@ -82,7 +82,7 @@ class OidcIOS extends OidcPlatform {
     }
     final url = request.generateUri(endSessionEndpoint);
     final responseUrl = await _authenticate(
-      method: 'endSession',
+      method: OidcNativeMethods.endSession,
       url: url,
       redirectUri: request.postLogoutRedirectUri,
       options: options,
@@ -110,15 +110,26 @@ class OidcIOS extends OidcPlatform {
           'callbackScheme': redirectUri.scheme,
         },
       });
+    } on MissingPluginException catch (e, st) {
+      // The native iOS plugin isn't registered (e.g. running on an
+      // unsupported platform, or a broken plugin registration). Surface a
+      // clear, actionable error instead of leaking the raw exception.
+      throw OidcException(
+        'The native oidc_ios plugin is not available on this platform. '
+        'Ensure the app runs on iOS 13+ with the plugin registered.',
+        internalException: e,
+        internalStackTrace: st,
+      );
     } on PlatformException catch (e, st) {
       // A cancelled flow is benign and maps to `null`.
-      if (e.code == 'USER_CANCELLED') {
+      if (e.code == OidcNativeErrorCodes.userCancelled) {
         return null;
       }
       // On end-session, a closed presentation context (the iOS+Azure "-3"
       // case) simply means the session ended; treat it as a successful logout
       // with no response payload.
-      if (method == 'endSession' && e.code == 'PRESENTATION_CONTEXT_INVALID') {
+      if (method == OidcNativeMethods.endSession &&
+          e.code == OidcNativeErrorCodes.presentationContextInvalid) {
         return null;
       }
       throw OidcException(
