@@ -36,6 +36,26 @@ void main() {
     expect(OidcPlatform.instance, isA<OidcAndroid>());
   });
 
+  test('uses the domain-prefixed channel name (must match native)', () {
+    expect(OidcAndroid.channel.name, OidcNativeChannels.android);
+    expect(OidcNativeChannels.android, 'com.bdayadev.oidc/android');
+  });
+
+  test('wraps MissingPluginException (native plugin absent) as OidcException',
+      () async {
+    // With no mock handler registered, invokeMethod throws
+    // MissingPluginException — the code must surface a clear OidcException.
+    await expectLater(
+      OidcAndroid().getAuthorizationResponse(
+        metadata,
+        _authRequest(),
+        const OidcPlatformSpecificOptions(),
+        const {},
+      ),
+      throwsA(isA<OidcException>()),
+    );
+  });
+
   test('getAuthorizationResponse builds the URL in Dart and parses the native '
       'redirect (the Custom Tabs primitive only opens the URL)', () async {
     Map<Object?, Object?>? received;

@@ -34,6 +34,26 @@ void main() {
     expect(OidcPlatform.instance, isA<OidcIOS>());
   });
 
+  test('uses the domain-prefixed channel name (must match native)', () {
+    expect(OidcIOS.channel.name, OidcNativeChannels.ios);
+    expect(OidcNativeChannels.ios, 'com.bdayadev.oidc/ios');
+  });
+
+  test('wraps MissingPluginException (native plugin absent) as OidcException',
+      () async {
+    // With no mock handler registered, invokeMethod throws
+    // MissingPluginException — the code must surface a clear OidcException.
+    await expectLater(
+      OidcIOS().getAuthorizationResponse(
+        metadata,
+        _authRequest(),
+        const OidcPlatformSpecificOptions(),
+        const {},
+      ),
+      throwsA(isA<OidcException>()),
+    );
+  });
+
   test(
       'getAuthorizationResponse builds the URL in Dart and parses the native '
       'ASWebAuthenticationSession redirect', () async {
@@ -58,6 +78,9 @@ void main() {
     expect(resp!.code, 'code-1');
     expect(resp.state, 'state-1');
     expect(received!['callbackScheme'], 'com.example.app');
+    // Full redirectUri is sent so the native iOS 17.4+ .https Callback branch
+    // can derive host/path for Universal-Link redirects.
+    expect(received!['redirectUri'], 'com.example.app://callback');
     // default external user agent is non-ephemeral.
     expect(received!['preferEphemeral'], false);
   });

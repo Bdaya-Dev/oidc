@@ -1,4 +1,4 @@
-[![openid certification](http://openid.net/wordpress-content/uploads/2016/05/oid-l-certification-mark-l-cmyk-150dpi-90mm.jpg)](https://openid.net/developers/certified-openid-connect-implementations/)
+[![openid certification](https://openid.net/wordpress-content/uploads/2016/05/oid-l-certification-mark-l-cmyk-150dpi-90mm.jpg)](https://openid.net/developers/certified-openid-connect-implementations/)
 
 This is a federated plugin split into the following main packages:
 
@@ -13,10 +13,10 @@ And the following internal packages:
 
 - [oidc_platform_interface](https://pub.dev/packages/oidc_platform_interface): common interface that needs to be implemented in a platform.
 
-- [oidc_android](https://pub.dev/packages/oidc_android): Android  implementation.
-- [oidc_ios](https://pub.dev/packages/oidc_ios): ios implementation.
-- [oidc_macos](https://pub.dev/packages/oidc_macos): macos implementation.
-- [oidc_flutter_appauth](https://pub.dev/packages/oidc_flutter_appauth): Base Implementation connecting packages with [flutter_appauth](https://pub.dev/packages/flutter_appauth), to use the [AppAuth SDK](https://appauth.io/), used in android, ios, macos.
+- [oidc_android](https://pub.dev/packages/oidc_android): Android implementation — first-party **Chrome Custom Tabs** (no third-party SDK).
+- [oidc_ios](https://pub.dev/packages/oidc_ios): iOS implementation — first-party **ASWebAuthenticationSession** (no third-party SDK; iOS 13+).
+- [oidc_macos](https://pub.dev/packages/oidc_macos): macOS implementation (currently via `oidc_flutter_appauth`).
+- [oidc_flutter_appauth](https://pub.dev/packages/oidc_flutter_appauth): Implementation connecting packages with [flutter_appauth](https://pub.dev/packages/flutter_appauth) / the [AppAuth SDK](https://appauth.io/). Now used by **macOS only** (Android and iOS are first-party).
 
 - [oidc_web](https://pub.dev/packages/oidc_web): Web implementation.
 
