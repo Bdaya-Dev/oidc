@@ -1,0 +1,22 @@
+
+name: x509
+
+repository: https://github.com/Bdaya-Dev/x509
+
+
+packages:
+  - .
+
+ide:
+  intellij: false
+
+command:
+  version:
+    linkToCommits: true
+
+scripts:
+  preversion: 
+    exec: dart test -j 1
+
+
+ 
