@@ -1,7 +1,7 @@
 part of '../crypto_keys.dart';
 
 /// A cryptographic key
-abstract class Key {
+abstract mixin class Key {
   /// Creates an [Encrypter] using this key and the specified algorithm
   Encrypter createEncrypter(Identifier algorithm) {
     if (this is SymmetricKey) {
@@ -13,7 +13,7 @@ abstract class Key {
 }
 
 /// A cryptographic public key
-abstract class PublicKey implements Key {
+abstract mixin class PublicKey implements Key {
   /// Creates a signature [Verifier] using this key and the specified algorithm
   Verifier createVerifier(Identifier algorithm) {
     if (this is SymmetricKey) {
@@ -25,7 +25,7 @@ abstract class PublicKey implements Key {
 }
 
 /// A cryptographic private key
-abstract class PrivateKey implements Key {
+abstract mixin class PrivateKey implements Key {
   /// Creates a [Signer] using this key and the specified algorithm.
   Signer createSigner(Identifier algorithm) {
     if (this is SymmetricKey) {
