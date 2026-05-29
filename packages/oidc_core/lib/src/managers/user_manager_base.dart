@@ -920,6 +920,20 @@ abstract class OidcUserManagerBase {
       if (stateData.managerId != id) {
         return null; // this state is not for this manager.
       }
+      // RFC 9207 mix-up attack defense: if the authorization server returned an
+      // `iss` parameter in the authorization response, it MUST match the
+      // provider's issuer. Validated only when present (a no-op for OPs that do
+      // not send it); a mismatch indicates a possible mix-up attack.
+      final responseIss = response.iss;
+      final expectedIssuer = metadata.issuer;
+      if (responseIss != null &&
+          expectedIssuer != null &&
+          responseIss.toString() != expectedIssuer.toString()) {
+        logAndThrow(
+          'Authorization response `iss` ($responseIss) does not match the '
+          'provider issuer ($expectedIssuer); possible mix-up attack (RFC 9207).',
+        );
+      }
       if (grantType == OidcConstants_GrantType.implicit) {
         //implicit grant gets the token directly from the response.
         final implicitTokenResponse = OidcTokenResponse.fromJson(response.src);
@@ -1030,7 +1044,10 @@ abstract class OidcUserManagerBase {
     if (currentUser == null) {
       newUser = await OidcUser.fromIdToken(
         token: token,
-        allowedAlgorithms: metadata.tokenEndpointAuthSigningAlgValuesSupported,
+        // Constrain id_token signature verification to the algorithms the OP
+        // advertises for ID Tokens (id_token_signing_alg_values_supported),
+        // not the token-endpoint client-authentication algorithms.
+        allowedAlgorithms: metadata.idTokenSigningAlgValuesSupported,
         keystore: keyStore,
         attributes: attributes,
         strictVerification: settings.strictJwtVerification,

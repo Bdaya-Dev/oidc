@@ -465,7 +465,10 @@ class OidcEndpoints {
     const applicationJson = 'application/json';
     const applicationJwt = 'application/jwt';
 
-    final contentTypeRaw = resp.headers['Content-Type'] ?? applicationJson;
+    // `package:http` lowercases all response header keys, so this lookup MUST
+    // use the lowercase key. A capitalized 'Content-Type' never matched, which
+    // caused every `application/jwt` UserInfo response to be misparsed as JSON.
+    final contentTypeRaw = resp.headers['content-type'] ?? applicationJson;
     final contentTypeParts = contentTypeRaw.split(';');
     final contentType = contentTypeParts.firstOrNull;
     OidcUserInfoResponse ret;
