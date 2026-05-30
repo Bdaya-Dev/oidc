@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:jose_plus/jose.dart';
 import 'package:mason_logger/mason_logger.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:oidc_cli/src/command_runner.dart';
@@ -11,18 +12,6 @@ import 'package:test/test.dart';
 class _MockLogger extends Mock implements Logger {}
 
 class _MockPubUpdater extends Mock implements PubUpdater {}
-
-String _base64UrlNoPadding(List<int> bytes) {
-  return base64Url.encode(bytes).replaceAll('=', '');
-}
-
-String _jwtNone(Map<String, dynamic> payload) {
-  final header = <String, dynamic>{'alg': 'none', 'typ': 'JWT'};
-  final headerPart = _base64UrlNoPadding(utf8.encode(jsonEncode(header)));
-  final payloadPart = _base64UrlNoPadding(utf8.encode(jsonEncode(payload)));
-  // For alg=none, signature is an empty string.
-  return '$headerPart.$payloadPart.';
-}
 
 Future<void> _writeJson(HttpResponse response, Object json) async {
   response.headers.contentType = ContentType.json;
@@ -76,6 +65,24 @@ void main() {
       var tokenPollCount = 0;
       late final HttpServer server;
 
+      // Sign the mock id_token with a real RS256 key and publish the matching
+      // public JWK, so the test exercises the production (fail-closed)
+      // verification path rather than an unsigned `alg:none` token.
+      final signingKey = JsonWebKey.generate('RS256');
+      String signIdToken(Map<String, dynamic> payload) =>
+          (JsonWebSignatureBuilder()
+                ..jsonContent = payload
+                ..addRecipient(signingKey, algorithm: 'RS256'))
+              .build()
+              .toCompactSerialization();
+      final publicJwk = <String, dynamic>{
+        'kty': signingKey['kty'],
+        'n': signingKey['n'],
+        'e': signingKey['e'],
+        'alg': 'RS256',
+        'use': 'sig',
+      };
+
       server = await _startServer((request) async {
         final path = request.uri.path;
 
@@ -88,7 +95,15 @@ void main() {
             'device_authorization_endpoint': issuer
                 .replace(path: '/device')
                 .toString(),
+            'jwks_uri': issuer.replace(path: '/jwks').toString(),
+            'id_token_signing_alg_values_supported': ['RS256'],
             // omit userinfo_endpoint to avoid userinfo calls in validation
+          });
+        }
+
+        if (request.method == 'GET' && path == '/jwks') {
+          return _writeJson(request.response, {
+            'keys': [publicJwk],
           });
         }
 
@@ -124,7 +139,7 @@ void main() {
           final issuer = Uri.parse('http://127.0.0.1:${server.port}');
           final nowSeconds =
               DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-          final idToken = _jwtNone({
+          final idToken = signIdToken({
             'iss': issuer.toString(),
             'aud': 'my-client',
             'sub': 'user-123',
