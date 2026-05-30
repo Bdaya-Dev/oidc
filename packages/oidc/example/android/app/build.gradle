@@ -42,9 +42,12 @@ android {
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // The entire native setup: the redirect_uri scheme the plugin-owned
+        // OidcRedirectActivity listens for. Matches the example's
+        // `com.bdayadev.oidc.example://oauth2redirect` redirect_uri.
         manifestPlaceholders += [
-          'appAuthRedirectScheme': 'com.bdayadev.oidc.example'
-        ]        
+          'oidcRedirectScheme': 'com.bdayadev.oidc.example'
+        ]
     }
 
     buildTypes {

@@ -11,11 +11,10 @@ class OidcFlutter {
   static Stream<OidcMonitorSessionResult> monitorSessionStatus({
     required Uri checkSessionIframe,
     required OidcMonitorSessionStatusRequest request,
-  }) =>
-      _platform.monitorSessionStatus(
-        checkSessionIframe: checkSessionIframe,
-        request: request,
-      );
+  }) => _platform.monitorSessionStatus(
+    checkSessionIframe: checkSessionIframe,
+    request: request,
+  );
 
   /// Prepares the platform to handle a redirect flow.
   static Map<String, dynamic> prepareForRedirectFlow(
@@ -87,7 +86,7 @@ class OidcFlutter {
   ///
   /// on windows/linux/macosx this starts a server on the same prt
   static Stream<OidcFrontChannelLogoutIncomingRequest>
-      listenToFrontChannelLogoutRequests({
+  listenToFrontChannelLogoutRequests({
     required Uri listenTo,
     OidcFrontChannelRequestListeningOptions options =
         const OidcFrontChannelRequestListeningOptions(),

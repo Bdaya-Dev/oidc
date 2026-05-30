@@ -55,9 +55,18 @@ android {
     defaultConfig {
         minSdkVersion 21
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Default for the redirect receiver's scheme so apps that pull oidc
+        // transitively but don't use native login still build. Apps doing
+        // mobile login override this in their own app/build.gradle:
+        //   manifestPlaceholders += ['oidcRedirectScheme': 'com.example.app']
+        manifestPlaceholders = [oidcRedirectScheme: 'com.bdayadev.oidc.unset']
     }
 
     dependencies {
+        // Chrome Custom Tabs for the system-browser authorization flow
+        // (replaces the AppAuth-Android dependency). Pure Kotlin/AAR, so it
+        // ships no .so and is inherently 16 KB page-size compliant.
+        implementation 'androidx.browser:browser:1.10.0'
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
         testImplementation 'org.mockito:mockito-core:5.0.0'
     }
