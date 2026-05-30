@@ -37,7 +37,8 @@ void main() {
               expect(
                 v.contains('=') || v.contains('+') || v.contains('/'),
                 isFalse,
-                reason: '$alg jwk member ${entry.key} must be unpadded url-safe '
+                reason:
+                    '$alg jwk member ${entry.key} must be unpadded url-safe '
                     'base64 (was "$v")',
               );
             }

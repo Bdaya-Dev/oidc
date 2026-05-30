@@ -15,8 +15,7 @@ void main() {
         });
 
     Future<OidcAuthorizeRequest> prepare(OidcProviderMetadata m) async {
-      final container =
-          await OidcEndpoints.prepareAuthorizationCodeFlowRequest(
+      final container = await OidcEndpoints.prepareAuthorizationCodeFlowRequest(
         metadata: m,
         input: OidcSimpleAuthorizationCodeFlowRequest(
           clientId: 'client-1',

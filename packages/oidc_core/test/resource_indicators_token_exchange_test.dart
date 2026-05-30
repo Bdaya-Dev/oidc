@@ -83,7 +83,10 @@ void main() {
         map[OidcConstants_AuthParameters.subjectTokenType],
         'urn:ietf:params:oauth:token-type:access_token',
       );
-      expect(map[OidcConstants_AuthParameters.audience], 'https://api.example.com');
+      expect(
+        map[OidcConstants_AuthParameters.audience],
+        'https://api.example.com',
+      );
     });
 
     test('token-exchange request reaches the token endpoint', () async {

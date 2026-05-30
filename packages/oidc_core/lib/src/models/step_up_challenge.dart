@@ -89,7 +89,9 @@ class OidcStepUpChallenge {
       final key = match.group(1)!.toLowerCase();
       final quoted = match.group(2);
       final unquoted = match.group(3);
-      params[key] = (quoted != null ? quoted.replaceAll(r'\"', '"') : unquoted)!;
+      params[key] = (quoted != null
+          ? quoted.replaceAll(r'\"', '"')
+          : unquoted)!;
     }
     if (params.isEmpty) {
       return null;

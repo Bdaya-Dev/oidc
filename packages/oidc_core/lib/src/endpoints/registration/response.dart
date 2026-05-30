@@ -55,10 +55,7 @@ class OidcClientRegistrationResponse extends JsonBasedResponse {
   List<Uri>? get redirectUris {
     final value = src['redirect_uris'];
     return value is List
-        ? value
-              .map((e) => Uri.tryParse(e.toString()))
-              .whereType<Uri>()
-              .toList()
+        ? value.map((e) => Uri.tryParse(e.toString())).whereType<Uri>().toList()
         : null;
   }
 

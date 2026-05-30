@@ -35,9 +35,9 @@ void main() {
     oidcPlatform = MockOidcPlatform();
     // `init` subscribes to native browser events; stub the stream so the mock
     // platform doesn't return null for it.
-    when(oidcPlatform.nativeBrowserEvents).thenAnswer(
-      (_) => const Stream.empty(),
-    );
+    when(
+      oidcPlatform.nativeBrowserEvents,
+    ).thenAnswer((_) => const Stream.empty());
     OidcPlatform.instance = oidcPlatform;
   });
 

@@ -81,13 +81,17 @@ Future<String> _signIdToken(Map<String, dynamic> claims) async {
 /// base64url left-half SHA-256 hash (RS256 id_token).
 String _hash(String value) {
   final full = sha256.convert(ascii.encode(value)).bytes;
-  return base64Url.encode(full.sublist(0, full.length ~/ 2)).replaceAll('=', '');
+  return base64Url
+      .encode(full.sublist(0, full.length ~/ 2))
+      .replaceAll('=', '');
 }
 
 Future<_HybridManager> _manager() async {
   final m = _HybridManager(
     discoveryDocument: _metadata,
-    clientCredentials: const OidcClientAuthentication.none(clientId: 'client-1'),
+    clientCredentials: const OidcClientAuthentication.none(
+      clientId: 'client-1',
+    ),
     store: OidcMemoryStore(),
     settings: OidcUserManagerSettings(
       redirectUri: Uri.parse('com.example.app://cb'),
@@ -101,34 +105,42 @@ Future<_HybridManager> _manager() async {
 
 void main() {
   group('Hybrid front-channel id_token validation (OIDC Core §3.3.2)', () {
-    Map<String, dynamic> claims({String nonce = 'nonce-1', String? cHash, String? atHash}) => {
+    Map<String, dynamic> claims({
+      String nonce = 'nonce-1',
+      String? cHash,
+      String? atHash,
+    }) => {
       'iss': 'https://op.example.com',
       'sub': 'user-1',
       'aud': 'client-1',
       'azp': 'client-1',
       'nonce': nonce,
-      'exp': clock.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
+      'exp':
+          clock.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/
+          1000,
       'iat': clock.now().millisecondsSinceEpoch ~/ 1000,
       'c_hash': ?cHash,
       'at_hash': ?atHash,
     };
 
-    test('accepts a valid front-channel id_token (nonce + c_hash + at_hash)',
-        () async {
-      const code = 'auth-code-1';
-      const accessToken = 'fc-access-token';
-      final idToken = await _signIdToken(
-        claims(cHash: _hash(code), atHash: _hash(accessToken)),
-      );
-      final m = await _manager();
-      // Completes without throwing.
-      await m.validateFrontChannel(
-        idToken: idToken,
-        accessToken: accessToken,
-        code: code,
-        nonce: 'nonce-1',
-      );
-    });
+    test(
+      'accepts a valid front-channel id_token (nonce + c_hash + at_hash)',
+      () async {
+        const code = 'auth-code-1';
+        const accessToken = 'fc-access-token';
+        final idToken = await _signIdToken(
+          claims(cHash: _hash(code), atHash: _hash(accessToken)),
+        );
+        final m = await _manager();
+        // Completes without throwing.
+        await m.validateFrontChannel(
+          idToken: idToken,
+          accessToken: accessToken,
+          code: code,
+          nonce: 'nonce-1',
+        );
+      },
+    );
 
     test('rejects a mismatched c_hash', () async {
       final idToken = await _signIdToken(claims(cHash: 'wrong-c-hash'));

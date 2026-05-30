@@ -1677,8 +1677,7 @@ abstract class OidcUserManagerBase {
   /// [OidcUserManagerSettings.resource].
   Future<OidcTokenResponse> exchangeToken({
     String? subjectToken,
-    String subjectTokenType =
-        OidcConstants_TokenExchange_TokenType.accessToken,
+    String subjectTokenType = OidcConstants_TokenExchange_TokenType.accessToken,
     String? actorToken,
     String? actorTokenType,
     String? requestedTokenType,
@@ -1798,9 +1797,8 @@ abstract class OidcUserManagerBase {
       cacheStore: store,
     );
     final idTokenNonce =
-        frontChannelUser
-                .parsedIdToken
-                .claims[OidcConstants_AuthParameters.nonce]
+        frontChannelUser.parsedIdToken.claims[OidcConstants_AuthParameters
+                .nonce]
             as String?;
     if (idTokenNonce != nonce) {
       logAndThrow(
@@ -2380,7 +2378,8 @@ abstract class OidcUserManagerBase {
             // provider keys (never `alg:none`) and its `iss`/`aud`/`exp` are
             // enforced before its inner parameters are used.
             keyStore: keyStore,
-            allowedAlgorithms: discoveryDocument.idTokenSigningAlgValuesSupported,
+            allowedAlgorithms:
+                discoveryDocument.idTokenSigningAlgValuesSupported,
             expectedAudience: clientCredentials.clientId,
           );
 

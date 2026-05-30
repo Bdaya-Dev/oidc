@@ -22,10 +22,9 @@ String _unsignedJwt(Map<String, dynamic> claims) {
   return '${seg({'alg': 'none', 'typ': 'JWT'})}.${seg(claims)}.';
 }
 
-Uri _responseUri(String jwt) =>
-    Uri.parse('https://app.example.com/cb').replace(
-      queryParameters: {OidcConstants_AuthParameters.response: jwt},
-    );
+Uri _responseUri(String jwt) => Uri.parse('https://app.example.com/cb').replace(
+  queryParameters: {OidcConstants_AuthParameters.response: jwt},
+);
 
 int _epoch(Duration fromNow) =>
     clock.now().add(fromNow).millisecondsSinceEpoch ~/ 1000;

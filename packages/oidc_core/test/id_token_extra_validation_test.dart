@@ -247,18 +247,21 @@ void main() {
     int secondsAgo(Duration d) =>
         clock.now().subtract(d).millisecondsSinceEpoch ~/ 1000;
 
-    test('rejects when max_age was requested but auth_time is missing', () async {
-      final user = await _user(_baseClaims()); // no auth_time
-      final errors = _manager().run(
-        user,
-        _metadata,
-        maxAge: const Duration(minutes: 5),
-      );
-      expect(
-        errors.any((e) => e.toString().contains('auth_time')),
-        isTrue,
-      );
-    });
+    test(
+      'rejects when max_age was requested but auth_time is missing',
+      () async {
+        final user = await _user(_baseClaims()); // no auth_time
+        final errors = _manager().run(
+          user,
+          _metadata,
+          maxAge: const Duration(minutes: 5),
+        );
+        expect(
+          errors.any((e) => e.toString().contains('auth_time')),
+          isTrue,
+        );
+      },
+    );
 
     test('accepts a recent auth_time within max_age', () async {
       final user = await _user({
@@ -297,17 +300,19 @@ void main() {
   });
 
   group('validateUser exp requirement (OIDC Core §2)', () {
-    test('returns a collected error (does not throw) when exp is missing',
-        () async {
-      final claims = _baseClaims()..remove('exp');
-      final user = await _user(claims);
-      // Must not throw a raw TypeError out of validateUser; the missing `exp`
-      // is collected as a normal validation error.
-      final errors = _manager().run(user, _metadata);
-      expect(
-        errors.any((e) => e.toString().contains('exp')),
-        isTrue,
-      );
-    });
+    test(
+      'returns a collected error (does not throw) when exp is missing',
+      () async {
+        final claims = _baseClaims()..remove('exp');
+        final user = await _user(claims);
+        // Must not throw a raw TypeError out of validateUser; the missing `exp`
+        // is collected as a normal validation error.
+        final errors = _manager().run(user, _metadata);
+        expect(
+          errors.any((e) => e.toString().contains('exp')),
+          isTrue,
+        );
+      },
+    );
   });
 }
