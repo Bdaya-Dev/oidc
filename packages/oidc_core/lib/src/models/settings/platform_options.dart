@@ -281,6 +281,10 @@ class OidcNativeOptionsAndroid implements OidcPlatformOptionsMarker {
 
   /// Ordered list of preferred browser packages to resolve a Custom Tabs
   /// provider from (`CustomTabsClient.getPackageName`).
+  ///
+  /// **Reserved — not yet wired natively:** the launch does not yet pin a
+  /// package via `setPackage`. Declared for forward compatibility; intended to
+  /// pair with a browser allow/deny list in a future release.
   final List<String> preferredBrowserPackages;
 
   /// Redirect-capture model selector (Auth Tab vs Custom Tabs +
@@ -291,6 +295,9 @@ class OidcNativeOptionsAndroid implements OidcPlatformOptionsMarker {
   final OidcPartialCustomTabs? partialCustomTabs;
 
   /// Optional Custom Tabs service pre-warming.
+  ///
+  /// **Reserved — not yet wired natively:** no service binding /
+  /// `mayLaunchUrl` is performed yet. Declared for forward compatibility.
   final OidcCustomTabsWarmup warmup;
 
   /// Escape hatch: arbitrary **serializable** intent extras forwarded verbatim
@@ -302,6 +309,10 @@ class OidcNativeOptionsAndroid implements OidcPlatformOptionsMarker {
   final Map<String, dynamic> rawIntentExtras;
 
   /// Whether to allow insecure (http / self-signed) connections in the flow.
+  ///
+  /// **No effect on the default Custom Tabs transport:** the browser — not the
+  /// app — governs TLS, so this cannot be honored there. Retained for parity
+  /// and potential non-Custom-Tabs transports.
   final bool allowInsecureConnections;
 
   Map<String, dynamic> toJson() => _$OidcNativeOptionsAndroidToJson(this);
@@ -352,6 +363,8 @@ class OidcNativeOptionsApple implements OidcPlatformOptionsMarker {
 
   /// Escape hatch: arbitrary **serializable** session options forwarded
   /// verbatim (read defensively / availability-guarded native-side).
+  ///
+  /// **Reserved — not yet read natively;** declared for forward compatibility.
   final Map<String, dynamic> rawSessionOptions;
 
   Map<String, dynamic> toJson() => _$OidcNativeOptionsAppleToJson(this);

@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   An iOS implementation of the oidc plugin.
                        DESC
   s.homepage         = 'https://bdaya-dev.github.io/oidc/'
-  s.license          = { :type => 'BSD', :file => '../LICENSE' }
+  s.license          = { :type => 'MIT', :file => '../LICENSE' }
   s.author           = { 'Bdaya-Dev' => 'ahmednfwela@bdaya-dev.com' }
   s.source           = { :path => '.' }
   # SwiftPM-aligned layout (sources under <plugin_name>/Sources/<plugin_name>/).

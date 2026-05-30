@@ -73,7 +73,7 @@ await manager.logout();
 - 🚀 **Easy to use**: you mainly need to concern yourself with the `OidcUserManager` class, which is very well documented and has a simple interface.
 
 ### 📜 Conformance
-- while we are **NOT** openid certified *yet*, this package was tested against [multiple conformance profiles](https://github.com/Bdaya-Dev/oidc/issues/11).
+- this package is an **[OpenID Connect Certified](https://openid.net/certification/) Relying Party**, and is additionally tested against [multiple conformance profiles](https://github.com/Bdaya-Dev/oidc/issues/11).
 
 ### Implemented specs
 
