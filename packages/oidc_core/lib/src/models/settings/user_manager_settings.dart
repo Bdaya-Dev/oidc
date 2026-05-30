@@ -78,6 +78,7 @@ class OidcUserManagerSettings {
     this.dpop,
     this.allowedAudiences,
     this.resource,
+    this.requestObject,
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
@@ -132,6 +133,12 @@ class OidcUserManagerSettings {
   /// are intended for. When set, it is sent on the authorization request and on
   /// refresh/token requests (as one repeated `resource` parameter per value).
   final List<Uri>? resource;
+
+  /// JWT-Secured Authorization Request (JAR, RFC 9101) settings. When set, the
+  /// authorization request parameters are signed into a `request` object and
+  /// the front-channel request collapses to `client_id` + `response_type` +
+  /// `scope` + `request`.
+  final OidcRequestObjectSettings? requestObject;
 
   /// Whether to support offline authentication or not.
   ///

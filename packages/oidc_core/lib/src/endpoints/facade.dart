@@ -222,6 +222,24 @@ class OidcEndpoints {
       resource: input.resource,
     );
 
+    final requestObjectSettings = input.requestObjectSettings;
+    if (requestObjectSettings != null) {
+      // JAR (RFC 9101): sign the authorization parameters into a `request`
+      // object. `iss` is the client_id and `aud` the authorization server
+      // (its issuer, falling back to the authorization endpoint).
+      req.request = oidcCreateRequestObject(
+        parameters: req.toMap(),
+        key: requestObjectSettings.signingKey,
+        algorithm: requestObjectSettings.algorithm,
+        issuer: input.clientId,
+        audience:
+            (metadata.issuer ?? metadata.authorizationEndpoint)?.toString() ??
+            '',
+        lifetime: requestObjectSettings.lifetime,
+        clockSkew: requestObjectSettings.clockSkew,
+      );
+    }
+
     return OidcSimpleAuthorizationRequestContainer(
       request: req,
       stateData: stateData,
@@ -344,16 +362,21 @@ class OidcEndpoints {
       final key =
           resolveResponseModeByKey ?? OidcConstants_AuthParameters.state;
 
-      if (responseUri.queryParameters.containsKey(key) ||
-          responseUri.queryParameters.containsKey(
-            OidcConstants_AuthParameters.error,
-          )) {
+      // A JARM response carries everything inside a single `response` JWT, so
+      // the plain `state` key is absent from the URL — treat `response` (and
+      // `error`) as resolution keys too.
+      bool hasResolutionKey(Map<String, String> params) =>
+          params.containsKey(key) ||
+          params.containsKey(OidcConstants_AuthParameters.error) ||
+          params.containsKey(OidcConstants_AuthParameters.response);
+
+      if (hasResolutionKey(responseUri.queryParameters)) {
         parameters = responseUri.queryParameters;
         resolvedResponseMode =
             OidcConstants_AuthorizeRequest_ResponseMode.query;
       } else {
         final fragmentUri = Uri(query: responseUri.fragment);
-        if (fragmentUri.queryParameters.containsKey(key)) {
+        if (hasResolutionKey(fragmentUri.queryParameters)) {
           parameters = fragmentUri.queryParameters;
 
           resolvedResponseMode =
@@ -395,6 +418,8 @@ class OidcEndpoints {
     String? responseMode,
     String? resolveResponseModeByKey,
     Map<String, dynamic>? overrides,
+    JsonWebKeyStore? keyStore,
+    List<String>? allowedAlgorithms,
   }) async {
     final (
       :parameters,
@@ -405,17 +430,54 @@ class OidcEndpoints {
       responseMode: responseMode,
     );
 
+    // JARM (JWT Secured Authorization Response Mode): when the response is
+    // delivered as a signed `response` JWT, verify it and use its claims as the
+    // authorization-response parameters (the inner `iss`/`state`/`code`/`error`
+    // then flow through the normal checks).
+    final jarm = parameters[OidcConstants_AuthParameters.response];
+    final responseParameters = jarm is String
+        ? await _decodeJarmResponse(
+            responseJwt: jarm,
+            keyStore: keyStore,
+            allowedAlgorithms: allowedAlgorithms,
+          )
+        : parameters;
+
     final p = {
-      ...parameters,
+      ...responseParameters,
       OidcConstants_AuthParameters.responseMode: resolvedResponseMode,
       ...?overrides,
     };
-    if (parameters.containsKey(OidcConstants_AuthParameters.error)) {
+    if (p.containsKey(OidcConstants_AuthParameters.error)) {
       throw OidcException.serverError(
         errorResponse: OidcErrorResponse.fromJson(p),
       );
     }
     return OidcAuthorizeResponse.fromJson(p);
+  }
+
+  /// Verifies a JARM `response` JWT and returns its claims (the authorization
+  /// response parameters). When [keyStore] is null the JWT is parsed
+  /// unverified; callers that need the JARM signature guarantee MUST pass the
+  /// provider's [keyStore].
+  static Future<Map<String, dynamic>> _decodeJarmResponse({
+    required String responseJwt,
+    JsonWebKeyStore? keyStore,
+    List<String>? allowedAlgorithms,
+  }) async {
+    final jwt = keyStore == null
+        ? JsonWebToken.unverified(responseJwt)
+        : await JsonWebToken.decodeAndVerify(
+            responseJwt,
+            keyStore,
+            allowedArguments: allowedAlgorithms,
+          );
+    final claims = jwt.claims;
+    final exp = claims.expiry;
+    if (exp != null && clock.now().isAfter(exp)) {
+      throw const OidcException('JARM `response` JWT has expired.');
+    }
+    return claims.toJson();
   }
 
   /// Sends a token exchange request.

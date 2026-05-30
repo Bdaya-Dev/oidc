@@ -260,6 +260,7 @@ abstract class OidcUserManagerBase {
       },
       maxAge: maxAgeOverride ?? settings.maxAge,
       resource: settings.resource,
+      requestObjectSettings: settings.requestObject,
       options: getSerializableOptions(options),
       managerId: id,
     );
@@ -2362,6 +2363,10 @@ abstract class OidcUserManagerBase {
         case OidcAuthorizeState():
           final resp = await OidcEndpoints.parseAuthorizeResponse(
             responseUri: stateResponseUrl,
+            // Enables JARM: a signed `response` JWT is verified against the
+            // provider keys before its inner parameters are used.
+            keyStore: keyStore,
+            allowedAlgorithms: discoveryDocument.idTokenSigningAlgValuesSupported,
           );
 
           await handleSuccessfulAuthResponse(

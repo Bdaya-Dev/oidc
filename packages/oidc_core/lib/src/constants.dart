@@ -243,6 +243,9 @@ class OidcConstants_AuthParameters {
   /// authorization request
   static const requestUri = 'request_uri';
 
+  /// JWT Secured Authorization Response (JARM): the signed `response` JWT.
+  static const response = 'response';
+
   /// authorization response, access token response
   static const idToken = 'id_token';
 

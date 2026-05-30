@@ -36,6 +36,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     this.acrValues,
     this.requestUri,
     this.resource,
+    this.request,
   });
 
   /// REQUIRED.
@@ -295,6 +296,17 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   @JsonKey(name: OidcConstants_AuthParameters.resource)
   List<Uri>? resource;
 
+  /// A JWT-Secured Authorization Request object (RFC 9101) carrying the
+  /// authorization parameters by value.
+  ///
+  /// When set, [generateUri] emits `client_id` + `response_type` + `scope` +
+  /// `request`; the authorization server reads the remaining parameters from
+  /// the signed request object. Excluded from serialization (it IS the
+  /// serialized form). Ignored when [requestUri] is also set (a PAR
+  /// `request_uri` takes precedence).
+  @JsonKey(includeToJson: false)
+  String? request;
+
   /// converts the request into a JSON Map.
   @override
   Map<String, dynamic> toMap() => {
@@ -304,16 +316,34 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
 
   Uri generateUri(Uri authorizationEndpoint) {
     final requestUri = this.requestUri;
-    // After a Pushed Authorization Request (RFC 9126 §4), the front-channel
-    // authorization request carries ONLY `client_id` + `request_uri`; the
-    // authorization server retrieves the (already-pushed) parameters by
-    // reference. Otherwise, serialize the full parameter set as usual.
-    final params = requestUri == null
-        ? OidcInternalUtilities.serializeQueryParameters(toMap())
-        : {
-            OidcConstants_AuthParameters.clientId: clientId,
-            OidcConstants_AuthParameters.requestUri: requestUri.toString(),
-          };
+    final request = this.request;
+    final Map<String, dynamic> params;
+    if (requestUri != null) {
+      // After a Pushed Authorization Request (RFC 9126 §4), the front-channel
+      // authorization request carries ONLY `client_id` + `request_uri`; the
+      // authorization server retrieves the (already-pushed) parameters by
+      // reference.
+      params = {
+        OidcConstants_AuthParameters.clientId: clientId,
+        OidcConstants_AuthParameters.requestUri: requestUri.toString(),
+      };
+    } else if (request != null) {
+      // JAR (RFC 9101 / OpenID Connect Core §6.1): the signed request object
+      // carries the parameters by value. `client_id` + `response_type` MUST
+      // still appear as plain OAuth parameters (and `scope` for OIDC), matching
+      // those inside the request object.
+      params = {
+        OidcConstants_AuthParameters.clientId: clientId,
+        OidcConstants_AuthParameters.responseType:
+            OidcInternalUtilities.joinSpaceDelimitedList(responseType),
+        OidcConstants_AuthParameters.scope:
+            OidcInternalUtilities.joinSpaceDelimitedList(scope),
+        OidcConstants_AuthParameters.request: request,
+      };
+    } else {
+      // Otherwise, serialize the full parameter set as usual.
+      params = OidcInternalUtilities.serializeQueryParameters(toMap());
+    }
     return authorizationEndpoint.replace(
       queryParameters: {
         ...authorizationEndpoint.queryParameters,
