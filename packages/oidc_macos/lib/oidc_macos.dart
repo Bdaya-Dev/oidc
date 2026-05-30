@@ -26,8 +26,7 @@ class OidcMacOS extends OidcPlatform {
   /// cookies/cache), derived from the macOS external-user-agent option.
   @visibleForTesting
   bool preferEphemeral(OidcPlatformSpecificOptions options) =>
-      options.macos.externalUserAgent ==
-      OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession;
+      options.macos.prefersEphemeralWebBrowserSession;
 
   @override
   Map<String, dynamic> prepareForRedirectFlow(

@@ -11,35 +11,11 @@ mixin OidcFlutterAppauth on OidcPlatform {
   @protected
   final appAuth = const FlutterAppAuth();
 
-  /// maps the [OidcAppAuthExternalUserAgent] to [ExternalUserAgent].
-  static ExternalUserAgent mapToExternalUserAgent(
-    OidcAppAuthExternalUserAgent value,
-  ) {
-    return switch (value) {
-      OidcAppAuthExternalUserAgent.asWebAuthenticationSession =>
-        ExternalUserAgent.asWebAuthenticationSession,
-      OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession =>
-        ExternalUserAgent.ephemeralAsWebAuthenticationSession,
-      OidcAppAuthExternalUserAgent.sfSafariViewController =>
-        ExternalUserAgent.sfSafariViewController,
-    };
-  }
-
-  /// maps the [ExternalUserAgent] to [OidcAppAuthExternalUserAgent].
-  static OidcAppAuthExternalUserAgent mapToOidcAppAuthExternalUserAgent(
-    ExternalUserAgent value,
-  ) {
-    return switch (value) {
-      ExternalUserAgent.asWebAuthenticationSession =>
-        OidcAppAuthExternalUserAgent.asWebAuthenticationSession,
-      ExternalUserAgent.ephemeralAsWebAuthenticationSession =>
-        OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession,
-      ExternalUserAgent.sfSafariViewController =>
-        OidcAppAuthExternalUserAgent.sfSafariViewController,
-    };
-  }
-
   /// gets the [ExternalUserAgent] parameter from options.
+  ///
+  /// Defaults to [ExternalUserAgent.ephemeralAsWebAuthenticationSession] when
+  /// [OidcNativeOptionsApple.prefersEphemeralWebBrowserSession] is set on the
+  /// relevant platform options; override for finer control.
   ExternalUserAgent getExternalUserAgent(
     OidcPlatformSpecificOptions options,
   ) =>

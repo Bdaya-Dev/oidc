@@ -97,10 +97,7 @@ void main() {
         metadata,
         _authRequest(),
         const OidcPlatformSpecificOptions(
-          ios: OidcPlatformSpecificOptions_AppAuth_IosMacos(
-            externalUserAgent: OidcAppAuthExternalUserAgent
-                .ephemeralAsWebAuthenticationSession,
-          ),
+          ios: OidcNativeOptionsApple(prefersEphemeralWebBrowserSession: true),
         ),
         const {},
       );

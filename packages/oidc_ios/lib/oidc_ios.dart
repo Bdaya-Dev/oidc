@@ -26,8 +26,7 @@ class OidcIOS extends OidcPlatform {
   /// cookies/cache), derived from the iOS external-user-agent option.
   @visibleForTesting
   bool preferEphemeral(OidcPlatformSpecificOptions options) =>
-      options.ios.externalUserAgent ==
-      OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession;
+      options.ios.prefersEphemeralWebBrowserSession;
 
   @override
   Map<String, dynamic> prepareForRedirectFlow(

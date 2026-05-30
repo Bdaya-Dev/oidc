@@ -17,7 +17,7 @@ class MockAppAuthImpl extends OidcPlatform with OidcFlutterAppauth {
   });
 
   final bool allowInsecureConnections;
-  final OidcAppAuthExternalUserAgent externalUserAgent;
+  final ExternalUserAgent externalUserAgent;
 
   @override
   bool getAllowInsecureConnections(
@@ -28,7 +28,7 @@ class MockAppAuthImpl extends OidcPlatform with OidcFlutterAppauth {
 
   @override
   ExternalUserAgent getExternalUserAgent(OidcPlatformSpecificOptions options) {
-    return OidcFlutterAppauth.mapToExternalUserAgent(externalUserAgent);
+    return externalUserAgent;
   }
 }
 
@@ -60,7 +60,7 @@ void main() {
         }
       });
     });
-    for (final externalUserAgent in OidcAppAuthExternalUserAgent.values) {
+    for (final externalUserAgent in ExternalUserAgent.values) {
       group('(externalUserAgent: $externalUserAgent)', () {
         for (final allowInsecureConnections in [true, false]) {
           group('(allowInsecureConnections: $allowInsecureConnections)', () {
