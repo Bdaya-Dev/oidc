@@ -2,8 +2,10 @@ name: oidc_workspace
 publish_to: none
 
 environment:
-  sdk: ^3.9.0
-  flutter: '>=3.35.0 <4.0.0'
+  # >=3.41 / Dart 3.11: the SwiftPM (FlutterFramework) plugin layout in
+  # oidc_ios/oidc_macos requires it (see those packages' pubspecs).
+  sdk: ^3.11.0
+  flutter: '>=3.41.0 <4.0.0'
 
 workspace:
   - packages/crypto_keys_plus
