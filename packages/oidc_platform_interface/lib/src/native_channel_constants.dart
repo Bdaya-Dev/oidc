@@ -24,6 +24,15 @@ abstract final class OidcNativeChannels {
 
   /// The macOS `ASWebAuthenticationSession` channel.
   static const String macos = 'com.bdayadev.oidc/macos';
+
+  /// The Android observability `EventChannel`.
+  static const String androidEvents = 'com.bdayadev.oidc/android/events';
+
+  /// The iOS observability `EventChannel`.
+  static const String iosEvents = 'com.bdayadev.oidc/ios/events';
+
+  /// The macOS observability `EventChannel`.
+  static const String macosEvents = 'com.bdayadev.oidc/macos/events';
 }
 
 /// Method names invoked on the native channels.

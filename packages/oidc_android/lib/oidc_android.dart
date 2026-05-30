@@ -22,6 +22,22 @@ class OidcAndroid extends OidcPlatform {
   static const MethodChannel channel =
       MethodChannel(OidcNativeChannels.android);
 
+  /// The event channel that streams native browser-layer events.
+  @visibleForTesting
+  static const EventChannel eventChannel =
+      EventChannel(OidcNativeChannels.androidEvents);
+
+  @override
+  Stream<OidcNativeBrowserEvent> nativeBrowserEvents() => eventChannel
+      .receiveBroadcastStream()
+      .map(
+        (e) => e is Map
+            ? OidcNativeBrowserEvent.fromMap(e.cast<Object?, Object?>())
+            : null,
+      )
+      .where((e) => e != null)
+      .cast<OidcNativeBrowserEvent>();
+
   @override
   Map<String, dynamic> prepareForRedirectFlow(
     OidcPlatformSpecificOptions options,

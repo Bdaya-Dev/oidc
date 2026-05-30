@@ -93,6 +93,13 @@ abstract class OidcUserManagerBase {
   /// Gets a stream of events related to the current manager.
   Stream<OidcEvent> events() => eventsController.stream;
 
+  /// Native browser-layer events (`OidcNativeBrowserEvent` subtypes) to forward
+  /// into [events]. The platform manager overrides this to surface Custom Tabs
+  /// / `ASWebAuthenticationSession` observability; empty by default (e.g. on
+  /// web/desktop).
+  @protected
+  Stream<OidcEvent> listenToNativeBrowserEvents() => const Stream.empty();
+
   /// The current authenticated user.
   OidcUser? get currentUser => userSubject.valueOrNull;
 
@@ -2054,7 +2061,9 @@ abstract class OidcUserManagerBase {
         )
         ..add(userSubject.listen(listenToUserSessionIfSupported))
         ..add(tokenEvents.expiring.listen(handleTokenExpiring))
-        ..add(tokenEvents.expired.listen(handleTokenExpired));
+        ..add(tokenEvents.expired.listen(handleTokenExpired))
+        // Surface native browser-layer observability through events().
+        ..add(listenToNativeBrowserEvents().listen(eventsController.add));
     });
   }
 

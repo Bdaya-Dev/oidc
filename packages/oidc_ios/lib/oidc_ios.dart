@@ -22,6 +22,23 @@ class OidcIOS extends OidcPlatform {
   @visibleForTesting
   static const MethodChannel channel = MethodChannel(OidcNativeChannels.ios);
 
+  /// The event channel that streams native browser-layer events.
+  @visibleForTesting
+  static const EventChannel eventChannel = EventChannel(
+    OidcNativeChannels.iosEvents,
+  );
+
+  @override
+  Stream<OidcNativeBrowserEvent> nativeBrowserEvents() => eventChannel
+      .receiveBroadcastStream()
+      .map(
+        (e) => e is Map
+            ? OidcNativeBrowserEvent.fromMap(e.cast<Object?, Object?>())
+            : null,
+      )
+      .where((e) => e != null)
+      .cast<OidcNativeBrowserEvent>();
+
   /// Whether to use an ephemeral `ASWebAuthenticationSession` (no shared
   /// cookies/cache), derived from the iOS external-user-agent option.
   @visibleForTesting

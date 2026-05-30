@@ -8,7 +8,7 @@ import UIKit
 /// `oidc_core`, including PKCE/state/nonce) in an `ASWebAuthenticationSession`
 /// and returns the captured redirect URI string back to Dart, which parses it.
 /// No OIDC logic lives here — this replaces the `flutter_appauth` dependency.
-public class OidcPlugin: NSObject, FlutterPlugin {
+public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var session: ASWebAuthenticationSession?
   // A strong reference to the presentation-context provider is required: if it
   // is deallocated while the session is in flight the app crashes with
@@ -18,11 +18,43 @@ public class OidcPlugin: NSObject, FlutterPlugin {
   // completion handler, an explicit `cancel`, or being superseded by a new
   // flow.
   private var pendingResult: FlutterResult?
+  private var eventSink: FlutterEventSink?
+  private var flowId: String?
+  private var flowCounter = 0
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
       name: "com.bdayadev.oidc/ios", binaryMessenger: registrar.messenger())
-    registrar.addMethodCallDelegate(OidcPlugin(), channel: channel)
+    let instance = OidcPlugin()
+    registrar.addMethodCallDelegate(instance, channel: channel)
+    // Observability event channel (OidcNativeChannels.iosEvents).
+    let events = FlutterEventChannel(
+      name: "com.bdayadev.oidc/ios/events", binaryMessenger: registrar.messenger())
+    events.setStreamHandler(instance)
+  }
+
+  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink)
+    -> FlutterError?
+  {
+    eventSink = events
+    return nil
+  }
+
+  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    eventSink = nil
+    return nil
+  }
+
+  /// Emits an observability event to Dart on the main thread.
+  private func emit(_ type: String, _ extra: [String: Any?] = [:]) {
+    guard let sink = eventSink else { return }
+    var event: [String: Any?] = [
+      "type": type,
+      "flowId": flowId as Any?,
+      "timestampMs": Int(Date().timeIntervalSince1970 * 1000),
+    ]
+    for (k, v) in extra { event[k] = v }
+    onMain { sink(event) }
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -62,11 +94,59 @@ public class OidcPlugin: NSObject, FlutterPlugin {
       self.session?.cancel()
       if let pending = self.pendingResult {
         self.pendingResult = nil
+        self.emit("cancelled")
         pending(OidcPlugin.cancelledError())
       }
       self.session = nil
       self.contextProvider = nil
     }
+  }
+
+  /// Emits a redacted `redirectReceived` event (no raw URI / secrets).
+  private func emitRedirect(_ url: URL?) {
+    guard let url = url else { return }
+    let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+    func has(_ name: String) -> Bool { items.contains { $0.name == name } }
+    emit(
+      "redirectReceived",
+      [
+        "scheme": url.scheme as Any?,
+        "host": url.host as Any?,
+        "hasCode": has("code"),
+        "hasState": has("state"),
+        "hasError": has("error"),
+      ])
+  }
+
+  /// Emits a `cancelled` or structured `failed` event from a session error.
+  private func emitError(_ error: NSError) {
+    if error.domain == ASWebAuthenticationSessionError.errorDomain,
+      error.code == ASWebAuthenticationSessionError.canceledLogin.rawValue
+    {
+      emit("cancelled")
+      return
+    }
+    var kind = "platformError"
+    if error.domain == ASWebAuthenticationSessionError.errorDomain {
+      switch error.code {
+      case ASWebAuthenticationSessionError.presentationContextNotProvided.rawValue:
+        kind = "presentationContextNotProvided"
+      case ASWebAuthenticationSessionError.presentationContextInvalid.rawValue:
+        kind = "presentationContextInvalid"
+      default:
+        break
+      }
+    }
+    emit(
+      "failed",
+      [
+        "error": [
+          "kind": kind,
+          "nativeDomain": error.domain,
+          "nativeCode": error.code,
+          "message": error.localizedDescription,
+        ] as [String: Any?]
+      ])
   }
 
   private func startSession(
@@ -94,6 +174,10 @@ public class OidcPlugin: NSObject, FlutterPlugin {
     // before starting a new one, so we never silently leak a pending session.
     cancelInFlight()
 
+    flowCounter += 1
+    flowId = String(flowCounter)
+    emit("opening")
+
     // All `pendingResult`/session/provider mutation + the reply stay on the
     // main thread; the completion handler carries no documented thread
     // guarantee and may run off it.
@@ -105,8 +189,10 @@ public class OidcPlugin: NSObject, FlutterPlugin {
         self.session = nil
         self.contextProvider = nil
         if let error = error as NSError? {
+          self.emitError(error)
           pending(OidcPlugin.mapError(error))
         } else {
+          self.emitRedirect(callbackURL)
           pending(callbackURL?.absoluteString)
         }
       }
@@ -154,10 +240,25 @@ public class OidcPlugin: NSObject, FlutterPlugin {
     session = newSession
     pendingResult = result
 
-    if !newSession.start() {
+    if newSession.start() {
+      emit(
+        "opened",
+        [
+          "sessionType": preferEphemeral ? "ephemeral" : "standard",
+          "captureMode": "asWebAuthenticationSession",
+        ])
+    } else {
       pendingResult = nil
       session = nil
       contextProvider = nil
+      emit(
+        "failed",
+        [
+          "error": [
+            "kind": "startFailed",
+            "message": "ASWebAuthenticationSession.start() returned false",
+          ] as [String: Any?]
+        ])
       reply(
         result,
         FlutterError(

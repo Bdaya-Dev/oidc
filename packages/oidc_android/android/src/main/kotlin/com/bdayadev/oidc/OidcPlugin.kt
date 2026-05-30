@@ -6,11 +6,14 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -45,14 +48,46 @@ class OidcPlugin :
     private var redirectHandled = false
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
 
+    private var eventChannel: EventChannel? = null
+    private var eventSink: EventChannel.EventSink? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var flowId: String? = null
+    private var flowCounter = 0
+
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         // Must match `OidcNativeChannels.android` in oidc_platform_interface.
         channel = MethodChannel(binding.binaryMessenger, "com.bdayadev.oidc/android")
         channel.setMethodCallHandler(this)
+
+        // Observability event channel (OidcNativeChannels.androidEvents).
+        eventChannel = EventChannel(binding.binaryMessenger, "com.bdayadev.oidc/android/events")
+        eventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
+            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                eventSink = events
+            }
+
+            override fun onCancel(arguments: Any?) {
+                eventSink = null
+            }
+        })
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        eventChannel?.setStreamHandler(null)
+        eventChannel = null
+        eventSink = null
+    }
+
+    /** Emits an observability event to Dart on the main thread. */
+    private fun emit(type: String, extra: Map<String, Any?> = emptyMap()) {
+        val sink = eventSink ?: return
+        val event = HashMap<String, Any?>()
+        event["type"] = type
+        event["flowId"] = flowId
+        event["timestampMs"] = System.currentTimeMillis()
+        event.putAll(extra)
+        mainHandler.post { sink.success(event) }
     }
 
     // region ActivityAware — we only need the Activity to launch the Custom Tab
@@ -106,17 +141,38 @@ class OidcPlugin :
         pendingResult = result
         expectedRedirect = call.argument<String>("redirectUri")?.let(Uri::parse)
         redirectHandled = false
+        flowId = (++flowCounter).toString()
         activeInstance = this
         registerLifecycle(currentActivity)
 
+        val options = call.argument<Map<String, Any?>>("options")
+        val ephemeral = options?.get("ephemeralBrowsing") as? Boolean == true
+        emit("opening")
+
         try {
-            val customTabs = buildCustomTabsIntent(call.argument("options"))
+            val customTabs = buildCustomTabsIntent(options)
             // launchUrl issues an ACTION_VIEW intent, which already falls back
             // to the default browser when no Custom Tabs provider is present;
             // the only un-handled case is "no browser installed at all".
             customTabs.launchUrl(currentActivity, Uri.parse(url))
+            emit(
+                "opened",
+                mapOf(
+                    "sessionType" to if (ephemeral) "ephemeral" else "standard",
+                    "captureMode" to "customTabsRedirectActivity",
+                ),
+            )
         } catch (e: ActivityNotFoundException) {
             cleanup()
+            emit(
+                "failed",
+                mapOf(
+                    "error" to mapOf(
+                        "kind" to "noBrowserAvailable",
+                        "message" to e.message,
+                    ),
+                ),
+            )
             result.error("START_FAILED", "No browser available to launch: ${e.message}", null)
         }
     }
@@ -135,6 +191,16 @@ class OidcPlugin :
             return false
         }
         redirectHandled = true
+        emit(
+            "redirectReceived",
+            mapOf(
+                "scheme" to data.scheme,
+                "host" to data.host,
+                "hasCode" to (data.getQueryParameter("code") != null),
+                "hasState" to (data.getQueryParameter("state") != null),
+                "hasError" to (data.getQueryParameter("error") != null),
+            ),
+        )
         val result = pendingResult
         cleanup()
         result?.success(data.toString())
@@ -186,6 +252,7 @@ class OidcPlugin :
 
     private fun finishWithCancel() {
         val result = pendingResult ?: return
+        emit("cancelled")
         cleanup()
         result.error("USER_CANCELLED", "The flow was cancelled by the user", null)
     }
