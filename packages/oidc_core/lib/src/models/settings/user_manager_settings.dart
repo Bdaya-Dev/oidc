@@ -27,6 +27,29 @@ Duration defaultOfflineRefreshRetryDelay(int consecutiveFailures) {
   return exponentialDelay > maxDelay ? maxDelay : exponentialDelay;
 }
 
+/// Controls whether the authorization-code login flow uses RFC 9126 Pushed
+/// Authorization Requests (PAR).
+///
+/// Note: under PAR the authorization parameters are frozen when the PAR request
+/// is posted (the front channel then carries only `client_id` + `request_uri`),
+/// so parameters added by the `authorization` hook do NOT reach the server.
+/// Supply such parameters via `extraAuthenticationParameters` instead — those
+/// are part of the pushed request body.
+enum OidcPushedAuthorizationRequestsMode {
+  /// Use PAR only when the authorization server requires it via discovery
+  /// metadata (`require_pushed_authorization_requests` == true). Servers that
+  /// don't require PAR behave exactly as without this setting (the default).
+  auto,
+
+  /// Always use PAR when the server advertises a
+  /// `pushed_authorization_request_endpoint`.
+  always,
+
+  /// Never use PAR, even if the server requires it (the server will then reject
+  /// the direct authorization request).
+  never,
+}
+
 ///
 class OidcUserManagerSettings {
   ///
@@ -49,7 +72,14 @@ class OidcUserManagerSettings {
     this.frontChannelRequestListeningOptions =
         const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
-    this.strictJwtVerification = false,
+    this.strictJwtVerification = true,
+    this.pushedAuthorizationRequestsMode =
+        OidcPushedAuthorizationRequestsMode.auto,
+    this.dpop,
+    this.allowedAudiences,
+    this.resource,
+    this.requestObject,
+    this.revokeTokensOnLogout = true,
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
@@ -67,10 +97,58 @@ class OidcUserManagerSettings {
   /// Settings to control using the user_info endpoint.
   final OidcUserInfoSettings userInfoSettings;
 
-  /// whether JWTs are strictly verified.
+  /// Whether id_token signatures are strictly verified (fail-closed).
   ///
-  /// If set to true, the library will throw an exception if a JWT is invalid.
+  /// When `true` (the default), an id_token whose signature cannot be verified
+  /// against the OP's JWKS is **rejected** (an exception is thrown). When
+  /// `false`, a verification failure is logged and the token is accepted
+  /// *unverified* — which means a forged or tampered id_token would be trusted.
+  ///
+  /// Defaults to `true` per OpenID Connect Core §3.1.3.7 and the OAuth 2.0
+  /// Security BCP (RFC 9700). Only set this to `false` if you fully understand
+  /// the risk (e.g. a controlled test environment).
   final bool strictJwtVerification;
+
+  /// Whether/when the authorization-code login flow uses RFC 9126 Pushed
+  /// Authorization Requests (PAR). Defaults to
+  /// [OidcPushedAuthorizationRequestsMode.auto] — follow the server's
+  /// `require_pushed_authorization_requests` metadata, which is non-breaking
+  /// for servers that don't require PAR.
+  final OidcPushedAuthorizationRequestsMode pushedAuthorizationRequestsMode;
+
+  /// Enables + configures DPoP (Demonstrating Proof of Possession, RFC 9449).
+  ///
+  /// When non-null, the manager generates a per-session DPoP proof key and
+  /// attaches a DPoP proof to token requests, sender-constraining the issued
+  /// tokens to that key. Null (the default) disables DPoP.
+  final OidcDPoPSettings? dpop;
+
+  /// Additional audiences (beyond the `client_id`, which is always trusted)
+  /// that an id_token's `aud` claim is allowed to contain.
+  ///
+  /// OpenID Connect Core §3.1.3.7 requires rejecting an id_token whose `aud`
+  /// contains audiences not trusted by the client; this is the trust list.
+  final List<String>? allowedAudiences;
+
+  /// RFC 8707 Resource Indicators: the protected resource(s) the issued tokens
+  /// are intended for. When set, it is sent on the authorization request and on
+  /// refresh/token requests (as one repeated `resource` parameter per value).
+  final List<Uri>? resource;
+
+  /// JWT-Secured Authorization Request (JAR, RFC 9101) settings. When set, the
+  /// authorization request parameters are signed into a `request` object and
+  /// the front-channel request collapses to `client_id` + `response_type` +
+  /// `scope` + `request`.
+  final OidcRequestObjectSettings? requestObject;
+
+  /// Whether [OidcUserManagerBase.logout] also revokes the refresh and access
+  /// tokens at the provider's `revocation_endpoint` (RFC 7009) before ending
+  /// the session. Defaults to `true`.
+  ///
+  /// Revocation is best-effort: it is a no-op when the provider advertises no
+  /// `revocation_endpoint`, and a revocation failure never blocks logout (it is
+  /// logged and swallowed). Set to `false` to keep logout purely front-channel.
+  final bool revokeTokensOnLogout;
 
   /// Whether to support offline authentication or not.
   ///

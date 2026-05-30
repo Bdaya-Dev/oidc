@@ -21,8 +21,7 @@ class _AuthPageState extends State<AuthPage> {
       OidcPlatformSpecificOptions_Web_NavigationMode.newPage;
 
   bool allowInsecureConnections = false;
-  OidcAppAuthExternalUserAgent externalUserAgent =
-      OidcAppAuthExternalUserAgent.asWebAuthenticationSession;
+  bool prefersEphemeral = false;
 
   OidcPlatformSpecificOptions _getOptions() {
     return OidcPlatformSpecificOptions(
@@ -31,15 +30,14 @@ class _AuthPageState extends State<AuthPage> {
         popupHeight: 800,
         popupWidth: 730,
       ),
-      // these settings are from https://pub.dev/packages/flutter_appauth.
-      android: OidcPlatformSpecificOptions_AppAuth_Android(
+      android: OidcNativeOptionsAndroid(
         allowInsecureConnections: allowInsecureConnections,
       ),
-      ios: OidcPlatformSpecificOptions_AppAuth_IosMacos(
-        externalUserAgent: externalUserAgent,
+      ios: OidcNativeOptionsApple(
+        prefersEphemeralWebBrowserSession: prefersEphemeral,
       ),
-      macos: OidcPlatformSpecificOptions_AppAuth_IosMacos(
-        externalUserAgent: externalUserAgent,
+      macos: OidcNativeOptionsApple(
+        prefersEphemeralWebBrowserSession: prefersEphemeral,
       ),
       windows: const OidcPlatformSpecificOptions_Native(),
     );

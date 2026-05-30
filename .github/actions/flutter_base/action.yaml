@@ -8,7 +8,7 @@ inputs:
   flutter-version:
     description: "Flutter version to use"
     # >=3.41 required: the SwiftPM (FlutterFramework) plugin layout in
-    # oidc_ios/oidc_macos needs Flutter 3.41+ / Dart 3.11+.
+    # oidc_darwin needs Flutter 3.41+ / Dart 3.11+.
     default: "3.44.0"
 
 runs:

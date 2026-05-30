@@ -1,1 +1,0 @@
-For a full example, see: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc/example

@@ -28,7 +28,7 @@ class OidcUser {
   /// with the user.
   static Future<OidcUser> fromIdToken({
     required OidcToken token,
-    bool strictVerification = false,
+    bool strictVerification = true,
     JsonWebKeyStore? keystore,
     OidcStore? cacheStore,
     List<String>? allowedAlgorithms,
@@ -154,7 +154,7 @@ class OidcUser {
   Future<OidcUser> replaceToken(
     OidcToken newToken, {
     String? idTokenOverride,
-    bool strictVerification = false,
+    bool strictVerification = true,
     OidcStore? cacheStore,
     bool allowExpiredIdToken = false,
   }) async {

@@ -61,6 +61,23 @@ abstract class OidcUserManagerBase {
   JsonWebKeyStore? _keyStore;
   JsonWebKeyStore get keyStore => _keyStore ??= JsonWebKeyStore();
 
+  OidcDPoPManager? _dpopManager;
+
+  /// The DPoP (RFC 9449) proof manager when DPoP is enabled
+  /// (`settings.dpop != null`); otherwise null.
+  ///
+  /// Lazily created and reused for the manager's lifetime so that refresh
+  /// proofs are signed with the SAME key as the original token request (the
+  /// refresh token is sender-constrained to it).
+  @protected
+  OidcDPoPManager? get dpopManager {
+    final dpopSettings = settings.dpop;
+    if (dpopSettings == null) {
+      return null;
+    }
+    return _dpopManager ??= OidcDPoPManager.generate(dpopSettings);
+  }
+
   /// The settings used in this manager.
   final OidcUserManagerSettings settings;
 
@@ -92,6 +109,13 @@ abstract class OidcUserManagerBase {
 
   /// Gets a stream of events related to the current manager.
   Stream<OidcEvent> events() => eventsController.stream;
+
+  /// Native browser-layer events (`OidcNativeBrowserEvent` subtypes) to forward
+  /// into [events]. The platform manager overrides this to surface Custom Tabs
+  /// / `ASWebAuthenticationSession` observability; empty by default (e.g. on
+  /// web/desktop).
+  @protected
+  Stream<OidcEvent> listenToNativeBrowserEvents() => const Stream.empty();
 
   /// The current authenticated user.
   OidcUser? get currentUser => userSubject.valueOrNull;
@@ -235,6 +259,8 @@ abstract class OidcUserManagerBase {
         ...?extraParameters,
       },
       maxAge: maxAgeOverride ?? settings.maxAge,
+      resource: settings.resource,
+      requestObjectSettings: settings.requestObject,
       options: getSerializableOptions(options),
       managerId: id,
     );
@@ -247,6 +273,43 @@ abstract class OidcUserManagerBase {
           metadata: discoveryDocument,
           store: store,
         );
+    // RFC 9126 Pushed Authorization Requests: when enabled, POST the prepared
+    // request to the PAR endpoint (back channel, authenticated) and continue
+    // the front channel by reference (`request_uri`). state/nonce/PKCE were
+    // already persisted by prepareAuthorizationCodeFlowRequest above, so local
+    // validation is unchanged (RFC 9126 §6).
+    final shouldPushAuthorizationRequest =
+        switch (settings.pushedAuthorizationRequestsMode) {
+          OidcPushedAuthorizationRequestsMode.never => false,
+          OidcPushedAuthorizationRequestsMode.always => true,
+          OidcPushedAuthorizationRequestsMode.auto =>
+            discoveryDocument.requirePushedAuthorizationRequestsOrDefault,
+        };
+    if (shouldPushAuthorizationRequest) {
+      final parEndpoint = discoveryDocument.pushedAuthorizationRequestEndpoint;
+      if (parEndpoint == null) {
+        logAndThrow(
+          'Pushed Authorization Requests are required/enabled but the '
+          'authorization server did not advertise a '
+          '`pushed_authorization_request_endpoint`.',
+        );
+      }
+      final dpop = dpopManager;
+      final parResponse = await OidcEndpoints.pushAuthorizationRequest(
+        pushedAuthorizationRequestEndpoint: parEndpoint,
+        request: requestContainer.request,
+        credentials: clientCredentials,
+        client: httpClient,
+        // RFC 9449 §10: bind the authorization code to the DPoP key by sending
+        // its thumbprint as `dpop_jkt` on the (back-channel) PAR request.
+        extraBodyFields: dpop != null && dpop.settings.bindAuthorizationCode
+            ? {OidcConstants_AuthParameters.dpopJkt: dpop.thumbprint}
+            : null,
+      );
+      // Continue the authorization request by reference; generateUri now emits
+      // only `client_id` + `request_uri` (RFC 9126 §4).
+      requestContainer.request.requestUri = parResponse.requestUri;
+    }
     return tryGetAuthResponse(
       grantType: OidcConstants_GrantType.authorizationCode,
       request: requestContainer.request,
@@ -292,6 +355,7 @@ abstract class OidcUserManagerBase {
           tokenEndpoint: hookRequest.tokenEndpoint,
           credentials: hookRequest.credentials,
           headers: hookRequest.headers,
+          dpopManager: dpopManager,
           request: hookRequest.request,
           client: hookRequest.client,
         );
@@ -389,6 +453,7 @@ abstract class OidcUserManagerBase {
               tokenEndpoint: hookRequest.tokenEndpoint,
               credentials: hookRequest.credentials,
               headers: hookRequest.headers,
+              dpopManager: dpopManager,
               request: hookRequest.request,
               client: hookRequest.client,
             );
@@ -801,6 +866,33 @@ abstract class OidcUserManagerBase {
     if (currentUser == null) {
       return;
     }
+    // Best-effort token revocation (RFC 7009) before ending the session, so the
+    // refresh and access tokens are invalidated server-side on logout. This is
+    // a no-op when the OP advertises no `revocation_endpoint`, and it MUST NEVER
+    // block logout: any failure is logged and swallowed. `forgetUser: false`
+    // keeps the session intact so the end-session flow below can run.
+    if (settings.revokeTokensOnLogout) {
+      try {
+        await revokeRefreshToken(forgetUser: false);
+      } on Object catch (e, st) {
+        logger.warning(
+          'Best-effort refresh-token revocation on logout failed; '
+          'continuing with logout.',
+          e,
+          st,
+        );
+      }
+      try {
+        await revokeAccessToken(forgetUser: false);
+      } on Object catch (e, st) {
+        logger.warning(
+          'Best-effort access-token revocation on logout failed; '
+          'continuing with logout.',
+          e,
+          st,
+        );
+      }
+    }
     final postLogoutRedirectUri =
         postLogoutRedirectUriOverride ?? settings.postLogoutRedirectUri;
 
@@ -952,6 +1044,10 @@ abstract class OidcUserManagerBase {
             attributes: null,
             nonce: stateData.nonce,
             metadata: metadata,
+            // Hybrid responses may carry a front-channel `code` to bind via
+            // `c_hash`; null for a pure implicit response.
+            authorizationCode: response.code,
+            maxAge: stateData.maxAge,
           );
         }
       }
@@ -971,6 +1067,23 @@ abstract class OidcUserManagerBase {
           "Server didn't send code even though the authorization code flow was used.",
         );
       }
+
+      // OpenID Connect Core §3.3.2 (Hybrid flow): when the authorization
+      // endpoint ALSO returned an id_token in the front channel, validate it
+      // before exchanging the code — `nonce` must match, `c_hash` must bind the
+      // returned `code`, and `at_hash` (when present) must bind the
+      // front-channel access_token.
+      final frontChannelIdToken = response.idToken;
+      if (frontChannelIdToken != null) {
+        await validateFrontChannelIdToken(
+          idToken: frontChannelIdToken,
+          accessToken: response.accessToken,
+          code: code,
+          nonce: stateData.nonce,
+          metadata: metadata,
+        );
+      }
+
       //request the token.
       final tokenResp = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
@@ -993,6 +1106,7 @@ abstract class OidcUserManagerBase {
             tokenEndpoint: hookRequest.tokenEndpoint,
             credentials: hookRequest.credentials,
             headers: hookRequest.headers,
+            dpopManager: dpopManager,
             request: hookRequest.request,
             client: hookRequest.client,
           );
@@ -1010,6 +1124,8 @@ abstract class OidcUserManagerBase {
         attributes: null,
         userInfo: null,
         metadata: metadata,
+        authorizationCode: code,
+        maxAge: stateData.maxAge,
       );
     } finally {
       //remove the state + state response since we already handled it.
@@ -1038,6 +1154,8 @@ abstract class OidcUserManagerBase {
     required OidcProviderMetadata metadata,
     OidcUser? currentUserOverride,
     bool validateAndSave = true,
+    String? authorizationCode,
+    Duration? maxAge,
   }) async {
     final currentUser = currentUserOverride ?? this.currentUser;
     OidcUser? newUser;
@@ -1066,6 +1184,27 @@ abstract class OidcUserManagerBase {
         cacheStore: store,
         allowExpiredIdToken: reusesExistingIdToken,
       );
+      // OpenID Connect Core §12.2: a freshly-issued id_token MUST keep the same
+      // `sub` (and `iss`) as the prior one — refuse a possible account swap on
+      // refresh. Skipped when the existing id_token is reused (no new token).
+      if (!reusesExistingIdToken) {
+        final oldClaims = currentUser.parsedIdToken.claims;
+        final newClaims = newUser.parsedIdToken.claims;
+        if (oldClaims.subject != null &&
+            newClaims.subject != oldClaims.subject) {
+          logAndThrow(
+            'Refreshed id_token `sub` (${newClaims.subject}) does not match '
+            'the existing user (${oldClaims.subject}); refusing a possible '
+            'account swap.',
+          );
+        }
+        if (oldClaims.issuer != null && newClaims.issuer != oldClaims.issuer) {
+          logAndThrow(
+            'Refreshed id_token `iss` (${newClaims.issuer}) does not match '
+            'the existing user (${oldClaims.issuer}).',
+          );
+        }
+      }
       if (attributes != null) {
         newUser = newUser.setAttributes(attributes);
       }
@@ -1083,7 +1222,12 @@ abstract class OidcUserManagerBase {
       );
     }
     if (validateAndSave) {
-      return validateAndSaveUser(user: newUser, metadata: metadata);
+      return validateAndSaveUser(
+        user: newUser,
+        metadata: metadata,
+        authorizationCode: authorizationCode,
+        maxAge: maxAge,
+      );
     } else {
       return newUser;
     }
@@ -1284,6 +1428,7 @@ abstract class OidcUserManagerBase {
             clientSecret: clientCredentials.clientSecret,
             extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
             scope: settings.scope,
+            resource: settings.resource,
           ),
           credentials: clientCredentials,
           headers: settings.extraTokenHeaders,
@@ -1296,6 +1441,7 @@ abstract class OidcUserManagerBase {
             credentials: tokenHookRequest.credentials,
             client: tokenHookRequest.client,
             headers: tokenHookRequest.headers,
+            dpopManager: dpopManager,
             request: tokenHookRequest.request,
           );
         },
@@ -1383,6 +1529,7 @@ abstract class OidcUserManagerBase {
             clientSecret: clientCredentials.clientSecret,
             extra: settings.extraTokenParameters,
             scope: settings.scope,
+            resource: settings.resource,
           ),
           options: settings.options,
         ),
@@ -1392,6 +1539,7 @@ abstract class OidcUserManagerBase {
             credentials: hookRequest.credentials,
             client: hookRequest.client,
             headers: hookRequest.headers,
+            dpopManager: dpopManager,
             request: hookRequest.request,
           );
         },
@@ -1546,29 +1694,324 @@ abstract class OidcUserManagerBase {
   }
 
   @protected
+  /// Performs an RFC 8693 Token Exchange at the token endpoint and returns the
+  /// raw [OidcTokenResponse].
+  ///
+  /// This does NOT change the currently logged-in user; it is intended for
+  /// obtaining a (possibly delegated/impersonated or downscoped) token for a
+  /// downstream resource. When [subjectToken] is omitted it defaults to the
+  /// current user's access token. [resource] defaults to
+  /// [OidcUserManagerSettings.resource].
+  Future<OidcTokenResponse> exchangeToken({
+    String? subjectToken,
+    String subjectTokenType = OidcConstants_TokenExchange_TokenType.accessToken,
+    String? actorToken,
+    String? actorTokenType,
+    String? requestedTokenType,
+    String? audience,
+    List<Uri>? resource,
+    List<String>? scope,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extra,
+  }) async {
+    final tokenEndpoint = discoveryDocument.tokenEndpoint;
+    if (tokenEndpoint == null) {
+      logAndThrow("This provider doesn't provide a token endpoint.");
+    }
+    final actualSubjectToken = subjectToken ?? currentUser?.token.accessToken;
+    if (actualSubjectToken == null) {
+      throw const OidcException(
+        'Token exchange requires a subject_token; none was provided and there '
+        'is no current access token.',
+      );
+    }
+    return (settings.hooks?.token).execute(
+      request: OidcTokenHookRequest(
+        metadata: discoveryDocument,
+        tokenEndpoint: tokenEndpoint,
+        credentials: clientCredentials,
+        headers: {...?settings.extraTokenHeaders, ...?headers},
+        client: httpClient,
+        options: settings.options,
+        request: OidcTokenRequest.tokenExchange(
+          subjectToken: actualSubjectToken,
+          subjectTokenType: subjectTokenType,
+          actorToken: actorToken,
+          actorTokenType: actorTokenType,
+          requestedTokenType: requestedTokenType,
+          audience: audience,
+          resource: resource ?? settings.resource,
+          scope: scope,
+          clientId: clientCredentials.clientId,
+          clientSecret: clientCredentials.clientSecret,
+          extra: extra,
+        ),
+      ),
+      defaultExecution: (hookRequest) => OidcEndpoints.token(
+        tokenEndpoint: hookRequest.tokenEndpoint,
+        credentials: hookRequest.credentials,
+        headers: hookRequest.headers,
+        dpopManager: dpopManager,
+        request: hookRequest.request,
+        client: hookRequest.client,
+      ),
+    );
+  }
+
+  /// Introspects a token (RFC 7662) using the provider's introspection
+  /// endpoint, returning its metadata (notably whether it is `active`).
+  ///
+  /// Defaults to introspecting the current user's access token when [token] is
+  /// omitted. The request is authenticated with the manager's client
+  /// credentials.
+  Future<OidcIntrospectionResponse> introspectToken({
+    String? token,
+    String? tokenTypeHint,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extra,
+  }) async {
+    final introspectionEndpoint = discoveryDocument.introspectionEndpoint;
+    if (introspectionEndpoint == null) {
+      logAndThrow("This provider doesn't provide an introspection endpoint.");
+    }
+    final actualToken = token ?? currentUser?.token.accessToken;
+    if (actualToken == null) {
+      throw const OidcException(
+        'Introspection requires a token; none was provided and there is no '
+        'current access token.',
+      );
+    }
+    return OidcEndpoints.introspect(
+      introspectionEndpoint: introspectionEndpoint,
+      credentials: clientCredentials,
+      client: httpClient,
+      headers: {...?settings.extraTokenHeaders, ...?headers},
+      request: OidcIntrospectionRequest(
+        token: actualToken,
+        tokenTypeHint: tokenTypeHint,
+        clientId: clientCredentials.clientId,
+        clientSecret: clientCredentials.clientSecret,
+        extra: extra,
+      ),
+    );
+  }
+
+  /// Validates the front-channel id_token returned by the authorization
+  /// endpoint in the OpenID Connect Hybrid flow (OpenID Connect Core §3.3.2):
+  /// signature, `nonce`, `c_hash` (binding [code]) and `at_hash` (binding the
+  /// front-channel [accessToken], when present). Throws on any failure.
+  ///
+  /// This is an additional security gate run BEFORE the code is exchanged; the
+  /// logged-in user is still built from the token-endpoint response.
+  @protected
+  Future<void> validateFrontChannelIdToken({
+    required String idToken,
+    required String? accessToken,
+    required String code,
+    required String nonce,
+    required OidcProviderMetadata metadata,
+  }) async {
+    final frontChannelUser = await OidcUser.fromIdToken(
+      token: OidcToken(
+        creationTime: clock.now(),
+        idToken: idToken,
+        accessToken: accessToken,
+        tokenType: accessToken == null ? null : 'Bearer',
+      ),
+      allowedAlgorithms: metadata.idTokenSigningAlgValuesSupported,
+      keystore: keyStore,
+      strictVerification: settings.strictJwtVerification,
+      cacheStore: store,
+    );
+    final idTokenNonce =
+        frontChannelUser.parsedIdToken.claims[OidcConstants_AuthParameters
+                .nonce]
+            as String?;
+    if (idTokenNonce != nonce) {
+      logAndThrow(
+        'Hybrid front-channel id_token returned a wrong nonce, possible '
+        'replay attack.',
+      );
+    }
+    final errors = validateUser(
+      user: frontChannelUser,
+      metadata: metadata,
+      authorizationCode: code,
+    );
+    if (errors.isNotEmpty) {
+      for (final error in errors) {
+        logger.warning(
+          'Hybrid front-channel id_token validation problem: $error',
+          error,
+        );
+      }
+      logAndThrow(
+        'Hybrid front-channel id_token failed validation: ${errors.first}',
+      );
+    }
+  }
+
   List<Exception> validateUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
+    String? authorizationCode,
+    Duration? maxAge,
   }) {
-    final errors = <Exception>[
-      ...user.parsedIdToken.claims.validate(
-        clientId: clientCredentials.clientId,
-        issuer: metadata.issuer,
-        expiryTolerance: settings.expiryTolerance,
-      ),
-    ];
+    final claims = user.parsedIdToken.claims;
+    // `exp` is REQUIRED (OIDC Core §2). jose's `validate()` force-unwraps the
+    // expiry, so guard before calling it: a missing `exp` is a hard validation
+    // failure (otherwise a malformed token throws an uncaught TypeError instead
+    // of a collected exception, breaking the validation contract).
+    final errors = <Exception>[];
+    if (claims.expiry == null) {
+      errors.add(
+        JoseException('id token is missing the required `exp` claim.'),
+      );
+    } else {
+      errors.addAll(
+        claims.validate(
+          clientId: clientCredentials.clientId,
+          issuer: metadata.issuer,
+          expiryTolerance: settings.expiryTolerance,
+        ),
+      );
+    }
     if (user.token.allowExpiredIdToken) {
       errors.removeWhere(_isJwtExpiredError);
     }
-    if (user.parsedIdToken.claims.subject == null) {
+    if (claims.subject == null) {
       errors.add(
         JoseException('id token is missing a `sub` claim.'),
       );
     }
-    if (user.parsedIdToken.claims.issuedAt == null) {
+    if (claims.issuedAt == null) {
       errors.add(
         JoseException('id token is missing an `iat` claim.'),
       );
+    }
+
+    // Additional OpenID Connect Core §3.1.3.7 id_token checks not covered by
+    // the generic JWT validation above.
+
+    // `azp` (authorized party): when present it MUST be the client_id, and when
+    // the id_token carries more than one audience, `azp` is REQUIRED.
+    final azp = claims['azp'];
+    final audiences = claims.audience ?? const <String>[];
+    if (azp != null && azp != clientCredentials.clientId) {
+      errors.add(
+        JoseException(
+          'id token `azp` (`$azp`) does not match the client_id '
+          '(`${clientCredentials.clientId}`).',
+        ),
+      );
+    }
+    if (audiences.length > 1 && azp == null) {
+      errors.add(
+        JoseException(
+          'id token has multiple audiences but is missing the required '
+          '`azp` (authorized party) claim.',
+        ),
+      );
+    }
+
+    // `nbf` (not-before): reject a token that is not yet valid, applying the
+    // same clock-skew tolerance used for expiry.
+    final notBefore = claims.notBefore;
+    if (notBefore != null &&
+        clock.now().isBefore(notBefore.subtract(settings.expiryTolerance))) {
+      errors.add(
+        JoseException(
+          'id token is not yet valid; `nbf` ($notBefore) is more than the '
+          'allowed tolerance (${settings.expiryTolerance}) after now.',
+        ),
+      );
+    }
+
+    // aud strictness (§3.1.3.7): the client_id is always trusted, and
+    // `settings.allowedAudiences` extends the trust list. Any OTHER audience
+    // means the token was minted for someone else and MUST be rejected.
+    final trustedAudiences = <String>{
+      clientCredentials.clientId,
+      ...?settings.allowedAudiences,
+    };
+    final untrustedAudiences = audiences
+        .where((a) => !trustedAudiences.contains(a))
+        .toList();
+    if (untrustedAudiences.isNotEmpty) {
+      errors.add(
+        JoseException(
+          'id token contains untrusted audience(s) $untrustedAudiences, not '
+          'in the client_id or settings.allowedAudiences.',
+        ),
+      );
+    }
+
+    // `at_hash` (§3.2.2.9): when present alongside an access_token, it MUST be
+    // the base64url left-half hash of the access_token using the id_token's
+    // signing-alg hash.
+    final atHash = claims['at_hash'];
+    final accessToken = user.token.accessToken;
+    if (atHash is String && accessToken != null) {
+      final alg = oidcReadJwtAlg(user.idToken);
+      final expected = alg == null
+          ? null
+          : oidcComputeTokenHash(alg, accessToken);
+      // Compare padding-insensitively: the spec mandates unpadded base64url,
+      // but tolerate a non-conformant OP that pads rather than false-rejecting.
+      if (expected != null && expected != atHash.replaceAll('=', '')) {
+        errors.add(
+          JoseException('id token `at_hash` does not match the access_token.'),
+        );
+      }
+    }
+
+    // `c_hash` (§3.3.2.11): when an id_token returned from the authorization
+    // endpoint alongside an authorization `code` (hybrid flow) carries `c_hash`,
+    // it MUST be the base64url left-half hash of the code, using the id_token's
+    // signing-alg hash.
+    final cHash = claims['c_hash'];
+    if (cHash is String && authorizationCode != null) {
+      final alg = oidcReadJwtAlg(user.idToken);
+      final expected = alg == null
+          ? null
+          : oidcComputeTokenHash(alg, authorizationCode);
+      if (expected != null && expected != cHash.replaceAll('=', '')) {
+        errors.add(
+          JoseException(
+            'id token `c_hash` does not match the authorization code.',
+          ),
+        );
+      }
+    }
+
+    // `auth_time` vs `max_age` (§3.1.2.1): when `max_age` was requested, the
+    // id_token MUST contain `auth_time`, and the end-user's last authentication
+    // MUST NOT be older than `max_age` (within the configured tolerance).
+    if (maxAge != null) {
+      final authTimeRaw = claims['auth_time'];
+      final authTime = authTimeRaw is num
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (authTimeRaw * 1000).round(),
+              isUtc: true,
+            )
+          : null;
+      if (authTime == null) {
+        errors.add(
+          JoseException(
+            '`max_age` was requested but the id token is missing the required '
+            '`auth_time` claim.',
+          ),
+        );
+      } else if (clock.now().isAfter(
+        authTime.add(maxAge).add(settings.expiryTolerance),
+      )) {
+        errors.add(
+          JoseException(
+            'id token `auth_time` ($authTime) is older than the requested '
+            'max_age ($maxAge).',
+          ),
+        );
+      }
     }
 
     return errors;
@@ -1582,9 +2025,16 @@ abstract class OidcUserManagerBase {
   Future<OidcUser?> validateAndSaveUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
+    String? authorizationCode,
+    Duration? maxAge,
   }) async {
     var actualUser = user;
-    final errors = validateUser(user: actualUser, metadata: metadata);
+    final errors = validateUser(
+      user: actualUser,
+      metadata: metadata,
+      authorizationCode: authorizationCode,
+      maxAge: maxAge,
+    );
     OidcUserInfoResponse? userInfoResp;
     var userInfoFailed = false;
 
@@ -1605,6 +2055,11 @@ abstract class OidcUserManagerBase {
             getAccessTokenForDistributedSource:
                 settings.userInfoSettings.getAccessTokenForDistributedSource,
             keyStore: keyStore,
+            // Present a DPoP-bound access token with the DPoP scheme + an
+            // `ath`-bound proof (RFC 9449 §7.1).
+            dpopManager: actualUser.token.tokenType?.toUpperCase() == 'DPOP'
+                ? dpopManager
+                : null,
           );
 
           logger.info('UserInfo response: ${userInfoResp.src}');
@@ -1946,6 +2401,13 @@ abstract class OidcUserManagerBase {
         case OidcAuthorizeState():
           final resp = await OidcEndpoints.parseAuthorizeResponse(
             responseUri: stateResponseUrl,
+            // Enables JARM: a signed `response` JWT is verified against the
+            // provider keys (never `alg:none`) and its `iss`/`aud`/`exp` are
+            // enforced before its inner parameters are used.
+            keyStore: keyStore,
+            allowedAlgorithms:
+                discoveryDocument.idTokenSigningAlgValuesSupported,
+            expectedAudience: clientCredentials.clientId,
           );
 
           await handleSuccessfulAuthResponse(
@@ -2054,7 +2516,9 @@ abstract class OidcUserManagerBase {
         )
         ..add(userSubject.listen(listenToUserSessionIfSupported))
         ..add(tokenEvents.expiring.listen(handleTokenExpiring))
-        ..add(tokenEvents.expired.listen(handleTokenExpired));
+        ..add(tokenEvents.expired.listen(handleTokenExpired))
+        // Surface native browser-layer observability through events().
+        ..add(listenToNativeBrowserEvents().listen(eventsController.add));
     });
   }
 

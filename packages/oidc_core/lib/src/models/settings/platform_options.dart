@@ -5,30 +5,37 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'platform_options.g.dart';
 
+/// Marker interface implemented by every per-platform native-options object.
+///
+/// The launch path stays type-erased; each platform package owns its fully
+/// typed object so platform-specific types never leak across packages
+/// (the `flutter_custom_tabs` `PlatformOptions` pattern).
+abstract interface class OidcPlatformOptionsMarker {}
+
 /// Represents flutter platform-specific options.
-@JsonSerializable()
+@JsonSerializable(explicitToJson: true)
 class OidcPlatformSpecificOptions {
   ///
   const OidcPlatformSpecificOptions({
-    this.android = const OidcPlatformSpecificOptions_AppAuth_Android(),
-    this.ios = const OidcPlatformSpecificOptions_AppAuth_IosMacos(),
-    this.macos = const OidcPlatformSpecificOptions_AppAuth_IosMacos(),
+    this.android = const OidcNativeOptionsAndroid(),
+    this.ios = const OidcNativeOptionsApple(),
+    this.macos = const OidcNativeOptionsApple(),
     this.web = const OidcPlatformSpecificOptions_Web(),
     this.windows = const OidcPlatformSpecificOptions_Native(),
     this.linux = const OidcPlatformSpecificOptions_Native(),
   });
 
-  /// Android options that will get passed to `package:flutter_appauth`
+  /// Android options for the first-party Chrome Custom Tabs flow.
   @JsonKey(name: 'android')
-  final OidcPlatformSpecificOptions_AppAuth_Android android;
+  final OidcNativeOptionsAndroid android;
 
-  /// IOs options that will get passed to `package:flutter_appauth`
+  /// iOS options for the first-party `ASWebAuthenticationSession` flow.
   @JsonKey(name: 'ios')
-  final OidcPlatformSpecificOptions_AppAuth_IosMacos ios;
+  final OidcNativeOptionsApple ios;
 
-  /// MacOs options that will get passed to `package:flutter_appauth`
+  /// macOS options for the first-party `ASWebAuthenticationSession` flow.
   @JsonKey(name: 'macos')
-  final OidcPlatformSpecificOptions_AppAuth_IosMacos macos;
+  final OidcNativeOptionsApple macos;
 
   /// Web options.
   @JsonKey(name: 'web')
@@ -51,45 +58,319 @@ class OidcPlatformSpecificOptions {
   ) => _$OidcPlatformSpecificOptionsFromJson(src);
 }
 
+// =============================================================================
+// Android — Chrome Custom Tabs
+// =============================================================================
+
+/// Color scheme for the Custom Tab (maps to `setColorScheme`).
+@JsonEnum()
+enum OidcColorScheme {
+  /// Follow the system setting.
+  system,
+
+  /// Always light.
+  light,
+
+  /// Always dark.
+  dark,
+}
+
+/// Whether the Custom Tab shows a default share action
+/// (maps to `setShareState`).
+@JsonEnum()
+enum OidcCustomTabsShareState {
+  /// Let the browser decide.
+  browserDefault,
+
+  /// Force the share action on.
+  on,
+
+  /// Force the share action off.
+  off,
+}
+
+/// Where the close button sits (maps to `setCloseButtonPosition`).
+@JsonEnum()
+enum OidcCustomTabsCloseButtonPosition {
+  /// Browser default.
+  defaultPosition,
+
+  /// At the start of the toolbar.
+  start,
+
+  /// At the end of the toolbar.
+  end,
+}
+
+/// Resize behavior of a partial (bottom-sheet) Custom Tab.
+@JsonEnum()
+enum OidcPartialTabResizeBehavior {
+  /// Browser default.
+  defaultBehavior,
+
+  /// User can drag to resize.
+  adjustable,
+
+  /// Fixed at the initial height.
+  fixed,
+}
+
+/// Selects the redirect-capture model on Android.
+@JsonEnum()
+enum OidcAuthTabMode {
+  /// Use the Auth Tab API when available (Chrome 137+), else fall back to the
+  /// plugin-owned `OidcRedirectActivity` + Custom Tabs path.
+  auto,
+
+  /// Always use the Auth Tab API (fails if unsupported).
+  force,
+
+  /// Always use the Custom Tabs + `OidcRedirectActivity` path.
+  never,
+}
+
+/// Optional pre-warming of the Custom Tabs service.
 ///
+/// NOTE: auth URLs are frequently single-use / nonce-bound, so prefetch benefit
+/// can be marginal, and `mayLaunch` must receive the actual authorize URL to
+/// help. Defaults to [none].
+@JsonEnum()
+enum OidcCustomTabsWarmup {
+  /// No pre-warming.
+  none,
+
+  /// Bind + warm up the Custom Tabs service (`CustomTabsClient.warmup`).
+  warmup,
+
+  /// Warm up and hint the upcoming URL (`CustomTabsSession.mayLaunchUrl`).
+  mayLaunch,
+}
+
+/// `CustomTabColorSchemeParams` for one color scheme.
+///
+/// Colors are 32-bit ARGB ints (e.g. `0xFF2196F3`); the native side reads them
+/// as 64-bit and applies opaque alpha where required.
 @JsonSerializable()
-class OidcPlatformSpecificOptions_AppAuth_Android {
+class OidcColorSchemeParams {
   ///
-  const OidcPlatformSpecificOptions_AppAuth_Android({
+  const OidcColorSchemeParams({
+    this.toolbarColor,
+    this.secondaryToolbarColor,
+    this.navigationBarColor,
+    this.navigationBarDividerColor,
+  });
+
+  /// ARGB toolbar color.
+  final int? toolbarColor;
+
+  /// ARGB secondary toolbar color.
+  final int? secondaryToolbarColor;
+
+  /// ARGB navigation-bar color.
+  final int? navigationBarColor;
+
+  /// ARGB navigation-bar divider color.
+  final int? navigationBarDividerColor;
+
+  Map<String, dynamic> toJson() => _$OidcColorSchemeParamsToJson(this);
+
+  factory OidcColorSchemeParams.fromJson(Map<String, dynamic> src) =>
+      _$OidcColorSchemeParamsFromJson(src);
+}
+
+/// Color configuration for the Custom Tab (maps to `setColorScheme` +
+/// `setColorSchemeParams` / `setDefaultColorSchemeParams`).
+@JsonSerializable(explicitToJson: true)
+class OidcCustomTabsColorSchemes {
+  ///
+  const OidcCustomTabsColorSchemes({
+    this.colorScheme = OidcColorScheme.system,
+    this.lightParams,
+    this.darkParams,
+    this.defaultParams,
+  });
+
+  /// The active color scheme.
+  final OidcColorScheme colorScheme;
+
+  /// Params applied to the light scheme.
+  final OidcColorSchemeParams? lightParams;
+
+  /// Params applied to the dark scheme.
+  final OidcColorSchemeParams? darkParams;
+
+  /// Params applied as the default scheme.
+  final OidcColorSchemeParams? defaultParams;
+
+  Map<String, dynamic> toJson() => _$OidcCustomTabsColorSchemesToJson(this);
+
+  factory OidcCustomTabsColorSchemes.fromJson(Map<String, dynamic> src) =>
+      _$OidcCustomTabsColorSchemesFromJson(src);
+}
+
+/// Partial (bottom-sheet) Custom Tab configuration.
+@JsonSerializable()
+class OidcPartialCustomTabs {
+  ///
+  const OidcPartialCustomTabs({
+    this.initialHeightPx,
+    this.resizeBehavior = OidcPartialTabResizeBehavior.defaultBehavior,
+    this.toolbarCornerRadiusDp,
+    this.backgroundInteractionEnabled = true,
+  });
+
+  /// Initial sheet height in px (`setInitialActivityHeightPx`).
+  final int? initialHeightPx;
+
+  /// How the user may resize the sheet.
+  final OidcPartialTabResizeBehavior resizeBehavior;
+
+  /// Toolbar corner radius in dp (`setToolbarCornerRadiusDp`).
+  final int? toolbarCornerRadiusDp;
+
+  /// Whether the background app remains interactive
+  /// (`setBackgroundInteractionEnabled`).
+  final bool backgroundInteractionEnabled;
+
+  Map<String, dynamic> toJson() => _$OidcPartialCustomTabsToJson(this);
+
+  factory OidcPartialCustomTabs.fromJson(Map<String, dynamic> src) =>
+      _$OidcPartialCustomTabsFromJson(src);
+}
+
+/// Android options for the first-party Chrome Custom Tabs flow.
+@JsonSerializable(explicitToJson: true)
+class OidcNativeOptionsAndroid implements OidcPlatformOptionsMarker {
+  ///
+  const OidcNativeOptionsAndroid({
+    this.colorSchemes,
+    this.shareState = OidcCustomTabsShareState.browserDefault,
+    this.showTitle = true,
+    this.urlBarHidingEnabled = false,
+    this.ephemeralBrowsing = false,
+    this.closeButtonPosition,
+    this.preferredBrowserPackages = const [],
+    this.useAuthTab = OidcAuthTabMode.auto,
+    this.partialCustomTabs,
+    this.warmup = OidcCustomTabsWarmup.none,
+    this.rawIntentExtras = const {},
     this.allowInsecureConnections = false,
   });
 
+  /// Toolbar / nav-bar colors.
+  final OidcCustomTabsColorSchemes? colorSchemes;
+
+  /// Whether the default share action is shown.
+  final OidcCustomTabsShareState shareState;
+
+  /// Whether the page title is shown in the toolbar.
+  final bool showTitle;
+
+  /// Whether the url bar hides on scroll.
+  final bool urlBarHidingEnabled;
+
+  /// Whether to request an ephemeral (incognito) browsing session.
   ///
+  /// Cross-platform concept (mirrors iOS/macOS
+  /// [OidcNativeOptionsApple.prefersEphemeralWebBrowserSession]). Silently
+  /// ignored where the browser/`androidx.browser` version does not support it.
+  final bool ephemeralBrowsing;
+
+  /// Close-button placement.
+  final OidcCustomTabsCloseButtonPosition? closeButtonPosition;
+
+  /// Ordered list of preferred browser packages to resolve a Custom Tabs
+  /// provider from (`CustomTabsClient.getPackageName`).
+  ///
+  /// **Reserved — not yet wired natively:** the launch does not yet pin a
+  /// package via `setPackage`. Declared for forward compatibility; intended to
+  /// pair with a browser allow/deny list in a future release.
+  final List<String> preferredBrowserPackages;
+
+  /// Redirect-capture model selector (Auth Tab vs Custom Tabs +
+  /// `OidcRedirectActivity`).
+  final OidcAuthTabMode useAuthTab;
+
+  /// Partial (bottom-sheet) Custom Tab configuration.
+  final OidcPartialCustomTabs? partialCustomTabs;
+
+  /// Optional Custom Tabs service pre-warming.
+  ///
+  /// **Reserved — not yet wired natively:** no service binding /
+  /// `mayLaunchUrl` is performed yet. Declared for forward compatibility.
+  final OidcCustomTabsWarmup warmup;
+
+  /// Escape hatch: arbitrary **serializable** intent extras forwarded verbatim
+  /// to the Custom Tabs `Intent` (primitives / `List` / `Map` only).
+  ///
+  /// Non-serializable config (`RemoteViews`, `Bitmap`, `PendingIntent`,
+  /// animation resources) is NOT expressible here — use the native
+  /// `OidcPlugin` builder-mutator hook instead.
+  final Map<String, dynamic> rawIntentExtras;
+
+  /// Whether to allow insecure (http / self-signed) connections in the flow.
+  ///
+  /// **No effect on the default Custom Tabs transport:** the browser — not the
+  /// app — governs TLS, so this cannot be honored there. Retained for parity
+  /// and potential non-Custom-Tabs transports.
   final bool allowInsecureConnections;
 
-  Map<String, dynamic> toJson() {
-    return _$OidcPlatformSpecificOptions_AppAuth_AndroidToJson(this);
-  }
+  Map<String, dynamic> toJson() => _$OidcNativeOptionsAndroidToJson(this);
 
-  factory OidcPlatformSpecificOptions_AppAuth_Android.fromJson(
-    Map<String, dynamic> src,
-  ) => _$OidcPlatformSpecificOptions_AppAuth_AndroidFromJson(src);
+  factory OidcNativeOptionsAndroid.fromJson(Map<String, dynamic> src) =>
+      _$OidcNativeOptionsAndroidFromJson(src);
 }
 
-///
+// =============================================================================
+// iOS / macOS — ASWebAuthenticationSession
+// =============================================================================
+
+/// Selects the `ASWebAuthenticationSession` callback type.
+@JsonEnum()
+enum OidcAppleCallbackMode {
+  /// Derive from the `redirect_uri` scheme (https -> Universal Link, otherwise
+  /// custom scheme). Preserves the existing iOS behavior.
+  auto,
+
+  /// Force `Callback.customScheme(_:)`.
+  customScheme,
+
+  /// Force `Callback.https(host:path:)` (requires an Associated Domains
+  /// entitlement; iOS 17.4 / macOS 14.4+).
+  https,
+}
+
+/// iOS / macOS options for the first-party `ASWebAuthenticationSession` flow.
 @JsonSerializable()
-class OidcPlatformSpecificOptions_AppAuth_IosMacos {
+class OidcNativeOptionsApple implements OidcPlatformOptionsMarker {
   ///
-  const OidcPlatformSpecificOptions_AppAuth_IosMacos({
-    this.externalUserAgent =
-        OidcAppAuthExternalUserAgent.asWebAuthenticationSession,
+  const OidcNativeOptionsApple({
+    this.prefersEphemeralWebBrowserSession = false,
+    this.additionalHeaderFields,
+    this.callbackMode = OidcAppleCallbackMode.auto,
+    this.rawSessionOptions = const {},
   });
 
+  /// Whether to use an ephemeral session (no shared cookies/cache).
+  final bool prefersEphemeralWebBrowserSession;
+
+  /// Extra HTTP headers added to the **initial** authorization request
+  /// (`additionalHeaderFields`, iOS 17.4 / macOS 14.4+; ignored before that).
+  final Map<String, String>? additionalHeaderFields;
+
+  /// Which `ASWebAuthenticationSession.Callback` type to use.
+  final OidcAppleCallbackMode callbackMode;
+
+  /// Escape hatch: arbitrary **serializable** session options forwarded
+  /// verbatim (read defensively / availability-guarded native-side).
   ///
-  final OidcAppAuthExternalUserAgent externalUserAgent;
+  /// **Reserved — not yet read natively;** declared for forward compatibility.
+  final Map<String, dynamic> rawSessionOptions;
 
-  Map<String, dynamic> toJson() {
-    return _$OidcPlatformSpecificOptions_AppAuth_IosMacosToJson(this);
-  }
+  Map<String, dynamic> toJson() => _$OidcNativeOptionsAppleToJson(this);
 
-  factory OidcPlatformSpecificOptions_AppAuth_IosMacos.fromJson(
-    Map<String, dynamic> src,
-  ) => _$OidcPlatformSpecificOptions_AppAuth_IosMacosFromJson(src);
+  factory OidcNativeOptionsApple.fromJson(Map<String, dynamic> src) =>
+      _$OidcNativeOptionsAppleFromJson(src);
 }
 
 ///
@@ -157,56 +438,6 @@ enum OidcPlatformSpecificOptions_Web_NavigationMode {
 
   /// NOT RECOMMENDED for user interaction.
   hiddenIFrame,
-}
-
-@JsonEnum(alwaysCreate: true)
-enum OidcAppAuthExternalUserAgent {
-  /// Uses the [ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession) APIs where possible.
-  ///
-  /// This is the default for macOS and iOS 12 and above. On iOS 11, it will
-  /// use [SFAuthenticationSession](https://developer.apple.com/documentation/safariservices/sfauthenticationsession)
-  /// instead.
-  ///
-  /// Behind the scenes, the plugin makes use of the default external user-agent
-  /// provided by the AppAuth iOS SDK. This will use the best user-agent
-  /// available on the device. Specifically, on iOS it will use [OIDExternalUserAgentIOS](https://openid.github.io/AppAuth-iOS/docs/latest/interface_o_i_d_external_user_agent_i_o_s.html)
-  /// and on macOS it will use [OIDExternalUserAgentMac](https://openid.github.io/AppAuth-iOS/docs/latest/interface_o_i_d_external_user_agent_mac.html).
-  ///
-  /// Using this follows the best practices on using the appropriate native APIs
-  /// based on the OS version.
-  asWebAuthenticationSession,
-
-  /// Indicates a preference in using an ephemeral sessions by using the [ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession)
-  /// APIs where possible.
-  ///
-  /// This is only applicable to macOS and iOS 12 and above. On these platforms,
-  /// the session will not share browser data with user's normal browser session
-  /// and does not keep the cache.
-  ///
-  /// Like [asWebAuthenticationSession], it fallback to use [SFAuthenticationSession](https://developer.apple.com/documentation/safariservices/sfauthenticationsession)
-  /// on iOS 11 where there's no support for ephemeral sessions.
-  ephemeralAsWebAuthenticationSession,
-
-  /// Uses the [SFSafariViewController](https://developer.apple.com/documentation/safariservices/sfsafariviewcontroller)
-  /// APIs.
-  ///
-  /// This does not share browser data with the user's normal browser session
-  /// but keeps the cache.
-  ///
-  /// This is only applicable to iOS. On macOS, it will use the same behavior as
-  /// [asWebAuthenticationSession].
-  ///
-  /// One reason for using this is when applications trigger an end session
-  /// request but wants to avoid the prompt that would have appeared when the
-  /// [ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession)
-  /// APIs are used. In this case, there's concern that the system-generated
-  /// prompt would confuse the user as they are trying to sign out but the
-  /// prompt states that it's taking the user through a sign-in flow.
-  ///
-  /// Note that as this does not follow the best practices on using the
-  /// appropriate native APIs based on the OS version, developers should use
-  /// this at their own discretion.
-  sfSafariViewController,
 }
 
 ///

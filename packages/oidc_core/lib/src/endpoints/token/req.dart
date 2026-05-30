@@ -29,8 +29,35 @@ class OidcTokenRequest extends JsonBasedRequest {
     this.refreshToken,
     this.scope,
     this.deviceCode,
+    this.resource,
+    this.requestedTokenType,
     super.extra,
   });
+
+  /// Token Exchange (RFC 8693): exchanges a [subjectToken] (and optionally an
+  /// [actorToken] for delegation) for a new token, optionally narrowed to an
+  /// [audience] and/or [resource]s.
+  OidcTokenRequest.tokenExchange({
+    required String this.subjectToken,
+    required String this.subjectTokenType,
+    this.actorToken,
+    this.actorTokenType,
+    this.audience,
+    this.resource,
+    this.requestedTokenType,
+    this.scope,
+    this.clientId,
+    this.clientSecret,
+    super.extra,
+  }) : grantType = OidcConstants_GrantType.tokenExchange,
+       code = null,
+       codeVerifier = null,
+       redirectUri = null,
+       assertion = null,
+       deviceCode = null,
+       refreshToken = null,
+       username = null,
+       password = null;
 
   OidcTokenRequest.authorizationCode({
     required String this.code,
@@ -38,6 +65,7 @@ class OidcTokenRequest extends JsonBasedRequest {
     this.clientId,
     this.clientSecret,
     this.codeVerifier,
+    this.resource,
     super.extra,
   }) : grantType = OidcConstants_GrantType.authorizationCode,
        username = null,
@@ -57,6 +85,7 @@ class OidcTokenRequest extends JsonBasedRequest {
     this.clientId,
     this.clientSecret,
     this.scope,
+    this.resource,
     super.extra,
   }) : grantType = OidcConstants_GrantType.refreshToken,
        codeVerifier = null,
@@ -209,6 +238,17 @@ class OidcTokenRequest extends JsonBasedRequest {
     toJson: OidcInternalUtilities.joinSpaceDelimitedList,
   )
   List<String>? scope;
+
+  /// RFC 8707 Resource Indicators: the target resource(s)/service(s) at which
+  /// the requested token will be used. Serialized as one repeated `resource`
+  /// parameter per value.
+  @JsonKey(name: OidcConstants_AuthParameters.resource)
+  List<Uri>? resource;
+
+  /// RFC 8693 Token Exchange: an identifier for the type of the requested
+  /// security token (e.g. [OidcConstants_TokenExchange_TokenType.accessToken]).
+  @JsonKey(name: OidcConstants_AuthParameters.requestedTokenType)
+  String? requestedTokenType;
 
   @override
   Map<String, dynamic> toMap() {

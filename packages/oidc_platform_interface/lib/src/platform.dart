@@ -1,5 +1,6 @@
 // coverage:ignore-file
 import 'package:oidc_core/oidc_core.dart';
+import 'package:oidc_platform_interface/src/native_events.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 /// The interface that implementations of oidc must implement.
@@ -69,6 +70,15 @@ abstract class OidcPlatform extends PlatformInterface {
     required Uri checkSessionIframe,
     required OidcMonitorSessionStatusRequest request,
   });
+
+  /// A broadcast stream of native browser-layer events (Custom Tabs /
+  /// `ASWebAuthenticationSession`) for observability — which browser/session
+  /// was used, when the redirect arrived (redacted), and granular failures.
+  ///
+  /// Returns an empty stream on platforms without first-party native browser
+  /// support (web/desktop). Correlate events to a specific call via
+  /// [OidcNativeBrowserEvent.flowId].
+  Stream<OidcNativeBrowserEvent> nativeBrowserEvents() => const Stream.empty();
 }
 
 /// an implementation of [OidcPlatform] that throws [UnimplementedError].

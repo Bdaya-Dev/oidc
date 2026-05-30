@@ -3,7 +3,7 @@ publish_to: none
 
 environment:
   # >=3.41 / Dart 3.11: the SwiftPM (FlutterFramework) plugin layout in
-  # oidc_ios/oidc_macos requires it (see those packages' pubspecs).
+  # oidc_darwin requires it (see that package's pubspec).
   sdk: ^3.11.0
   flutter: '>=3.41.0 <4.0.0'
 
@@ -19,11 +19,9 @@ workspace:
   - packages/oidc_core
   - packages/oidc_default_store
   - packages/oidc_desktop
-  - packages/oidc_flutter_appauth
-  - packages/oidc_ios
+  - packages/oidc_darwin
   - packages/oidc_linux
   - packages/oidc_loopback_listener
-  - packages/oidc_macos
   - packages/oidc_platform_interface
   - packages/oidc_web
   - packages/oidc_web/example
@@ -59,6 +57,20 @@ melos:
     generate:dart:
       run: melos exec -c 1 --depends-on="build_runner" -- "dart run build_runner build --delete-conflicting-outputs"
       description: Build all generated files for Dart packages in this project.
+
+    generate:native:
+      run: melos exec --scope="oidc_platform_interface" -- "dart run pigeon --input pigeons/oidc_native.dart"
+      description: >-
+        Regenerate the Pigeon native transport (Dart + Kotlin + darwin Swift)
+        from packages/oidc_platform_interface/pigeons/oidc_native.dart. Pigeon is
+        a normal dev-dependency (the v1 analyzer bump allows it), so this is just
+        `dart run pigeon` — no global activation, no manual steps.
+
+    generate:
+      run: |
+        melos run generate:dart
+        melos run generate:native
+      description: Regenerate every generated file (Dart build_runner + native Pigeon).
 
     analyze: # ------ taken from cfug/dio ------------
       description: Analyze all packages

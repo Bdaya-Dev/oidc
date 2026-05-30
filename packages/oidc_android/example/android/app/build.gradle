@@ -48,9 +48,11 @@ android {
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Drives the plugin-owned OidcRedirectActivity's intent-filter scheme
+        // (see oidc_android's AndroidManifest `${oidcRedirectScheme}`).
         manifestPlaceholders += [
-          'appAuthRedirectScheme': 'com.bdayadev.oidc_example'
-        ]        
+          'oidcRedirectScheme': 'com.bdayadev.oidc_example'
+        ]
     }
 
     buildTypes {
