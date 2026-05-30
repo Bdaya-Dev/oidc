@@ -21,6 +21,9 @@ abstract final class OidcNativeChannels {
 
   /// The iOS `ASWebAuthenticationSession` channel.
   static const String ios = 'com.bdayadev.oidc/ios';
+
+  /// The macOS `ASWebAuthenticationSession` channel.
+  static const String macos = 'com.bdayadev.oidc/macos';
 }
 
 /// Method names invoked on the native channels.

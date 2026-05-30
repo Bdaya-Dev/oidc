@@ -42,18 +42,11 @@ android {
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // The redirect_uri scheme the plugin-owned OidcRedirectActivity listens
-        // for. Matches the example's `com.bdayadev.oidc.example://oauth2redirect`.
-        //
-        // `appAuthRedirectScheme` is still required because flutter_appauth is
-        // pulled in transitively via macOS (oidc_macos) and its Android manifest
-        // declares a redirect receiver with this placeholder — even though
-        // Android auth no longer uses AppAuth. It MUST be a DISTINCT, unused
-        // scheme so AppAuth's receiver never matches (and steals) our real
-        // redirect. This goes away once macOS migrates to a first-party impl.
+        // The entire native setup: the redirect_uri scheme the plugin-owned
+        // OidcRedirectActivity listens for. Matches the example's
+        // `com.bdayadev.oidc.example://oauth2redirect` redirect_uri.
         manifestPlaceholders += [
-          'oidcRedirectScheme': 'com.bdayadev.oidc.example',
-          'appAuthRedirectScheme': 'com.bdayadev.oidc.example.appauth.unused'
+          'oidcRedirectScheme': 'com.bdayadev.oidc.example'
         ]
     }
 

@@ -17,11 +17,12 @@ dart pub add oidc oidc_default_store oidc_core
 
 every platform you support has its own configuration and set up.
 
-Native browser handling differs per platform:
+Native browser handling is **first-party on every platform** (no third-party
+auth SDK):
 
-- **Android** — first-party **Chrome Custom Tabs** (no third-party SDK).
-- **iOS** — first-party **ASWebAuthenticationSession** (no third-party SDK; requires **iOS 13+**).
-- **macOS** — still uses the [AppAuth SDK](https://appauth.io/) via [![flutter_appauth][flutter_appauth_image]][flutter_appauth_link].
+- **Android** — **Chrome Custom Tabs**.
+- **iOS** — **ASWebAuthenticationSession** (requires **iOS 13+**).
+- **macOS** — **ASWebAuthenticationSession** (requires **macOS 10.15+**).
 
 we also rely on [![flutter_secure_storage][flutter_secure_storage_image]][flutter_secure_storage_link] in our `oidc_default_store` implementation, to encrypt the stored access tokens.
 
@@ -59,24 +60,10 @@ your `redirect_uri` then looks like `com.my.app://oauth2redirect`.
 > if your `applicationId`/scheme contains an underscore (`_`), replace it with a
 > dot (`.`) in the `oidcRedirectScheme` (schemes can't contain underscores).
 
-> **You also still need an `appAuthRedirectScheme` placeholder.** `flutter_appauth`
-> is pulled in transitively (macOS still uses it), and its Android manifest
-> requires this placeholder even though Android auth no longer uses AppAuth. Set
-> it to a **distinct, unused** scheme so AppAuth's receiver can't steal your real
-> redirect:
->
-> ```diff
->     manifestPlaceholders += [
->         'oidcRedirectScheme': 'com.my.app',
-> +       'appAuthRedirectScheme': 'com.my.app.appauth.unused'
->     ]
-> ```
->
-> This requirement disappears once macOS migrates to a first-party implementation.
-
-> **Upgrading from a flutter_appauth-based setup?** Remove any redirect
-> `<intent-filter>` you hand-added to `MainActivity` (the plugin handles it now),
-> and change your `appAuthRedirectScheme` to a distinct unused scheme as above.
+> **Upgrading from a flutter_appauth-based setup?** Delete the old
+> `appAuthRedirectScheme` placeholder and any redirect `<intent-filter>` you
+> hand-added to `MainActivity` — `package:oidc` no longer depends on
+> `flutter_appauth` on any platform, so they are no longer used.
 
 > **HTTPS redirect (App Links)?** A `https://` `redirect_uri` additionally needs
 > a verified [Android App Link](https://developer.android.com/training/app-links/verify-android-applinks)
@@ -156,27 +143,17 @@ Requirements:
 
 ## macOS
 
-> macOS still uses the [AppAuth SDK](https://appauth.io/) via
-> `oidc_flutter_appauth` (migration to a first-party implementation is pending).
+### Redirect handling (ASWebAuthenticationSession)
 
-### AppAuth setup (macOS)
+`oidc_macos` uses the system `ASWebAuthenticationSession` (the same first-party
+approach as iOS — no third-party SDK), which registers your `redirect_uri`
+scheme **at runtime**. You do **not** need a `CFBundleURLTypes` /
+`CFBundleURLSchemes` entry in `macos/Info.plist` for the OIDC redirect.
 
-Append the following to your `macos/Info.plist` file:
+Requirements:
 
-```xml
-<key>CFBundleURLTypes</key>
-<array>
-    <dict>
-        <key>CFBundleTypeRole</key>
-        <string>Editor</string>
-        <key>CFBundleURLSchemes</key>
-        <array>
-            <string>com.my.app</string>
-        </array>
-    </dict>
-</array>
-```
-replace `com.my.app` with your application id
+- **macOS 10.15+** — set the deployment target accordingly in Xcode and in
+  `macos/Podfile` (`platform :osx, '10.15'` or higher).
 
 ### App Sandbox network entitlement (macOS)
 
