@@ -8,6 +8,9 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResultLauncher
+import androidx.browser.auth.AuthTabIntent
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -54,6 +57,11 @@ class OidcPlugin :
     private var flowId: String? = null
     private var flowCounter = 0
 
+    // Auth Tab redirect-capture launcher; non-null only when the host Activity
+    // is a ComponentActivity (e.g. FlutterFragmentActivity). Required for the
+    // `useAuthTab: force` path.
+    private var authLauncher: ActivityResultLauncher<Intent>? = null
+
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         // Must match `OidcNativeChannels.android` in oidc_platform_interface.
         channel = MethodChannel(binding.binaryMessenger, "com.bdayadev.oidc/android")
@@ -96,6 +104,23 @@ class OidcPlugin :
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         this.binding = binding
         this.activity = binding.activity
+        registerAuthTabLauncher(binding.activity)
+    }
+
+    /**
+     * Registers an Auth Tab result launcher when the host is a
+     * [ComponentActivity] (e.g. `FlutterFragmentActivity`). Uses the
+     * key-based `activityResultRegistry` so it can be registered after the
+     * Activity is resumed (a plugin can't register in `onCreate`). Stays null
+     * for a plain `FlutterActivity`, in which case the `useAuthTab: force`
+     * path falls back to Custom Tabs.
+     */
+    private fun registerAuthTabLauncher(host: Activity) {
+        authLauncher?.unregister()
+        authLauncher = (host as? ComponentActivity)?.activityResultRegistry?.register(
+            "com.bdayadev.oidc.authtab",
+            AuthTabIntent.AuthenticateUserResultContract(),
+        ) { result -> handleAuthResult(result) }
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) =
@@ -107,6 +132,8 @@ class OidcPlugin :
 
     private fun detachActivity() {
         unregisterLifecycle()
+        authLauncher?.unregister()
+        authLauncher = null
         binding = null
         activity = null
     }
@@ -142,13 +169,29 @@ class OidcPlugin :
         expectedRedirect = call.argument<String>("redirectUri")?.let(Uri::parse)
         redirectHandled = false
         flowId = (++flowCounter).toString()
-        activeInstance = this
-        registerLifecycle(currentActivity)
 
         val options = call.argument<Map<String, Any?>>("options")
         val ephemeral = options?.get("ephemeralBrowsing") as? Boolean == true
+        val useAuthTab = options?.get("useAuthTab") as? String ?: "auto"
         emit("opening")
 
+        // Auth Tab path (Chrome 137+): the browser captures the redirect and
+        // returns it via the ActivityResult API — no OidcRedirectActivity / no
+        // manifest placeholder. Opt-in via `useAuthTab: force`; requires a
+        // ComponentActivity host (e.g. FlutterFragmentActivity).
+        val launcher = authLauncher
+        if (useAuthTab == "force" && launcher != null) {
+            launchAuthTab(launcher, url, ephemeral)
+            return
+        }
+        if (useAuthTab == "force" && launcher == null) {
+            // Requested but unavailable (plain FlutterActivity) — fall back.
+            emit("warning", mapOf("code" to "AUTH_TAB_REQUIRES_COMPONENT_ACTIVITY"))
+        }
+
+        // Default: Custom Tabs + plugin-owned OidcRedirectActivity.
+        activeInstance = this
+        registerLifecycle(currentActivity)
         try {
             val customTabs = buildCustomTabsIntent(options)
             // launchUrl issues an ACTION_VIEW intent, which already falls back
@@ -174,6 +217,72 @@ class OidcPlugin :
                 ),
             )
             result.error("START_FAILED", "No browser available to launch: ${e.message}", null)
+        }
+    }
+
+    private fun launchAuthTab(
+        launcher: ActivityResultLauncher<Intent>,
+        url: String,
+        ephemeral: Boolean,
+    ) {
+        val authTab = AuthTabIntent.Builder()
+            .setEphemeralBrowsingEnabled(ephemeral)
+            .build()
+        val redirect = expectedRedirect
+        val host = redirect?.host
+        if (redirect?.scheme.equals("https", ignoreCase = true) && host != null) {
+            // https / App-Links variant.
+            authTab.launch(launcher, Uri.parse(url), host, redirect?.path ?: "/")
+        } else {
+            authTab.launch(launcher, Uri.parse(url), redirect?.scheme ?: "")
+        }
+        emit(
+            "opened",
+            mapOf(
+                "sessionType" to if (ephemeral) "ephemeral" else "standard",
+                "captureMode" to "authTab",
+            ),
+        )
+    }
+
+    /** Handles the Auth Tab [AuthTabIntent.AuthResult] on the main thread. */
+    private fun handleAuthResult(authResult: AuthTabIntent.AuthResult) {
+        val pending = pendingResult ?: return
+        when (authResult.resultCode) {
+            AuthTabIntent.RESULT_OK -> {
+                val uri = authResult.resultUri
+                redirectHandled = true
+                if (uri != null) {
+                    emit(
+                        "redirectReceived",
+                        mapOf(
+                            "scheme" to uri.scheme,
+                            "host" to uri.host,
+                            "hasCode" to (uri.getQueryParameter("code") != null),
+                            "hasState" to (uri.getQueryParameter("state") != null),
+                            "hasError" to (uri.getQueryParameter("error") != null),
+                        ),
+                    )
+                }
+                cleanup()
+                pending.success(uri?.toString())
+            }
+            AuthTabIntent.RESULT_VERIFICATION_FAILED -> {
+                emit("failed", mapOf("error" to mapOf("kind" to "verificationFailed")))
+                cleanup()
+                pending.error("VERIFICATION_FAILED", "App Links verification failed", null)
+            }
+            AuthTabIntent.RESULT_VERIFICATION_TIMED_OUT -> {
+                emit("failed", mapOf("error" to mapOf("kind" to "verificationTimedOut")))
+                cleanup()
+                pending.error("VERIFICATION_TIMED_OUT", "App Links verification timed out", null)
+            }
+            else -> {
+                // RESULT_CANCELED / RESULT_UNKNOWN_CODE.
+                emit("cancelled")
+                cleanup()
+                pending.error("USER_CANCELLED", "The flow was cancelled by the user", null)
+            }
         }
     }
 
