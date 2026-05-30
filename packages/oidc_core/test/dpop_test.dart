@@ -64,6 +64,13 @@ void main() {
         'https://as.example:8443/token',
       );
     });
+
+    test('preserves the path case (the DPoP htu path is case-sensitive)', () {
+      expect(
+        oidcNormalizeHtu(Uri.parse('https://AS.EXAMPLE/Path/To/Token')),
+        'https://as.example/Path/To/Token',
+      );
+    });
   });
 
   group('oidcDPoPPublicJwk', () {
@@ -72,6 +79,41 @@ void main() {
       final pub = oidcDPoPPublicJwk(key);
       expect(pub.keys.toSet(), {'kty', 'crv', 'x', 'y'});
       expect(pub.containsKey('d'), isFalse);
+    });
+
+    test('pads short EC coordinates to the full 32-byte curve length so the '
+        'jwk + jkt match a spec-compliant server', () {
+      // ~1/128 generated P-256 keys have a coordinate whose minimal big-endian
+      // form has a leading zero byte (which jose_plus drops). Find one and
+      // assert our projection re-pads both coordinates to a full 32 bytes.
+      int len(String b64) => base64Url.decode(base64Url.normalize(b64)).length;
+      JsonWebKey? shortKey;
+      for (var i = 0; i < 3000 && shortKey == null; i++) {
+        final k = JsonWebKey.generate('ES256');
+        if (len(k['x'] as String) < 32 || len(k['y'] as String) < 32) {
+          shortKey = k;
+        }
+      }
+      expect(
+        shortKey,
+        isNotNull,
+        reason: 'expected a short-coordinate key within 3000 generations',
+      );
+      final pub = oidcDPoPPublicJwk(shortKey!);
+      expect(len(pub['x']! as String), 32);
+      expect(len(pub['y']! as String), 32);
+      // The thumbprint is computed over the SAME padded coordinates.
+      expect(oidcJwkThumbprint(shortKey), isNotEmpty);
+    });
+  });
+
+  group('oidcDPoPAth', () {
+    test('hashes an ASCII access token', () {
+      expect(oidcDPoPAth('abc.123_token'), isNotEmpty);
+    });
+
+    test('throws OidcException (not a raw Error) on a non-ASCII token', () {
+      expect(() => oidcDPoPAth('tokén'), throwsA(isA<OidcException>()));
     });
   });
 

@@ -35,19 +35,56 @@ const oidcDPoPNonceHeaderName = 'DPoP-Nonce';
 /// (RFC 9449 §8 / §9).
 const oidcDPoPUseNonceError = 'use_dpop_nonce';
 
-/// Projects [key] to its **public** JWK members only (RFC 9449 §4.2 requires
-/// the embedded `jwk` to contain no private key material).
+/// The fixed octet length of an EC coordinate for the given curve (RFC 7518
+/// §6.2.1.2 / SEC1): P-256 -> 32, P-384 -> 48, P-521 -> 66.
+int _ecFieldSize(String? crv) {
+  switch (crv) {
+    case 'P-256':
+      return 32;
+    case 'P-384':
+      return 48;
+    case 'P-521':
+      return 66;
+    default:
+      throw OidcException('Unsupported DPoP EC curve: `$crv`.');
+  }
+}
+
+/// Left-pads a base64url EC coordinate to [fieldSize] octets.
 ///
-/// Supports EC (`crv,x,y`), RSA (`n,e`) and OKP (`crv,x`).
+/// `jose_plus` emits the minimal big-endian encoding, dropping any leading
+/// zero byte (~1/128 generated P-256 keys). RFC 7518 §6.2.1.2 requires the full
+/// field length; a short coordinate yields a different embedded `jwk` and
+/// RFC 7638 thumbprint than a spec-compliant server computes — silently
+/// breaking DPoP sender-constrained binding. Re-pad here, where we own the
+/// canonical form.
+String _fixedLenCoord(String coord, int fieldSize) {
+  final bytes = base64Url.decode(base64Url.normalize(coord));
+  if (bytes.length >= fieldSize) return coord;
+  return _base64UrlNoPad([
+    ...List<int>.filled(fieldSize - bytes.length, 0),
+    ...bytes,
+  ]);
+}
+
+/// Projects [key] to its **public** JWK members only (RFC 9449 §4.2 requires
+/// the embedded `jwk` to contain no private key material), with EC coordinates
+/// normalized to their full curve length.
+///
+/// Supports EC (`crv,x,y`) and RSA (`n,e`).
 Map<String, dynamic> oidcDPoPPublicJwk(JsonWebKey key) {
   final kty = key['kty'] as String?;
   switch (kty) {
     case 'EC':
-      return {'kty': kty, 'crv': key['crv'], 'x': key['x'], 'y': key['y']};
+      final size = _ecFieldSize(key['crv'] as String?);
+      return {
+        'kty': kty,
+        'crv': key['crv'],
+        'x': _fixedLenCoord(key['x'] as String, size),
+        'y': _fixedLenCoord(key['y'] as String, size),
+      };
     case 'RSA':
       return {'kty': kty, 'n': key['n'], 'e': key['e']};
-    case 'OKP':
-      return {'kty': kty, 'crv': key['crv'], 'x': key['x']};
     default:
       throw OidcException('Unsupported DPoP key type: `$kty`.');
   }
@@ -65,11 +102,15 @@ String oidcJwkThumbprint(JsonWebKey key) {
   final Map<String, dynamic> required;
   switch (kty) {
     case 'EC':
-      required = {'crv': key['crv'], 'kty': kty, 'x': key['x'], 'y': key['y']};
+      final size = _ecFieldSize(key['crv'] as String?);
+      required = {
+        'crv': key['crv'],
+        'kty': kty,
+        'x': _fixedLenCoord(key['x'] as String, size),
+        'y': _fixedLenCoord(key['y'] as String, size),
+      };
     case 'RSA':
       required = {'e': key['e'], 'kty': kty, 'n': key['n']};
-    case 'OKP':
-      required = {'crv': key['crv'], 'kty': kty, 'x': key['x']};
     default:
       throw OidcException('Unsupported DPoP key type: `$kty`.');
   }
@@ -103,6 +144,15 @@ String oidcNormalizeHtu(Uri uri) {
 /// Computes the `ath` claim — base64url (no padding) of `SHA-256(ASCII(token))`
 /// — binding a DPoP proof to an access token (RFC 9449 §4.2 / §7.1).
 String oidcDPoPAth(String accessToken) {
+  // ASCII is the spec-correct encoding (RFC 9449 §4.2 / RFC 6750 §2.1); `utf8`
+  // would silently mismatch a conformant server. Validate up-front and surface
+  // a typed error rather than letting `ascii.encode` throw an ArgumentError.
+  if (accessToken.codeUnits.any((c) => c > 0x7F)) {
+    throw const OidcException(
+      'DPoP `ath` requires an ASCII access token (RFC 9449 §4.2 / '
+      'RFC 6750 §2.1); the access token contains non-ASCII characters.',
+    );
+  }
   final digest = sha256.convert(ascii.encode(accessToken)).bytes;
   return _base64UrlNoPad(digest);
 }
