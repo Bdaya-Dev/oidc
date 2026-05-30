@@ -60,11 +60,12 @@ melos:
       description: Build all generated files for Dart packages in this project.
 
     generate:native:
-      run: dart run tool/generate_native.dart
+      run: melos exec --scope="oidc_platform_interface" -- "dart run pigeon --input pigeons/oidc_native.dart"
       description: >-
-        Regenerate the Pigeon native transport (Dart + Kotlin + iOS/macOS Swift)
-        from packages/oidc_platform_interface/pigeons/oidc_native.dart. Fully
-        automated - no manual steps.
+        Regenerate the Pigeon native transport (Dart + Kotlin + darwin Swift)
+        from packages/oidc_platform_interface/pigeons/oidc_native.dart. Pigeon is
+        a normal dev-dependency (the v1 analyzer bump allows it), so this is just
+        `dart run pigeon` — no global activation, no manual steps.
 
     generate:
       run: |
