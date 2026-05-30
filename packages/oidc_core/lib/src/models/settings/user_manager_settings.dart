@@ -76,6 +76,7 @@ class OidcUserManagerSettings {
     this.pushedAuthorizationRequestsMode =
         OidcPushedAuthorizationRequestsMode.auto,
     this.dpop,
+    this.allowedAudiences,
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
@@ -118,6 +119,13 @@ class OidcUserManagerSettings {
   /// attaches a DPoP proof to token requests, sender-constraining the issued
   /// tokens to that key. Null (the default) disables DPoP.
   final OidcDPoPSettings? dpop;
+
+  /// Additional audiences (beyond the `client_id`, which is always trusted)
+  /// that an id_token's `aud` claim is allowed to contain.
+  ///
+  /// OpenID Connect Core §3.1.3.7 requires rejecting an id_token whose `aud`
+  /// contains audiences not trusted by the client; this is the trust list.
+  final List<String>? allowedAudiences;
 
   /// Whether to support offline authentication or not.
   ///

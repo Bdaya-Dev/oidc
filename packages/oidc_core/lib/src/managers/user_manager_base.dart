@@ -1717,6 +1717,42 @@ abstract class OidcUserManagerBase {
       );
     }
 
+    // aud strictness (§3.1.3.7): the client_id is always trusted, and
+    // `settings.allowedAudiences` extends the trust list. Any OTHER audience
+    // means the token was minted for someone else and MUST be rejected.
+    final trustedAudiences = <String>{
+      clientCredentials.clientId,
+      ...?settings.allowedAudiences,
+    };
+    final untrustedAudiences = audiences
+        .where((a) => !trustedAudiences.contains(a))
+        .toList();
+    if (untrustedAudiences.isNotEmpty) {
+      errors.add(
+        JoseException(
+          'id token contains untrusted audience(s) $untrustedAudiences, not '
+          'in the client_id or settings.allowedAudiences.',
+        ),
+      );
+    }
+
+    // `at_hash` (§3.2.2.9): when present alongside an access_token, it MUST be
+    // the base64url left-half hash of the access_token using the id_token's
+    // signing-alg hash.
+    final atHash = claims['at_hash'];
+    final accessToken = user.token.accessToken;
+    if (atHash is String && accessToken != null) {
+      final alg = oidcReadJwtAlg(user.idToken);
+      final expected = alg == null
+          ? null
+          : oidcComputeTokenHash(alg, accessToken);
+      if (expected != null && expected != atHash) {
+        errors.add(
+          JoseException('id token `at_hash` does not match the access_token.'),
+        );
+      }
+    }
+
     return errors;
   }
 
