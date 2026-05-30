@@ -19,10 +19,7 @@ dependencies:
   logging: ^1.2.0
   clock: ^1.1.1
   copy_with_extension: ^15.0.1
-  # rxdart 0.28 is the latest major but is currently blocked by
-  # bdaya_shared_value (pins rxdart ^0.27.5) used in the example app; this
-  # forward-compatible range auto-upgrades once that is unblocked.
-  rxdart: ">=0.27.7 <2.0.0"
+  rxdart: ^0.28.0
   async: ^2.13.0
 
 dev_dependencies:
