@@ -27,6 +27,28 @@ class OidcConstants_AccessTokenTypes {
   static const dPoP = 'DPoP';
 }
 
+/// RFC 8693 Token Exchange token type identifiers, used for
+/// `subject_token_type` / `actor_token_type` / `requested_token_type`.
+class OidcConstants_TokenExchange_TokenType {
+  /// Indicates that the token is an OAuth 2.0 access token.
+  static const accessToken = 'urn:ietf:params:oauth:token-type:access_token';
+
+  /// Indicates that the token is an OAuth 2.0 refresh token.
+  static const refreshToken = 'urn:ietf:params:oauth:token-type:refresh_token';
+
+  /// Indicates that the token is an OpenID Connect ID Token.
+  static const idToken = 'urn:ietf:params:oauth:token-type:id_token';
+
+  /// Indicates that the token is a base64url-encoded SAML 1.1 assertion.
+  static const saml1 = 'urn:ietf:params:oauth:token-type:saml1';
+
+  /// Indicates that the token is a base64url-encoded SAML 2.0 assertion.
+  static const saml2 = 'urn:ietf:params:oauth:token-type:saml2';
+
+  /// Indicates that the token is a JWT.
+  static const jwt = 'urn:ietf:params:oauth:token-type:jwt';
+}
+
 class OidcConstants_ClientAuthenticationMethods {
   static const clientSecretBasic = 'client_secret_basic';
   static const clientSecretPost = 'client_secret_post';

@@ -259,6 +259,7 @@ abstract class OidcUserManagerBase {
         ...?extraParameters,
       },
       maxAge: maxAgeOverride ?? settings.maxAge,
+      resource: settings.resource,
       options: getSerializableOptions(options),
       managerId: id,
     );
@@ -1382,6 +1383,7 @@ abstract class OidcUserManagerBase {
             clientSecret: clientCredentials.clientSecret,
             extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
             scope: settings.scope,
+            resource: settings.resource,
           ),
           credentials: clientCredentials,
           headers: settings.extraTokenHeaders,
@@ -1482,6 +1484,7 @@ abstract class OidcUserManagerBase {
             clientSecret: clientCredentials.clientSecret,
             extra: settings.extraTokenParameters,
             scope: settings.scope,
+            resource: settings.resource,
           ),
           options: settings.options,
         ),
@@ -1646,6 +1649,71 @@ abstract class OidcUserManagerBase {
   }
 
   @protected
+  /// Performs an RFC 8693 Token Exchange at the token endpoint and returns the
+  /// raw [OidcTokenResponse].
+  ///
+  /// This does NOT change the currently logged-in user; it is intended for
+  /// obtaining a (possibly delegated/impersonated or downscoped) token for a
+  /// downstream resource. When [subjectToken] is omitted it defaults to the
+  /// current user's access token. [resource] defaults to
+  /// [OidcUserManagerSettings.resource].
+  Future<OidcTokenResponse> exchangeToken({
+    String? subjectToken,
+    String subjectTokenType =
+        OidcConstants_TokenExchange_TokenType.accessToken,
+    String? actorToken,
+    String? actorTokenType,
+    String? requestedTokenType,
+    String? audience,
+    List<Uri>? resource,
+    List<String>? scope,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extra,
+  }) async {
+    final tokenEndpoint = discoveryDocument.tokenEndpoint;
+    if (tokenEndpoint == null) {
+      logAndThrow("This provider doesn't provide a token endpoint.");
+    }
+    final actualSubjectToken = subjectToken ?? currentUser?.token.accessToken;
+    if (actualSubjectToken == null) {
+      throw const OidcException(
+        'Token exchange requires a subject_token; none was provided and there '
+        'is no current access token.',
+      );
+    }
+    return (settings.hooks?.token).execute(
+      request: OidcTokenHookRequest(
+        metadata: discoveryDocument,
+        tokenEndpoint: tokenEndpoint,
+        credentials: clientCredentials,
+        headers: {...?settings.extraTokenHeaders, ...?headers},
+        client: httpClient,
+        options: settings.options,
+        request: OidcTokenRequest.tokenExchange(
+          subjectToken: actualSubjectToken,
+          subjectTokenType: subjectTokenType,
+          actorToken: actorToken,
+          actorTokenType: actorTokenType,
+          requestedTokenType: requestedTokenType,
+          audience: audience,
+          resource: resource ?? settings.resource,
+          scope: scope,
+          clientId: clientCredentials.clientId,
+          clientSecret: clientCredentials.clientSecret,
+          extra: extra,
+        ),
+      ),
+      defaultExecution: (hookRequest) => OidcEndpoints.token(
+        tokenEndpoint: hookRequest.tokenEndpoint,
+        credentials: hookRequest.credentials,
+        headers: hookRequest.headers,
+        dpopManager: dpopManager,
+        request: hookRequest.request,
+        client: hookRequest.client,
+      ),
+    );
+  }
+
   List<Exception> validateUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,

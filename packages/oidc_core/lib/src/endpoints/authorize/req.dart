@@ -35,6 +35,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     this.loginHint,
     this.acrValues,
     this.requestUri,
+    this.resource,
   });
 
   /// REQUIRED.
@@ -287,6 +288,12 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// Leave null for a normal (non-PAR) authorization request.
   @JsonKey(includeToJson: false)
   Uri? requestUri;
+
+  /// RFC 8707 Resource Indicators: the resource(s) the client intends to access
+  /// with the issued tokens. Emitted as one repeated `resource` query parameter
+  /// per value (and likewise in the PAR request body).
+  @JsonKey(name: OidcConstants_AuthParameters.resource)
+  List<Uri>? resource;
 
   /// converts the request into a JSON Map.
   @override

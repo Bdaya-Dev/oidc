@@ -79,14 +79,44 @@ class OidcEndpoints {
       req.headers['Content-Type'] = contentType;
     }
     if (bodyFields != null) {
-      req.bodyFields = (bodyFields.map<String, String?>(
-        (key, value) => MapEntry(
-          key,
-          value is List<String>
-              ? OidcInternalUtilities.joinSpaceDelimitedList(value)
-              : value?.toString(),
-        ),
-      )..removeWhere((key, value) => value is! String)).cast<String, String>();
+      final pairs = <MapEntry<String, String>>[];
+      var hasRepeated = false;
+      for (final entry in bodyFields.entries) {
+        final value = entry.value;
+        if (value == null) {
+          continue;
+        }
+        if (value is Iterable) {
+          // A repeatable form parameter (e.g. RFC 8707 `resource`): emit one
+          // pair per element. `http.Request.bodyFields` is a Map<String,String>
+          // and cannot represent repeated keys, so when any value is a list the
+          // body is URL-encoded manually below. (Space-delimited params such as
+          // `scope` arrive already joined to a String, so they are unaffected.)
+          hasRepeated = true;
+          for (final item in value) {
+            if (item != null) {
+              pairs.add(MapEntry(entry.key, item.toString()));
+            }
+          }
+        } else {
+          pairs.add(MapEntry(entry.key, value.toString()));
+        }
+      }
+      if (hasRepeated) {
+        req.headers.putIfAbsent(
+          'content-type',
+          () => 'application/x-www-form-urlencoded; charset=utf-8',
+        );
+        req.body = pairs
+            .map(
+              (e) =>
+                  '${Uri.encodeQueryComponent(e.key)}='
+                  '${Uri.encodeQueryComponent(e.value)}',
+            )
+            .join('&');
+      } else {
+        req.bodyFields = {for (final e in pairs) e.key: e.value};
+      }
     }
     return req;
   }
@@ -189,6 +219,7 @@ class OidcEndpoints {
       nonce: hashedNonce,
       prompt: input.prompt,
       uiLocales: input.uiLocales,
+      resource: input.resource,
     );
 
     return OidcSimpleAuthorizationRequestContainer(

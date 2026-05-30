@@ -77,6 +77,7 @@ class OidcUserManagerSettings {
         OidcPushedAuthorizationRequestsMode.auto,
     this.dpop,
     this.allowedAudiences,
+    this.resource,
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
@@ -126,6 +127,11 @@ class OidcUserManagerSettings {
   /// OpenID Connect Core §3.1.3.7 requires rejecting an id_token whose `aud`
   /// contains audiences not trusted by the client; this is the trust list.
   final List<String>? allowedAudiences;
+
+  /// RFC 8707 Resource Indicators: the protected resource(s) the issued tokens
+  /// are intended for. When set, it is sent on the authorization request and on
+  /// refresh/token requests (as one repeated `resource` parameter per value).
+  final List<Uri>? resource;
 
   /// Whether to support offline authentication or not.
   ///
