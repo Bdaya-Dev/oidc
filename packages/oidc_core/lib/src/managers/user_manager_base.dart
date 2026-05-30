@@ -1832,22 +1832,34 @@ abstract class OidcUserManagerBase {
     String? authorizationCode,
     Duration? maxAge,
   }) {
-    final errors = <Exception>[
-      ...user.parsedIdToken.claims.validate(
-        clientId: clientCredentials.clientId,
-        issuer: metadata.issuer,
-        expiryTolerance: settings.expiryTolerance,
-      ),
-    ];
+    final claims = user.parsedIdToken.claims;
+    // `exp` is REQUIRED (OIDC Core §2). jose's `validate()` force-unwraps the
+    // expiry, so guard before calling it: a missing `exp` is a hard validation
+    // failure (otherwise a malformed token throws an uncaught TypeError instead
+    // of a collected exception, breaking the validation contract).
+    final errors = <Exception>[];
+    if (claims.expiry == null) {
+      errors.add(
+        JoseException('id token is missing the required `exp` claim.'),
+      );
+    } else {
+      errors.addAll(
+        claims.validate(
+          clientId: clientCredentials.clientId,
+          issuer: metadata.issuer,
+          expiryTolerance: settings.expiryTolerance,
+        ),
+      );
+    }
     if (user.token.allowExpiredIdToken) {
       errors.removeWhere(_isJwtExpiredError);
     }
-    if (user.parsedIdToken.claims.subject == null) {
+    if (claims.subject == null) {
       errors.add(
         JoseException('id token is missing a `sub` claim.'),
       );
     }
-    if (user.parsedIdToken.claims.issuedAt == null) {
+    if (claims.issuedAt == null) {
       errors.add(
         JoseException('id token is missing an `iat` claim.'),
       );
@@ -1855,7 +1867,6 @@ abstract class OidcUserManagerBase {
 
     // Additional OpenID Connect Core §3.1.3.7 id_token checks not covered by
     // the generic JWT validation above.
-    final claims = user.parsedIdToken.claims;
 
     // `azp` (authorized party): when present it MUST be the client_id, and when
     // the id_token carries more than one audience, `azp` is REQUIRED.
@@ -1920,7 +1931,9 @@ abstract class OidcUserManagerBase {
       final expected = alg == null
           ? null
           : oidcComputeTokenHash(alg, accessToken);
-      if (expected != null && expected != atHash) {
+      // Compare padding-insensitively: the spec mandates unpadded base64url,
+      // but tolerate a non-conformant OP that pads rather than false-rejecting.
+      if (expected != null && expected != atHash.replaceAll('=', '')) {
         errors.add(
           JoseException('id token `at_hash` does not match the access_token.'),
         );
@@ -1937,7 +1950,7 @@ abstract class OidcUserManagerBase {
       final expected = alg == null
           ? null
           : oidcComputeTokenHash(alg, authorizationCode);
-      if (expected != null && expected != cHash) {
+      if (expected != null && expected != cHash.replaceAll('=', '')) {
         errors.add(
           JoseException(
             'id token `c_hash` does not match the authorization code.',
@@ -2364,9 +2377,11 @@ abstract class OidcUserManagerBase {
           final resp = await OidcEndpoints.parseAuthorizeResponse(
             responseUri: stateResponseUrl,
             // Enables JARM: a signed `response` JWT is verified against the
-            // provider keys before its inner parameters are used.
+            // provider keys (never `alg:none`) and its `iss`/`aud`/`exp` are
+            // enforced before its inner parameters are used.
             keyStore: keyStore,
             allowedAlgorithms: discoveryDocument.idTokenSigningAlgValuesSupported,
+            expectedAudience: clientCredentials.clientId,
           );
 
           await handleSuccessfulAuthResponse(

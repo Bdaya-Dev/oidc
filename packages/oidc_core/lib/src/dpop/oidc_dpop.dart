@@ -50,21 +50,31 @@ int _ecFieldSize(String? crv) {
   }
 }
 
-/// Left-pads a base64url EC coordinate to [fieldSize] octets.
+/// Re-encodes a base64 JWK member to canonical base64url **without padding**
+/// (RFC 7638 §3.1 / RFC 7515 Appendix C).
+///
+/// `jose_plus` returns members (`x`, `y`, `n`, `e`) with trailing `=` padding;
+/// the canonical JWK / thumbprint form is unpadded base64url, so every member
+/// MUST be normalized here. Without this the embedded `jwk` and the RFC 7638
+/// thumbprint (`dpop_jkt` / `cnf.jkt`) would not match what a spec-compliant
+/// server computes — silently breaking DPoP sender-constrained binding.
+String _canonicalMember(String member) =>
+    _base64UrlNoPad(base64Url.decode(base64Url.normalize(member)));
+
+/// Left-pads a base64url EC coordinate to [fieldSize] octets and returns it as
+/// canonical (unpadded) base64url.
 ///
 /// `jose_plus` emits the minimal big-endian encoding, dropping any leading
 /// zero byte (~1/128 generated P-256 keys). RFC 7518 §6.2.1.2 requires the full
 /// field length; a short coordinate yields a different embedded `jwk` and
-/// RFC 7638 thumbprint than a spec-compliant server computes — silently
-/// breaking DPoP sender-constrained binding. Re-pad here, where we own the
-/// canonical form.
+/// RFC 7638 thumbprint than a spec-compliant server computes. Always re-emit
+/// (left-padding when short) so the output is both full-length AND unpadded.
 String _fixedLenCoord(String coord, int fieldSize) {
   final bytes = base64Url.decode(base64Url.normalize(coord));
-  if (bytes.length >= fieldSize) return coord;
-  return _base64UrlNoPad([
-    ...List<int>.filled(fieldSize - bytes.length, 0),
-    ...bytes,
-  ]);
+  final fixed = bytes.length >= fieldSize
+      ? bytes
+      : <int>[...List<int>.filled(fieldSize - bytes.length, 0), ...bytes];
+  return _base64UrlNoPad(fixed);
 }
 
 /// Projects [key] to its **public** JWK members only (RFC 9449 §4.2 requires
@@ -84,7 +94,11 @@ Map<String, dynamic> oidcDPoPPublicJwk(JsonWebKey key) {
         'y': _fixedLenCoord(key['y'] as String, size),
       };
     case 'RSA':
-      return {'kty': kty, 'n': key['n'], 'e': key['e']};
+      return {
+        'kty': kty,
+        'n': _canonicalMember(key['n'] as String),
+        'e': _canonicalMember(key['e'] as String),
+      };
     default:
       throw OidcException('Unsupported DPoP key type: `$kty`.');
   }
@@ -110,7 +124,11 @@ String oidcJwkThumbprint(JsonWebKey key) {
         'y': _fixedLenCoord(key['y'] as String, size),
       };
     case 'RSA':
-      required = {'e': key['e'], 'kty': kty, 'n': key['n']};
+      required = {
+        'e': _canonicalMember(key['e'] as String),
+        'kty': kty,
+        'n': _canonicalMember(key['n'] as String),
+      };
     default:
       throw OidcException('Unsupported DPoP key type: `$kty`.');
   }
@@ -137,7 +155,9 @@ String oidcNormalizeHtu(Uri uri) {
     scheme: uri.scheme.toLowerCase(),
     host: uri.host.toLowerCase(),
     port: uri.hasPort ? uri.port : null,
-    path: uri.path,
+    // A path-less endpoint normalizes to "/" — the HTTP request target a server
+    // compares `htu` against is never empty.
+    path: uri.path.isEmpty ? '/' : uri.path,
   ).toString();
 }
 

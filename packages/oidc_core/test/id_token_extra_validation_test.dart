@@ -295,4 +295,19 @@ void main() {
       expect(errors.any((e) => e.toString().contains('auth_time')), isFalse);
     });
   });
+
+  group('validateUser exp requirement (OIDC Core §2)', () {
+    test('returns a collected error (does not throw) when exp is missing',
+        () async {
+      final claims = _baseClaims()..remove('exp');
+      final user = await _user(claims);
+      // Must not throw a raw TypeError out of validateUser; the missing `exp`
+      // is collected as a normal validation error.
+      final errors = _manager().run(user, _metadata);
+      expect(
+        errors.any((e) => e.toString().contains('exp')),
+        isTrue,
+      );
+    });
+  });
 }

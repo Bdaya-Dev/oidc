@@ -227,14 +227,20 @@ class OidcEndpoints {
       // JAR (RFC 9101): sign the authorization parameters into a `request`
       // object. `iss` is the client_id and `aud` the authorization server
       // (its issuer, falling back to the authorization endpoint).
+      final audience = (metadata.issuer ?? metadata.authorizationEndpoint)
+          ?.toString();
+      if (audience == null) {
+        throw const OidcException(
+          'Cannot build a JAR request object: the provider metadata has no '
+          '`issuer` or `authorization_endpoint` to use as the `aud`.',
+        );
+      }
       req.request = oidcCreateRequestObject(
         parameters: req.toMap(),
         key: requestObjectSettings.signingKey,
         algorithm: requestObjectSettings.algorithm,
         issuer: input.clientId,
-        audience:
-            (metadata.issuer ?? metadata.authorizationEndpoint)?.toString() ??
-            '',
+        audience: audience,
         lifetime: requestObjectSettings.lifetime,
         clockSkew: requestObjectSettings.clockSkew,
       );
@@ -420,6 +426,7 @@ class OidcEndpoints {
     Map<String, dynamic>? overrides,
     JsonWebKeyStore? keyStore,
     List<String>? allowedAlgorithms,
+    String? expectedAudience,
   }) async {
     final (
       :parameters,
@@ -439,6 +446,7 @@ class OidcEndpoints {
         ? await _decodeJarmResponse(
             responseJwt: jarm,
             keyStore: keyStore,
+            expectedAudience: expectedAudience,
             allowedAlgorithms: allowedAlgorithms,
           )
         : parameters;
@@ -462,20 +470,55 @@ class OidcEndpoints {
   /// provider's [keyStore].
   static Future<Map<String, dynamic>> _decodeJarmResponse({
     required String responseJwt,
-    JsonWebKeyStore? keyStore,
+    required JsonWebKeyStore? keyStore,
+    required String? expectedAudience,
     List<String>? allowedAlgorithms,
   }) async {
-    final jwt = keyStore == null
-        ? JsonWebToken.unverified(responseJwt)
-        : await JsonWebToken.decodeAndVerify(
-            responseJwt,
-            keyStore,
-            allowedArguments: allowedAlgorithms,
-          );
+    // A JARM response is security-critical (it carries code/state/iss); never
+    // trust it unverified.
+    if (keyStore == null) {
+      throw const OidcException(
+        'A JARM `response` JWT was returned but no key store was available to '
+        'verify its signature; refusing to trust it unverified.',
+      );
+    }
+    // JARM MUST NOT be unsigned. jose_plus only auto-rejects `alg:none` when the
+    // allowed-algorithm list is null, so strip it explicitly (an OP MAY list
+    // `none` in id_token_signing_alg_values_supported, which would otherwise
+    // open an unsigned-response forgery path).
+    final algs = allowedAlgorithms
+        ?.where((a) => a.toLowerCase() != 'none')
+        .toList();
+    final jwt = await JsonWebToken.decodeAndVerify(
+      responseJwt,
+      keyStore,
+      allowedArguments: algs,
+    );
     final claims = jwt.claims;
+    // JARM mandates `iss`, `aud`, and `exp`; reject if any is missing/invalid
+    // (the inner `iss` is additionally cross-checked against the issuer by the
+    // RFC 9207 mix-up defense downstream).
     final exp = claims.expiry;
-    if (exp != null && clock.now().isAfter(exp)) {
+    if (exp == null) {
+      throw const OidcException(
+        'JARM `response` JWT is missing the required `exp` claim.',
+      );
+    }
+    if (clock.now().isAfter(exp)) {
       throw const OidcException('JARM `response` JWT has expired.');
+    }
+    if (claims.issuer == null) {
+      throw const OidcException(
+        'JARM `response` JWT is missing the required `iss` claim.',
+      );
+    }
+    final aud = claims.audience;
+    if (expectedAudience != null &&
+        (aud == null || !aud.contains(expectedAudience))) {
+      throw OidcException(
+        'JARM `response` JWT `aud` ($aud) does not contain the client_id '
+        '($expectedAudience).',
+      );
     }
     return claims.toJson();
   }
