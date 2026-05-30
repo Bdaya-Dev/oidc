@@ -41,6 +41,43 @@ void main() {
     expect(OidcNativeChannels.android, 'com.bdayadev.oidc/android');
   });
 
+  test('forwards serialized Custom Tabs options over the channel', () async {
+    Map<Object?, Object?>? received;
+    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
+      received = call.arguments as Map<Object?, Object?>;
+      return 'com.example.app://callback?code=c&state=state-1';
+    });
+
+    await OidcAndroid().getAuthorizationResponse(
+      metadata,
+      _authRequest(),
+      const OidcPlatformSpecificOptions(
+        android: OidcNativeOptionsAndroid(
+          showTitle: false,
+          urlBarHidingEnabled: true,
+          ephemeralBrowsing: true,
+          shareState: OidcCustomTabsShareState.off,
+          colorSchemes: OidcCustomTabsColorSchemes(
+            colorScheme: OidcColorScheme.dark,
+            defaultParams: OidcColorSchemeParams(toolbarColor: 0xFF2196F3),
+          ),
+        ),
+      ),
+      const {},
+    );
+
+    final opts = received!['options']! as Map<Object?, Object?>;
+    expect(opts['showTitle'], false);
+    expect(opts['urlBarHidingEnabled'], true);
+    expect(opts['ephemeralBrowsing'], true);
+    // Enums serialize by name; colors as ARGB ints; nested objects as maps.
+    expect(opts['shareState'], 'off');
+    final schemes = opts['colorSchemes']! as Map<Object?, Object?>;
+    expect(schemes['colorScheme'], 'dark');
+    final params = schemes['defaultParams']! as Map<Object?, Object?>;
+    expect(params['toolbarColor'], 0xFF2196F3);
+  });
+
   test('wraps MissingPluginException (native plugin absent) as OidcException',
       () async {
     // With no mock handler registered, invokeMethod throws

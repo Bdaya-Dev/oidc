@@ -40,12 +40,12 @@ OidcPlatformSpecificOptions _$OidcPlatformSpecificOptionsFromJson(
 Map<String, dynamic> _$OidcPlatformSpecificOptionsToJson(
   OidcPlatformSpecificOptions instance,
 ) => <String, dynamic>{
-  'android': instance.android,
-  'ios': instance.ios,
-  'macos': instance.macos,
-  'web': instance.web,
-  'linux': instance.linux,
-  'windows': instance.windows,
+  'android': instance.android.toJson(),
+  'ios': instance.ios.toJson(),
+  'macos': instance.macos.toJson(),
+  'web': instance.web.toJson(),
+  'linux': instance.linux.toJson(),
+  'windows': instance.windows.toJson(),
 };
 
 OidcColorSchemeParams _$OidcColorSchemeParamsFromJson(
@@ -94,9 +94,9 @@ Map<String, dynamic> _$OidcCustomTabsColorSchemesToJson(
   OidcCustomTabsColorSchemes instance,
 ) => <String, dynamic>{
   'colorScheme': _$OidcColorSchemeEnumMap[instance.colorScheme]!,
-  'lightParams': instance.lightParams,
-  'darkParams': instance.darkParams,
-  'defaultParams': instance.defaultParams,
+  'lightParams': instance.lightParams?.toJson(),
+  'darkParams': instance.darkParams?.toJson(),
+  'defaultParams': instance.defaultParams?.toJson(),
 };
 
 const _$OidcColorSchemeEnumMap = {
@@ -180,7 +180,7 @@ OidcNativeOptionsAndroid _$OidcNativeOptionsAndroidFromJson(
 Map<String, dynamic> _$OidcNativeOptionsAndroidToJson(
   OidcNativeOptionsAndroid instance,
 ) => <String, dynamic>{
-  'colorSchemes': instance.colorSchemes,
+  'colorSchemes': instance.colorSchemes?.toJson(),
   'shareState': _$OidcCustomTabsShareStateEnumMap[instance.shareState]!,
   'showTitle': instance.showTitle,
   'urlBarHidingEnabled': instance.urlBarHidingEnabled,
@@ -189,7 +189,7 @@ Map<String, dynamic> _$OidcNativeOptionsAndroidToJson(
       _$OidcCustomTabsCloseButtonPositionEnumMap[instance.closeButtonPosition],
   'preferredBrowserPackages': instance.preferredBrowserPackages,
   'useAuthTab': _$OidcAuthTabModeEnumMap[instance.useAuthTab]!,
-  'partialCustomTabs': instance.partialCustomTabs,
+  'partialCustomTabs': instance.partialCustomTabs?.toJson(),
   'warmup': _$OidcCustomTabsWarmupEnumMap[instance.warmup]!,
   'rawIntentExtras': instance.rawIntentExtras,
   'allowInsecureConnections': instance.allowInsecureConnections,

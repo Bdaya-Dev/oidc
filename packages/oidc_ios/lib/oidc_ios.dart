@@ -103,6 +103,9 @@ class OidcIOS extends OidcPlatform {
       return await channel.invokeMethod<String>(method, <String, dynamic>{
         'url': url.toString(),
         'preferEphemeral': preferEphemeral(options),
+        // Serialized ASWebAuthenticationSession options (additionalHeaderFields,
+        // callbackMode, rawSessionOptions); native applies what it supports.
+        'options': options.ios.toJson(),
         if (redirectUri != null) ...{
           'redirectUri': redirectUri.toString(),
           'callbackScheme': redirectUri.scheme,

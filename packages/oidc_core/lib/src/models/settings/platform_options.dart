@@ -13,7 +13,7 @@ part 'platform_options.g.dart';
 abstract interface class OidcPlatformOptionsMarker {}
 
 /// Represents flutter platform-specific options.
-@JsonSerializable()
+@JsonSerializable(explicitToJson: true)
 class OidcPlatformSpecificOptions {
   ///
   const OidcPlatformSpecificOptions({
@@ -180,7 +180,7 @@ class OidcColorSchemeParams {
 
 /// Color configuration for the Custom Tab (maps to `setColorScheme` +
 /// `setColorSchemeParams` / `setDefaultColorSchemeParams`).
-@JsonSerializable()
+@JsonSerializable(explicitToJson: true)
 class OidcCustomTabsColorSchemes {
   ///
   const OidcCustomTabsColorSchemes({
@@ -239,7 +239,7 @@ class OidcPartialCustomTabs {
 }
 
 /// Android options for the first-party Chrome Custom Tabs flow.
-@JsonSerializable()
+@JsonSerializable(explicitToJson: true)
 class OidcNativeOptionsAndroid implements OidcPlatformOptionsMarker {
   ///
   const OidcNativeOptionsAndroid({

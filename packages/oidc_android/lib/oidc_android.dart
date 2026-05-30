@@ -46,6 +46,7 @@ class OidcAndroid extends OidcPlatform {
       method: OidcNativeMethods.authorize,
       url: url,
       redirectUri: request.redirectUri,
+      options: options,
     );
     if (responseUrl == null) {
       return null;
@@ -77,6 +78,7 @@ class OidcAndroid extends OidcPlatform {
       method: OidcNativeMethods.endSession,
       url: url,
       redirectUri: request.postLogoutRedirectUri,
+      options: options,
     );
     if (responseUrl == null) {
       return null;
@@ -90,10 +92,14 @@ class OidcAndroid extends OidcPlatform {
     required String method,
     required Uri url,
     required Uri? redirectUri,
+    required OidcPlatformSpecificOptions options,
   }) async {
     try {
       return await channel.invokeMethod<String>(method, <String, dynamic>{
         'url': url.toString(),
+        // Serialized Chrome Custom Tabs options; the native side applies the
+        // ones it supports and ignores the rest.
+        'options': options.android.toJson(),
         if (redirectUri != null) ...{
           'redirectUri': redirectUri.toString(),
           'callbackScheme': redirectUri.scheme,
