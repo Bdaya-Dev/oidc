@@ -823,4 +823,49 @@ class OidcEndpoints {
       response: resp,
     );
   }
+
+  /// Introspects a token (RFC 7662) at the [introspectionEndpoint] and returns
+  /// the token's metadata — notably whether it is `active`.
+  ///
+  /// The request is authenticated with the client's [credentials] (the same
+  /// resolution used by [token]/[revokeToken]); introspection is a privileged
+  /// endpoint, so a client without credentials must supply authentication via
+  /// [headers] or [extraBodyFields].
+  static Future<OidcIntrospectionResponse> introspect({
+    required Uri introspectionEndpoint,
+    required OidcIntrospectionRequest request,
+    http.Client? client,
+    OidcClientAuthentication? credentials,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extraBodyFields,
+  }) async {
+    final resolved = credentials?.resolveForRequest(introspectionEndpoint);
+    final authHeader = resolved?.getAuthorizationHeader();
+    final authBodyParams = resolved?.getBodyParameters();
+    final req = _prepareRequest(
+      method: OidcConstants_RequestMethod.post,
+      uri: introspectionEndpoint,
+      contentType: _formUrlEncoded,
+      headers: {
+        _authorizationHeaderKey: ?authHeader,
+        ...?headers,
+      },
+      bodyFields: {
+        ...request.toMap(),
+        if (authHeader == null) ...?authBodyParams,
+        ...?extraBodyFields,
+      },
+    );
+
+    final resp = await OidcInternalUtilities.sendWithClient(
+      client: client,
+      request: req,
+    );
+
+    return _handleResponse(
+      mapper: OidcIntrospectionResponse.fromJson,
+      request: req,
+      response: resp,
+    );
+  }
 }

@@ -1714,6 +1714,44 @@ abstract class OidcUserManagerBase {
     );
   }
 
+  /// Introspects a token (RFC 7662) using the provider's introspection
+  /// endpoint, returning its metadata (notably whether it is `active`).
+  ///
+  /// Defaults to introspecting the current user's access token when [token] is
+  /// omitted. The request is authenticated with the manager's client
+  /// credentials.
+  Future<OidcIntrospectionResponse> introspectToken({
+    String? token,
+    String? tokenTypeHint,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extra,
+  }) async {
+    final introspectionEndpoint = discoveryDocument.introspectionEndpoint;
+    if (introspectionEndpoint == null) {
+      logAndThrow("This provider doesn't provide an introspection endpoint.");
+    }
+    final actualToken = token ?? currentUser?.token.accessToken;
+    if (actualToken == null) {
+      throw const OidcException(
+        'Introspection requires a token; none was provided and there is no '
+        'current access token.',
+      );
+    }
+    return OidcEndpoints.introspect(
+      introspectionEndpoint: introspectionEndpoint,
+      credentials: clientCredentials,
+      client: httpClient,
+      headers: {...?settings.extraTokenHeaders, ...?headers},
+      request: OidcIntrospectionRequest(
+        token: actualToken,
+        tokenTypeHint: tokenTypeHint,
+        clientId: clientCredentials.clientId,
+        clientSecret: clientCredentials.clientSecret,
+        extra: extra,
+      ),
+    );
+  }
+
   List<Exception> validateUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
