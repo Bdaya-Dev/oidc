@@ -49,7 +49,7 @@ class OidcUserManagerSettings {
     this.frontChannelRequestListeningOptions =
         const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
-    this.strictJwtVerification = false,
+    this.strictJwtVerification = true,
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
@@ -67,9 +67,16 @@ class OidcUserManagerSettings {
   /// Settings to control using the user_info endpoint.
   final OidcUserInfoSettings userInfoSettings;
 
-  /// whether JWTs are strictly verified.
+  /// Whether id_token signatures are strictly verified (fail-closed).
   ///
-  /// If set to true, the library will throw an exception if a JWT is invalid.
+  /// When `true` (the default), an id_token whose signature cannot be verified
+  /// against the OP's JWKS is **rejected** (an exception is thrown). When
+  /// `false`, a verification failure is logged and the token is accepted
+  /// *unverified* — which means a forged or tampered id_token would be trusted.
+  ///
+  /// Defaults to `true` per OpenID Connect Core §3.1.3.7 and the OAuth 2.0
+  /// Security BCP (RFC 9700). Only set this to `false` if you fully understand
+  /// the risk (e.g. a controlled test environment).
   final bool strictJwtVerification;
 
   /// Whether to support offline authentication or not.

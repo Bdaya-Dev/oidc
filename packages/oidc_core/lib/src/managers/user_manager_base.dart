@@ -1073,6 +1073,27 @@ abstract class OidcUserManagerBase {
         cacheStore: store,
         allowExpiredIdToken: reusesExistingIdToken,
       );
+      // OpenID Connect Core §12.2: a freshly-issued id_token MUST keep the same
+      // `sub` (and `iss`) as the prior one — refuse a possible account swap on
+      // refresh. Skipped when the existing id_token is reused (no new token).
+      if (!reusesExistingIdToken) {
+        final oldClaims = currentUser.parsedIdToken.claims;
+        final newClaims = newUser.parsedIdToken.claims;
+        if (oldClaims.subject != null &&
+            newClaims.subject != oldClaims.subject) {
+          logAndThrow(
+            'Refreshed id_token `sub` (${newClaims.subject}) does not match '
+            'the existing user (${oldClaims.subject}); refusing a possible '
+            'account swap.',
+          );
+        }
+        if (oldClaims.issuer != null && newClaims.issuer != oldClaims.issuer) {
+          logAndThrow(
+            'Refreshed id_token `iss` (${newClaims.issuer}) does not match '
+            'the existing user (${oldClaims.issuer}).',
+          );
+        }
+      }
       if (attributes != null) {
         newUser = newUser.setAttributes(attributes);
       }
@@ -1575,6 +1596,44 @@ abstract class OidcUserManagerBase {
     if (user.parsedIdToken.claims.issuedAt == null) {
       errors.add(
         JoseException('id token is missing an `iat` claim.'),
+      );
+    }
+
+    // Additional OpenID Connect Core §3.1.3.7 id_token checks not covered by
+    // the generic JWT validation above.
+    final claims = user.parsedIdToken.claims;
+
+    // `azp` (authorized party): when present it MUST be the client_id, and when
+    // the id_token carries more than one audience, `azp` is REQUIRED.
+    final azp = claims['azp'];
+    final audiences = claims.audience ?? const <String>[];
+    if (azp != null && azp != clientCredentials.clientId) {
+      errors.add(
+        JoseException(
+          'id token `azp` (`$azp`) does not match the client_id '
+          '(`${clientCredentials.clientId}`).',
+        ),
+      );
+    }
+    if (audiences.length > 1 && azp == null) {
+      errors.add(
+        JoseException(
+          'id token has multiple audiences but is missing the required '
+          '`azp` (authorized party) claim.',
+        ),
+      );
+    }
+
+    // `nbf` (not-before): reject a token that is not yet valid, applying the
+    // same clock-skew tolerance used for expiry.
+    final notBefore = claims.notBefore;
+    if (notBefore != null &&
+        clock.now().isBefore(notBefore.subtract(settings.expiryTolerance))) {
+      errors.add(
+        JoseException(
+          'id token is not yet valid; `nbf` ($notBefore) is more than the '
+          'allowed tolerance (${settings.expiryTolerance}) after now.',
+        ),
       );
     }
 
