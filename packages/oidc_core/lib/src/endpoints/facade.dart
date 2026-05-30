@@ -636,6 +636,53 @@ class OidcEndpoints {
     );
   }
 
+  /// Sends a Pushed Authorization Request (PAR).
+  ///
+  /// this adapts: [rfc9126](https://datatracker.ietf.org/doc/html/rfc9126)
+  ///
+  /// The [request] is the same [OidcAuthorizeRequest] that would otherwise be
+  /// sent to the authorization endpoint; PAR POSTs it (authenticated) to the
+  /// [pushedAuthorizationRequestEndpoint] and returns a single-use
+  /// `request_uri` to send to the authorization endpoint instead of the raw
+  /// parameters.
+  ///
+  /// if [credentials] is set to null, it's up to the caller how to authenticate
+  /// the request; either via [headers] or [extraBodyFields].
+  static Future<OidcPushedAuthorizationResponse> pushAuthorizationRequest({
+    required Uri pushedAuthorizationRequestEndpoint,
+    required OidcAuthorizeRequest request,
+    OidcClientAuthentication? credentials,
+    Map<String, String>? headers,
+    Map<String, dynamic>? extraBodyFields,
+    http.Client? client,
+  }) async {
+    final authHeader = credentials?.getAuthorizationHeader();
+    final authBodyParams = credentials?.getBodyParameters();
+    final req = _prepareRequest(
+      method: OidcConstants_RequestMethod.post,
+      uri: pushedAuthorizationRequestEndpoint,
+      headers: {
+        _authorizationHeaderKey: ?authHeader,
+        ...?headers,
+      },
+      contentType: _formUrlEncoded,
+      bodyFields: {
+        ...request.toMap(),
+        if (authHeader == null) ...?authBodyParams,
+        ...?extraBodyFields,
+      },
+    );
+    final resp = await OidcInternalUtilities.sendWithClient(
+      client: client,
+      request: req,
+    );
+    return _handleResponse(
+      mapper: OidcPushedAuthorizationResponse.fromJson,
+      response: resp,
+      request: req,
+    );
+  }
+
   /// Sends a token revocation request.
   static Future<OidcRevocationResponse> revokeToken({
     required Uri revocationEndpoint,
