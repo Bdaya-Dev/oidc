@@ -6,8 +6,9 @@ homepage: https://bdaya-dev.github.io/oidc/
 topics: ["oidc", "openidconnect", "oauth", "authentication"]
 resolution: workspace
 environment:
-  sdk: ">=3.5.0 <4.0.0"
-  flutter: ">=3.22.0"
+  # SwiftPM + FlutterFramework (Package.swift) require Flutter 3.41 / Dart 3.11.
+  sdk: "^3.11.0"
+  flutter: ">=3.41.0"
 
 flutter:
   plugin:

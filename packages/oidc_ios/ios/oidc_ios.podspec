@@ -8,11 +8,12 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
   An iOS implementation of the oidc plugin.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://bdaya-dev.github.io/oidc/'
   s.license          = { :type => 'BSD', :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
-  s.source           = { :path => '.' }  
-  s.source_files = 'Classes/**/*'
+  s.author           = { 'Bdaya-Dev' => 'ahmednfwela@bdaya-dev.com' }
+  s.source           = { :path => '.' }
+  # SwiftPM-aligned layout (sources under <plugin_name>/Sources/<plugin_name>/).
+  s.source_files = 'oidc_ios/Sources/oidc_ios/**/*.swift'
   s.dependency 'Flutter'
   # ASWebAuthenticationSession + presentationContextProvider require iOS 13.
   s.platform = :ios, '13.0'

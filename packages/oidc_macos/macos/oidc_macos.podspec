@@ -8,15 +8,16 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
   A macOS implementation of the oidc plugin.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://bdaya-dev.github.io/oidc/'
   s.license          = { :type => 'BSD', :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = { 'Bdaya-Dev' => 'ahmednfwela@bdaya-dev.com' }
   s.source           = { :path => '.' }
-  s.source_files = 'Classes/**/*'
+  # SwiftPM-aligned layout (sources under <plugin_name>/Sources/<plugin_name>/).
+  s.source_files = 'oidc_macos/Sources/oidc_macos/**/*.swift'
   s.dependency 'FlutterMacOS'
 
   s.platform = :osx
-  s.osx.deployment_target = '10.11'
+  s.osx.deployment_target = '10.15'
   s.swift_version = '5.0'
 end
 

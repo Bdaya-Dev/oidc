@@ -32,8 +32,7 @@ class OidcIOS extends OidcPlatform {
   @override
   Map<String, dynamic> prepareForRedirectFlow(
     OidcPlatformSpecificOptions options,
-  ) =>
-      const {};
+  ) => const {};
 
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
@@ -61,8 +60,8 @@ class OidcIOS extends OidcPlatform {
     return OidcEndpoints.parseAuthorizeResponse(
       responseUri: Uri.parse(responseUrl),
       overrides: {
-        OidcConstants_AuthParameters.redirectUri:
-            request.redirectUri.toString(),
+        OidcConstants_AuthParameters.redirectUri: request.redirectUri
+            .toString(),
       },
     );
   }
@@ -142,16 +141,14 @@ class OidcIOS extends OidcPlatform {
 
   @override
   Stream<OidcFrontChannelLogoutIncomingRequest>
-      listenToFrontChannelLogoutRequests(
+  listenToFrontChannelLogoutRequests(
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions options,
-  ) =>
-          const Stream.empty();
+  ) => const Stream.empty();
 
   @override
   Stream<OidcMonitorSessionResult> monitorSessionStatus({
     required Uri checkSessionIframe,
     required OidcMonitorSessionStatusRequest request,
-  }) =>
-      const Stream.empty();
+  }) => const Stream.empty();
 }

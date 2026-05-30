@@ -59,9 +59,24 @@ your `redirect_uri` then looks like `com.my.app://oauth2redirect`.
 > if your `applicationId`/scheme contains an underscore (`_`), replace it with a
 > dot (`.`) in the `oidcRedirectScheme` (schemes can't contain underscores).
 
-> **Upgrading from a flutter_appauth-based setup?** Remove the old
-> `appAuthRedirectScheme` placeholder and any redirect `<intent-filter>` you
-> hand-added to `MainActivity`; they are no longer used.
+> **You also still need an `appAuthRedirectScheme` placeholder.** `flutter_appauth`
+> is pulled in transitively (macOS still uses it), and its Android manifest
+> requires this placeholder even though Android auth no longer uses AppAuth. Set
+> it to a **distinct, unused** scheme so AppAuth's receiver can't steal your real
+> redirect:
+>
+> ```diff
+>     manifestPlaceholders += [
+>         'oidcRedirectScheme': 'com.my.app',
+> +       'appAuthRedirectScheme': 'com.my.app.appauth.unused'
+>     ]
+> ```
+>
+> This requirement disappears once macOS migrates to a first-party implementation.
+
+> **Upgrading from a flutter_appauth-based setup?** Remove any redirect
+> `<intent-filter>` you hand-added to `MainActivity` (the plugin handles it now),
+> and change your `appAuthRedirectScheme` to a distinct unused scheme as above.
 
 > **HTTPS redirect (App Links)?** A `https://` `redirect_uri` additionally needs
 > a verified [Android App Link](https://developer.android.com/training/app-links/verify-android-applinks)
@@ -162,6 +177,22 @@ Append the following to your `macos/Info.plist` file:
 </array>
 ```
 replace `com.my.app` with your application id
+
+### App Sandbox network entitlement (macOS)
+
+macOS runs under the App Sandbox, which **blocks outbound network by default**.
+The OIDC flow needs network access, so add the network-client entitlement to
+**both** `macos/Runner/DebugProfile.entitlements` **and**
+`macos/Runner/Release.entitlements`:
+
+```xml
+<key>com.apple.security.network.client</key>
+<true/>
+```
+
+(For signed/notarized distribution, the
+[Hardened Runtime](https://docs.flutter.dev/platform-integration/macos/building#hardened-runtime)
+is required and is compatible with these entitlements.)
 
 ### flutter_secure_storage setup for macos
 

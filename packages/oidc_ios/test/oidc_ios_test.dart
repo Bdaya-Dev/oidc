@@ -5,14 +5,12 @@ import 'package:oidc_ios/oidc_ios.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
 OidcAuthorizeRequest _authRequest() => OidcAuthorizeRequest(
-      clientId: 'client-1',
-      redirectUri: Uri.parse('com.example.app://callback'),
-      responseType: const [
-        OidcConstants_AuthorizationEndpoint_ResponseType.code,
-      ],
-      scope: const ['openid'],
-      state: 'state-1',
-    );
+  clientId: 'client-1',
+  redirectUri: Uri.parse('com.example.app://callback'),
+  responseType: const [OidcConstants_AuthorizationEndpoint_ResponseType.code],
+  scope: const ['openid'],
+  state: 'state-1',
+);
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -39,23 +37,24 @@ void main() {
     expect(OidcNativeChannels.ios, 'com.bdayadev.oidc/ios');
   });
 
-  test('wraps MissingPluginException (native plugin absent) as OidcException',
-      () async {
-    // With no mock handler registered, invokeMethod throws
-    // MissingPluginException — the code must surface a clear OidcException.
-    await expectLater(
-      OidcIOS().getAuthorizationResponse(
-        metadata,
-        _authRequest(),
-        const OidcPlatformSpecificOptions(),
-        const {},
-      ),
-      throwsA(isA<OidcException>()),
-    );
-  });
-
   test(
-      'getAuthorizationResponse builds the URL in Dart and parses the native '
+    'wraps MissingPluginException (native plugin absent) as OidcException',
+    () async {
+      // With no mock handler registered, invokeMethod throws
+      // MissingPluginException — the code must surface a clear OidcException.
+      await expectLater(
+        OidcIOS().getAuthorizationResponse(
+          metadata,
+          _authRequest(),
+          const OidcPlatformSpecificOptions(),
+          const {},
+        ),
+        throwsA(isA<OidcException>()),
+      );
+    },
+  );
+
+  test('getAuthorizationResponse builds the URL in Dart and parses the native '
       'ASWebAuthenticationSession redirect', () async {
     Map<Object?, Object?>? received;
     messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
@@ -85,28 +84,30 @@ void main() {
     expect(received!['preferEphemeral'], false);
   });
 
-  test('passes preferEphemeral=true for the ephemeral external user agent',
-      () async {
-    Map<Object?, Object?>? received;
-    messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
-      received = call.arguments as Map<Object?, Object?>;
-      return 'com.example.app://callback?code=c&state=state-1';
-    });
+  test(
+    'passes preferEphemeral=true for the ephemeral external user agent',
+    () async {
+      Map<Object?, Object?>? received;
+      messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
+        received = call.arguments as Map<Object?, Object?>;
+        return 'com.example.app://callback?code=c&state=state-1';
+      });
 
-    await OidcIOS().getAuthorizationResponse(
-      metadata,
-      _authRequest(),
-      const OidcPlatformSpecificOptions(
-        ios: OidcPlatformSpecificOptions_AppAuth_IosMacos(
-          externalUserAgent:
-              OidcAppAuthExternalUserAgent.ephemeralAsWebAuthenticationSession,
+      await OidcIOS().getAuthorizationResponse(
+        metadata,
+        _authRequest(),
+        const OidcPlatformSpecificOptions(
+          ios: OidcPlatformSpecificOptions_AppAuth_IosMacos(
+            externalUserAgent: OidcAppAuthExternalUserAgent
+                .ephemeralAsWebAuthenticationSession,
+          ),
         ),
-      ),
-      const {},
-    );
+        const {},
+      );
 
-    expect(received!['preferEphemeral'], true);
-  });
+      expect(received!['preferEphemeral'], true);
+    },
+  );
 
   test('getAuthorizationResponse returns null on USER_CANCELLED', () async {
     messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
@@ -142,8 +143,7 @@ void main() {
     expect(resp!.state, 'logout-state');
   });
 
-  test(
-      'getEndSessionResponse treats PRESENTATION_CONTEXT_INVALID (the '
+  test('getEndSessionResponse treats PRESENTATION_CONTEXT_INVALID (the '
       'iOS + Azure "-3" case) as a closed session (null)', () async {
     messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
       throw PlatformException(

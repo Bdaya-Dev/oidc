@@ -41,6 +41,9 @@ GeneratedPluginRegistrant.h
 GeneratedPluginRegistrant.m
 GeneratedPluginRegistrant.swift
 build/
+# Swift Package Manager build artifacts
+.build/
+.swiftpm/
 .flutter-plugins
 
 .project
