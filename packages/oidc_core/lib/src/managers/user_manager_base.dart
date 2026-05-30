@@ -1039,6 +1039,23 @@ abstract class OidcUserManagerBase {
           "Server didn't send code even though the authorization code flow was used.",
         );
       }
+
+      // OpenID Connect Core §3.3.2 (Hybrid flow): when the authorization
+      // endpoint ALSO returned an id_token in the front channel, validate it
+      // before exchanging the code — `nonce` must match, `c_hash` must bind the
+      // returned `code`, and `at_hash` (when present) must bind the
+      // front-channel access_token.
+      final frontChannelIdToken = response.idToken;
+      if (frontChannelIdToken != null) {
+        await validateFrontChannelIdToken(
+          idToken: frontChannelIdToken,
+          accessToken: response.accessToken,
+          code: code,
+          nonce: stateData.nonce,
+          metadata: metadata,
+        );
+      }
+
       //request the token.
       final tokenResp = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
@@ -1750,6 +1767,62 @@ abstract class OidcUserManagerBase {
         extra: extra,
       ),
     );
+  }
+
+  /// Validates the front-channel id_token returned by the authorization
+  /// endpoint in the OpenID Connect Hybrid flow (OpenID Connect Core §3.3.2):
+  /// signature, `nonce`, `c_hash` (binding [code]) and `at_hash` (binding the
+  /// front-channel [accessToken], when present). Throws on any failure.
+  ///
+  /// This is an additional security gate run BEFORE the code is exchanged; the
+  /// logged-in user is still built from the token-endpoint response.
+  @protected
+  Future<void> validateFrontChannelIdToken({
+    required String idToken,
+    required String? accessToken,
+    required String code,
+    required String nonce,
+    required OidcProviderMetadata metadata,
+  }) async {
+    final frontChannelUser = await OidcUser.fromIdToken(
+      token: OidcToken(
+        creationTime: clock.now(),
+        idToken: idToken,
+        accessToken: accessToken,
+        tokenType: accessToken == null ? null : 'Bearer',
+      ),
+      allowedAlgorithms: metadata.idTokenSigningAlgValuesSupported,
+      keystore: keyStore,
+      strictVerification: settings.strictJwtVerification,
+      cacheStore: store,
+    );
+    final idTokenNonce =
+        frontChannelUser
+                .parsedIdToken
+                .claims[OidcConstants_AuthParameters.nonce]
+            as String?;
+    if (idTokenNonce != nonce) {
+      logAndThrow(
+        'Hybrid front-channel id_token returned a wrong nonce, possible '
+        'replay attack.',
+      );
+    }
+    final errors = validateUser(
+      user: frontChannelUser,
+      metadata: metadata,
+      authorizationCode: code,
+    );
+    if (errors.isNotEmpty) {
+      for (final error in errors) {
+        logger.warning(
+          'Hybrid front-channel id_token validation problem: $error',
+          error,
+        );
+      }
+      logAndThrow(
+        'Hybrid front-channel id_token failed validation: ${errors.first}',
+      );
+    }
   }
 
   List<Exception> validateUser({
