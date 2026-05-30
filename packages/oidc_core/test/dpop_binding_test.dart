@@ -74,4 +74,54 @@ void main() {
       isFalse,
     );
   });
+
+  test('userInfo retries once with the RS nonce on use_dpop_nonce '
+      '(RFC 9449 §9)', () async {
+    final proofs = <String>[];
+    var calls = 0;
+    final client = MockClient((req) async {
+      proofs.add(_hdr(req, 'DPoP'));
+      calls++;
+      if (calls == 1) {
+        // First attempt: challenge with a resource-server nonce. The error is
+        // carried in WWW-Authenticate (not a JSON body), per RFC 9449 §7.2.
+        return http.Response(
+          '',
+          401,
+          headers: const {
+            'www-authenticate': 'DPoP error="use_dpop_nonce"',
+            'dpop-nonce': 'rs-nonce-1',
+          },
+        );
+      }
+      return http.Response(
+        jsonEncode({'sub': 'user-1'}),
+        200,
+        headers: const {'content-type': 'application/json'},
+      );
+    });
+    final dpop = OidcDPoPManager.generate(const OidcDPoPSettings());
+
+    final resp = await OidcEndpoints.userInfo(
+      userInfoEndpoint: endpoint,
+      accessToken: 'at-123',
+      client: client,
+      dpopManager: dpop,
+      followDistributedClaims: false,
+    );
+
+    expect(calls, 2, reason: 'exactly one retry');
+    expect(resp.src['sub'], 'user-1');
+
+    Map<String, dynamic> payload(String proof) =>
+        jsonDecode(
+              utf8.decode(
+                base64Url.decode(base64Url.normalize(proof.split('.')[1])),
+              ),
+            )
+            as Map<String, dynamic>;
+    // First proof had no nonce; the retry's proof carries the RS nonce.
+    expect(payload(proofs[0]).containsKey('nonce'), isFalse);
+    expect(payload(proofs[1])['nonce'], 'rs-nonce-1');
+  });
 }

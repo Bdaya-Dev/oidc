@@ -472,7 +472,9 @@ class OidcEndpoints {
         'to send access_token as a form parameter, the request method MUST be post.',
       );
     }
-    final req = _prepareRequest(
+    // The DPoP proof carries a single-use `ath`/`jti`, so the request is
+    // (re)built on each attempt; the proof picks up the latest cached nonce.
+    http.Request buildRequest() => _prepareRequest(
       method: requestMethod,
       uri: userInfoEndpoint,
       headers: {
@@ -498,10 +500,29 @@ class OidcEndpoints {
           : null,
     );
 
-    final resp = await OidcInternalUtilities.sendWithClient(
+    var req = buildRequest();
+    var resp = await OidcInternalUtilities.sendWithClient(
       client: client,
       request: req,
     );
+    // RFC 9449 §9: a resource server may reject the first DPoP request with a
+    // `use_dpop_nonce` challenge — a 401 carrying a `DPoP-Nonce` header and a
+    // `WWW-Authenticate: DPoP ... error="use_dpop_nonce"`. Cache the nonce and
+    // retry exactly once with it baked into the proof. (Unlike the token
+    // endpoint, the RS error lives in WWW-Authenticate, not a JSON body.)
+    if (dpopManager != null && resp.statusCode == 401) {
+      final nonce = resp.headers[oidcDPoPNonceHeaderName.toLowerCase()];
+      final wwwAuthenticate =
+          resp.headers['www-authenticate']?.toLowerCase() ?? '';
+      if (nonce != null && wwwAuthenticate.contains(oidcDPoPUseNonceError)) {
+        dpopManager.setNonceFor(userInfoEndpoint, nonce);
+        req = buildRequest();
+        resp = await OidcInternalUtilities.sendWithClient(
+          client: client,
+          request: req,
+        );
+      }
+    }
     const applicationJson = 'application/json';
     const applicationJwt = 'application/jwt';
 
