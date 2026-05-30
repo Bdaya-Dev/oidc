@@ -75,6 +75,7 @@ class OidcUserManagerSettings {
     this.strictJwtVerification = true,
     this.pushedAuthorizationRequestsMode =
         OidcPushedAuthorizationRequestsMode.auto,
+    this.dpop,
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
@@ -110,6 +111,13 @@ class OidcUserManagerSettings {
   /// `require_pushed_authorization_requests` metadata, which is non-breaking
   /// for servers that don't require PAR.
   final OidcPushedAuthorizationRequestsMode pushedAuthorizationRequestsMode;
+
+  /// Enables + configures DPoP (Demonstrating Proof of Possession, RFC 9449).
+  ///
+  /// When non-null, the manager generates a per-session DPoP proof key and
+  /// attaches a DPoP proof to token requests, sender-constraining the issued
+  /// tokens to that key. Null (the default) disables DPoP.
+  final OidcDPoPSettings? dpop;
 
   /// Whether to support offline authentication or not.
   ///
