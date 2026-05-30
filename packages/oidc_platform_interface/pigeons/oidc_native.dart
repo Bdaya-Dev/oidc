@@ -2,8 +2,9 @@
 //
 // Codegen (from packages/oidc_platform_interface):
 //   dart pub global run pigeon --input pigeons/oidc_native.dart
-// then copy the generated iOS Swift to macOS (identical API):
-//   cp ../oidc_ios/.../OidcNative.g.swift ../oidc_macos/.../OidcNative.g.swift
+// Pigeon emits a single platform-guarded Swift file (`#if os(iOS)/macOS`) into
+// the unified `oidc_darwin` package, so iOS and macOS share one output — there
+// is nothing to copy.
 //
 // Options + events cross as `Map<String, Object?>` (the existing toJson /
 // event maps), so the native option-parsing + event-mapping are reused; Pigeon
@@ -17,7 +18,8 @@ import 'package:pigeon/pigeon.dart';
     kotlinOut:
         '../oidc_android/android/src/main/kotlin/com/bdayadev/oidc/OidcNative.g.kt',
     kotlinOptions: KotlinOptions(package: 'com.bdayadev.oidc'),
-    swiftOut: '../oidc_ios/ios/oidc_ios/Sources/oidc_ios/OidcNative.g.swift',
+    swiftOut:
+        '../oidc_darwin/darwin/oidc_darwin/Sources/oidc_darwin/OidcNative.g.swift',
   ),
 )
 
@@ -48,8 +50,8 @@ abstract class OidcAndroidHostApi {
 }
 
 /// iOS / macOS `ASWebAuthenticationSession` host API (implemented by
-/// `oidc_ios` and `oidc_macos`; only one is active at runtime, so they share
-/// the API channel name).
+/// `oidc_darwin`; only one Apple platform is active at runtime, so iOS and
+/// macOS share the API channel name).
 @HostApi()
 abstract class OidcAppleHostApi {
   @async

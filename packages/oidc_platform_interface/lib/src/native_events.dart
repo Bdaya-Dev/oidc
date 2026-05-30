@@ -1,7 +1,7 @@
 // ignore_for_file: sort_constructors_first
 
 /// Typed, observable events emitted by the first-party native browser layer
-/// (`oidc_android` Custom Tabs / `oidc_ios`+`oidc_macos`
+/// (`oidc_android` Custom Tabs / `oidc_darwin`
 /// `ASWebAuthenticationSession`).
 ///
 /// These are [OidcEvent]s, so consumers observe them through the **existing**

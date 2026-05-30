@@ -4,12 +4,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "oidc_macos",
+    name: "oidc_darwin",
     platforms: [
+        .iOS("13.0"),
         .macOS("10.15")
     ],
     products: [
-        .library(name: "oidc-macos", targets: ["oidc_macos"])
+        .library(name: "oidc-darwin", targets: ["oidc_darwin"])
     ],
     dependencies: [
         // Required for Swift Package Manager plugins as of Flutter 3.41.
@@ -17,7 +18,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "oidc_macos",
+            name: "oidc_darwin",
             dependencies: [
                 .product(name: "FlutterFramework", package: "FlutterFramework")
             ],

@@ -3,7 +3,7 @@ publish_to: none
 
 environment:
   # >=3.41 / Dart 3.11: the SwiftPM (FlutterFramework) plugin layout in
-  # oidc_ios/oidc_macos requires it (see those packages' pubspecs).
+  # oidc_darwin requires it (see that package's pubspec).
   sdk: ^3.11.0
   flutter: '>=3.41.0 <4.0.0'
 
@@ -19,11 +19,10 @@ workspace:
   - packages/oidc_core
   - packages/oidc_default_store
   - packages/oidc_desktop
+  - packages/oidc_darwin
   - packages/oidc_flutter_appauth
-  - packages/oidc_ios
   - packages/oidc_linux
   - packages/oidc_loopback_listener
-  - packages/oidc_macos
   - packages/oidc_platform_interface
   - packages/oidc_web
   - packages/oidc_web/example

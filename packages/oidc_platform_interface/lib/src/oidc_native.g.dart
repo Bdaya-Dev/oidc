@@ -140,8 +140,8 @@ class OidcAndroidHostApi {
 }
 
 /// iOS / macOS `ASWebAuthenticationSession` host API (implemented by
-/// `oidc_ios` and `oidc_macos`; only one is active at runtime, so they share
-/// the API channel name).
+/// `oidc_darwin`; only one Apple platform is active at runtime, so iOS and
+/// macOS share the API channel name).
 class OidcAppleHostApi {
   /// Constructor for [OidcAppleHostApi].  The [binaryMessenger] named argument is
   /// available for dependency injection.  If it is left null, the default

@@ -1,5 +1,5 @@
 /// Shared constants for the first-party native browser transport
-/// (`oidc_android` / `oidc_ios` / `oidc_macos`).
+/// (`oidc_android` / `oidc_darwin`).
 ///
 /// The Dart<->native message transport is the Pigeon-generated
 /// `OidcAndroidHostApi` / `OidcAppleHostApi` (see `oidc_native.g.dart`); Pigeon

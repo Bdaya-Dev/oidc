@@ -128,10 +128,10 @@ just do `flutter run` from your terminal (not IDE) once, and it will ask you to 
 
 ### Redirect handling (ASWebAuthenticationSession)
 
-`oidc_ios` uses the system `ASWebAuthenticationSession`, which registers your
-`redirect_uri` scheme **at runtime**. You do **not** need a `CFBundleURLTypes` /
-`CFBundleURLSchemes` entry in `ios/Info.plist` for the OIDC redirect, and you do
-not add any third-party SDK.
+`oidc_darwin` (iOS) uses the system `ASWebAuthenticationSession`, which
+registers your `redirect_uri` scheme **at runtime**. You do **not** need a
+`CFBundleURLTypes` / `CFBundleURLSchemes` entry in `ios/Info.plist` for the OIDC
+redirect, and you do not add any third-party SDK.
 
 Requirements:
 
@@ -145,9 +145,9 @@ Requirements:
 
 ### Redirect handling (ASWebAuthenticationSession)
 
-`oidc_macos` uses the system `ASWebAuthenticationSession` (the same first-party
-approach as iOS — no third-party SDK), which registers your `redirect_uri`
-scheme **at runtime**. You do **not** need a `CFBundleURLTypes` /
+`oidc_darwin` (macOS) uses the system `ASWebAuthenticationSession` (the same
+first-party approach as iOS — no third-party SDK), which registers your
+`redirect_uri` scheme **at runtime**. You do **not** need a `CFBundleURLTypes` /
 `CFBundleURLSchemes` entry in `macos/Info.plist` for the OIDC redirect.
 
 Requirements:

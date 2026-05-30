@@ -151,8 +151,8 @@ interface OidcAndroidHostApi {
 }
 /**
  * iOS / macOS `ASWebAuthenticationSession` host API (implemented by
- * `oidc_ios` and `oidc_macos`; only one is active at runtime, so they share
- * the API channel name).
+ * `oidc_darwin`; only one Apple platform is active at runtime, so iOS and
+ * macOS share the API channel name).
  *
  * Generated interface from Pigeon that represents a handler of messages from Flutter.
  */

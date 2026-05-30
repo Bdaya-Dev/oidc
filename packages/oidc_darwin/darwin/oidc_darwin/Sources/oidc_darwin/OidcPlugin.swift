@@ -1,16 +1,29 @@
 import AuthenticationServices
-import Flutter
-import UIKit
+import Foundation
 
-/// First-party iOS implementation of the oidc browser primitive.
+#if os(iOS)
+  import Flutter
+  import UIKit
+#elseif os(macOS)
+  import AppKit
+  import FlutterMacOS
+#endif
+
+/// First-party iOS + macOS ("darwin") implementation of the oidc browser
+/// primitive.
 ///
 /// Opens the authorization / end-session URL (already fully built by Dart
 /// `oidc_core`, including PKCE/state/nonce) in an `ASWebAuthenticationSession`
 /// and returns the captured redirect URI string back to Dart, which parses it.
 /// No OIDC logic lives here — this replaces the `flutter_appauth` dependency.
 ///
-/// The Dart<->native transport is the Pigeon-generated `OidcAppleHostApi`
-/// (shared with macOS) plus a Pigeon event channel for observability events.
+/// A single platform-guarded source serves both Apple platforms (the Flutter
+/// `sharedDarwinSource` layout). The only genuine platform differences are the
+/// module imports, the registrar messenger accessor, the iOS 17.4 / macOS 14.4
+/// availability gates, and the UIKit-vs-AppKit presentation anchor.
+///
+/// The Dart<->native transport is the Pigeon-generated `OidcAppleHostApi` plus
+/// a Pigeon event channel for observability events.
 public class OidcPlugin: NSObject, FlutterPlugin, OidcAppleHostApi {
   private var session: ASWebAuthenticationSession?
   // A strong reference to the presentation-context provider is required: if it
@@ -27,12 +40,16 @@ public class OidcPlugin: NSObject, FlutterPlugin, OidcAppleHostApi {
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = OidcPlugin()
+    #if os(iOS)
+      let messenger = registrar.messenger()
+    #elseif os(macOS)
+      let messenger = registrar.messenger
+    #endif
     // Pigeon host API (replaces the hand-rolled FlutterMethodChannel).
-    OidcAppleHostApiSetup.setUp(
-      binaryMessenger: registrar.messenger(), api: instance)
+    OidcAppleHostApiSetup.setUp(binaryMessenger: messenger, api: instance)
     // Observability event channel.
     StreamNativeEventsStreamHandler.register(
-      with: registrar.messenger(), streamHandler: instance.eventStreamHandler)
+      with: messenger, streamHandler: instance.eventStreamHandler)
   }
 
   /// Emits an observability event to Dart on the main thread.
@@ -84,8 +101,7 @@ public class OidcPlugin: NSObject, FlutterPlugin, OidcAppleHostApi {
 
   /// Resolves an in-flight flow as cancelled and tears it down. Calling
   /// `cancel()` on the session does NOT invoke its completion handler, so the
-  /// pending Dart Future must be resolved here explicitly. All session /
-  /// provider state is UIKit-adjacent, so this runs on the main thread.
+  /// pending Dart Future must be resolved here explicitly.
   private func cancelInFlight() {
     onMain {
       self.session?.cancel()
@@ -193,10 +209,11 @@ public class OidcPlugin: NSObject, FlutterPlugin, OidcAppleHostApi {
     }
 
     let newSession: ASWebAuthenticationSession
-    // `init(url:callbackURLScheme:)` is deprecated on iOS 17.4; the newer
-    // `init(url:callback:)` additionally supports https / Universal-Link
-    // redirects via `Callback.https(host:path:)`.
-    if #available(iOS 17.4, *), let scheme = callbackScheme {
+    // `init(url:callbackURLScheme:)` is deprecated on iOS 17.4 / macOS 14.4; the
+    // newer `init(url:callback:)` additionally supports https / Universal-Link
+    // redirects via `Callback.https(host:path:)`. One combined availability
+    // check covers both platforms.
+    if #available(iOS 17.4, macOS 14.4, *), let scheme = callbackScheme {
       let callback: ASWebAuthenticationSession.Callback
       // Honor the explicit callbackMode; "auto" derives it from the scheme.
       let wantsHttps =
@@ -222,8 +239,9 @@ public class OidcPlugin: NSObject, FlutterPlugin, OidcAppleHostApi {
         completionHandler: onComplete)
     }
 
-    // Extra headers on the initial request (iOS 17.4+); ignored before that.
-    if #available(iOS 17.4, *), let additionalHeaders {
+    // Extra headers on the initial request (iOS 17.4+ / macOS 14.4+); ignored
+    // before that.
+    if #available(iOS 17.4, macOS 14.4, *), let additionalHeaders {
       newSession.additionalHeaderFields = additionalHeaders
     }
 
@@ -305,34 +323,42 @@ private final class OidcEventStreamHandler: StreamNativeEventsStreamHandler {
   }
 }
 
-/// Supplies the window to present the `ASWebAuthenticationSession` over, using
-/// the active `UIWindowScene` (UIScene lifecycle, default on Flutter 3.44+).
+/// Supplies the window to present the `ASWebAuthenticationSession` over. On iOS
+/// this is the active `UIWindowScene`'s key window; on macOS it is the AppKit
+/// key/main window.
 private final class OidcPresentationContextProvider: NSObject,
   ASWebAuthenticationPresentationContextProviding
 {
   func presentationAnchor(for session: ASWebAuthenticationSession)
     -> ASPresentationAnchor
   {
-    if #available(iOS 15.0, *) {
-      let keyWindow =
-        UIApplication.shared.connectedScenes
-        .compactMap { $0 as? UIWindowScene }
-        .first { $0.activationState == .foregroundActive }?
-        .keyWindow
-      if let keyWindow = keyWindow {
+    #if os(iOS)
+      if #available(iOS 15.0, *) {
+        let keyWindow =
+          UIApplication.shared.connectedScenes
+          .compactMap { $0 as? UIWindowScene }
+          .first { $0.activationState == .foregroundActive }?
+          .keyWindow
+        if let keyWindow = keyWindow {
+          return keyWindow
+        }
+      }
+      if let keyWindow = UIApplication.shared.windows.first(where: { $0.isKeyWindow }) {
         return keyWindow
       }
-    }
-    if let keyWindow = UIApplication.shared.windows.first(where: { $0.isKeyWindow }) {
-      return keyWindow
-    }
-    // Fall back to any window of the first connected scene rather than a bare,
-    // unattached anchor (which iOS rejects with presentationContextInvalid).
-    let anyWindow =
-      UIApplication.shared.connectedScenes
-      .compactMap { $0 as? UIWindowScene }
-      .flatMap { $0.windows }
-      .first
-    return anyWindow ?? ASPresentationAnchor()
+      // Fall back to any window of the first connected scene rather than a bare,
+      // unattached anchor (which iOS rejects with presentationContextInvalid).
+      let anyWindow =
+        UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap { $0.windows }
+        .first
+      return anyWindow ?? ASPresentationAnchor()
+    #elseif os(macOS)
+      return NSApplication.shared.keyWindow
+        ?? NSApplication.shared.mainWindow
+        ?? NSApplication.shared.windows.first
+        ?? ASPresentationAnchor()
+    #endif
   }
 }

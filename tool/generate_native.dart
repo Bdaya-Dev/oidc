@@ -8,12 +8,12 @@
 // `packages/oidc_platform_interface/pigeons/oidc_native.dart` it produces:
 //   - Dart:   packages/oidc_platform_interface/lib/src/oidc_native.g.dart
 //   - Kotlin: packages/oidc_android/.../com/bdayadev/oidc/OidcNative.g.kt
-//   - Swift:  packages/oidc_ios/.../Sources/oidc_ios/OidcNative.g.swift   (iOS)
-//   - Swift:  packages/oidc_macos/.../Sources/oidc_macos/OidcNative.g.swift
+//   - Swift:  packages/oidc_darwin/.../Sources/oidc_darwin/OidcNative.g.swift
 //
-// The macOS Swift is mirrored from the iOS output: Pigeon emits a single
-// platform-guarded file (`#if os(iOS) ... #elseif os(macOS) ...`), so one
-// generated file serves both Apple platforms — there is nothing to hand-edit.
+// Pigeon emits a single platform-guarded Swift file
+// (`#if os(iOS) ... #elseif os(macOS) ...`) into the unified `oidc_darwin`
+// package, so one generated file serves both Apple platforms — there is
+// nothing to copy or hand-edit.
 //
 // Pigeon (26.x) needs `analyzer >=10`, which conflicts with the pub-workspace
 // resolution (`copy_with_extension_gen` caps analyzer lower), so it is run as a
@@ -39,9 +39,11 @@ Future<void> main() async {
   // 1. Pin + activate Pigeon as a global tool (idempotent).
   await _run('dart', ['pub', 'global', 'activate', 'pigeon', _pigeonVersion]);
 
-  // 2. Generate Dart + Kotlin + iOS Swift. Output paths (and the Kotlin
+  // 2. Generate Dart + Kotlin + darwin Swift. Output paths (and the Kotlin
   //    package) come from the schema's @ConfigurePigeon block, which Pigeon
-  //    resolves relative to its working directory.
+  //    resolves relative to its working directory. The darwin Swift is a single
+  //    platform-guarded file shared by iOS and macOS (`sharedDarwinSource`), so
+  //    there is no copy step.
   await _run('dart', [
     'pub',
     'global',
@@ -51,22 +53,15 @@ Future<void> main() async {
     'pigeons/oidc_native.dart',
   ], workingDirectory: platformInterface.path);
 
-  // 3. Mirror the iOS Swift output to macOS (one platform-guarded file).
-  final iosSwift = File(
-    '$root/packages/oidc_ios/ios/oidc_ios/Sources/oidc_ios/OidcNative.g.swift',
-  );
-  final macosSwift = File(
-    '$root/packages/oidc_macos/macos/oidc_macos/Sources/oidc_macos/'
+  final darwinSwift = File(
+    '$root/packages/oidc_darwin/darwin/oidc_darwin/Sources/oidc_darwin/'
     'OidcNative.g.swift',
   );
-  if (!iosSwift.existsSync()) {
-    _fail('Expected generated Swift not found at ${iosSwift.path}.');
+  if (!darwinSwift.existsSync()) {
+    _fail('Expected generated Swift not found at ${darwinSwift.path}.');
   }
-  macosSwift.parent.createSync(recursive: true);
-  iosSwift.copySync(macosSwift.path);
-  stdout.writeln('Mirrored iOS Swift -> ${macosSwift.path}');
 
-  stdout.writeln('\n[OK] Pigeon native transport regenerated (4 outputs).');
+  stdout.writeln('\n[OK] Pigeon native transport regenerated (3 outputs).');
 }
 
 Future<void> _run(

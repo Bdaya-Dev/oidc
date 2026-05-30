@@ -5,29 +5,39 @@ import 'package:flutter/services.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
-/// The macOS implementation of [OidcPlatform].
+/// The iOS + macOS ("darwin") implementation of [OidcPlatform].
 ///
 /// Performs the authorization / end-session browser flow using the system
 /// `ASWebAuthenticationSession` through the Pigeon-generated
 /// [OidcAppleHostApi]. All OIDC logic (URL building, PKCE, `state`, `nonce`,
 /// and response parsing) stays in pure-Dart `oidc_core`; the native side only
 /// opens a URL and returns the redirect URI. This replaces the previous
-/// `flutter_appauth`-based path.
-class OidcMacOS extends OidcPlatform {
-  /// Creates the macOS platform implementation.
+/// `flutter_appauth`-based path and merges the former `oidc_ios` + `oidc_macos`
+/// packages.
+class OidcDarwin extends OidcPlatform {
+  /// Creates the darwin platform implementation.
   ///
   /// [hostApi] is injectable for testing; production uses the default
   /// Pigeon-generated host API bound to the standard binary messenger.
-  OidcMacOS({OidcAppleHostApi? hostApi})
+  OidcDarwin({OidcAppleHostApi? hostApi})
     : _hostApi = hostApi ?? OidcAppleHostApi();
 
-  /// Registers this class as the default instance of [OidcPlatform].
+  /// Registers this class as the default instance of [OidcPlatform] on both
+  /// iOS and macOS.
   static void registerWith() {
-    OidcPlatform.instance = OidcMacOS();
+    OidcPlatform.instance = OidcDarwin();
   }
 
-  /// The Pigeon host API that talks to the native macOS plugin.
+  /// The Pigeon host API that talks to the native iOS/macOS plugin.
   final OidcAppleHostApi _hostApi;
+
+  /// Selects the Apple options for the platform the app is currently running
+  /// on. The cross-platform options surface keeps `.ios` and `.macos` separate
+  /// (they can differ legitimately), so each platform reads its own field.
+  OidcNativeOptionsApple _appleOptions(OidcPlatformSpecificOptions options) =>
+      defaultTargetPlatform == TargetPlatform.macOS
+      ? options.macos
+      : options.ios;
 
   @override
   Stream<OidcNativeBrowserEvent> nativeBrowserEvents() => streamNativeEvents()
@@ -36,10 +46,11 @@ class OidcMacOS extends OidcPlatform {
       .cast<OidcNativeBrowserEvent>();
 
   /// Whether to use an ephemeral `ASWebAuthenticationSession` (no shared
-  /// cookies/cache), derived from the macOS external-user-agent option.
+  /// cookies/cache), derived from the active platform's external-user-agent
+  /// option.
   @visibleForTesting
   bool preferEphemeral(OidcPlatformSpecificOptions options) =>
-      options.macos.prefersEphemeralWebBrowserSession;
+      _appleOptions(options).prefersEphemeralWebBrowserSession;
 
   @override
   Map<String, dynamic> prepareForRedirectFlow(
@@ -70,7 +81,7 @@ class OidcMacOS extends OidcPlatform {
         // Serialized ASWebAuthenticationSession options
         // (additionalHeaderFields, callbackMode, rawSessionOptions); the native
         // side applies what it supports.
-        options.macos.toJson(),
+        _appleOptions(options).toJson(),
       ),
     );
     if (responseUrl == null) {
@@ -107,7 +118,7 @@ class OidcMacOS extends OidcPlatform {
         postLogout?.toString(),
         postLogout?.scheme,
         preferEphemeral(options),
-        options.macos.toJson(),
+        _appleOptions(options).toJson(),
       ),
     );
     if (responseUrl == null) {
@@ -120,17 +131,19 @@ class OidcMacOS extends OidcPlatform {
 
   /// Invokes a native [OidcAppleHostApi] call and normalizes its failure modes:
   /// a `USER_CANCELLED` error becomes `null` (the shared null-means-cancelled
-  /// contract); on end-session a `PRESENTATION_CONTEXT_INVALID` also becomes
-  /// `null` (the session simply ended); a missing native plugin (Pigeon's
-  /// `channel-error`, or [MissingPluginException]) becomes a clear
-  /// [OidcException]; any other [PlatformException] is rethrown wrapped.
+  /// contract); on end-session a `PRESENTATION_CONTEXT_INVALID` (the iOS+Azure
+  /// "-3" case) also becomes `null` (the session simply ended); a missing
+  /// native plugin (Pigeon's `channel-error`, or [MissingPluginException])
+  /// becomes a clear [OidcException]; any other [PlatformException] is rethrown
+  /// wrapped.
   Future<String?> _guard(String method, Future<String?> Function() call) async {
     try {
       return await call();
     } on MissingPluginException catch (e, st) {
       throw OidcException(
-        'The native oidc_macos plugin is not available on this platform. '
-        'Ensure the app runs on macOS 10.15+ with the plugin registered.',
+        'The native oidc_darwin plugin is not available on this platform. '
+        'Ensure the app runs on iOS 13+ / macOS 10.15+ with the plugin '
+        'registered.',
         internalException: e,
         internalStackTrace: st,
       );
@@ -139,8 +152,9 @@ class OidcMacOS extends OidcPlatform {
       if (e.code == OidcNativeErrorCodes.userCancelled) {
         return null;
       }
-      // On end-session, a closed presentation context simply means the session
-      // ended; treat it as a successful logout with no response payload.
+      // On end-session, a closed presentation context (the iOS+Azure "-3"
+      // case) simply means the session ended; treat it as a successful logout
+      // with no response payload.
       if (method == OidcNativeMethods.endSession &&
           e.code == OidcNativeErrorCodes.presentationContextInvalid) {
         return null;
@@ -148,8 +162,9 @@ class OidcMacOS extends OidcPlatform {
       // Pigeon surfaces an unregistered host API as a `channel-error`.
       if (e.code == 'channel-error') {
         throw OidcException(
-          'The native oidc_macos plugin is not available on this platform. '
-          'Ensure the app runs on macOS 10.15+ with the plugin registered.',
+          'The native oidc_darwin plugin is not available on this platform. '
+          'Ensure the app runs on iOS 13+ / macOS 10.15+ with the plugin '
+          'registered.',
           internalException: e,
           internalStackTrace: st,
         );

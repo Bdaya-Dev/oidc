@@ -1,7 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:oidc_ios/oidc_ios.dart';
+import 'package:oidc_darwin/oidc_darwin.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
 OidcAuthorizeRequest _authRequest() => OidcAuthorizeRequest(
@@ -13,7 +14,9 @@ OidcAuthorizeRequest _authRequest() => OidcAuthorizeRequest(
 );
 
 /// Base Pigeon channel name for [OidcAppleHostApi] (must match the native Swift
-/// `OidcAppleHostApiSetup.setUp` registration).
+/// `OidcAppleHostApiSetup.setUp` registration). Keyed on the platform_interface
+/// package, NOT on oidc_ios/oidc_macos/oidc_darwin, so it is unchanged by the
+/// package merge.
 const _hostApiPrefix =
     'dev.flutter.pigeon.oidc_platform_interface.OidcAppleHostApi';
 
@@ -56,8 +59,8 @@ void main() {
   });
 
   test('can be registered', () {
-    OidcIOS.registerWith();
-    expect(OidcPlatform.instance, isA<OidcIOS>());
+    OidcDarwin.registerWith();
+    expect(OidcPlatform.instance, isA<OidcDarwin>());
   });
 
   test(
@@ -69,7 +72,7 @@ void main() {
         return 'com.example.app://callback?code=c&state=state-1';
       });
 
-      await OidcIOS().getAuthorizationResponse(
+      await OidcDarwin().getAuthorizationResponse(
         metadata,
         _authRequest(),
         const OidcPlatformSpecificOptions(
@@ -94,7 +97,7 @@ void main() {
     'wraps a missing native plugin (channel-error) as OidcException',
     () async {
       await expectLater(
-        OidcIOS().getAuthorizationResponse(
+        OidcDarwin().getAuthorizationResponse(
           metadata,
           _authRequest(),
           const OidcPlatformSpecificOptions(),
@@ -116,7 +119,7 @@ void main() {
       return 'com.example.app://callback?code=code-1&state=state-1';
     });
 
-    final resp = await OidcIOS().getAuthorizationResponse(
+    final resp = await OidcDarwin().getAuthorizationResponse(
       metadata,
       _authRequest(),
       const OidcPlatformSpecificOptions(),
@@ -144,7 +147,7 @@ void main() {
         return 'com.example.app://callback?code=c&state=state-1';
       });
 
-      await OidcIOS().getAuthorizationResponse(
+      await OidcDarwin().getAuthorizationResponse(
         metadata,
         _authRequest(),
         const OidcPlatformSpecificOptions(
@@ -157,12 +160,34 @@ void main() {
     },
   );
 
+  test('reads the macos options field when running on macOS', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    List<Object?>? received;
+    mockHostApi('authorizeApple', (args) async {
+      received = args;
+      return 'com.example.app://callback?code=c&state=state-1';
+    });
+
+    await OidcDarwin().getAuthorizationResponse(
+      metadata,
+      _authRequest(),
+      const OidcPlatformSpecificOptions(
+        macos: OidcNativeOptionsApple(prefersEphemeralWebBrowserSession: true),
+      ),
+      const {},
+    );
+
+    // preferEphemeral read from `.macos` (not `.ios`) on macOS.
+    expect(received![3], true);
+  });
+
   test('getAuthorizationResponse returns null on USER_CANCELLED', () async {
     mockHostApi('authorizeApple', (args) async {
       throw PlatformException(code: 'USER_CANCELLED', message: 'cancelled');
     });
 
-    final resp = await OidcIOS().getAuthorizationResponse(
+    final resp = await OidcDarwin().getAuthorizationResponse(
       metadata,
       _authRequest(),
       const OidcPlatformSpecificOptions(),
@@ -176,7 +201,7 @@ void main() {
       return 'com.example.app://logout?state=logout-state';
     });
 
-    final resp = await OidcIOS().getEndSessionResponse(
+    final resp = await OidcDarwin().getEndSessionResponse(
       metadata,
       OidcEndSessionRequest(
         postLogoutRedirectUri: Uri.parse('com.example.app://logout'),
@@ -199,7 +224,7 @@ void main() {
       );
     });
 
-    final resp = await OidcIOS().getEndSessionResponse(
+    final resp = await OidcDarwin().getEndSessionResponse(
       metadata,
       OidcEndSessionRequest(
         postLogoutRedirectUri: Uri.parse('com.example.app://logout'),
