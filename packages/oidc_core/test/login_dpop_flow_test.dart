@@ -230,4 +230,56 @@ void main() {
       expect(second['nonce'], 'srv-nonce-1');
     },
   );
+
+  test(
+    'binds the auth code via dpop_jkt on the PAR request (RFC 9449 §10)',
+    () async {
+      http.Request? parPost;
+      final client = MockClient((req) async {
+        if (req.url.path.endsWith('/par')) {
+          parPost = req;
+          return http.Response(
+            jsonEncode({'request_uri': 'urn:par:1', 'expires_in': 60}),
+            201,
+            headers: const {'content-type': 'application/json'},
+          );
+        }
+        if (req.url.path.endsWith('/token')) {
+          return http.Response(
+            jsonEncode({'access_token': 'at', 'token_type': 'DPoP'}),
+            200,
+            headers: const {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('{}', 404);
+      });
+      final manager = _CodeFlowManager(
+        discoveryDocument: OidcProviderMetadata.fromJson({
+          'issuer': 'https://op.example.com',
+          'authorization_endpoint': 'https://op.example.com/authorize',
+          'token_endpoint': 'https://op.example.com/token',
+          'pushed_authorization_request_endpoint': 'https://op.example.com/par',
+        }),
+        clientCredentials: const OidcClientAuthentication.none(
+          clientId: 'client-1',
+        ),
+        store: OidcMemoryStore(),
+        httpClient: client,
+        settings: OidcUserManagerSettings(
+          redirectUri: Uri.parse('com.example.app://cb'),
+          strictJwtVerification: false,
+          dpop: const OidcDPoPSettings(),
+          pushedAuthorizationRequestsMode:
+              OidcPushedAuthorizationRequestsMode.always,
+        ),
+      );
+      await manager.init();
+      await login(manager);
+
+      expect(parPost, isNotNull, reason: 'PAR must be posted');
+      final body = Uri.splitQueryString(parPost!.body);
+      expect(body['dpop_jkt'], isNotNull);
+      expect(body['dpop_jkt'], isNotEmpty);
+    },
+  );
 }

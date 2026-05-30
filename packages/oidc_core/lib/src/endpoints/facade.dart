@@ -462,6 +462,7 @@ class OidcEndpoints {
     Map<String, String>? headers,
     http.Client? client,
     Future<String?> Function(String, Uri)? getAccessTokenForDistributedSource,
+    OidcDPoPManager? dpopManager,
   }) async {
     if (tokenLocation == OidcUserInfoAccessTokenLocations.formParameter &&
         requestMethod != OidcConstants_RequestMethod.post) {
@@ -475,7 +476,16 @@ class OidcEndpoints {
       headers: {
         if (tokenLocation ==
             OidcUserInfoAccessTokenLocations.authorizationHeader)
-          _authorizationHeaderKey: 'Bearer $accessToken',
+          _authorizationHeaderKey:
+              '${dpopManager != null ? 'DPoP' : 'Bearer'} $accessToken',
+        // RFC 9449 §7.1: a DPoP-bound access token is presented with the `DPoP`
+        // scheme + a proof whose `ath` binds it to this request.
+        if (dpopManager != null)
+          oidcDPoPHeaderName: dpopManager.createResourceProof(
+            method: requestMethod,
+            uri: userInfoEndpoint,
+            accessToken: accessToken,
+          ),
         ...?headers,
       },
       bodyFields:

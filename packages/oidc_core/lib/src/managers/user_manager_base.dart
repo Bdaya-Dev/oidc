@@ -292,11 +292,17 @@ abstract class OidcUserManagerBase {
           '`pushed_authorization_request_endpoint`.',
         );
       }
+      final dpop = dpopManager;
       final parResponse = await OidcEndpoints.pushAuthorizationRequest(
         pushedAuthorizationRequestEndpoint: parEndpoint,
         request: requestContainer.request,
         credentials: clientCredentials,
         client: httpClient,
+        // RFC 9449 §10: bind the authorization code to the DPoP key by sending
+        // its thumbprint as `dpop_jkt` on the (back-channel) PAR request.
+        extraBodyFields: dpop != null && dpop.settings.bindAuthorizationCode
+            ? {OidcConstants_AuthParameters.dpopJkt: dpop.thumbprint}
+            : null,
       );
       // Continue the authorization request by reference; generateUri now emits
       // only `client_id` + `request_uri` (RFC 9126 §4).
@@ -1760,6 +1766,11 @@ abstract class OidcUserManagerBase {
             getAccessTokenForDistributedSource:
                 settings.userInfoSettings.getAccessTokenForDistributedSource,
             keyStore: keyStore,
+            // Present a DPoP-bound access token with the DPoP scheme + an
+            // `ath`-bound proof (RFC 9449 §7.1).
+            dpopManager: actualUser.token.tokenType?.toUpperCase() == 'DPOP'
+                ? dpopManager
+                : null,
           );
 
           logger.info('UserInfo response: ${userInfoResp.src}');
