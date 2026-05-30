@@ -134,32 +134,31 @@ class OidcEndpoints {
     required OidcSimpleAuthorizationCodeFlowRequest input,
     OidcStore? store,
   }) async {
-    //
+    // OAuth 2.1 / RFC 9700 (Security BCP): ALWAYS use PKCE, defaulting to S256,
+    // even when the OP's metadata omits `code_challenge_methods_supported` — a
+    // server MUST ignore parameters it does not understand, so sending PKCE is
+    // always safe, and silently dropping it is a downgrade. Only fall back to
+    // `plain` when the OP advertises `plain` but NOT `S256`; never send no PKCE.
     final supportedCodeChallengeMethods =
-        metadata.codeChallengeMethodsSupported;
-    String? codeVerifier;
-    String? codeChallenge;
-    String? codeChallengeMethod;
-
-    if (supportedCodeChallengeMethods != null &&
-        supportedCodeChallengeMethods.isNotEmpty) {
-      codeVerifier = OidcPkcePair.generateVerifier();
-      if (supportedCodeChallengeMethods.contains(
-        OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256,
-      )) {
-        codeChallenge = OidcPkcePair.generateS256Challenge(codeVerifier);
-        codeChallengeMethod =
-            OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256;
-      } else if (supportedCodeChallengeMethods.contains(
-        OidcConstants_AuthorizeRequest_CodeChallengeMethod.plain,
-      )) {
-        codeChallenge = OidcPkcePair.generatePlainChallenge(codeVerifier);
-        codeChallengeMethod =
-            OidcConstants_AuthorizeRequest_CodeChallengeMethod.plain;
-      } else {
-        codeVerifier = null;
-        codeChallenge = null;
-      }
+        metadata.codeChallengeMethodsSupported ?? const <String>[];
+    final codeVerifier = OidcPkcePair.generateVerifier();
+    final String codeChallenge;
+    final String codeChallengeMethod;
+    if (!supportedCodeChallengeMethods.contains(
+          OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256,
+        ) &&
+        supportedCodeChallengeMethods.contains(
+          OidcConstants_AuthorizeRequest_CodeChallengeMethod.plain,
+        )) {
+      // The OP explicitly supports `plain` but not `S256`.
+      codeChallenge = OidcPkcePair.generatePlainChallenge(codeVerifier);
+      codeChallengeMethod =
+          OidcConstants_AuthorizeRequest_CodeChallengeMethod.plain;
+    } else {
+      // Default: S256 (advertised, or metadata silent — the recommended path).
+      codeChallenge = OidcPkcePair.generateS256Challenge(codeVerifier);
+      codeChallengeMethod =
+          OidcConstants_AuthorizeRequest_CodeChallengeMethod.s256;
     }
 
     final nonce = Nonce.generate(32, Random.secure());
