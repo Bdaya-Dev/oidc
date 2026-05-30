@@ -78,23 +78,6 @@ abstract class OidcUserManagerBase {
     return _dpopManager ??= OidcDPoPManager.generate(dpopSettings);
   }
 
-  /// Returns [base] with a DPoP proof header added for a token-endpoint POST to
-  /// [tokenEndpoint] when DPoP is enabled; otherwise returns [base] unchanged.
-  @protected
-  Map<String, String>? tokenHeadersWithDPoP(
-    Uri tokenEndpoint,
-    Map<String, String>? base,
-  ) {
-    final dpop = dpopManager;
-    if (dpop == null) {
-      return base;
-    }
-    return {
-      ...?base,
-      oidcDPoPHeaderName: dpop.createTokenProof(tokenEndpoint),
-    };
-  }
-
   /// The settings used in this manager.
   final OidcUserManagerSettings settings;
 
@@ -363,10 +346,8 @@ abstract class OidcUserManagerBase {
         return OidcEndpoints.token(
           tokenEndpoint: hookRequest.tokenEndpoint,
           credentials: hookRequest.credentials,
-          headers: tokenHeadersWithDPoP(
-            hookRequest.tokenEndpoint,
-            hookRequest.headers,
-          ),
+          headers: hookRequest.headers,
+          dpopManager: dpopManager,
           request: hookRequest.request,
           client: hookRequest.client,
         );
@@ -463,10 +444,8 @@ abstract class OidcUserManagerBase {
             return OidcEndpoints.token(
               tokenEndpoint: hookRequest.tokenEndpoint,
               credentials: hookRequest.credentials,
-              headers: tokenHeadersWithDPoP(
-                hookRequest.tokenEndpoint,
-                hookRequest.headers,
-              ),
+              headers: hookRequest.headers,
+              dpopManager: dpopManager,
               request: hookRequest.request,
               client: hookRequest.client,
             );
@@ -1070,10 +1049,8 @@ abstract class OidcUserManagerBase {
           return OidcEndpoints.token(
             tokenEndpoint: hookRequest.tokenEndpoint,
             credentials: hookRequest.credentials,
-            headers: tokenHeadersWithDPoP(
-              hookRequest.tokenEndpoint,
-              hookRequest.headers,
-            ),
+            headers: hookRequest.headers,
+            dpopManager: dpopManager,
             request: hookRequest.request,
             client: hookRequest.client,
           );
@@ -1397,10 +1374,8 @@ abstract class OidcUserManagerBase {
             tokenEndpoint: tokenHookRequest.tokenEndpoint,
             credentials: tokenHookRequest.credentials,
             client: tokenHookRequest.client,
-            headers: tokenHeadersWithDPoP(
-              tokenHookRequest.tokenEndpoint,
-              tokenHookRequest.headers,
-            ),
+            headers: tokenHookRequest.headers,
+            dpopManager: dpopManager,
             request: tokenHookRequest.request,
           );
         },
@@ -1496,10 +1471,8 @@ abstract class OidcUserManagerBase {
             tokenEndpoint: hookRequest.tokenEndpoint,
             credentials: hookRequest.credentials,
             client: hookRequest.client,
-            headers: tokenHeadersWithDPoP(
-              hookRequest.tokenEndpoint,
-              hookRequest.headers,
-            ),
+            headers: hookRequest.headers,
+            dpopManager: dpopManager,
             request: hookRequest.request,
           );
         },

@@ -176,4 +176,58 @@ void main() {
       expect(jwkOf(posts[0]), jwkOf(posts[1]));
     },
   );
+
+  test(
+    'retries once with the server nonce on use_dpop_nonce (RFC 9449 §8)',
+    () async {
+      final posts = <http.Request>[];
+      var tokenCalls = 0;
+      final client = MockClient((req) async {
+        if (req.url.path.endsWith('/token')) {
+          posts.add(req);
+          tokenCalls++;
+          if (tokenCalls == 1) {
+            // First attempt: challenge for a nonce.
+            return http.Response(
+              jsonEncode({'error': 'use_dpop_nonce'}),
+              400,
+              headers: const {
+                'content-type': 'application/json',
+                'dpop-nonce': 'srv-nonce-1',
+              },
+            );
+          }
+          return http.Response(
+            jsonEncode({'access_token': 'at', 'token_type': 'DPoP'}),
+            200,
+            headers: const {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('{}', 404);
+      });
+      final manager = _CodeFlowManager(
+        discoveryDocument: _metadata(),
+        clientCredentials: const OidcClientAuthentication.none(
+          clientId: 'client-1',
+        ),
+        store: OidcMemoryStore(),
+        httpClient: client,
+        settings: OidcUserManagerSettings(
+          redirectUri: Uri.parse('com.example.app://cb'),
+          strictJwtVerification: false,
+          dpop: const OidcDPoPSettings(),
+        ),
+      );
+      await manager.init();
+      await login(manager);
+
+      // Exactly two token POSTs: the first was challenged, the second carries the
+      // server-issued nonce in its proof.
+      expect(posts, hasLength(2));
+      final first = _decode(_header(posts[0], 'DPoP')!.split('.')[1]);
+      final second = _decode(_header(posts[1], 'DPoP')!.split('.')[1]);
+      expect(first.containsKey('nonce'), isFalse);
+      expect(second['nonce'], 'srv-nonce-1');
+    },
+  );
 }

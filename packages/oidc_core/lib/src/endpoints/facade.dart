@@ -396,33 +396,58 @@ class OidcEndpoints {
     Map<String, String>? headers,
     Map<String, dynamic>? extraBodyFields,
     http.Client? client,
+    OidcDPoPManager? dpopManager,
   }) async {
-    final resolved = credentials?.resolveForRequest(tokenEndpoint);
-    final authHeader = resolved?.getAuthorizationHeader();
-    final authBodyParams = resolved?.getBodyParameters();
-    final req = _prepareRequest(
-      method: OidcConstants_RequestMethod.post,
-      uri: tokenEndpoint,
-      headers: {
-        _authorizationHeaderKey: ?authHeader,
-        ...?headers,
-      },
-      contentType: _formUrlEncoded,
-      bodyFields: {
-        ...request.toMap(),
-        if (authHeader == null) ...?authBodyParams,
-        ...?extraBodyFields,
-      },
-    );
-    final resp = await OidcInternalUtilities.sendWithClient(
-      client: client,
-      request: req,
-    );
-    return _handleResponse(
-      mapper: OidcTokenResponse.fromJson,
-      response: resp,
-      request: req,
-    );
+    // The client assertion (private_key_jwt / client_secret_jwt) and the DPoP
+    // proof are both single-use, so they are (re)built on each attempt.
+    Future<OidcTokenResponse> attempt() async {
+      final resolved = credentials?.resolveForRequest(tokenEndpoint);
+      final authHeader = resolved?.getAuthorizationHeader();
+      final authBodyParams = resolved?.getBodyParameters();
+      final req = _prepareRequest(
+        method: OidcConstants_RequestMethod.post,
+        uri: tokenEndpoint,
+        headers: {
+          _authorizationHeaderKey: ?authHeader,
+          if (dpopManager != null)
+            oidcDPoPHeaderName: dpopManager.createTokenProof(tokenEndpoint),
+          ...?headers,
+        },
+        contentType: _formUrlEncoded,
+        bodyFields: {
+          ...request.toMap(),
+          if (authHeader == null) ...?authBodyParams,
+          ...?extraBodyFields,
+        },
+      );
+      final resp = await OidcInternalUtilities.sendWithClient(
+        client: client,
+        request: req,
+      );
+      return _handleResponse(
+        mapper: OidcTokenResponse.fromJson,
+        response: resp,
+        request: req,
+      );
+    }
+
+    if (dpopManager == null) {
+      return attempt();
+    }
+    try {
+      return await attempt();
+    } on OidcException catch (e) {
+      // RFC 9449 §8: the AS may reject the first request with `use_dpop_nonce`
+      // and supply a `DPoP-Nonce`; cache it and retry exactly once with the
+      // nonce in the proof.
+      final nonce =
+          e.rawResponse?.headers[oidcDPoPNonceHeaderName.toLowerCase()];
+      if (nonce != null && e.errorResponse?.error == oidcDPoPUseNonceError) {
+        dpopManager.setNonceFor(tokenEndpoint, nonce);
+        return attempt();
+      }
+      rethrow;
+    }
   }
 
   static Future<OidcUserInfoResponse> userInfo({
