@@ -776,4 +776,10 @@ class OidcConstants_RequestMethod {
 
   /// POST http method
   static const post = 'POST';
+
+  /// PUT http method
+  static const put = 'PUT';
+
+  /// DELETE http method
+  static const delete = 'DELETE';
 }

@@ -6,6 +6,7 @@ export 'facade.dart';
 export 'front_channel_logout_request.dart';
 export 'introspection/_exports.dart';
 export 'par/_exports.dart';
+export 'registration/_exports.dart';
 export 'revocation/_exports.dart';
 export 'session/_exports.dart';
 export 'token/_exports.dart';

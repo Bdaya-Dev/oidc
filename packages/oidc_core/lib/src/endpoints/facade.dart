@@ -868,4 +868,144 @@ class OidcEndpoints {
       response: resp,
     );
   }
+
+  /// Builds a request with an optional JSON body (used by the dynamic client
+  /// registration / management endpoints, which exchange `application/json`).
+  static http.Request _prepareJsonRequest({
+    required String method,
+    required Uri uri,
+    Map<String, dynamic>? jsonBody,
+    Map<String, String>? headers,
+  }) {
+    final req = http.Request(method, uri);
+    req.headers['Accept'] = 'application/json';
+    if (headers != null) {
+      req.headers.addAll(headers);
+    }
+    if (jsonBody != null) {
+      req.headers['Content-Type'] = 'application/json';
+      req.body = jsonEncode(jsonBody);
+    }
+    return req;
+  }
+
+  /// Dynamically registers a client (RFC 7591) at [registrationEndpoint],
+  /// returning the issued client_id (+ optional client_secret and the RFC 7592
+  /// registration_access_token / registration_client_uri).
+  ///
+  /// When the authorization server requires an initial access token for
+  /// registration, pass [initialAccessToken] (sent as a Bearer token).
+  static Future<OidcClientRegistrationResponse> registerClient({
+    required Uri registrationEndpoint,
+    required OidcClientRegistrationRequest request,
+    String? initialAccessToken,
+    http.Client? client,
+    Map<String, String>? headers,
+  }) async {
+    final req = _prepareJsonRequest(
+      method: OidcConstants_RequestMethod.post,
+      uri: registrationEndpoint,
+      jsonBody: request.toMap(),
+      headers: {
+        if (initialAccessToken != null)
+          _authorizationHeaderKey: 'Bearer $initialAccessToken',
+        ...?headers,
+      },
+    );
+    final resp = await OidcInternalUtilities.sendWithClient(
+      client: client,
+      request: req,
+    );
+    return _handleResponse(
+      mapper: OidcClientRegistrationResponse.fromJson,
+      request: req,
+      response: resp,
+    );
+  }
+
+  /// Reads a client's current configuration (RFC 7592 §2.1) from its
+  /// [registrationClientUri], authenticated with the [registrationAccessToken].
+  static Future<OidcClientRegistrationResponse> readClientConfiguration({
+    required Uri registrationClientUri,
+    required String registrationAccessToken,
+    http.Client? client,
+    Map<String, String>? headers,
+  }) async {
+    final req = _prepareJsonRequest(
+      method: OidcConstants_RequestMethod.get,
+      uri: registrationClientUri,
+      headers: {
+        _authorizationHeaderKey: 'Bearer $registrationAccessToken',
+        ...?headers,
+      },
+    );
+    final resp = await OidcInternalUtilities.sendWithClient(
+      client: client,
+      request: req,
+    );
+    return _handleResponse(
+      mapper: OidcClientRegistrationResponse.fromJson,
+      request: req,
+      response: resp,
+    );
+  }
+
+  /// Updates a client's configuration (RFC 7592 §2.2) at its
+  /// [registrationClientUri], authenticated with the [registrationAccessToken].
+  static Future<OidcClientRegistrationResponse> updateClientConfiguration({
+    required Uri registrationClientUri,
+    required String registrationAccessToken,
+    required OidcClientRegistrationRequest request,
+    http.Client? client,
+    Map<String, String>? headers,
+  }) async {
+    final req = _prepareJsonRequest(
+      method: OidcConstants_RequestMethod.put,
+      uri: registrationClientUri,
+      jsonBody: request.toMap(),
+      headers: {
+        _authorizationHeaderKey: 'Bearer $registrationAccessToken',
+        ...?headers,
+      },
+    );
+    final resp = await OidcInternalUtilities.sendWithClient(
+      client: client,
+      request: req,
+    );
+    return _handleResponse(
+      mapper: OidcClientRegistrationResponse.fromJson,
+      request: req,
+      response: resp,
+    );
+  }
+
+  /// Deletes (deprovisions) a client (RFC 7592 §2.3) at its
+  /// [registrationClientUri]. A successful deletion returns HTTP 204.
+  static Future<void> deleteClientConfiguration({
+    required Uri registrationClientUri,
+    required String registrationAccessToken,
+    http.Client? client,
+    Map<String, String>? headers,
+  }) async {
+    final req = _prepareJsonRequest(
+      method: OidcConstants_RequestMethod.delete,
+      uri: registrationClientUri,
+      headers: {
+        _authorizationHeaderKey: 'Bearer $registrationAccessToken',
+        ...?headers,
+      },
+    );
+    final resp = await OidcInternalUtilities.sendWithClient(
+      client: client,
+      request: req,
+    );
+    if (!(resp.statusCode >= 200 && resp.statusCode < 400)) {
+      throw OidcException(
+        'Failed to delete client configuration '
+        '(status ${resp.statusCode}): ${req.url}',
+        rawRequest: req,
+        rawResponse: resp,
+      );
+    }
+  }
 }
