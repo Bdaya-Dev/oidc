@@ -150,6 +150,7 @@ class OidcEndpoints {
       options: input.options,
       extraTokenHeaders: input.extraTokenHeaders,
       managerId: input.managerId,
+      maxAge: input.maxAge,
     );
     //store the state
     if (store != null) {
@@ -223,6 +224,7 @@ class OidcEndpoints {
       data: input.extraStateData,
       extraTokenParams: null,
       extraTokenHeaders: null,
+      maxAge: input.maxAge,
     );
     if (store != null) {
       //store the state

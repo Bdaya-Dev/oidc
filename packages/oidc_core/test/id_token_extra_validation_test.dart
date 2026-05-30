@@ -17,8 +17,17 @@ class _ValidationManager extends OidcUserManagerBase {
     required super.settings,
   });
 
-  List<Exception> run(OidcUser user, OidcProviderMetadata metadata) =>
-      validateUser(user: user, metadata: metadata);
+  List<Exception> run(
+    OidcUser user,
+    OidcProviderMetadata metadata, {
+    String? authorizationCode,
+    Duration? maxAge,
+  }) => validateUser(
+    user: user,
+    metadata: metadata,
+    authorizationCode: authorizationCode,
+    maxAge: maxAge,
+  );
 
   @override
   bool get isWeb => false;
@@ -198,6 +207,92 @@ void main() {
       );
       final errors = _manager().run(user, _metadata);
       expect(errors.any((e) => e.toString().contains('at_hash')), isTrue);
+    });
+  });
+
+  group('validateUser c_hash (§3.3.2.11)', () {
+    String hashOf(String value) {
+      // The id_token is RS256-signed (see _signIdToken), so c_hash uses SHA-256.
+      final full = sha256.convert(ascii.encode(value)).bytes;
+      return base64Url
+          .encode(full.sublist(0, full.length ~/ 2))
+          .replaceAll('=', '');
+    }
+
+    test('accepts a matching c_hash', () async {
+      const code = 'auth-code-xyz';
+      final user = await _user({..._baseClaims(), 'c_hash': hashOf(code)});
+      final errors = _manager().run(user, _metadata, authorizationCode: code);
+      expect(errors.any((e) => e.toString().contains('c_hash')), isFalse);
+    });
+
+    test('rejects a mismatched c_hash', () async {
+      final user = await _user({..._baseClaims(), 'c_hash': 'totally-wrong'});
+      final errors = _manager().run(
+        user,
+        _metadata,
+        authorizationCode: 'auth-code-xyz',
+      );
+      expect(errors.any((e) => e.toString().contains('c_hash')), isTrue);
+    });
+
+    test('ignores c_hash when no authorization code is threaded in', () async {
+      final user = await _user({..._baseClaims(), 'c_hash': 'whatever'});
+      final errors = _manager().run(user, _metadata); // no code
+      expect(errors.any((e) => e.toString().contains('c_hash')), isFalse);
+    });
+  });
+
+  group('validateUser auth_time vs max_age (§3.1.2.1)', () {
+    int secondsAgo(Duration d) =>
+        clock.now().subtract(d).millisecondsSinceEpoch ~/ 1000;
+
+    test('rejects when max_age was requested but auth_time is missing', () async {
+      final user = await _user(_baseClaims()); // no auth_time
+      final errors = _manager().run(
+        user,
+        _metadata,
+        maxAge: const Duration(minutes: 5),
+      );
+      expect(
+        errors.any((e) => e.toString().contains('auth_time')),
+        isTrue,
+      );
+    });
+
+    test('accepts a recent auth_time within max_age', () async {
+      final user = await _user({
+        ..._baseClaims(),
+        'auth_time': secondsAgo(const Duration(minutes: 1)),
+      });
+      final errors = _manager().run(
+        user,
+        _metadata,
+        maxAge: const Duration(minutes: 5),
+      );
+      expect(errors.any((e) => e.toString().contains('auth_time')), isFalse);
+    });
+
+    test('rejects an auth_time older than max_age', () async {
+      final user = await _user({
+        ..._baseClaims(),
+        'auth_time': secondsAgo(const Duration(hours: 1)),
+      });
+      final errors = _manager().run(
+        user,
+        _metadata,
+        maxAge: const Duration(minutes: 5),
+      );
+      expect(errors.any((e) => e.toString().contains('older than')), isTrue);
+    });
+
+    test('ignores auth_time when max_age was not requested', () async {
+      final user = await _user({
+        ..._baseClaims(),
+        'auth_time': secondsAgo(const Duration(hours: 10)),
+      });
+      final errors = _manager().run(user, _metadata); // no maxAge
+      expect(errors.any((e) => e.toString().contains('auth_time')), isFalse);
     });
   });
 }

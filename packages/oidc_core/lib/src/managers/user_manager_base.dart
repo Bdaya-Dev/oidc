@@ -1015,6 +1015,10 @@ abstract class OidcUserManagerBase {
             attributes: null,
             nonce: stateData.nonce,
             metadata: metadata,
+            // Hybrid responses may carry a front-channel `code` to bind via
+            // `c_hash`; null for a pure implicit response.
+            authorizationCode: response.code,
+            maxAge: stateData.maxAge,
           );
         }
       }
@@ -1074,6 +1078,8 @@ abstract class OidcUserManagerBase {
         attributes: null,
         userInfo: null,
         metadata: metadata,
+        authorizationCode: code,
+        maxAge: stateData.maxAge,
       );
     } finally {
       //remove the state + state response since we already handled it.
@@ -1102,6 +1108,8 @@ abstract class OidcUserManagerBase {
     required OidcProviderMetadata metadata,
     OidcUser? currentUserOverride,
     bool validateAndSave = true,
+    String? authorizationCode,
+    Duration? maxAge,
   }) async {
     final currentUser = currentUserOverride ?? this.currentUser;
     OidcUser? newUser;
@@ -1168,7 +1176,12 @@ abstract class OidcUserManagerBase {
       );
     }
     if (validateAndSave) {
-      return validateAndSaveUser(user: newUser, metadata: metadata);
+      return validateAndSaveUser(
+        user: newUser,
+        metadata: metadata,
+        authorizationCode: authorizationCode,
+        maxAge: maxAge,
+      );
     } else {
       return newUser;
     }
@@ -1636,6 +1649,8 @@ abstract class OidcUserManagerBase {
   List<Exception> validateUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
+    String? authorizationCode,
+    Duration? maxAge,
   }) {
     final errors = <Exception>[
       ...user.parsedIdToken.claims.validate(
@@ -1732,6 +1747,55 @@ abstract class OidcUserManagerBase {
       }
     }
 
+    // `c_hash` (§3.3.2.11): when an id_token returned from the authorization
+    // endpoint alongside an authorization `code` (hybrid flow) carries `c_hash`,
+    // it MUST be the base64url left-half hash of the code, using the id_token's
+    // signing-alg hash.
+    final cHash = claims['c_hash'];
+    if (cHash is String && authorizationCode != null) {
+      final alg = oidcReadJwtAlg(user.idToken);
+      final expected = alg == null
+          ? null
+          : oidcComputeTokenHash(alg, authorizationCode);
+      if (expected != null && expected != cHash) {
+        errors.add(
+          JoseException(
+            'id token `c_hash` does not match the authorization code.',
+          ),
+        );
+      }
+    }
+
+    // `auth_time` vs `max_age` (§3.1.2.1): when `max_age` was requested, the
+    // id_token MUST contain `auth_time`, and the end-user's last authentication
+    // MUST NOT be older than `max_age` (within the configured tolerance).
+    if (maxAge != null) {
+      final authTimeRaw = claims['auth_time'];
+      final authTime = authTimeRaw is num
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (authTimeRaw * 1000).round(),
+              isUtc: true,
+            )
+          : null;
+      if (authTime == null) {
+        errors.add(
+          JoseException(
+            '`max_age` was requested but the id token is missing the required '
+            '`auth_time` claim.',
+          ),
+        );
+      } else if (clock.now().isAfter(
+        authTime.add(maxAge).add(settings.expiryTolerance),
+      )) {
+        errors.add(
+          JoseException(
+            'id token `auth_time` ($authTime) is older than the requested '
+            'max_age ($maxAge).',
+          ),
+        );
+      }
+    }
+
     return errors;
   }
 
@@ -1743,9 +1807,16 @@ abstract class OidcUserManagerBase {
   Future<OidcUser?> validateAndSaveUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
+    String? authorizationCode,
+    Duration? maxAge,
   }) async {
     var actualUser = user;
-    final errors = validateUser(user: actualUser, metadata: metadata);
+    final errors = validateUser(
+      user: actualUser,
+      metadata: metadata,
+      authorizationCode: authorizationCode,
+      maxAge: maxAge,
+    );
     OidcUserInfoResponse? userInfoResp;
     var userInfoFailed = false;
 
