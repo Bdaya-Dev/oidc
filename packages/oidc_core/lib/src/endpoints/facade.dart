@@ -658,6 +658,16 @@ class OidcEndpoints {
   }) async {
     final authHeader = credentials?.getAuthorizationHeader();
     final authBodyParams = credentials?.getBodyParameters();
+    final bodyFields =
+        <String, dynamic>{
+            ...request.toMap(),
+            if (authHeader == null) ...?authBodyParams,
+            ...?extraBodyFields,
+          }
+          // RFC 9126 §2.1: the `request_uri` parameter MUST NOT be provided to the
+          // PAR endpoint — strip it defensively in case a caller supplied one via
+          // `extra` parameters / extraBodyFields.
+          ..remove(OidcConstants_AuthParameters.requestUri);
     final req = _prepareRequest(
       method: OidcConstants_RequestMethod.post,
       uri: pushedAuthorizationRequestEndpoint,
@@ -666,11 +676,7 @@ class OidcEndpoints {
         ...?headers,
       },
       contentType: _formUrlEncoded,
-      bodyFields: {
-        ...request.toMap(),
-        if (authHeader == null) ...?authBodyParams,
-        ...?extraBodyFields,
-      },
+      bodyFields: bodyFields,
     );
     final resp = await OidcInternalUtilities.sendWithClient(
       client: client,

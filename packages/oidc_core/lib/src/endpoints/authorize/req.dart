@@ -34,6 +34,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     this.idTokenHint,
     this.loginHint,
     this.acrValues,
+    this.requestUri,
   });
 
   /// REQUIRED.
@@ -276,6 +277,17 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   @JsonKey(name: OidcConstants_AuthParameters.codeChallengeMethod)
   String? codeChallengeMethod;
 
+  /// The single-use `request_uri` obtained from a Pushed Authorization Request
+  /// (RFC 9126 §4).
+  ///
+  /// Deliberately excluded from serialization: when set, [generateUri] emits
+  /// ONLY `client_id` + `request_uri` on the front channel (the authorization
+  /// server resolves the rest of the already-pushed parameters by reference),
+  /// and it must never appear in the PAR request body itself (RFC 9126 §2.1).
+  /// Leave null for a normal (non-PAR) authorization request.
+  @JsonKey(includeToJson: false)
+  Uri? requestUri;
+
   /// converts the request into a JSON Map.
   @override
   Map<String, dynamic> toMap() => {
@@ -283,10 +295,23 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     ...super.toMap(),
   };
 
-  Uri generateUri(Uri authorizationEndpoint) => authorizationEndpoint.replace(
-    queryParameters: {
-      ...authorizationEndpoint.queryParameters,
-      ...OidcInternalUtilities.serializeQueryParameters(toMap()),
-    },
-  );
+  Uri generateUri(Uri authorizationEndpoint) {
+    final requestUri = this.requestUri;
+    // After a Pushed Authorization Request (RFC 9126 §4), the front-channel
+    // authorization request carries ONLY `client_id` + `request_uri`; the
+    // authorization server retrieves the (already-pushed) parameters by
+    // reference. Otherwise, serialize the full parameter set as usual.
+    final params = requestUri == null
+        ? OidcInternalUtilities.serializeQueryParameters(toMap())
+        : {
+            OidcConstants_AuthParameters.clientId: clientId,
+            OidcConstants_AuthParameters.requestUri: requestUri.toString(),
+          };
+    return authorizationEndpoint.replace(
+      queryParameters: {
+        ...authorizationEndpoint.queryParameters,
+        ...params,
+      },
+    );
+  }
 }

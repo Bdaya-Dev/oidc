@@ -27,6 +27,29 @@ Duration defaultOfflineRefreshRetryDelay(int consecutiveFailures) {
   return exponentialDelay > maxDelay ? maxDelay : exponentialDelay;
 }
 
+/// Controls whether the authorization-code login flow uses RFC 9126 Pushed
+/// Authorization Requests (PAR).
+///
+/// Note: under PAR the authorization parameters are frozen when the PAR request
+/// is posted (the front channel then carries only `client_id` + `request_uri`),
+/// so parameters added by the `authorization` hook do NOT reach the server.
+/// Supply such parameters via `extraAuthenticationParameters` instead — those
+/// are part of the pushed request body.
+enum OidcPushedAuthorizationRequestsMode {
+  /// Use PAR only when the authorization server requires it via discovery
+  /// metadata (`require_pushed_authorization_requests` == true). Servers that
+  /// don't require PAR behave exactly as without this setting (the default).
+  auto,
+
+  /// Always use PAR when the server advertises a
+  /// `pushed_authorization_request_endpoint`.
+  always,
+
+  /// Never use PAR, even if the server requires it (the server will then reject
+  /// the direct authorization request).
+  never,
+}
+
 ///
 class OidcUserManagerSettings {
   ///
@@ -50,6 +73,8 @@ class OidcUserManagerSettings {
         const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
     this.strictJwtVerification = true,
+    this.pushedAuthorizationRequestsMode =
+        OidcPushedAuthorizationRequestsMode.auto,
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
@@ -78,6 +103,13 @@ class OidcUserManagerSettings {
   /// Security BCP (RFC 9700). Only set this to `false` if you fully understand
   /// the risk (e.g. a controlled test environment).
   final bool strictJwtVerification;
+
+  /// Whether/when the authorization-code login flow uses RFC 9126 Pushed
+  /// Authorization Requests (PAR). Defaults to
+  /// [OidcPushedAuthorizationRequestsMode.auto] — follow the server's
+  /// `require_pushed_authorization_requests` metadata, which is non-breaking
+  /// for servers that don't require PAR.
+  final OidcPushedAuthorizationRequestsMode pushedAuthorizationRequestsMode;
 
   /// Whether to support offline authentication or not.
   ///

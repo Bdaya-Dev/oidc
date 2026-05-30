@@ -254,6 +254,37 @@ abstract class OidcUserManagerBase {
           metadata: discoveryDocument,
           store: store,
         );
+    // RFC 9126 Pushed Authorization Requests: when enabled, POST the prepared
+    // request to the PAR endpoint (back channel, authenticated) and continue
+    // the front channel by reference (`request_uri`). state/nonce/PKCE were
+    // already persisted by prepareAuthorizationCodeFlowRequest above, so local
+    // validation is unchanged (RFC 9126 §6).
+    final shouldPushAuthorizationRequest =
+        switch (settings.pushedAuthorizationRequestsMode) {
+          OidcPushedAuthorizationRequestsMode.never => false,
+          OidcPushedAuthorizationRequestsMode.always => true,
+          OidcPushedAuthorizationRequestsMode.auto =>
+            discoveryDocument.requirePushedAuthorizationRequestsOrDefault,
+        };
+    if (shouldPushAuthorizationRequest) {
+      final parEndpoint = discoveryDocument.pushedAuthorizationRequestEndpoint;
+      if (parEndpoint == null) {
+        logAndThrow(
+          'Pushed Authorization Requests are required/enabled but the '
+          'authorization server did not advertise a '
+          '`pushed_authorization_request_endpoint`.',
+        );
+      }
+      final parResponse = await OidcEndpoints.pushAuthorizationRequest(
+        pushedAuthorizationRequestEndpoint: parEndpoint,
+        request: requestContainer.request,
+        credentials: clientCredentials,
+        client: httpClient,
+      );
+      // Continue the authorization request by reference; generateUri now emits
+      // only `client_id` + `request_uri` (RFC 9126 §4).
+      requestContainer.request.requestUri = parResponse.requestUri;
+    }
     return tryGetAuthResponse(
       grantType: OidcConstants_GrantType.authorizationCode,
       request: requestContainer.request,
