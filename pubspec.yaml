@@ -60,6 +60,19 @@ melos:
       run: melos exec -c 1 --depends-on="build_runner" -- "dart run build_runner build --delete-conflicting-outputs"
       description: Build all generated files for Dart packages in this project.
 
+    generate:native:
+      run: dart run tool/generate_native.dart
+      description: >-
+        Regenerate the Pigeon native transport (Dart + Kotlin + iOS/macOS Swift)
+        from packages/oidc_platform_interface/pigeons/oidc_native.dart. Fully
+        automated - no manual steps.
+
+    generate:
+      run: |
+        melos run generate:dart
+        melos run generate:native
+      description: Regenerate every generated file (Dart build_runner + native Pigeon).
+
     analyze: # ------ taken from cfug/dio ------------
       description: Analyze all packages
       exec: dart analyze

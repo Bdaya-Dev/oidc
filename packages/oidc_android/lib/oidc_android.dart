@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
@@ -8,33 +7,29 @@ import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 /// The Android implementation of [OidcPlatform].
 ///
 /// Performs the authorization / end-session browser flow using Android Chrome
-/// Custom Tabs through a platform [MethodChannel]. All OIDC logic (URL
-/// building, PKCE, `state`, `nonce`, and response parsing) stays in pure-Dart
-/// `oidc_core`; the native side only opens a URL and returns the redirect URI.
+/// Custom Tabs through the Pigeon-generated [OidcAndroidHostApi]. All OIDC logic
+/// (URL building, PKCE, `state`, `nonce`, and response parsing) stays in
+/// pure-Dart `oidc_core`; the native side only opens a URL and returns the
+/// redirect URI.
 class OidcAndroid extends OidcPlatform {
+  /// Creates the Android platform implementation.
+  ///
+  /// [hostApi] is injectable for testing; production uses the default
+  /// Pigeon-generated host API bound to the standard binary messenger.
+  OidcAndroid({OidcAndroidHostApi? hostApi})
+      : _hostApi = hostApi ?? OidcAndroidHostApi();
+
   /// Registers this class as the default instance of [OidcPlatform].
   static void registerWith() {
     OidcPlatform.instance = OidcAndroid();
   }
 
-  /// The platform channel that talks to the native Android plugin.
-  @visibleForTesting
-  static const MethodChannel channel =
-      MethodChannel(OidcNativeChannels.android);
-
-  /// The event channel that streams native browser-layer events.
-  @visibleForTesting
-  static const EventChannel eventChannel =
-      EventChannel(OidcNativeChannels.androidEvents);
+  /// The Pigeon host API that talks to the native Android plugin.
+  final OidcAndroidHostApi _hostApi;
 
   @override
-  Stream<OidcNativeBrowserEvent> nativeBrowserEvents() => eventChannel
-      .receiveBroadcastStream()
-      .map(
-        (e) => e is Map
-            ? OidcNativeBrowserEvent.fromMap(e.cast<Object?, Object?>())
-            : null,
-      )
+  Stream<OidcNativeBrowserEvent> nativeBrowserEvents() => streamNativeEvents()
+      .map(OidcNativeBrowserEvent.fromMap)
       .where((e) => e != null)
       .cast<OidcNativeBrowserEvent>();
 
@@ -58,11 +53,16 @@ class OidcAndroid extends OidcPlatform {
       );
     }
     final url = request.generateUri(authorizationEndpoint);
-    final responseUrl = await _authenticate(
-      method: OidcNativeMethods.authorize,
-      url: url,
-      redirectUri: request.redirectUri,
-      options: options,
+    final responseUrl = await _guard(
+      OidcNativeMethods.authorize,
+      () => _hostApi.authorize(
+        url.toString(),
+        request.redirectUri.toString(),
+        request.redirectUri.scheme,
+        // Serialized Chrome Custom Tabs options; the native side applies the
+        // ones it supports and ignores the rest.
+        options.android.toJson(),
+      ),
     );
     if (responseUrl == null) {
       return null;
@@ -90,11 +90,15 @@ class OidcAndroid extends OidcPlatform {
       );
     }
     final url = request.generateUri(endSessionEndpoint);
-    final responseUrl = await _authenticate(
-      method: OidcNativeMethods.endSession,
-      url: url,
-      redirectUri: request.postLogoutRedirectUri,
-      options: options,
+    final postLogout = request.postLogoutRedirectUri;
+    final responseUrl = await _guard(
+      OidcNativeMethods.endSession,
+      () => _hostApi.endSession(
+        url.toString(),
+        postLogout?.toString(),
+        postLogout?.scheme,
+        options.android.toJson(),
+      ),
     );
     if (responseUrl == null) {
       return null;
@@ -104,26 +108,18 @@ class OidcAndroid extends OidcPlatform {
     );
   }
 
-  Future<String?> _authenticate({
-    required String method,
-    required Uri url,
-    required Uri? redirectUri,
-    required OidcPlatformSpecificOptions options,
-  }) async {
+  /// Invokes a native [OidcAndroidHostApi] call and normalizes its failure
+  /// modes: a `USER_CANCELLED` error becomes `null` (the null-means-cancelled
+  /// contract shared by all platforms), a missing native plugin (Pigeon's
+  /// `channel-error`, or a [MissingPluginException]) becomes a clear
+  /// [OidcException], and any other [PlatformException] is rethrown wrapped.
+  Future<String?> _guard(
+    String method,
+    Future<String?> Function() call,
+  ) async {
     try {
-      return await channel.invokeMethod<String>(method, <String, dynamic>{
-        'url': url.toString(),
-        // Serialized Chrome Custom Tabs options; the native side applies the
-        // ones it supports and ignores the rest.
-        'options': options.android.toJson(),
-        if (redirectUri != null) ...{
-          'redirectUri': redirectUri.toString(),
-          'callbackScheme': redirectUri.scheme,
-        },
-      });
+      return await call();
     } on MissingPluginException catch (e, st) {
-      // The native Android plugin isn't registered. Surface a clear,
-      // actionable error instead of leaking the raw exception.
       throw OidcException(
         'The native oidc_android plugin is not available. Ensure the app '
         'runs on Android with the plugin registered.',
@@ -131,10 +127,18 @@ class OidcAndroid extends OidcPlatform {
         internalStackTrace: st,
       );
     } on PlatformException catch (e, st) {
-      // A cancelled flow is benign and maps to `null` (matching the
-      // null-means-cancelled contract used by the other platforms).
+      // A cancelled flow is benign and maps to `null`.
       if (e.code == OidcNativeErrorCodes.userCancelled) {
         return null;
+      }
+      // Pigeon surfaces an unregistered host API as a `channel-error`.
+      if (e.code == 'channel-error') {
+        throw OidcException(
+          'The native oidc_android plugin is not available. Ensure the app '
+          'runs on Android with the plugin registered.',
+          internalException: e,
+          internalStackTrace: st,
+        );
       }
       throw OidcException(
         'Native $method failed (${e.code}): ${e.message}',

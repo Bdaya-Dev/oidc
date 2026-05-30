@@ -12,8 +12,9 @@ import Foundation
 ///
 /// Mirrors `oidc_ios`'s implementation; the only platform difference is the
 /// presentation anchor, which is an AppKit `NSWindow` instead of a UIKit
-/// `UIWindow`.
-public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
+/// `UIWindow`. The Dart<->native transport is the Pigeon-generated
+/// `OidcAppleHostApi` (shared with iOS) plus a Pigeon event channel.
+public class OidcPlugin: NSObject, FlutterPlugin, OidcAppleHostApi {
   private var session: ASWebAuthenticationSession?
   // A strong reference to the presentation-context provider is required: if it
   // is deallocated while the session is in flight the app crashes with
@@ -22,65 +23,59 @@ public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   // Held so an in-flight flow can be resolved exactly once — by the session
   // completion handler, an explicit `cancel`, or being superseded by a new
   // flow.
-  private var pendingResult: FlutterResult?
-  private var eventSink: FlutterEventSink?
+  private var pendingCompletion: ((Result<String?, Error>) -> Void)?
+  private let eventStreamHandler = OidcEventStreamHandler()
   private var flowId: String?
   private var flowCounter = 0
 
   public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(
-      name: "com.bdayadev.oidc/macos", binaryMessenger: registrar.messenger)
     let instance = OidcPlugin()
-    registrar.addMethodCallDelegate(instance, channel: channel)
-    // Observability event channel (OidcNativeChannels.macosEvents).
-    let events = FlutterEventChannel(
-      name: "com.bdayadev.oidc/macos/events", binaryMessenger: registrar.messenger)
-    events.setStreamHandler(instance)
-  }
-
-  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink)
-    -> FlutterError?
-  {
-    eventSink = events
-    return nil
-  }
-
-  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
-    eventSink = nil
-    return nil
+    // Pigeon host API (replaces the hand-rolled FlutterMethodChannel).
+    OidcAppleHostApiSetup.setUp(
+      binaryMessenger: registrar.messenger, api: instance)
+    // Observability event channel.
+    StreamNativeEventsStreamHandler.register(
+      with: registrar.messenger, streamHandler: instance.eventStreamHandler)
   }
 
   /// Emits an observability event to Dart on the main thread.
   private func emit(_ type: String, _ extra: [String: Any?] = [:]) {
-    guard let sink = eventSink else { return }
+    guard let sink = eventStreamHandler.sink else { return }
     var event: [String: Any?] = [
       "type": type,
       "flowId": flowId as Any?,
       "timestampMs": Int(Date().timeIntervalSince1970 * 1000),
     ]
     for (k, v) in extra { event[k] = v }
-    onMain { sink(event) }
+    onMain { sink.success(event) }
   }
 
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    switch call.method {
-    // Both flows are identical natively: open a URL, capture the redirect.
-    case "authorize", "endSession":
-      startSession(call, result)
-    case "cancel":
-      cancelInFlight()
-      reply(result, nil)
-    default:
-      reply(result, FlutterMethodNotImplemented)
-    }
+  // region OidcAppleHostApi — both flows are identical natively: open a URL,
+  // capture the redirect. Pigeon guarantees `url` is non-null.
+  public func authorizeApple(
+    url: String, redirectUri: String?, callbackScheme: String?,
+    preferEphemeral: Bool, options: [String: Any?],
+    completion: @escaping (Result<String?, Error>) -> Void
+  ) {
+    startSession(
+      url: url, redirectUri: redirectUri, callbackScheme: callbackScheme,
+      preferEphemeral: preferEphemeral, options: options, completion: completion)
   }
 
-  /// Flutter requires every `FlutterResult` to be invoked on the platform
-  /// (main) thread. `ASWebAuthenticationSession`'s completion handler carries
-  /// no documented thread guarantee, so all replies are funneled through here.
-  private func reply(_ result: @escaping FlutterResult, _ value: Any?) {
-    onMain { result(value) }
+  public func endSessionApple(
+    url: String, redirectUri: String?, callbackScheme: String?,
+    preferEphemeral: Bool, options: [String: Any?],
+    completion: @escaping (Result<String?, Error>) -> Void
+  ) {
+    startSession(
+      url: url, redirectUri: redirectUri, callbackScheme: callbackScheme,
+      preferEphemeral: preferEphemeral, options: options, completion: completion)
   }
+
+  public func cancelApple() throws {
+    cancelInFlight()
+  }
+  // endregion
 
   private func onMain(_ work: @escaping () -> Void) {
     if Thread.isMainThread {
@@ -96,10 +91,10 @@ public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private func cancelInFlight() {
     onMain {
       self.session?.cancel()
-      if let pending = self.pendingResult {
-        self.pendingResult = nil
+      if let pending = self.pendingCompletion {
+        self.pendingCompletion = nil
         self.emit("cancelled")
-        pending(OidcPlugin.cancelledError())
+        pending(.failure(OidcPlugin.cancelledError()))
       }
       self.session = nil
       self.contextProvider = nil
@@ -154,25 +149,22 @@ public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   }
 
   private func startSession(
-    _ call: FlutterMethodCall, _ result: @escaping FlutterResult
+    url urlString: String, redirectUri redirectUriString: String?,
+    callbackScheme: String?, preferEphemeral: Bool, options: [String: Any?],
+    completion: @escaping (Result<String?, Error>) -> Void
   ) {
-    guard let args = call.arguments as? [String: Any],
-      let urlString = args["url"] as? String,
-      let url = URL(string: urlString)
-    else {
-      reply(
-        result,
-        FlutterError(
-          code: "BAD_ARGS", message: "Missing or invalid `url` argument",
-          details: nil))
+    guard let url = URL(string: urlString) else {
+      completion(
+        .failure(
+          PigeonError(
+            code: "BAD_ARGS", message: "Invalid `url` argument", details: nil)))
       return
     }
-    let callbackScheme = args["callbackScheme"] as? String
-    let redirectUriString = args["redirectUri"] as? String
-    let preferEphemeral = (args["preferEphemeral"] as? Bool) ?? false
-    let options = args["options"] as? [String: Any]
-    let callbackMode = (options?["callbackMode"] as? String) ?? "auto"
-    let additionalHeaders = options?["additionalHeaderFields"] as? [String: String]
+    // Drop nil values so the option reads below match the previous
+    // `[String: Any]` shape.
+    let opts = options.compactMapValues { $0 }
+    let callbackMode = (opts["callbackMode"] as? String) ?? "auto"
+    let additionalHeaders = opts["additionalHeaderFields"] as? [String: String]
 
     // Supersede any flow still in flight (resolving its Future as cancelled)
     // before starting a new one, so we never silently leak a pending session.
@@ -182,21 +174,21 @@ public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     flowId = String(flowCounter)
     emit("opening")
 
-    // All `pendingResult`/session/provider mutation + the reply stay on the
+    // All `pendingCompletion`/session/provider mutation + the reply stay on the
     // main thread; the completion handler may run off it.
-    let completion: (URL?, Error?) -> Void = { [weak self] callbackURL, error in
+    let onComplete: (URL?, Error?) -> Void = { [weak self] callbackURL, error in
       guard let self = self else { return }
       self.onMain {
-        guard let pending = self.pendingResult else { return }
-        self.pendingResult = nil
+        guard let pending = self.pendingCompletion else { return }
+        self.pendingCompletion = nil
         self.session = nil
         self.contextProvider = nil
         if let error = error as NSError? {
           self.emitError(error)
-          pending(OidcPlugin.mapError(error))
+          pending(.failure(OidcPlugin.mapError(error)))
         } else {
           self.emitRedirect(callbackURL)
-          pending(callbackURL?.absoluteString)
+          pending(.success(callbackURL?.absoluteString))
         }
       }
     }
@@ -224,11 +216,11 @@ public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         callback = .customScheme(scheme)
       }
       newSession = ASWebAuthenticationSession(
-        url: url, callback: callback, completionHandler: completion)
+        url: url, callback: callback, completionHandler: onComplete)
     } else {
       newSession = ASWebAuthenticationSession(
         url: url, callbackURLScheme: callbackScheme,
-        completionHandler: completion)
+        completionHandler: onComplete)
     }
 
     // Extra headers on the initial request (macOS 14.4+); ignored before that.
@@ -241,7 +233,7 @@ public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     newSession.presentationContextProvider = provider
     newSession.prefersEphemeralWebBrowserSession = preferEphemeral
     session = newSession
-    pendingResult = result
+    pendingCompletion = completion
 
     if newSession.start() {
       emit(
@@ -251,7 +243,7 @@ public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
           "captureMode": "asWebAuthenticationSession",
         ])
     } else {
-      pendingResult = nil
+      pendingCompletion = nil
       session = nil
       contextProvider = nil
       emit(
@@ -262,29 +254,29 @@ public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
             "message": "ASWebAuthenticationSession.start() returned false",
           ] as [String: Any?]
         ])
-      reply(
-        result,
-        FlutterError(
-          code: "START_FAILED",
-          message: "ASWebAuthenticationSession.start() returned false",
-          details: nil))
+      completion(
+        .failure(
+          PigeonError(
+            code: "START_FAILED",
+            message: "ASWebAuthenticationSession.start() returned false",
+            details: nil)))
     }
   }
 
-  private static func cancelledError() -> FlutterError {
-    return FlutterError(
+  private static func cancelledError() -> PigeonError {
+    return PigeonError(
       code: "USER_CANCELLED",
       message: "The flow was cancelled by the user", details: nil)
   }
 
-  private static func mapError(_ error: NSError) -> FlutterError {
+  private static func mapError(_ error: NSError) -> PigeonError {
     if error.domain == ASWebAuthenticationSessionError.errorDomain {
       switch error.code {
       case ASWebAuthenticationSessionError.canceledLogin.rawValue:
         return cancelledError()
       case ASWebAuthenticationSessionError.presentationContextNotProvided.rawValue,
         ASWebAuthenticationSessionError.presentationContextInvalid.rawValue:
-        return FlutterError(
+        return PigeonError(
           code: "PRESENTATION_CONTEXT_INVALID",
           message: error.localizedDescription,
           // Preserve the original numeric code for diagnosability.
@@ -293,9 +285,24 @@ public class OidcPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         break
       }
     }
-    return FlutterError(
+    return PigeonError(
       code: "PLATFORM_ERROR", message: error.localizedDescription,
-      details: ["domain": error.domain, "code": error.code])
+      details: ["domain": error.domain, "code": String(error.code)])
+  }
+}
+
+/// Captures the Pigeon event sink for the observability stream.
+private final class OidcEventStreamHandler: StreamNativeEventsStreamHandler {
+  var sink: PigeonEventSink<[String: Any?]>?
+
+  override func onListen(
+    withArguments arguments: Any?, sink: PigeonEventSink<[String: Any?]>
+  ) {
+    self.sink = sink
+  }
+
+  override func onCancel(withArguments arguments: Any?) {
+    sink = nil
   }
 }
 

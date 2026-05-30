@@ -16,9 +16,6 @@ import androidx.browser.customtabs.CustomTabsIntent
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
-import io.flutter.plugin.common.EventChannel
-import io.flutter.plugin.common.MethodCall
-import io.flutter.plugin.common.MethodChannel
 
 /**
  * First-party Android implementation of the oidc browser primitive.
@@ -28,6 +25,10 @@ import io.flutter.plugin.common.MethodChannel
  * the captured redirect URI string back to Dart, which parses it. No OIDC
  * logic lives here — this replaces the `flutter_appauth` dependency with a
  * thin, dependency-light native primitive.
+ *
+ * The Dart<->native transport is the Pigeon-generated [OidcAndroidHostApi]
+ * (compiler-enforced method/argument types) plus a Pigeon event channel
+ * ([StreamNativeEventsStreamHandler]) for observability events.
  *
  * The redirect is captured by the plugin-owned [OidcRedirectActivity], declared
  * in this package's `AndroidManifest.xml` with an intent-filter whose
@@ -40,19 +41,27 @@ import io.flutter.plugin.common.MethodChannel
 class OidcPlugin :
     FlutterPlugin,
     ActivityAware,
-    MethodChannel.MethodCallHandler {
+    OidcAndroidHostApi {
 
-    private lateinit var channel: MethodChannel
     private var binding: ActivityPluginBinding? = null
     private var activity: Activity? = null
 
-    private var pendingResult: MethodChannel.Result? = null
+    private var pendingCallback: ((Result<String?>) -> Unit)? = null
     private var expectedRedirect: Uri? = null
     private var redirectHandled = false
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
 
-    private var eventChannel: EventChannel? = null
-    private var eventSink: EventChannel.EventSink? = null
+    // Pigeon event sink for observability events; non-null while Dart listens.
+    private var eventSink: PigeonEventSink<Map<String, Any?>>? = null
+    private val eventHandler = object : StreamNativeEventsStreamHandler() {
+        override fun onListen(p0: Any?, sink: PigeonEventSink<Map<String, Any?>>) {
+            eventSink = sink
+        }
+
+        override fun onCancel(p0: Any?) {
+            eventSink = null
+        }
+    }
     private val mainHandler = Handler(Looper.getMainLooper())
     private var flowId: String? = null
     private var flowCounter = 0
@@ -63,27 +72,15 @@ class OidcPlugin :
     private var authLauncher: ActivityResultLauncher<Intent>? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        // Must match `OidcNativeChannels.android` in oidc_platform_interface.
-        channel = MethodChannel(binding.binaryMessenger, "com.bdayadev.oidc/android")
-        channel.setMethodCallHandler(this)
-
-        // Observability event channel (OidcNativeChannels.androidEvents).
-        eventChannel = EventChannel(binding.binaryMessenger, "com.bdayadev.oidc/android/events")
-        eventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                eventSink = events
-            }
-
-            override fun onCancel(arguments: Any?) {
-                eventSink = null
-            }
-        })
+        // Pigeon host API (replaces the hand-rolled MethodChannel). The channel
+        // names live in the generated OidcNative.g.kt / oidc_native.g.dart.
+        OidcAndroidHostApi.setUp(binding.binaryMessenger, this)
+        // Observability event channel.
+        StreamNativeEventsStreamHandler.register(binding.binaryMessenger, eventHandler)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        channel.setMethodCallHandler(null)
-        eventChannel?.setStreamHandler(null)
-        eventChannel = null
+        OidcAndroidHostApi.setUp(binding.binaryMessenger, null)
         eventSink = null
     }
 
@@ -139,40 +136,52 @@ class OidcPlugin :
     }
     // endregion
 
-    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
-        when (call.method) {
-            // Both flows are identical natively: open a URL, capture the redirect.
-            "authorize", "endSession" -> startFlow(call, result)
-            "cancel" -> {
-                finishWithCancel()
-                result.success(null)
-            }
-            else -> result.notImplemented()
-        }
-    }
+    // region OidcAndroidHostApi — both flows are identical natively: open a URL
+    // and capture the redirect. Pigeon guarantees `url` is non-null.
+    override fun authorize(
+        url: String,
+        redirectUri: String?,
+        callbackScheme: String?,
+        options: Map<String, Any?>,
+        callback: (Result<String?>) -> Unit,
+    ) = startFlow(url, redirectUri, options, callback)
 
-    private fun startFlow(call: MethodCall, result: MethodChannel.Result) {
+    override fun endSession(
+        url: String,
+        redirectUri: String?,
+        callbackScheme: String?,
+        options: Map<String, Any?>,
+        callback: (Result<String?>) -> Unit,
+    ) = startFlow(url, redirectUri, options, callback)
+
+    override fun cancel() = finishWithCancel()
+    // endregion
+
+    private fun startFlow(
+        url: String,
+        redirectUri: String?,
+        options: Map<String, Any?>,
+        callback: (Result<String?>) -> Unit,
+    ) {
         val currentActivity = activity
         if (currentActivity == null) {
-            result.error("NO_ACTIVITY", "Plugin is not attached to an Activity", null)
-            return
-        }
-        val url = call.argument<String>("url")
-        if (url == null) {
-            result.error("BAD_ARGS", "Missing `url` argument", null)
+            callback(
+                Result.failure(
+                    FlutterError("NO_ACTIVITY", "Plugin is not attached to an Activity", null),
+                ),
+            )
             return
         }
         // Supersede any in-flight request so we never leak a pending result.
         finishWithCancel()
 
-        pendingResult = result
-        expectedRedirect = call.argument<String>("redirectUri")?.let(Uri::parse)
+        pendingCallback = callback
+        expectedRedirect = redirectUri?.let(Uri::parse)
         redirectHandled = false
         flowId = (++flowCounter).toString()
 
-        val options = call.argument<Map<String, Any?>>("options")
-        val ephemeral = options?.get("ephemeralBrowsing") as? Boolean == true
-        val useAuthTab = options?.get("useAuthTab") as? String ?: "auto"
+        val ephemeral = options["ephemeralBrowsing"] as? Boolean == true
+        val useAuthTab = options["useAuthTab"] as? String ?: "auto"
         emit("opening")
 
         // Auth Tab path (Chrome 137+): the browser captures the redirect and
@@ -216,7 +225,11 @@ class OidcPlugin :
                     ),
                 ),
             )
-            result.error("START_FAILED", "No browser available to launch: ${e.message}", null)
+            finishPending(
+                Result.failure(
+                    FlutterError("START_FAILED", "No browser available to launch: ${e.message}", null),
+                ),
+            )
         }
     }
 
@@ -247,7 +260,7 @@ class OidcPlugin :
 
     /** Handles the Auth Tab [AuthTabIntent.AuthResult] on the main thread. */
     private fun handleAuthResult(authResult: AuthTabIntent.AuthResult) {
-        val pending = pendingResult ?: return
+        if (pendingCallback == null) return
         when (authResult.resultCode) {
             AuthTabIntent.RESULT_OK -> {
                 val uri = authResult.resultUri
@@ -264,24 +277,32 @@ class OidcPlugin :
                         ),
                     )
                 }
-                cleanup()
-                pending.success(uri?.toString())
+                finishPending(Result.success(uri?.toString()))
             }
             AuthTabIntent.RESULT_VERIFICATION_FAILED -> {
                 emit("failed", mapOf("error" to mapOf("kind" to "verificationFailed")))
-                cleanup()
-                pending.error("VERIFICATION_FAILED", "App Links verification failed", null)
+                finishPending(
+                    Result.failure(
+                        FlutterError("VERIFICATION_FAILED", "App Links verification failed", null),
+                    ),
+                )
             }
             AuthTabIntent.RESULT_VERIFICATION_TIMED_OUT -> {
                 emit("failed", mapOf("error" to mapOf("kind" to "verificationTimedOut")))
-                cleanup()
-                pending.error("VERIFICATION_TIMED_OUT", "App Links verification timed out", null)
+                finishPending(
+                    Result.failure(
+                        FlutterError("VERIFICATION_TIMED_OUT", "App Links verification timed out", null),
+                    ),
+                )
             }
             else -> {
                 // RESULT_CANCELED / RESULT_UNKNOWN_CODE.
                 emit("cancelled")
-                cleanup()
-                pending.error("USER_CANCELLED", "The flow was cancelled by the user", null)
+                finishPending(
+                    Result.failure(
+                        FlutterError("USER_CANCELLED", "The flow was cancelled by the user", null),
+                    ),
+                )
             }
         }
     }
@@ -310,9 +331,7 @@ class OidcPlugin :
                 "hasError" to (data.getQueryParameter("error") != null),
             ),
         )
-        val result = pendingResult
-        cleanup()
-        result?.success(data.toString())
+        finishPending(Result.success(data.toString()))
         return true
     }
 
@@ -331,7 +350,7 @@ class OidcPlugin :
             }
 
             override fun onActivityResumed(a: Activity) {
-                if (a === host && sawPause && !redirectHandled && pendingResult != null) {
+                if (a === host && sawPause && !redirectHandled && pendingCallback != null) {
                     finishWithCancel()
                 }
             }
@@ -353,17 +372,27 @@ class OidcPlugin :
     }
 
     private fun cleanup() {
-        pendingResult = null
+        pendingCallback = null
         expectedRedirect = null
         unregisterLifecycle()
         if (activeInstance === this) activeInstance = null
     }
 
-    private fun finishWithCancel() {
-        val result = pendingResult ?: return
-        emit("cancelled")
+    /** Resolves and clears the in-flight callback exactly once. */
+    private fun finishPending(result: Result<String?>) {
+        val cb = pendingCallback ?: return
         cleanup()
-        result.error("USER_CANCELLED", "The flow was cancelled by the user", null)
+        cb(result)
+    }
+
+    private fun finishWithCancel() {
+        if (pendingCallback == null) return
+        emit("cancelled")
+        finishPending(
+            Result.failure(
+                FlutterError("USER_CANCELLED", "The flow was cancelled by the user", null),
+            ),
+        )
     }
 
     /**

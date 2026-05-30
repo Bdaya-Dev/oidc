@@ -14,11 +14,38 @@ OidcAuthorizeRequest _authRequest() => OidcAuthorizeRequest(
       state: 'state-1',
     );
 
+/// Base Pigeon channel name for [OidcAndroidHostApi] (must match the native
+/// Kotlin `OidcAndroidHostApi.setUp` registration).
+const _hostApiPrefix =
+    'dev.flutter.pigeon.oidc_platform_interface.OidcAndroidHostApi';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  const codec = OidcAndroidHostApi.pigeonChannelCodec;
+
+  /// Mocks a native [OidcAndroidHostApi] method at the Pigeon channel level:
+  /// decodes the positional argument list, and replies with either a single
+  /// success value or — when [handler] throws a [PlatformException] — the
+  /// Pigeon 3-element error envelope `[code, message, details]`.
+  void mockHostApi(
+    String method,
+    Future<Object?> Function(List<Object?> args) handler,
+  ) {
+    final name = '$_hostApiPrefix.$method';
+    messenger.setMockMessageHandler(name, (ByteData? message) async {
+      final args =
+          (codec.decodeMessage(message) as List<Object?>?) ?? <Object?>[];
+      try {
+        final result = await handler(args);
+        return codec.encodeMessage(<Object?>[result]);
+      } on PlatformException catch (e) {
+        return codec.encodeMessage(<Object?>[e.code, e.message, e.details]);
+      }
+    });
+  }
 
   final metadata = OidcProviderMetadata.fromJson(const {
     'issuer': 'https://op.example.com',
@@ -27,24 +54,22 @@ void main() {
     'end_session_endpoint': 'https://op.example.com/logout',
   });
 
-  tearDown(
-    () => messenger.setMockMethodCallHandler(OidcAndroid.channel, null),
-  );
+  tearDown(() {
+    for (final method in ['authorize', 'endSession', 'cancel']) {
+      messenger.setMockMessageHandler('$_hostApiPrefix.$method', null);
+    }
+  });
 
   test('can be registered', () {
     OidcAndroid.registerWith();
     expect(OidcPlatform.instance, isA<OidcAndroid>());
   });
 
-  test('uses the domain-prefixed channel name (must match native)', () {
-    expect(OidcAndroid.channel.name, OidcNativeChannels.android);
-    expect(OidcNativeChannels.android, 'com.bdayadev.oidc/android');
-  });
-
-  test('forwards serialized Custom Tabs options over the channel', () async {
-    Map<Object?, Object?>? received;
-    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
-      received = call.arguments as Map<Object?, Object?>;
+  test('forwards serialized Custom Tabs options over the Pigeon channel',
+      () async {
+    List<Object?>? received;
+    mockHostApi('authorize', (args) async {
+      received = args;
       return 'com.example.app://callback?code=c&state=state-1';
     });
 
@@ -66,7 +91,8 @@ void main() {
       const {},
     );
 
-    final opts = received!['options']! as Map<Object?, Object?>;
+    // Pigeon authorize args: [url, redirectUri, callbackScheme, options].
+    final opts = received![3]! as Map<Object?, Object?>;
     expect(opts['showTitle'], false);
     expect(opts['urlBarHidingEnabled'], true);
     expect(opts['ephemeralBrowsing'], true);
@@ -78,10 +104,11 @@ void main() {
     expect(params['toolbarColor'], 0xFF2196F3);
   });
 
-  test('wraps MissingPluginException (native plugin absent) as OidcException',
+  test('wraps a missing native plugin (channel-error) as OidcException',
       () async {
-    // With no mock handler registered, invokeMethod throws
-    // MissingPluginException — the code must surface a clear OidcException.
+    // With no mock handler registered, the Pigeon channel send returns a null
+    // reply, which surfaces as a `channel-error` PlatformException; the code
+    // must translate that into a clear OidcException.
     await expectLater(
       OidcAndroid().getAuthorizationResponse(
         metadata,
@@ -96,11 +123,10 @@ void main() {
   test(
       'getAuthorizationResponse builds the URL in Dart and parses the native '
       'redirect (the Custom Tabs primitive only opens the URL)', () async {
-    Map<Object?, Object?>? received;
-    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
-      expect(call.method, 'authorize');
-      received = call.arguments as Map<Object?, Object?>;
-      final url = Uri.parse(received!['url']! as String);
+    List<Object?>? received;
+    mockHostApi('authorize', (args) async {
+      received = args;
+      final url = Uri.parse(args[0]! as String);
       expect(url.queryParameters['client_id'], 'client-1');
       expect(url.queryParameters['state'], 'state-1');
       expect(url.queryParameters['response_type'], 'code');
@@ -117,12 +143,13 @@ void main() {
     expect(resp, isNotNull);
     expect(resp!.code, 'code-1');
     expect(resp.state, 'state-1');
-    expect(received!['callbackScheme'], 'com.example.app');
-    expect(received!['redirectUri'], 'com.example.app://callback');
+    // args: [url, redirectUri, callbackScheme, options].
+    expect(received![1], 'com.example.app://callback');
+    expect(received![2], 'com.example.app');
   });
 
   test('getAuthorizationResponse returns null on USER_CANCELLED', () async {
-    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
+    mockHostApi('authorize', (args) async {
       throw PlatformException(code: 'USER_CANCELLED', message: 'cancelled');
     });
 
@@ -138,7 +165,7 @@ void main() {
   test(
       'getAuthorizationResponse rethrows other native errors as '
       'OidcException', () async {
-    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
+    mockHostApi('authorize', (args) async {
       throw PlatformException(code: 'PLATFORM_ERROR', message: 'boom');
     });
 
@@ -154,8 +181,7 @@ void main() {
   });
 
   test('getEndSessionResponse parses the post-logout redirect state', () async {
-    messenger.setMockMethodCallHandler(OidcAndroid.channel, (call) async {
-      expect(call.method, 'endSession');
+    mockHostApi('endSession', (args) async {
       return 'com.example.app://logout?state=logout-state';
     });
 

@@ -8,34 +8,29 @@ import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 /// The iOS implementation of [OidcPlatform].
 ///
 /// Performs the authorization / end-session browser flow using
-/// `ASWebAuthenticationSession` through a platform [MethodChannel]. All OIDC
-/// logic (URL building, PKCE, `state`, `nonce`, and response parsing) stays in
-/// pure-Dart `oidc_core`; the native side only opens a URL and returns the
-/// redirect URI.
+/// `ASWebAuthenticationSession` through the Pigeon-generated
+/// [OidcAppleHostApi]. All OIDC logic (URL building, PKCE, `state`, `nonce`,
+/// and response parsing) stays in pure-Dart `oidc_core`; the native side only
+/// opens a URL and returns the redirect URI.
 class OidcIOS extends OidcPlatform {
+  /// Creates the iOS platform implementation.
+  ///
+  /// [hostApi] is injectable for testing; production uses the default
+  /// Pigeon-generated host API bound to the standard binary messenger.
+  OidcIOS({OidcAppleHostApi? hostApi})
+    : _hostApi = hostApi ?? OidcAppleHostApi();
+
   /// Registers this class as the default instance of [OidcPlatform].
   static void registerWith() {
     OidcPlatform.instance = OidcIOS();
   }
 
-  /// The platform channel that talks to the native iOS plugin.
-  @visibleForTesting
-  static const MethodChannel channel = MethodChannel(OidcNativeChannels.ios);
-
-  /// The event channel that streams native browser-layer events.
-  @visibleForTesting
-  static const EventChannel eventChannel = EventChannel(
-    OidcNativeChannels.iosEvents,
-  );
+  /// The Pigeon host API that talks to the native iOS plugin.
+  final OidcAppleHostApi _hostApi;
 
   @override
-  Stream<OidcNativeBrowserEvent> nativeBrowserEvents() => eventChannel
-      .receiveBroadcastStream()
-      .map(
-        (e) => e is Map
-            ? OidcNativeBrowserEvent.fromMap(e.cast<Object?, Object?>())
-            : null,
-      )
+  Stream<OidcNativeBrowserEvent> nativeBrowserEvents() => streamNativeEvents()
+      .map(OidcNativeBrowserEvent.fromMap)
       .where((e) => e != null)
       .cast<OidcNativeBrowserEvent>();
 
@@ -64,11 +59,18 @@ class OidcIOS extends OidcPlatform {
       );
     }
     final url = request.generateUri(authorizationEndpoint);
-    final responseUrl = await _authenticate(
-      method: OidcNativeMethods.authorize,
-      url: url,
-      redirectUri: request.redirectUri,
-      options: options,
+    final responseUrl = await _guard(
+      OidcNativeMethods.authorize,
+      () => _hostApi.authorizeApple(
+        url.toString(),
+        request.redirectUri.toString(),
+        request.redirectUri.scheme,
+        preferEphemeral(options),
+        // Serialized ASWebAuthenticationSession options
+        // (additionalHeaderFields, callbackMode, rawSessionOptions); the native
+        // side applies what it supports.
+        options.ios.toJson(),
+      ),
     );
     if (responseUrl == null) {
       return null;
@@ -96,11 +98,16 @@ class OidcIOS extends OidcPlatform {
       );
     }
     final url = request.generateUri(endSessionEndpoint);
-    final responseUrl = await _authenticate(
-      method: OidcNativeMethods.endSession,
-      url: url,
-      redirectUri: request.postLogoutRedirectUri,
-      options: options,
+    final postLogout = request.postLogoutRedirectUri;
+    final responseUrl = await _guard(
+      OidcNativeMethods.endSession,
+      () => _hostApi.endSessionApple(
+        url.toString(),
+        postLogout?.toString(),
+        postLogout?.scheme,
+        preferEphemeral(options),
+        options.ios.toJson(),
+      ),
     );
     if (responseUrl == null) {
       return null;
@@ -110,28 +117,17 @@ class OidcIOS extends OidcPlatform {
     );
   }
 
-  Future<String?> _authenticate({
-    required String method,
-    required Uri url,
-    required Uri? redirectUri,
-    required OidcPlatformSpecificOptions options,
-  }) async {
+  /// Invokes a native [OidcAppleHostApi] call and normalizes its failure modes:
+  /// a `USER_CANCELLED` error becomes `null` (the shared null-means-cancelled
+  /// contract); on end-session a `PRESENTATION_CONTEXT_INVALID` (the iOS+Azure
+  /// "-3" case) also becomes `null` (the session simply ended); a missing
+  /// native plugin (Pigeon's `channel-error`, or [MissingPluginException])
+  /// becomes a clear [OidcException]; any other [PlatformException] is rethrown
+  /// wrapped.
+  Future<String?> _guard(String method, Future<String?> Function() call) async {
     try {
-      return await channel.invokeMethod<String>(method, <String, dynamic>{
-        'url': url.toString(),
-        'preferEphemeral': preferEphemeral(options),
-        // Serialized ASWebAuthenticationSession options (additionalHeaderFields,
-        // callbackMode, rawSessionOptions); native applies what it supports.
-        'options': options.ios.toJson(),
-        if (redirectUri != null) ...{
-          'redirectUri': redirectUri.toString(),
-          'callbackScheme': redirectUri.scheme,
-        },
-      });
+      return await call();
     } on MissingPluginException catch (e, st) {
-      // The native iOS plugin isn't registered (e.g. running on an
-      // unsupported platform, or a broken plugin registration). Surface a
-      // clear, actionable error instead of leaking the raw exception.
       throw OidcException(
         'The native oidc_ios plugin is not available on this platform. '
         'Ensure the app runs on iOS 13+ with the plugin registered.',
@@ -149,6 +145,15 @@ class OidcIOS extends OidcPlatform {
       if (method == OidcNativeMethods.endSession &&
           e.code == OidcNativeErrorCodes.presentationContextInvalid) {
         return null;
+      }
+      // Pigeon surfaces an unregistered host API as a `channel-error`.
+      if (e.code == 'channel-error') {
+        throw OidcException(
+          'The native oidc_ios plugin is not available on this platform. '
+          'Ensure the app runs on iOS 13+ with the plugin registered.',
+          internalException: e,
+          internalStackTrace: st,
+        );
       }
       throw OidcException(
         'Native $method failed (${e.code}): ${e.message}',
