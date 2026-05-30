@@ -25,10 +25,19 @@ void main() {
   );
   final settings = OidcUserManagerSettings(
     redirectUri: Uri.parse('http://example.com/redirect.html'),
+    // The mock id_tokens are HS256-signed with a symmetric key not served by
+    // the (Google) jwks_uri, so they can't be signature-verified here. These
+    // tests exercise manager/caching/refresh logic, not signature validation.
+    strictJwtVerification: false,
   );
 
   setUp(() {
     oidcPlatform = MockOidcPlatform();
+    // `init` subscribes to native browser events; stub the stream so the mock
+    // platform doesn't return null for it.
+    when(oidcPlatform.nativeBrowserEvents).thenAnswer(
+      (_) => const Stream.empty(),
+    );
     OidcPlatform.instance = oidcPlatform;
   });
 
@@ -364,6 +373,7 @@ void main() {
               final eventSettings = OidcUserManagerSettings(
                 redirectUri: settings.redirectUri,
                 refreshBefore: (_) => const Duration(milliseconds: 700),
+                strictJwtVerification: false,
               );
               manager = OidcUserManager(
                 id: managerId,
