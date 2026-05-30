@@ -397,8 +397,9 @@ class OidcEndpoints {
     Map<String, dynamic>? extraBodyFields,
     http.Client? client,
   }) async {
-    final authHeader = credentials?.getAuthorizationHeader();
-    final authBodyParams = credentials?.getBodyParameters();
+    final resolved = credentials?.resolveForRequest(tokenEndpoint);
+    final authHeader = resolved?.getAuthorizationHeader();
+    final authBodyParams = resolved?.getBodyParameters();
     final req = _prepareRequest(
       method: OidcConstants_RequestMethod.post,
       uri: tokenEndpoint,
@@ -609,8 +610,11 @@ class OidcEndpoints {
     Map<String, dynamic>? extraBodyFields,
     http.Client? client,
   }) async {
-    final authHeader = credentials?.getAuthorizationHeader();
-    final authBodyParams = credentials?.getBodyParameters();
+    final resolved = credentials?.resolveForRequest(
+      deviceAuthorizationEndpoint,
+    );
+    final authHeader = resolved?.getAuthorizationHeader();
+    final authBodyParams = resolved?.getBodyParameters();
     final req = _prepareRequest(
       method: OidcConstants_RequestMethod.post,
       uri: deviceAuthorizationEndpoint,
@@ -656,8 +660,11 @@ class OidcEndpoints {
     Map<String, dynamic>? extraBodyFields,
     http.Client? client,
   }) async {
-    final authHeader = credentials?.getAuthorizationHeader();
-    final authBodyParams = credentials?.getBodyParameters();
+    final resolved = credentials?.resolveForRequest(
+      pushedAuthorizationRequestEndpoint,
+    );
+    final authHeader = resolved?.getAuthorizationHeader();
+    final authBodyParams = resolved?.getBodyParameters();
     final bodyFields =
         <String, dynamic>{
             ...request.toMap(),
@@ -698,8 +705,9 @@ class OidcEndpoints {
     Map<String, String>? headers,
     Map<String, dynamic>? extraBodyFields,
   }) async {
-    final authHeader = credentials?.getAuthorizationHeader();
-    final authBodyParams = credentials?.getBodyParameters();
+    final resolved = credentials?.resolveForRequest(revocationEndpoint);
+    final authHeader = resolved?.getAuthorizationHeader();
+    final authBodyParams = resolved?.getBodyParameters();
     final req = _prepareRequest(
       method: OidcConstants_RequestMethod.post,
       uri: revocationEndpoint,
