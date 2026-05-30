@@ -79,6 +79,7 @@ class OidcUserManagerSettings {
     this.allowedAudiences,
     this.resource,
     this.requestObject,
+    this.revokeTokensOnLogout = true,
     this.getExpiresIn,
     this.sessionManagementSettings = const OidcSessionManagementSettings(),
     this.getIdToken,
@@ -139,6 +140,15 @@ class OidcUserManagerSettings {
   /// the front-channel request collapses to `client_id` + `response_type` +
   /// `scope` + `request`.
   final OidcRequestObjectSettings? requestObject;
+
+  /// Whether [OidcUserManagerBase.logout] also revokes the refresh and access
+  /// tokens at the provider's `revocation_endpoint` (RFC 7009) before ending
+  /// the session. Defaults to `true`.
+  ///
+  /// Revocation is best-effort: it is a no-op when the provider advertises no
+  /// `revocation_endpoint`, and a revocation failure never blocks logout (it is
+  /// logged and swallowed). Set to `false` to keep logout purely front-channel.
+  final bool revokeTokensOnLogout;
 
   /// Whether to support offline authentication or not.
   ///

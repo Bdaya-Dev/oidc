@@ -866,6 +866,33 @@ abstract class OidcUserManagerBase {
     if (currentUser == null) {
       return;
     }
+    // Best-effort token revocation (RFC 7009) before ending the session, so the
+    // refresh and access tokens are invalidated server-side on logout. This is
+    // a no-op when the OP advertises no `revocation_endpoint`, and it MUST NEVER
+    // block logout: any failure is logged and swallowed. `forgetUser: false`
+    // keeps the session intact so the end-session flow below can run.
+    if (settings.revokeTokensOnLogout) {
+      try {
+        await revokeRefreshToken(forgetUser: false);
+      } on Object catch (e, st) {
+        logger.warning(
+          'Best-effort refresh-token revocation on logout failed; '
+          'continuing with logout.',
+          e,
+          st,
+        );
+      }
+      try {
+        await revokeAccessToken(forgetUser: false);
+      } on Object catch (e, st) {
+        logger.warning(
+          'Best-effort access-token revocation on logout failed; '
+          'continuing with logout.',
+          e,
+          st,
+        );
+      }
+    }
     final postLogoutRedirectUri =
         postLogoutRedirectUriOverride ?? settings.postLogoutRedirectUri;
 
