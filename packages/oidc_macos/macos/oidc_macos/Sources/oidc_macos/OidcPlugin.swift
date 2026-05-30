@@ -88,18 +88,20 @@ public class OidcPlugin: NSObject, FlutterPlugin {
       return
     }
     let callbackScheme = args["callbackScheme"] as? String
+    let redirectUriString = args["redirectUri"] as? String
     let preferEphemeral = (args["preferEphemeral"] as? Bool) ?? false
+    let options = args["options"] as? [String: Any]
+    let callbackMode = (options?["callbackMode"] as? String) ?? "auto"
+    let additionalHeaders = options?["additionalHeaderFields"] as? [String: String]
 
     // Supersede any flow still in flight (resolving its Future as cancelled)
     // before starting a new one, so we never silently leak a pending session.
     cancelInFlight()
 
-    let newSession = ASWebAuthenticationSession(
-      url: url, callbackURLScheme: callbackScheme
-    ) { [weak self] callbackURL, error in
+    // All `pendingResult`/session/provider mutation + the reply stay on the
+    // main thread; the completion handler may run off it.
+    let completion: (URL?, Error?) -> Void = { [weak self] callbackURL, error in
       guard let self = self else { return }
-      // All `pendingResult`/session/provider mutation + the reply stay on the
-      // main thread; the completion handler may run off it.
       self.onMain {
         guard let pending = self.pendingResult else { return }
         self.pendingResult = nil
@@ -111,6 +113,41 @@ public class OidcPlugin: NSObject, FlutterPlugin {
           pending(callbackURL?.absoluteString)
         }
       }
+    }
+
+    let newSession: ASWebAuthenticationSession
+    // `init(url:callbackURLScheme:)` is deprecated on macOS 14.4; the newer
+    // `init(url:callback:)` additionally supports https / Universal-Link
+    // redirects via `Callback.https(host:path:)`.
+    if #available(macOS 14.4, *), let scheme = callbackScheme {
+      let callback: ASWebAuthenticationSession.Callback
+      // Honor the explicit callbackMode; "auto" derives it from the scheme.
+      let wantsHttps =
+        callbackMode == "https"
+        || (callbackMode == "auto"
+          && scheme.caseInsensitiveCompare("https") == .orderedSame)
+      if wantsHttps,
+        let redirectUriString,
+        let redirectUrl = URL(string: redirectUriString),
+        let host = redirectUrl.host
+      {
+        // Universal-Link redirect. NOTE: this requires the consuming app to
+        // declare an Associated Domains entitlement (`webcredentials:<host>`).
+        callback = .https(host: host, path: redirectUrl.path)
+      } else {
+        callback = .customScheme(scheme)
+      }
+      newSession = ASWebAuthenticationSession(
+        url: url, callback: callback, completionHandler: completion)
+    } else {
+      newSession = ASWebAuthenticationSession(
+        url: url, callbackURLScheme: callbackScheme,
+        completionHandler: completion)
+    }
+
+    // Extra headers on the initial request (macOS 14.4+); ignored before that.
+    if #available(macOS 14.4, *), let additionalHeaders {
+      newSession.additionalHeaderFields = additionalHeaders
     }
 
     let provider = OidcPresentationContextProvider()

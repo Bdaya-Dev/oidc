@@ -86,6 +86,9 @@ public class OidcPlugin: NSObject, FlutterPlugin {
     let callbackScheme = args["callbackScheme"] as? String
     let redirectUriString = args["redirectUri"] as? String
     let preferEphemeral = (args["preferEphemeral"] as? Bool) ?? false
+    let options = args["options"] as? [String: Any]
+    let callbackMode = (options?["callbackMode"] as? String) ?? "auto"
+    let additionalHeaders = options?["additionalHeaderFields"] as? [String: String]
 
     // Supersede any flow still in flight (resolving its Future as cancelled)
     // before starting a new one, so we never silently leak a pending session.
@@ -115,7 +118,12 @@ public class OidcPlugin: NSObject, FlutterPlugin {
     // redirects via `Callback.https(host:path:)`.
     if #available(iOS 17.4, *), let scheme = callbackScheme {
       let callback: ASWebAuthenticationSession.Callback
-      if scheme.caseInsensitiveCompare("https") == .orderedSame,
+      // Honor the explicit callbackMode; "auto" derives it from the scheme.
+      let wantsHttps =
+        callbackMode == "https"
+        || (callbackMode == "auto"
+          && scheme.caseInsensitiveCompare("https") == .orderedSame)
+      if wantsHttps,
         let redirectUriString,
         let redirectUrl = URL(string: redirectUriString),
         let host = redirectUrl.host
@@ -132,6 +140,11 @@ public class OidcPlugin: NSObject, FlutterPlugin {
       newSession = ASWebAuthenticationSession(
         url: url, callbackURLScheme: callbackScheme,
         completionHandler: completion)
+    }
+
+    // Extra headers on the initial request (iOS 17.4+); ignored before that.
+    if #available(iOS 17.4, *), let additionalHeaders {
+      newSession.additionalHeaderFields = additionalHeaders
     }
 
     let provider = OidcPresentationContextProvider()

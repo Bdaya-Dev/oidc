@@ -38,6 +38,34 @@ void main() {
   });
 
   test(
+    'forwards apple options (callbackMode + additionalHeaderFields)',
+    () async {
+      Map<Object?, Object?>? received;
+      messenger.setMockMethodCallHandler(OidcIOS.channel, (call) async {
+        received = call.arguments as Map<Object?, Object?>;
+        return 'com.example.app://callback?code=c&state=state-1';
+      });
+
+      await OidcIOS().getAuthorizationResponse(
+        metadata,
+        _authRequest(),
+        const OidcPlatformSpecificOptions(
+          ios: OidcNativeOptionsApple(
+            callbackMode: OidcAppleCallbackMode.https,
+            additionalHeaderFields: {'X-Test': 'yes'},
+          ),
+        ),
+        const {},
+      );
+
+      final opts = received!['options']! as Map<Object?, Object?>;
+      expect(opts['callbackMode'], 'https');
+      final headers = opts['additionalHeaderFields']! as Map<Object?, Object?>;
+      expect(headers['X-Test'], 'yes');
+    },
+  );
+
+  test(
     'wraps MissingPluginException (native plugin absent) as OidcException',
     () async {
       // With no mock handler registered, invokeMethod throws
