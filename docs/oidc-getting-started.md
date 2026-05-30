@@ -269,6 +269,3 @@ Apart from `libsecret` you also need a keyring service, for that you need either
 
 [flutter_secure_storage_link]: https://pub.dev/packages/flutter_secure_storage
 [flutter_secure_storage_image]: https://img.shields.io/badge/package-flutter__secure__storage-0175C2?logo=dart&logoColor=white
-
-[flutter_appauth_link]: https://pub.dev/packages/flutter_appauth
-[flutter_appauth_image]: https://img.shields.io/badge/package-flutter__appauth-0175C2?logo=dart&logoColor=white

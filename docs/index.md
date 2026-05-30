@@ -15,7 +15,6 @@ And the following internal packages:
 
 - [oidc_android](https://pub.dev/packages/oidc_android): Android implementation — first-party **Chrome Custom Tabs** (no third-party SDK).
 - [oidc_darwin](https://pub.dev/packages/oidc_darwin): iOS + macOS implementation — first-party **ASWebAuthenticationSession** (no third-party SDK; iOS 13+ / macOS 10.15+). Merges and supersedes the former `oidc_ios` and `oidc_macos`.
-- [oidc_flutter_appauth](https://pub.dev/packages/oidc_flutter_appauth): Optional implementation connecting packages with [flutter_appauth](https://pub.dev/packages/flutter_appauth) / the [AppAuth SDK](https://appauth.io/). **No longer used by any endorsed platform** (Android, iOS and macOS are all first-party); kept for users who specifically want an AppAuth-based flow.
 
 - [oidc_web](https://pub.dev/packages/oidc_web): Web implementation.
 

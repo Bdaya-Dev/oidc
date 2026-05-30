@@ -20,7 +20,6 @@ workspace:
   - packages/oidc_default_store
   - packages/oidc_desktop
   - packages/oidc_darwin
-  - packages/oidc_flutter_appauth
   - packages/oidc_linux
   - packages/oidc_loopback_listener
   - packages/oidc_platform_interface
