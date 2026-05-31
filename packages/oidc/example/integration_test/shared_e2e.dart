@@ -16,14 +16,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
-import 'package:oidc_example/main.dart' as example;
 
 import 'conformance/api.dart';
 import 'conformance/manager.dart';
 import 'helpers.dart';
 
-/// A harness-agnostic "pump and settle" hook (WidgetTester or PatrolTester).
-typedef PumpAndSettle = Future<void> Function();
+/// A harness-agnostic "launch the example app (and settle)" hook. Each runner
+/// provides its own: integration_test runs the app's `main()`; Patrol pumps a
+/// widget via the PatrolTester instead, to avoid double-initializing the
+/// Flutter engine (Patrol already bootstraps the app via `$dartRunMain`).
+typedef LaunchApp = Future<void> Function();
 
 const String oidcConformanceToken = String.fromEnvironment(
   'OIDC_CONFORMANCE_TOKEN',
@@ -61,34 +63,27 @@ void ensureLoggingConfigured() {
 
 /// Smoke path used when no conformance token is supplied: just initialize the
 /// example's default manager.
-Future<void> runManagerSmokeTest(PumpAndSettle pumpAndSettle) async {
+Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
   _testLogger.info('Running smoke test path (no OIDC token supplied).');
   print('Starting test: Simple manager initializes correctly');
-  example.main();
-  print('App main function executed');
+  await launchApp();
+  print('App launched');
 
-  expect(app_state.currentManagerRx.$.didInit, false);
-  print('Verified that manager is not initialized');
-
-  print('Initializing manager...');
-  await app_state.currentManagerRx.$.init();
-  print('Manager initialization complete');
-
-  print('Pumping and settling widgets...');
-  await pumpAndSettle();
-  print('Widgets settled');
+  if (!app_state.currentManagerRx.$.didInit) {
+    print('Initializing manager...');
+    await app_state.currentManagerRx.$.init();
+    print('Manager initialization complete');
+  }
 
   expect(app_state.currentManagerRx.$.didInit, true);
   print('Verified that manager is initialized');
 }
 
 /// Full OIDC conformance flow against certification.openid.net.
-Future<void> runOidcConformanceTest(PumpAndSettle pumpAndSettle) async {
+Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
   _testLogger.info('Running full OIDC conformance flow.');
-  example.main();
-  _testLogger.info('Example app launched; waiting for first frame to settle.');
-  await pumpAndSettle();
-  _testLogger.info('Initial pumpAndSettle complete.');
+  await launchApp();
+  _testLogger.info('Example app launched and settled.');
 
   const baseUrl = 'https://www.certification.openid.net/';
   _testLogger.fine('Conformance base URL: $baseUrl');
