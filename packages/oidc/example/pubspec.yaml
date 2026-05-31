@@ -25,13 +25,33 @@ dependencies:
   oidc_default_store: ^0.6.0+2
 dev_dependencies:
   archive: ^4.0.7
+  # integration_test + flutter_driver are retained ONLY for the linux/windows
+  # e2e jobs until the Patrol fork gains desktop backends. android/iOS/macOS/web
+  # run via Patrol (below).
   flutter_driver:
     sdk: flutter
   flutter_test:
     sdk: flutter
   integration_test:
     sdk: flutter
+  # Our Patrol fork (web tests run via Playwright, not flutter-drive/DWDS).
+  patrol:
+    git:
+      url: https://github.com/ahmednfwela/patrol.git
+      ref: fixed
+      path: packages/patrol
   very_good_analysis: ^10.0.0
+
+# Patrol CLI config (patrol_cli is activated globally in CI, not depended on
+# here, so its deps don't enter the app's resolution).
+patrol:
+  app_name: OIDC Example
+  android:
+    package_name: com.bdayadev.oidc.example
+  ios:
+    bundle_id: com.bdayadev.oidc.example
+  macos:
+    bundle_id: com.bdayadev.oidc.example
 
 flutter:
   uses-material-design: true
