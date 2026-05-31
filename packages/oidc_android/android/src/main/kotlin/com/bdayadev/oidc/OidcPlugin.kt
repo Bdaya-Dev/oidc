@@ -51,7 +51,6 @@ class OidcPlugin :
     private var redirectHandled = false
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var timeoutRunnable: Runnable? = null
 
     // Pigeon event sink for observability events; non-null while Dart listens.
     private var eventSink: PigeonEventSink<Map<String, Any?>>? = null
@@ -376,7 +375,6 @@ class OidcPlugin :
     }
 
     private fun cleanup() {
-        cancelFlowTimeout()
         pendingCallback = null
         expectedRedirect = null
         unregisterLifecycle()
@@ -386,19 +384,13 @@ class OidcPlugin :
     private fun scheduleFlowTimeout(options: Map<String, Any?>) {
         val seconds = (options["flowTimeoutSeconds"] as? Number)?.toLong() ?: return
         if (seconds <= 0) return
-        val runnable = Runnable {
-            if (pendingCallback != null) {
+        val expectedFlowId = flowId
+        mainHandler.postDelayed({
+            if (pendingCallback != null && flowId == expectedFlowId) {
                 emit("timeout", mapOf("afterSeconds" to seconds))
                 finishWithCancel()
             }
-        }
-        timeoutRunnable = runnable
-        mainHandler.postDelayed(runnable, seconds * 1000)
-    }
-
-    private fun cancelFlowTimeout() {
-        timeoutRunnable?.let { mainHandler.removeCallbacks(it) }
-        timeoutRunnable = null
+        }, seconds * 1000)
     }
 
     /** Resolves and clears the in-flight callback exactly once. */
