@@ -18,28 +18,9 @@
             <action android:name="androidx.browser.customtabs.action.CustomTabsService" />
         </intent>
     </queries>
-    <application>
-        <!--
-          Plugin-owned redirect receiver. The consuming app drives the scheme
-          with a single manifest placeholder in its app/build.gradle:
-
-              manifestPlaceholders += ['oidcRedirectScheme': 'com.example.app']
-
-          A safe default is provided in this library's build.gradle so apps that
-          pull oidc transitively but do not use the native redirect flow still
-          build. Apps doing mobile login MUST override it with their own
-          redirect_uri scheme.
-        -->
-        <activity
-            android:name="com.bdayadev.oidc.OidcRedirectActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="${oidcRedirectScheme}" />
-            </intent-filter>
-        </activity>
-    </application>
+    <!--
+      Auth Tab captures the redirect via the Activity Result API — no
+      intent-filter / redirect Activity needed. The consuming app no longer
+      needs the `oidcRedirectScheme` manifest placeholder.
+    -->
 </manifest>

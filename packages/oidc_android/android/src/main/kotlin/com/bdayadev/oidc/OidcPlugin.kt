@@ -1,18 +1,13 @@
 package com.bdayadev.oidc
 
 import android.app.Activity
-import android.app.Application
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.browser.auth.AuthTabIntent
-import androidx.browser.customtabs.CustomTabColorSchemeParams
-import androidx.browser.customtabs.CustomTabsIntent
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -20,23 +15,22 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 /**
  * First-party Android implementation of the oidc browser primitive.
  *
- * It opens the authorization / end-session URL (already fully built by Dart
- * `oidc_core`, including PKCE/state/nonce) in a Chrome Custom Tab and returns
+ * Opens the authorization / end-session URL (already fully built by Dart
+ * `oidc_core`, including PKCE/state/nonce) via [AuthTabIntent] and returns
  * the captured redirect URI string back to Dart, which parses it. No OIDC
  * logic lives here — this replaces the `flutter_appauth` dependency with a
  * thin, dependency-light native primitive.
  *
+ * Auth Tab (Chrome 137+) captures the redirect via the Activity Result API,
+ * which survives process death. On older browsers it falls back to Custom
+ * Tabs automatically (built into [AuthTabIntent] via a null EXTRA_SESSION).
+ * No intent-filter, no manifest placeholder, and no separate redirect
+ * Activity is needed — the host must be a [ComponentActivity] (e.g.
+ * `FlutterFragmentActivity`).
+ *
  * The Dart<->native transport is the Pigeon-generated [OidcAndroidHostApi]
  * (compiler-enforced method/argument types) plus a Pigeon event channel
  * ([StreamNativeEventsStreamHandler]) for observability events.
- *
- * The redirect is captured by the plugin-owned [OidcRedirectActivity], declared
- * in this package's `AndroidManifest.xml` with an intent-filter whose
- * `<data android:scheme="${oidcRedirectScheme}"/>` is driven by a single
- * manifest placeholder. The consuming app sets ONE line in its
- * `app/build.gradle` (`manifestPlaceholders += ['oidcRedirectScheme': ...]`) —
- * no `<intent-filter>` and no `launchMode`/`taskAffinity` changes on its own
- * Activity (which closes the #174 class of misconfiguration at the root).
  */
 class OidcPlugin :
     FlutterPlugin,
@@ -49,7 +43,6 @@ class OidcPlugin :
     private var pendingCallback: ((Result<String?>) -> Unit)? = null
     private var expectedRedirect: Uri? = null
     private var redirectHandled = false
-    private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     // Pigeon event sink for observability events; non-null while Dart listens.
@@ -128,7 +121,6 @@ class OidcPlugin :
     override fun onDetachedFromActivity() = detachActivity()
 
     private fun detachActivity() {
-        unregisterLifecycle()
         authLauncher?.unregister()
         authLauncher = null
         binding = null
@@ -163,11 +155,24 @@ class OidcPlugin :
         options: Map<String, Any?>,
         callback: (Result<String?>) -> Unit,
     ) {
-        val currentActivity = activity
-        if (currentActivity == null) {
+        if (activity == null) {
             callback(
                 Result.failure(
                     FlutterError("NO_ACTIVITY", "Plugin is not attached to an Activity", null),
+                ),
+            )
+            return
+        }
+        val launcher = authLauncher
+        if (launcher == null) {
+            callback(
+                Result.failure(
+                    FlutterError(
+                        "NO_COMPONENT_ACTIVITY",
+                        "Auth Tab requires a ComponentActivity host (e.g. FlutterFragmentActivity). " +
+                            "Change your MainActivity to extend FlutterFragmentActivity.",
+                        null,
+                    ),
                 ),
             )
             return
@@ -181,58 +186,16 @@ class OidcPlugin :
         flowId = (++flowCounter).toString()
 
         val ephemeral = options["ephemeralBrowsing"] as? Boolean == true
-        val useAuthTab = options["useAuthTab"] as? String ?: "auto"
         emit("opening")
 
-        // Auth Tab path (Chrome 137+): the browser captures the redirect and
-        // returns it via the ActivityResult API — no OidcRedirectActivity / no
-        // manifest placeholder. Opt-in via `useAuthTab: force`; requires a
-        // ComponentActivity host (e.g. FlutterFragmentActivity).
-        val launcher = authLauncher
-        if (useAuthTab == "force" && launcher != null) {
-            launchAuthTab(launcher, url, ephemeral)
-            scheduleFlowTimeout(options)
-            return
-        }
-        if (useAuthTab == "force" && launcher == null) {
-            // Requested but unavailable (plain FlutterActivity) — fall back.
-            emit("warning", mapOf("code" to "AUTH_TAB_REQUIRES_COMPONENT_ACTIVITY"))
-        }
-
-        // Default: Custom Tabs + plugin-owned OidcRedirectActivity.
-        activeInstance = this
-        registerLifecycle(currentActivity)
-        try {
-            val customTabs = buildCustomTabsIntent(options)
-            // launchUrl issues an ACTION_VIEW intent, which already falls back
-            // to the default browser when no Custom Tabs provider is present;
-            // the only un-handled case is "no browser installed at all".
-            customTabs.launchUrl(currentActivity, Uri.parse(url))
-            emit(
-                "opened",
-                mapOf(
-                    "sessionType" to if (ephemeral) "ephemeral" else "standard",
-                    "captureMode" to "customTabsRedirectActivity",
-                ),
-            )
-            scheduleFlowTimeout(options)
-        } catch (e: ActivityNotFoundException) {
-            cleanup()
-            emit(
-                "failed",
-                mapOf(
-                    "error" to mapOf(
-                        "kind" to "noBrowserAvailable",
-                        "message" to e.message,
-                    ),
-                ),
-            )
-            finishPending(
-                Result.failure(
-                    FlutterError("START_FAILED", "No browser available to launch: ${e.message}", null),
-                ),
-            )
-        }
+        // Always use Auth Tab. On Chrome 137+ it uses the native Auth Tab API
+        // (redirect captured via the Activity Result API, which survives process
+        // death). On older browsers it falls back to Custom Tabs automatically
+        // (built into AuthTabIntent via a null EXTRA_SESSION). Either way the
+        // redirect is returned through the ActivityResultLauncher callback
+        // (handleAuthResult), NOT through an intent-filter / OidcRedirectActivity.
+        launchAuthTab(launcher, url, ephemeral)
+        scheduleFlowTimeout(options)
     }
 
     private fun launchAuthTab(
@@ -309,75 +272,9 @@ class OidcPlugin :
         }
     }
 
-    /**
-     * Called by [OidcRedirectActivity] with the captured redirect URI. Returns
-     * true if the in-flight flow consumed it. Runs on the main thread.
-     */
-    private fun onRedirect(data: Uri): Boolean {
-        val expected = expectedRedirect ?: return false
-        if (!data.scheme.equals(expected.scheme, ignoreCase = true)) return false
-        // Custom-scheme redirects may omit a host; match host only when present.
-        if (!expected.host.isNullOrEmpty() &&
-            !data.host.equals(expected.host, ignoreCase = true)
-        ) {
-            return false
-        }
-        redirectHandled = true
-        emit(
-            "redirectReceived",
-            mapOf(
-                "scheme" to data.scheme,
-                "host" to data.host,
-                "hasCode" to (data.getQueryParameter("code") != null),
-                "hasState" to (data.getQueryParameter("state") != null),
-                "hasError" to (data.getQueryParameter("error") != null),
-            ),
-        )
-        finishPending(Result.success(data.toString()))
-        return true
-    }
-
-    /**
-     * Detects user cancellation: if the host Activity is paused (Custom Tab in
-     * front) and then resumed WITHOUT a redirect arriving, the user dismissed
-     * the tab.
-     */
-    private fun registerLifecycle(host: Activity) {
-        unregisterLifecycle()
-        val callbacks = object : Application.ActivityLifecycleCallbacks {
-            private var sawPause = false
-
-            override fun onActivityPaused(a: Activity) {
-                if (a === host) sawPause = true
-            }
-
-            override fun onActivityResumed(a: Activity) {
-                if (a === host && sawPause && !redirectHandled && pendingCallback != null) {
-                    finishWithCancel()
-                }
-            }
-
-            override fun onActivityCreated(a: Activity, b: Bundle?) {}
-            override fun onActivityStarted(a: Activity) {}
-            override fun onActivityStopped(a: Activity) {}
-            override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
-            override fun onActivityDestroyed(a: Activity) {}
-        }
-        lifecycleCallbacks = callbacks
-        host.application.registerActivityLifecycleCallbacks(callbacks)
-    }
-
-    private fun unregisterLifecycle() {
-        val callbacks = lifecycleCallbacks ?: return
-        activity?.application?.unregisterActivityLifecycleCallbacks(callbacks)
-        lifecycleCallbacks = null
-    }
-
     private fun cleanup() {
         pendingCallback = null
         expectedRedirect = null
-        unregisterLifecycle()
-        if (activeInstance === this) activeInstance = null
     }
 
     private fun scheduleFlowTimeout(options: Map<String, Any?>) {
@@ -407,118 +304,5 @@ class OidcPlugin :
                 FlutterError("USER_CANCELLED", "The flow was cancelled by the user", null),
             ),
         )
-    }
-
-    /**
-     * Builds a [CustomTabsIntent] from the serialized `OidcNativeOptionsAndroid`
-     * map forwarded by Dart. Unknown / unsupported keys are ignored. The
-     * service-bound options (preferred browser package, warmup, Auth Tab) are
-     * handled elsewhere; non-serializable decorations (RemoteViews, Bitmap,
-     * PendingIntent, animation resources) go through a native builder hook.
-     */
-    private fun buildCustomTabsIntent(options: Map<*, *>?): CustomTabsIntent {
-        val b = CustomTabsIntent.Builder()
-        if (options == null) return b.build()
-
-        (options["showTitle"] as? Boolean)?.let { b.setShowTitle(it) }
-        (options["urlBarHidingEnabled"] as? Boolean)?.let { b.setUrlBarHidingEnabled(it) }
-        if (options["ephemeralBrowsing"] as? Boolean == true) {
-            // Best-effort incognito hint; the browser decides if it honors it.
-            b.setEphemeralBrowsingEnabled(true)
-        }
-
-        when (options["shareState"] as? String) {
-            "on" -> b.setShareState(CustomTabsIntent.SHARE_STATE_ON)
-            "off" -> b.setShareState(CustomTabsIntent.SHARE_STATE_OFF)
-            "browserDefault" -> b.setShareState(CustomTabsIntent.SHARE_STATE_DEFAULT)
-        }
-        when (options["closeButtonPosition"] as? String) {
-            "start" -> b.setCloseButtonPosition(CustomTabsIntent.CLOSE_BUTTON_POSITION_START)
-            "end" -> b.setCloseButtonPosition(CustomTabsIntent.CLOSE_BUTTON_POSITION_END)
-            "defaultPosition" ->
-                b.setCloseButtonPosition(CustomTabsIntent.CLOSE_BUTTON_POSITION_DEFAULT)
-        }
-
-        (options["colorSchemes"] as? Map<*, *>)?.let { cs ->
-            when (cs["colorScheme"] as? String) {
-                "light" -> b.setColorScheme(CustomTabsIntent.COLOR_SCHEME_LIGHT)
-                "dark" -> b.setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
-                "system" -> b.setColorScheme(CustomTabsIntent.COLOR_SCHEME_SYSTEM)
-            }
-            colorParams(cs["defaultParams"])?.let { b.setDefaultColorSchemeParams(it) }
-            colorParams(cs["lightParams"])?.let {
-                b.setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_LIGHT, it)
-            }
-            colorParams(cs["darkParams"])?.let {
-                b.setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_DARK, it)
-            }
-        }
-
-        (options["partialCustomTabs"] as? Map<*, *>)?.let { p ->
-            (p["initialHeightPx"] as? Number)?.toInt()?.let { h ->
-                val behavior = when (p["resizeBehavior"] as? String) {
-                    "adjustable" -> CustomTabsIntent.ACTIVITY_HEIGHT_ADJUSTABLE
-                    "fixed" -> CustomTabsIntent.ACTIVITY_HEIGHT_FIXED
-                    else -> CustomTabsIntent.ACTIVITY_HEIGHT_DEFAULT
-                }
-                b.setInitialActivityHeightPx(h, behavior)
-            }
-            (p["toolbarCornerRadiusDp"] as? Number)?.toInt()?.let {
-                b.setToolbarCornerRadiusDp(it)
-            }
-            (p["backgroundInteractionEnabled"] as? Boolean)?.let {
-                b.setBackgroundInteractionEnabled(it)
-            }
-        }
-
-        val customTabs = b.build()
-        // Raw, serializable passthrough extras (primitives only).
-        (options["rawIntentExtras"] as? Map<*, *>)?.forEach { (k, v) ->
-            if (k is String) putExtra(customTabs.intent, k, v)
-        }
-        return customTabs
-    }
-
-    private fun colorParams(raw: Any?): CustomTabColorSchemeParams? {
-        val m = raw as? Map<*, *> ?: return null
-        val cb = CustomTabColorSchemeParams.Builder()
-        // Colors arrive as ARGB; channel ints > 0x7FFFFFFF arrive as Long, so
-        // read as Number and narrow to the signed 32-bit ARGB value.
-        (m["toolbarColor"] as? Number)?.toInt()?.let { cb.setToolbarColor(it) }
-        (m["secondaryToolbarColor"] as? Number)?.toInt()?.let {
-            cb.setSecondaryToolbarColor(it)
-        }
-        (m["navigationBarColor"] as? Number)?.toInt()?.let { cb.setNavigationBarColor(it) }
-        (m["navigationBarDividerColor"] as? Number)?.toInt()?.let {
-            cb.setNavigationBarDividerColor(it)
-        }
-        return cb.build()
-    }
-
-    private fun putExtra(intent: Intent, key: String, value: Any?) {
-        when (value) {
-            is String -> intent.putExtra(key, value)
-            is Boolean -> intent.putExtra(key, value)
-            is Int -> intent.putExtra(key, value)
-            is Long -> intent.putExtra(key, value)
-            is Double -> intent.putExtra(key, value)
-            // Non-primitive extras can't be set here; use the native hook.
-        }
-    }
-
-    companion object {
-        // The plugin instance currently awaiting a redirect. Set while a flow
-        // is in flight so OidcRedirectActivity can deliver the captured URI
-        // without needing an Activity/Binding reference.
-        @Volatile
-        private var activeInstance: OidcPlugin? = null
-
-        /**
-         * Delivers a captured redirect URI from [OidcRedirectActivity] to the
-         * in-flight flow. Returns true if a flow consumed it. Invoked on the
-         * main (UI) thread from the Activity lifecycle.
-         */
-        @JvmStatic
-        fun handleRedirect(data: Uri): Boolean = activeInstance?.onRedirect(data) ?: false
     }
 }

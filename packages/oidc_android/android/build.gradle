@@ -55,11 +55,8 @@ android {
     defaultConfig {
         minSdkVersion 21
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // Default for the redirect receiver's scheme so apps that pull oidc
-        // transitively but don't use native login still build. Apps doing
-        // mobile login override this in their own app/build.gradle:
-        //   manifestPlaceholders += ['oidcRedirectScheme': 'com.example.app']
-        manifestPlaceholders = [oidcRedirectScheme: 'com.bdayadev.oidc.unset']
+        // Auth Tab captures the redirect via the Activity Result API — no
+        // oidcRedirectScheme manifest placeholder needed.
     }
 
     dependencies {
