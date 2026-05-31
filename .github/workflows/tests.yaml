@@ -261,21 +261,16 @@ jobs:
       matrix:
         working-directory: ["packages/oidc/example"]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Bumped from 15: the web e2e retries flutter drive to work around Flutter's
+    # DWDS startup race (flutter/flutter#181357). Each lost-race attempt aborts
+    # fast (we kill it the instant AppConnectionException appears), but several
+    # attempts + their builds need headroom.
+    timeout-minutes: 30
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
-        with:
-          # Flutter 3.44.0 has an upstream `flutter drive` web DWDS regression
-          # (AppConnectionException -> debug service never connects -> hang to
-          # timeout; flutter/flutter#181357, regressed after 3.35.6). 3.44.0 is the
-          # latest stable, so there's nothing newer to jump to. Pin the web e2e to
-          # the newest release that still satisfies the oidc_darwin floor
-          # (flutter >=3.41 / Dart >=3.11): 3.41.9 ships Dart 3.11.5. All OTHER
-          # jobs keep the action default (3.44.0), which they pass on.
-          flutter-version: "3.41.9"
       # Pin Chrome + a MATCHING ChromeDriver. The GitHub runner's Chrome drifts
       # upward over time (currently 148) and breaks Flutter's web debug-service
       # (DWDS) handshake -> "AppConnectionException" -> the app never connects ->
@@ -307,24 +302,89 @@ jobs:
           # pinned chromedriver below) instead of the runner's drifted Chrome.
           CHROME_EXECUTABLE: ${{ steps.setup-chrome.outputs.chrome-path }}
         run: |
-          # first we run the PINNED chromedriver on port 4444 and Xvfb
+          # Start the PINNED chromedriver (port 4444) + Xvfb once; reused across
+          # retries below. Chrome's sandbox works via the "Allow Chrome sandbox"
+          # step, and --chrome-binary points chromedriver's session at the same
+          # pinned Chrome (else it auto-locates the runner's Chrome and throws
+          # "SessionNotCreatedException: only supports Chrome version 136").
           export DISPLAY=:99
           "${{ steps.setup-chrome.outputs.chromedriver-path }}" --port=4444 --trace-buffer-size=100000 &
           sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
-          # then we start flutter drive (Chrome's sandbox now works thanks to the
-          # "Allow Chrome sandbox" step above, so no --no-sandbox is needed).
-          # --chrome-binary points the chromedriver WebDriver session at the SAME
-          # pinned Chrome as the pinned chromedriver above; without it chromedriver
-          # auto-locates the runner's system Chrome (148) and fails with
-          # "SessionNotCreatedException: only supports Chrome version 136".
-          flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --browser-name=chrome --chrome-binary="${{ steps.setup-chrome.outputs.chrome-path }}" --web-port=22433 --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} | tee output.log
-          # We have to check the output for failed tests matching the string "[E]"
-          output=$(<output.log)
-          if [[ "$output" =~ \[E\] ]]; then
-          # You will see "All tests passed." in the logs even when tests failed.
-          echo "All tests did not pass. Please check the logs for more information."
-          exit 1
-          fi
+
+          # Flutter >=3.41 has an upstream `flutter drive` web bug: DWDS tries to
+          # connect before the app's JS bundle finishes bootstrapping, throws
+          # AppConnectionException, and then flutter drive HANGS until timeout
+          # (flutter/flutter#181357 - a startup race; still open/P2). main pins
+          # Flutter 3.35.4 (pre-regression) so it never hit this; we must be >=3.41
+          # for oidc_darwin's SwiftPM/FlutterFramework layout, so we work around
+          # the race by retrying, the community-accepted approach (flutter#167715).
+          # Each attempt is aborted the INSTANT AppConnectionException appears (so a
+          # lost race costs ~1 min, not a 15-min hang); a fresh attempt usually wins
+          # the race within 1-2 tries. A genuine "[E]" test failure is NOT retried.
+          run_attempt() {
+            rm -f output.log
+            flutter drive \
+              --driver=./test_driver/integration_test.dart \
+              --target=./integration_test/app_test.dart \
+              -d chrome --browser-name=chrome \
+              --chrome-binary="${{ steps.setup-chrome.outputs.chrome-path }}" \
+              --web-port=22433 \
+              --dart-define=CI=true \
+              --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} \
+              > output.log 2>&1 &
+            local pid=$! waited=0 max=360
+            while kill -0 "$pid" 2>/dev/null; do
+              # flutter prints "All tests passed." even on failure, so a real pass =
+              # "All tests passed." AND no "[E]" marker in the output.
+              if grep -q 'All tests passed' output.log; then
+                kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
+                grep -q '\[E\]' output.log && return 2 || return 0
+              fi
+              if grep -q '\[E\]' output.log; then
+                echo ">>> integration test reported failures ([E]) - genuine, not retrying"
+                kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
+                return 2
+              fi
+              if grep -qE 'AppConnectionException|Failed to establish connection with the application' output.log; then
+                echo ">>> DWDS startup race lost (AppConnectionException) - aborting attempt early"
+                kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
+                return 1
+              fi
+              if [ "$waited" -ge "$max" ]; then
+                echo ">>> attempt exceeded ${max}s with no verdict - aborting"
+                kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true
+                return 1
+              fi
+              sleep 3; waited=$((waited + 3))
+            done
+            # process exited on its own
+            wait "$pid" 2>/dev/null || true
+            grep -q '\[E\]' output.log && return 2
+            grep -q 'All tests passed' output.log && return 0
+            echo ">>> flutter drive exited without a clear pass"
+            return 1
+          }
+
+          cleanup_attempt() {
+            fuser -k 22433/tcp 2>/dev/null || true   # free the fixed web-port
+            pkill -x chrome 2>/dev/null || true
+            pkill -f 'flutter_tools_chrome_device' 2>/dev/null || true
+            pkill -f 'frontend_server' 2>/dev/null || true
+            sleep 3
+          }
+
+          attempts=5
+          rc=1
+          for i in $(seq 1 "$attempts"); do
+            echo "================== web e2e attempt $i/$attempts =================="
+            set +e; run_attempt; rc=$?; set -e
+            echo "----- attempt $i output (rc=$rc) -----"; cat output.log || true
+            if [ "$rc" -eq 0 ]; then echo ">>> web e2e PASSED on attempt $i"; break; fi
+            if [ "$rc" -eq 2 ]; then echo ">>> genuine test failure - not retrying"; break; fi
+            echo ">>> attempt $i lost the DWDS race; cleaning up before retry"
+            cleanup_attempt
+          done
+          exit "$rc"
         shell: bash
 
       # web has no test coverage for now
