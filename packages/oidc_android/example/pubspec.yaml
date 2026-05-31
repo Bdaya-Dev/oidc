@@ -8,7 +8,7 @@ environment:
 
 dependencies:
   async: ^2.11.0
-  bdaya_shared_value: ^4.0.0
+  bdaya_shared_value: ^5.0.0
   flutter:
     sdk: flutter
   go_router: ^17.0.1

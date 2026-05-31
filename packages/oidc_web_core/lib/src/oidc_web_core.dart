@@ -5,7 +5,6 @@ import 'dart:js_interop';
 import 'package:collection/collection.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:rxdart/rxdart.dart';
 import 'package:web/web.dart';
 
 /// {@template oidc_web_core}
@@ -427,34 +426,34 @@ class OidcWebCore {
         //send message to iframe
         await timerSub?.cancel();
         logger.info('Starting periodic stream!');
-        timerSub =
-            Stream.periodic(
-              request.interval,
-              (computationCount) => computationCount,
-            ).startWith(-1).listen((_) {
-              final iframe = document.getElementById(iframeId);
-              if (!iframe.isA<HTMLIFrameElement>()) {
-                return;
-              }
-              try {
-                final cw = (iframe! as HTMLIFrameElement).contentWindow;
-                if (cw == null) {
-                  return;
-                }
-                const space = ' ';
-                cw.postMessage(
-                  '${request.clientId}$space${request.sessionState}'.toJS,
-                  checkSessionIframe.origin.toJS,
-                );
-              } catch (e, st) {
-                timerSub?.cancel();
-                logger.severe(
-                  "Failed to send postMessage to OP's iframe",
-                  e,
-                  st,
-                );
-              }
-            });
+        void sendCheckSession() {
+          final iframe = document.getElementById(iframeId);
+          if (!iframe.isA<HTMLIFrameElement>()) {
+            return;
+          }
+          try {
+            final cw = (iframe! as HTMLIFrameElement).contentWindow;
+            if (cw == null) {
+              return;
+            }
+            const space = ' ';
+            cw.postMessage(
+              '${request.clientId}$space${request.sessionState}'.toJS,
+              checkSessionIframe.origin.toJS,
+            );
+          } catch (e, st) {
+            timerSub?.cancel();
+            logger.severe("Failed to send postMessage to OP's iframe", e, st);
+          }
+        }
+
+        // Emit once immediately (previously rxdart's startWith(-1)), then on
+        // every interval.
+        sendCheckSession();
+        timerSub = Stream.periodic(
+          request.interval,
+          (computationCount) => computationCount,
+        ).listen((_) => sendCheckSession());
       },
       onCancel: () {
         //stop the session iframe

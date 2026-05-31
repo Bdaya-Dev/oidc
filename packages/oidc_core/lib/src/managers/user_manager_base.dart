@@ -8,7 +8,6 @@ import 'package:jose_plus/jose.dart';
 import 'package:logging/logging.dart';
 import 'package:meta/meta.dart';
 import 'package:oidc_core/oidc_core.dart';
-import 'package:rxdart/rxdart.dart';
 
 final _logger = Logger('OidcUserManagerBase');
 
@@ -82,7 +81,7 @@ abstract class OidcUserManagerBase {
   final OidcUserManagerSettings settings;
 
   @protected
-  final userSubject = BehaviorSubject<OidcUser?>.seeded(null);
+  final userSubject = OidcValueStream<OidcUser?>(null);
 
   @protected
   final eventsController = StreamController<OidcEvent>.broadcast();
@@ -118,7 +117,7 @@ abstract class OidcUserManagerBase {
   Stream<OidcEvent> listenToNativeBrowserEvents() => const Stream.empty();
 
   /// The current authenticated user.
-  OidcUser? get currentUser => userSubject.valueOrNull;
+  OidcUser? get currentUser => userSubject.value;
 
   @protected
   Never logAndThrow(

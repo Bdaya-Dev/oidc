@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_redundant_argument_values
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -13,7 +14,6 @@ import 'package:logging/logging.dart';
 import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
 import 'package:oidc_example/mock.dart';
-import 'package:rxdart/rxdart.dart' as rx;
 
 //This file represents a global state, which is bad
 //in a production app (since you can't test it).
@@ -266,14 +266,18 @@ Future<void> initApp() {
       exampleLogger.severe('Failed to initialize secure storage', e);
     }
 
-    currentManagerRx.streamWithInitial
-        .switchMap((manager) => manager.userChanges())
-        .listen((event) {
-          cachedAuthedUser.$ = event;
-          exampleLogger.info(
-            'User changed: ${event?.claims.toJson()}, info: ${event?.userInfo}',
-          );
-        });
+    // Follow the active manager's user stream, switching to the new manager's
+    // stream whenever the active manager changes (replaces rxdart's switchMap).
+    StreamSubscription<OidcUser?>? userChangesSub;
+    currentManagerRx.streamWithInitial.listen((manager) {
+      unawaited(userChangesSub?.cancel());
+      userChangesSub = manager.userChanges().listen((event) {
+        cachedAuthedUser.$ = event;
+        exampleLogger.info(
+          'User changed: ${event?.claims.toJson()}, info: ${event?.userInfo}',
+        );
+      });
+    });
   });
 }
 
