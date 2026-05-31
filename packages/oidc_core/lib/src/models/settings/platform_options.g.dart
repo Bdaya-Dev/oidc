@@ -175,6 +175,7 @@ OidcNativeOptionsAndroid _$OidcNativeOptionsAndroidFromJson(
       OidcCustomTabsWarmup.none,
   rawIntentExtras: json['rawIntentExtras'] as Map<String, dynamic>? ?? const {},
   allowInsecureConnections: json['allowInsecureConnections'] as bool? ?? false,
+  flowTimeoutSeconds: (json['flowTimeoutSeconds'] as num?)?.toInt(),
 );
 
 Map<String, dynamic> _$OidcNativeOptionsAndroidToJson(
@@ -193,6 +194,7 @@ Map<String, dynamic> _$OidcNativeOptionsAndroidToJson(
   'warmup': _$OidcCustomTabsWarmupEnumMap[instance.warmup]!,
   'rawIntentExtras': instance.rawIntentExtras,
   'allowInsecureConnections': instance.allowInsecureConnections,
+  'flowTimeoutSeconds': instance.flowTimeoutSeconds,
 };
 
 const _$OidcCustomTabsShareStateEnumMap = {

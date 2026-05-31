@@ -255,6 +255,7 @@ class OidcNativeOptionsAndroid implements OidcPlatformOptionsMarker {
     this.warmup = OidcCustomTabsWarmup.none,
     this.rawIntentExtras = const {},
     this.allowInsecureConnections = false,
+    this.flowTimeoutSeconds,
   });
 
   /// Toolbar / nav-bar colors.
@@ -314,6 +315,16 @@ class OidcNativeOptionsAndroid implements OidcPlatformOptionsMarker {
   /// app — governs TLS, so this cannot be honored there. Retained for parity
   /// and potential non-Custom-Tabs transports.
   final bool allowInsecureConnections;
+
+  /// Maximum seconds the native browser flow may wait for a redirect before
+  /// auto-cancelling with `USER_CANCELLED`.
+  ///
+  /// `null` (default) means no timeout — the flow waits until the user
+  /// dismisses the browser or a redirect arrives. Set a value for headless CI
+  /// or unattended environments where no user interaction can complete the
+  /// flow. AppAuth-Android had implicit timeout behavior; this makes it
+  /// explicit.
+  final int? flowTimeoutSeconds;
 
   Map<String, dynamic> toJson() => _$OidcNativeOptionsAndroidToJson(this);
 

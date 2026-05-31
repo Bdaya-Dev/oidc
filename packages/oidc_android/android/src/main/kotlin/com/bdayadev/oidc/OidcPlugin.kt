@@ -50,6 +50,8 @@ class OidcPlugin :
     private var expectedRedirect: Uri? = null
     private var redirectHandled = false
     private var lifecycleCallbacks: Application.ActivityLifecycleCallbacks? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var timeoutRunnable: Runnable? = null
 
     // Pigeon event sink for observability events; non-null while Dart listens.
     private var eventSink: PigeonEventSink<Map<String, Any?>>? = null
@@ -191,6 +193,7 @@ class OidcPlugin :
         val launcher = authLauncher
         if (useAuthTab == "force" && launcher != null) {
             launchAuthTab(launcher, url, ephemeral)
+            scheduleFlowTimeout(options)
             return
         }
         if (useAuthTab == "force" && launcher == null) {
@@ -214,6 +217,7 @@ class OidcPlugin :
                     "captureMode" to "customTabsRedirectActivity",
                 ),
             )
+            scheduleFlowTimeout(options)
         } catch (e: ActivityNotFoundException) {
             cleanup()
             emit(
@@ -372,10 +376,29 @@ class OidcPlugin :
     }
 
     private fun cleanup() {
+        cancelFlowTimeout()
         pendingCallback = null
         expectedRedirect = null
         unregisterLifecycle()
         if (activeInstance === this) activeInstance = null
+    }
+
+    private fun scheduleFlowTimeout(options: Map<String, Any?>) {
+        val seconds = (options["flowTimeoutSeconds"] as? Number)?.toLong() ?: return
+        if (seconds <= 0) return
+        val runnable = Runnable {
+            if (pendingCallback != null) {
+                emit("timeout", mapOf("afterSeconds" to seconds))
+                finishWithCancel()
+            }
+        }
+        timeoutRunnable = runnable
+        mainHandler.postDelayed(runnable, seconds * 1000)
+    }
+
+    private fun cancelFlowTimeout() {
+        timeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        timeoutRunnable = null
     }
 
     /** Resolves and clears the in-flight callback exactly once. */

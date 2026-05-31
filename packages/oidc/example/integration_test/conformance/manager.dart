@@ -27,6 +27,11 @@ OidcUserManager conformanceManager(
       // using ephemeral session prevents annoying popups from blocking test
       macos: OidcNativeOptionsApple(prefersEphemeralWebBrowserSession: true),
       ios: OidcNativeOptionsApple(prefersEphemeralWebBrowserSession: true),
+      // On headless CI emulators Custom Tabs opens but no user can interact,
+      // so the redirect never arrives and loginAuthorizationCodeFlow hangs.
+      // A 30 s timeout lets the module fail-fast (caught by the try/catch in
+      // shared_e2e) so the rest of the conformance suite still runs.
+      android: OidcNativeOptionsAndroid(flowTimeoutSeconds: 30),
     ),
     scope: const [
       OidcConstants_Scopes.openid,
