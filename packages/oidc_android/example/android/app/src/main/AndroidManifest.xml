@@ -11,7 +11,7 @@
     android:dataExtractionRules="@xml/data_extraction_rules">
 
     <activity
-      android:name="io.flutter.embedding.android.FlutterActivity"
+      android:name="io.flutter.embedding.android.FlutterFragmentActivity"
       android:exported="true"
       android:launchMode="singleTop"
       android:theme="@style/LaunchTheme"
