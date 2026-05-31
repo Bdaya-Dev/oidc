@@ -63,7 +63,6 @@ class OidcPlugin :
             eventSink = null
         }
     }
-    private val mainHandler = Handler(Looper.getMainLooper())
     private var flowId: String? = null
     private var flowCounter = 0
 
