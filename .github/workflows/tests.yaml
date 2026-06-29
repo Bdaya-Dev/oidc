@@ -241,6 +241,10 @@ jobs:
           UDID=$(xcrun xctrace list devices | grep "^iPhone" | awk '{gsub(/[()]/,""); print $NF}' | head -n 1)
           echo $UDID
           xcrun simctl boot "${UDID:?No Simulator with this name found}"
+          # Export the booted UDID so the Patrol step can target it precisely.
+          # `-d iPhone` (a generic name) does NOT match a booted simulator in
+          # patrol's device list ("Device iPhone is not attached"); the UDID does.
+          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
       - name: Wait for Simulator to be Ready
         run: |
           COUNT=0
@@ -270,7 +274,7 @@ jobs:
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-package oidc \
-            -d iPhone \
+            -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
           cp coverage/patrol_lcov.info coverage/ios-coverage.info
@@ -476,7 +480,13 @@ jobs:
           # patrol_cli_plus drives the Windows desktop backend. A single
           # invocation runs every patrol_test/*_test.dart (conformance + e2e +
           # offline) and collects Dart coverage via the VM service.
-          patrol_plus test \
+          #
+          # `dart pub global activate` on Windows installs `patrol_plus.bat`
+          # (a cmd shim), NOT an extensionless shell script. git-bash does NOT
+          # honor PATHEXT, so bare `patrol_plus` is "command not found" (exit
+          # 127) even with the pub-cache bin on PATH. Invoke the .bat by its
+          # full name — git-bash resolves it on PATH and execs it via cmd.
+          patrol_plus.bat test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-package oidc \

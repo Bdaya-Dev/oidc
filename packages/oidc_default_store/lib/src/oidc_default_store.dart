@@ -141,6 +141,7 @@ class OidcDefaultStore implements OidcStore {
       'FlutterSecureStorage()` to OidcDefaultStore to store these securely.',
     );
   }
+
   SharedPreferences? __sharedPreferences;
   SharedPreferences get _sharedPreferences => __sharedPreferences!;
 

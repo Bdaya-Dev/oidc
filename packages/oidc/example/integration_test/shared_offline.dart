@@ -161,6 +161,13 @@ OfflineTestUserManager createManager({
   final settings = OidcUserManagerSettings(
     redirectUri: Uri.parse('com.example.test:/callback'),
     scope: const ['openid', 'offline_access'],
+    // These tests seed UNSIGNED (alg:none) id_tokens via the fake OP
+    // (id_token_signing_alg_values_supported: ['none']) to exercise OFFLINE /
+    // refresh behaviour — not signature verification. Since the library now
+    // correctly rejects alg:none (and strictJwtVerification defaults to true),
+    // opt this behaviour-test manager out so the seeded token is accepted as
+    // unverified. Production code must NOT set this.
+    strictJwtVerification: false,
     supportOfflineAuth: true,
     offlineRepeatFailureWarningThreshold: warningThreshold,
     userInfoSettings: const OidcUserInfoSettings(sendUserInfoRequest: false),

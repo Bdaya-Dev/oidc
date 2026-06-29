@@ -33,14 +33,17 @@ void main() {
       );
     });
 
-    test('path issuer WITH trailing slash → identical, no `//` (regression)', () {
-      expect(
-        OidcUtils.getOpenIdConfigWellKnownUri(
-          Uri.parse('https://example.com/issuer1/'),
-        ).toString(),
-        'https://example.com/issuer1/.well-known/openid-configuration',
-      );
-    });
+    test(
+      'path issuer WITH trailing slash → identical, no `//` (regression)',
+      () {
+        expect(
+          OidcUtils.getOpenIdConfigWellKnownUri(
+            Uri.parse('https://example.com/issuer1/'),
+          ).toString(),
+          'https://example.com/issuer1/.well-known/openid-configuration',
+        );
+      },
+    );
   });
 
   group('OidcUtils.getOAuthAuthServerWellKnownUri (RFC 8414 §3.1 insert)', () {

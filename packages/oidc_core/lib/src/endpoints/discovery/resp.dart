@@ -285,8 +285,8 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// parameter. When `true`, the client MUST reject a response missing `iss`
   /// (RFC 9207 §2.4). Absent ⇒ treated as `false` (lenient).
   @JsonKey(
-    name:
-        OidcConstants_ProviderMetadata.authorizationResponseIssParameterSupported,
+    name: OidcConstants_ProviderMetadata
+        .authorizationResponseIssParameterSupported,
   )
   final bool? authorizationResponseIssParameterSupported;
   bool get authorizationResponseIssParameterSupportedOrDefault =>

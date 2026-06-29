@@ -182,7 +182,8 @@ void main() {
         expect(
           tokenCalls,
           isNotEmpty,
-          reason: 'auto refresh-on-expiry must not be gated on '
+          reason:
+              'auto refresh-on-expiry must not be gated on '
               'grant_types_supported',
         );
         expect(_qp(tokenCalls.first)['grant_type'], 'refresh_token');
