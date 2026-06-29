@@ -149,14 +149,59 @@ extension OidcDateTime on DateTime {
 
 /// Utilities for the Oidc spec
 class OidcUtils {
-  /// Takes a base Url and adds /.well-known/openid-configuration to it
+  /// Drops trailing empty path segments (the encoding of a terminating `/`).
+  ///
+  /// OIDC Discovery 1.0 §4.1 / RFC 8414 §3.1 require any terminating `/` on the
+  /// issuer to be removed before composing the well-known URL. `Uri.parse(
+  /// 'https://op/realm/').pathSegments == ['realm', '']`, and spreading that
+  /// empty tail produced a double slash (`/realm//.well-known/...`) → a 404 on
+  /// path-bearing issuers (Keycloak/IdentityServer/Zitadel pattern).
+  static List<String> _trimTrailingEmptySegments(List<String> segments) {
+    final out = [...segments];
+    while (out.isNotEmpty && out.last.isEmpty) {
+      out.removeLast();
+    }
+    return out;
+  }
+
+  /// Takes a base issuer Url and APPENDS `/.well-known/openid-configuration`
+  /// (OpenID Connect Discovery 1.0 §4.1), stripping any terminating slash first.
   static Uri getOpenIdConfigWellKnownUri(Uri base) {
     return base.replace(
       pathSegments: [
-        ...base.pathSegments,
+        ..._trimTrailingEmptySegments(base.pathSegments),
         '.well-known',
         'openid-configuration',
       ],
+      query: null,
+      fragment: null,
     );
+  }
+
+  /// Takes a base issuer Url and INSERTS `/.well-known/oauth-authorization-server`
+  /// BEFORE the path (RFC 8414 §3.1 — the OPPOSITE layout to OIDC §4.1):
+  /// `https://op/issuer1` → `https://op/.well-known/oauth-authorization-server/issuer1`.
+  static Uri getOAuthAuthServerWellKnownUri(Uri base) {
+    return base.replace(
+      pathSegments: [
+        '.well-known',
+        'oauth-authorization-server',
+        ..._trimTrailingEmptySegments(base.pathSegments),
+      ],
+      query: null,
+      fragment: null,
+    );
+  }
+
+  /// OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3: the discovery document's `issuer`
+  /// MUST be identical to the issuer used to fetch it (mix-up defense). Compares
+  /// by simple string equality, case-folding ONLY scheme + host (a genuine path
+  /// difference, including a trailing slash, is a real mismatch and stays
+  /// significant — do NOT normalize it away).
+  static bool issuersAreIdentical(Uri expected, Uri actual) {
+    String norm(Uri u) => u
+        .replace(scheme: u.scheme.toLowerCase(), host: u.host.toLowerCase())
+        .toString();
+    return norm(expected) == norm(actual);
   }
 }
