@@ -1402,13 +1402,13 @@ abstract class OidcUserManagerBase {
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
     final existingUser = currentUserOverride ?? currentUser;
-    if (!discoveryDocument.grantTypesSupportedOrDefault.contains(
-      OidcConstants_GrantType.refreshToken,
-    )) {
-      //Server doesn't support refresh_token grant.
-      return null;
-    }
-
+    // Availability of the refresh_token grant is determined by HAVING a
+    // refresh_token, NOT by the OP advertising `refresh_token` in
+    // `grant_types_supported`: that field is OPTIONAL discovery metadata
+    // (RFC 8414 §2) which compliant IdPs (e.g. Facebook) omit, and RFC 6749 §6
+    // ties refresh to possession of the token. Gating on the metadata silently
+    // disabled refresh for those IdPs; if the OP genuinely rejects the grant,
+    // the token-endpoint call below fails loudly instead.
     final refreshToken =
         overrideRefreshToken ?? existingUser?.token.refreshToken;
     if (refreshToken == null) {
@@ -2487,6 +2487,23 @@ abstract class OidcUserManagerBase {
       if (jwksUri != null) {
         keyStore.addKeySetUrl(jwksUri);
       }
+      final clientSecret = clientCredentials.clientSecret;
+      if (clientSecret != null) {
+        // RFC 7518 §3.2 / OIDC Core §16.19: HS256/384/512 id_tokens are
+        // MAC-signed with the client_secret octets as the key. Register it as an
+        // `oct` key so symmetric id_token signatures can be verified. Without
+        // this, HS*-signed id_tokens were unverifiable. The extra key is inert
+        // for RS*/ES* tokens (those still verify via the jwks_uri keys above).
+        keyStore.addKey(
+          JsonWebKey.fromJson({
+            'kty': 'oct',
+            'k': base64Url
+                .encode(utf8.encode(clientSecret))
+                .replaceAll('=', ''),
+            'use': 'sig',
+          }),
+        );
+      }
       await clearUnusedStates();
       if (!await loadLogoutRequests()) {
         //no logout requests.
@@ -2543,9 +2560,20 @@ abstract class OidcUserManagerBase {
       return;
     }
 
-    //validate first.
-    if (request.iss != currentUser.parsedIdToken.claims.issuer ||
-        request.sid != currentUser.parsedIdToken.claims.sid) {
+    // Validate `iss`/`sid` ONLY when the OP actually sent them. Per OpenID
+    // Connect Front-Channel Logout 1.0 §3, both are OPTIONAL (sent only when
+    // `frontchannel_logout_session_required` is true); a spec-compliant OP MAY
+    // omit them. The previous `request.iss != issuer` compare treated a missing
+    // (null) param as a mismatch and silently refused to log the user out
+    // against every such OP. Now: a PRESENT-but-mismatched value is rejected
+    // (defense), an ABSENT value is accepted.
+    final issMismatch =
+        request.iss != null &&
+        request.iss != currentUser.parsedIdToken.claims.issuer;
+    final sidMismatch =
+        request.sid != null &&
+        request.sid != currentUser.parsedIdToken.claims.sid;
+    if (issMismatch || sidMismatch) {
       //invalid request, do nothing.
       logger.severe(
         'Received a front channel logout request, but the issuer '

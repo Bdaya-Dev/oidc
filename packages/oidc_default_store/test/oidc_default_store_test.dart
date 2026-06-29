@@ -15,6 +15,23 @@ void main() {
       expect(OidcDefaultStore(), isNotNull);
     });
 
+    testWidgets(
+        'per-managerId key index survives multiple writes (register reads the '
+        'managerId bucket, not the null bucket)', (tester) async {
+      final store = OidcDefaultStore();
+      await store.init();
+      const ns = OidcStoreNamespace.state;
+      const managerId = 'mgrA';
+      await store.setMany(ns, values: {'k1': 'v1'}, managerId: managerId);
+      // A SEPARATE write for the SAME manager must not drop the previously
+      // registered key. Before the fix, _registerKeyForNamespace read the
+      // default (null) bucket instead of the managerId bucket, so this second
+      // write overwrote the index with just {k2}, orphaning k1.
+      await store.setMany(ns, values: {'k2': 'v2'}, managerId: managerId);
+      final keys = await store.getAllKeys(ns, managerId: managerId);
+      expect(keys, containsAll(<String>['k1', 'k2']));
+    });
+
     final storeConfigs = [
       OidcDefaultStore(),
       OidcDefaultStore(

@@ -73,13 +73,23 @@ class OidcUser {
     if (keystore == null) {
       webToken = JsonWebToken.unverified(idToken);
     } else {
+      // An ID token MUST NOT be unsigned. `jose_plus` only auto-rejects
+      // `alg:none` when the allowed-algorithm list is null, so strip it
+      // explicitly: an OP MAY list `none` in
+      // `id_token_signing_alg_values_supported`, which would otherwise let an
+      // attacker forge an unsigned id_token — most dangerously on the
+      // front-channel implicit/hybrid path where the signature is the sole
+      // protection. (Mirrors the JARM `alg:none` strip in `facade.dart`.)
+      final algs = allowedAlgorithms
+          ?.where((a) => a.toLowerCase() != 'none')
+          .toList();
       try {
         webToken = await JsonWebKeySetLoader.runZoned(
           () async {
             return JsonWebToken.decodeAndVerify(
               idToken,
               keystore,
-              allowedArguments: allowedAlgorithms,
+              allowedArguments: algs,
             );
           },
           loader: cacheStore == null

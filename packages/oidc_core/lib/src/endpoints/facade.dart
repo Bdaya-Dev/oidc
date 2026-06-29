@@ -671,10 +671,18 @@ class OidcEndpoints {
     if (contentType == applicationJwt) {
       JsonWebToken jwt;
       if (keyStore != null) {
+        // Strip `alg:none` before verifying a signed UserInfo JWT: `jose_plus`
+        // only auto-rejects `none` when the allowed-algorithm list is null, so
+        // an OP advertising `none` in `userinfo_signing_alg_values_supported`
+        // would otherwise open an unsigned-UserInfo forgery path. (Mirrors the
+        // id_token and JARM `alg:none` strips.)
+        final algs = allowedAlgorithms
+            ?.where((a) => a.toLowerCase() != 'none')
+            .toList();
         jwt = await JsonWebToken.decodeAndVerify(
           resp.body,
           keyStore,
-          allowedArguments: allowedAlgorithms,
+          allowedArguments: algs,
         );
       } else {
         jwt = JsonWebToken.unverified(resp.body);

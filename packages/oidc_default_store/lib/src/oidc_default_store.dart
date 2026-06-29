@@ -53,6 +53,27 @@ class OidcDefaultStore implements OidcStore {
   /// instance of [FlutterSecureStorage] to use for the
   /// [OidcStoreNamespace.secureTokens] namespace.
   FlutterSecureStorage? secureStorage;
+
+  /// One-shot guard so the plaintext-fallback warning is logged once, not per op.
+  bool _warnedInsecureSecureTokens = false;
+
+  /// Warns (once) that `secureTokens` is being persisted UNENCRYPTED because no
+  /// [FlutterSecureStorage] was supplied. Previously this fallback was silent,
+  /// so tokens + the PKCE `code_verifier` landed in plaintext SharedPreferences
+  /// with no signal (RFC 9700 / OAuth 2.0 for Browser-Based-Apps BCP).
+  void _warnInsecureSecureTokensFallback() {
+    if (_warnedInsecureSecureTokens) {
+      return;
+    }
+    _warnedInsecureSecureTokens = true;
+    _logger.warning(
+      'OidcDefaultStore: no FlutterSecureStorage instance was provided, so the '
+      'secureTokens namespace (access/refresh/id tokens and the PKCE '
+      'code_verifier) is persisted via package:shared_preferences, which is '
+      'NOT encrypted at rest. Pass `secureStorageInstance: '
+      'FlutterSecureStorage()` to OidcDefaultStore to store these securely.',
+    );
+  }
   SharedPreferences? __sharedPreferences;
   SharedPreferences get _sharedPreferences => __sharedPreferences!;
 
@@ -99,7 +120,11 @@ class OidcDefaultStore implements OidcStore {
     Set<String> keys,
     String? managerId,
   ) async {
-    final prev = await getAllKeys(namespace);
+    // Read from the SAME per-manager bucket we write to below: `_setAllKeys`
+    // is keyed by `managerId`, so reading the default (null) bucket here made
+    // register/unregister operate on a different key set than the writes,
+    // corrupting per-manager key cleanup in multi-manager apps.
+    final prev = await getAllKeys(namespace, managerId: managerId);
     final newKeys = prev.union(keys).toList();
     await _setAllKeys(namespace, newKeys, managerId);
   }
@@ -109,7 +134,11 @@ class OidcDefaultStore implements OidcStore {
     Set<String> keys,
     String? managerId,
   ) async {
-    final prev = await getAllKeys(namespace);
+    // Read from the SAME per-manager bucket we write to below: `_setAllKeys`
+    // is keyed by `managerId`, so reading the default (null) bucket here made
+    // register/unregister operate on a different key set than the writes,
+    // corrupting per-manager key cleanup in multi-manager apps.
+    final prev = await getAllKeys(namespace, managerId: managerId);
     final newKeys = prev.difference(keys).toList();
     await _setAllKeys(namespace, newKeys, managerId);
   }
@@ -243,6 +272,7 @@ class OidcDefaultStore implements OidcStore {
             }
             return res;
           } else {
+            _warnInsecureSecureTokensFallback();
             return _defaultGetMany(namespace, keys, managerId);
           }
         } catch (e) {
@@ -295,6 +325,7 @@ class OidcDefaultStore implements OidcStore {
               );
             }
           } else {
+            _warnInsecureSecureTokensFallback();
             return _defaultSetMany(namespace, values, managerId);
           }
         } catch (e) {
@@ -345,6 +376,7 @@ class OidcDefaultStore implements OidcStore {
               );
             }
           } else {
+            _warnInsecureSecureTokensFallback();
             await _defaultRemoveMany(namespace, keys, managerId);
           }
         } catch (e) {
