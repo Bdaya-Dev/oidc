@@ -20,6 +20,9 @@ class _TestManager extends OidcUserManagerBase {
 
   void seed(OidcUser user) => userSubject.add(user);
 
+  /// Test hook to drive the protected auto-refresh-on-expiry path.
+  Future<void> expire(OidcToken token) => handleTokenExpiring(token);
+
   @override
   bool get isWeb => false;
   @override
@@ -143,6 +146,46 @@ void main() {
         );
         expect(_qp(tokenCalls.first)['grant_type'], 'refresh_token');
         expect(result, isNotNull);
+      },
+    );
+
+    test(
+      'AUTO refresh-on-expiry also hits /token when grant_types_supported is '
+      'omitted (handleTokenExpiring not gated on metadata)',
+      () async {
+        final tokenCalls = <http.Request>[];
+        final client = MockClient((req) async {
+          if (req.url.path.endsWith('/token')) {
+            tokenCalls.add(req);
+            return http.Response(
+              '{"access_token":"new-access","token_type":"Bearer",'
+              '"expires_in":3600,"refresh_token":"refresh-token-2",'
+              '"id_token":"${_signIdToken()}"}',
+              200,
+              headers: const {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('{}', 404);
+        });
+        final manager = await _build(client);
+
+        await manager.expire(
+          OidcToken(
+            creationTime: clock.now(),
+            idToken: _signIdToken(),
+            accessToken: 'access-token-1',
+            refreshToken: 'refresh-token-1',
+            tokenType: 'Bearer',
+          ),
+        );
+
+        expect(
+          tokenCalls,
+          isNotEmpty,
+          reason: 'auto refresh-on-expiry must not be gated on '
+              'grant_types_supported',
+        );
+        expect(_qp(tokenCalls.first)['grant_type'], 'refresh_token');
       },
     );
   });

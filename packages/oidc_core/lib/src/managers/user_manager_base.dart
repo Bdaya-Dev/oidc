@@ -1500,14 +1500,13 @@ abstract class OidcUserManagerBase {
     eventsController.add(
       OidcTokenExpiringEvent.now(currentToken: event),
     );
-    final discoveryDocument = this.discoveryDocument;
-    if (!discoveryDocument.grantTypesSupportedOrDefault.contains(
-      OidcConstants_GrantType.refreshToken,
-    )) {
-      //Server doesn't support refresh_token grant.
-      return;
-    }
-
+    // Automatic refresh-on-expiry is gated on POSSESSION of a refresh_token, not
+    // on the OP advertising `refresh_token` in grant_types_supported (OPTIONAL
+    // metadata, RFC 8414 §2; refresh is tied to the token per RFC 6749 §6).
+    // Gating on the metadata silently disabled auto-refresh for OPs that omit it
+    // (e.g. Facebook) — this mirrors the same ungating already applied to the
+    // manual _refreshToken path. A genuinely unsupported grant fails loudly at
+    // the token endpoint below.
     final refreshToken = event.refreshToken;
     if (refreshToken == null) {
       return;
