@@ -222,8 +222,9 @@ extension OidcStoreExt on OidcStore {
           value: stateData,
         );
 
-  /// Gets the stateData (value) of a [state] (key).
-  Future<void> removeStateResponseData(String state) => setStateData(
+  /// Removes the stored state-response (the unprocessed redirect [Uri]) for a
+  /// [state] (key) from the [OidcStoreNamespace.stateResponse] namespace.
+  Future<void> removeStateResponseData(String state) => setStateResponseData(
     state: state,
     stateData: null,
   );

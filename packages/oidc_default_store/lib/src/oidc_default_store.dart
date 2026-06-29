@@ -50,8 +50,75 @@ class OidcDefaultStore implements OidcStore {
   })  : secureStorage = secureStorageInstance,
         __sharedPreferences = sharedPreferences;
 
+  /// Recommended hardened [AndroidOptions] for storing OIDC tokens at rest.
+  ///
+  /// This is the `flutter_secure_storage` v10 default (an Android-Keystore-backed
+  /// RSA key wrapping an AES-GCM payload key). The deprecated
+  /// `encryptedSharedPreferences` (Jetpack Security) path is intentionally NOT
+  /// set — v10 migrates away from it automatically. (RFC 9700 §4.9.3/§4.14.)
+  static const AndroidOptions recommendedAndroidOptions =
+      AndroidOptions.defaultOptions;
+
+  /// Recommended hardened [IOSOptions] for storing OIDC tokens at rest.
+  ///
+  /// `accessibility` is [KeychainAccessibility.first_unlock_this_device]
+  /// (the MSAL posture): the item survives a reboot so a backgrounded app can
+  /// still refresh tokens after first unlock, but it is never iCloud-synced and
+  /// never migrated to another device. `synchronizable` stays at its `false`
+  /// default so the item is never written to the iCloud keychain.
+  static const IOSOptions recommendedIOSOptions = IOSOptions(
+    accessibility: KeychainAccessibility.first_unlock_this_device,
+  );
+
+  /// Recommended hardened [MacOsOptions] for storing OIDC tokens at rest.
+  ///
+  /// Mirrors [recommendedIOSOptions]. Note that macOS Flutter apps additionally
+  /// require the Keychain Sharing entitlement for `flutter_secure_storage` to
+  /// work at all.
+  static const MacOsOptions recommendedMacOsOptions = MacOsOptions(
+    accessibility: KeychainAccessibility.first_unlock_this_device,
+  );
+
+  /// Builds a [FlutterSecureStorage] configured with the hardened OIDC defaults
+  /// ([recommendedAndroidOptions], [recommendedIOSOptions] and
+  /// [recommendedMacOsOptions]).
+  ///
+  /// Pass the result to [OidcDefaultStore.new]'s `secureStorageInstance` to get
+  /// the recommended at-rest posture for the
+  /// [OidcStoreNamespace.secureTokens] namespace:
+  ///
+  /// ```dart
+  /// final store = OidcDefaultStore(
+  ///   secureStorageInstance: OidcDefaultStore.createHardenedSecureStorage(),
+  /// );
+  /// ```
+  ///
+  /// Android uses [recommendedAndroidOptions] (the v10 default), so it is not
+  /// passed explicitly here.
+  ///
+  /// This is opt-in (not the constructor default) to preserve backward
+  /// compatibility: callers that pass their own [FlutterSecureStorage], or rely
+  /// on the `shared_preferences` fallback, are unaffected.
+  static FlutterSecureStorage createHardenedSecureStorage() =>
+      const FlutterSecureStorage(
+        iOptions: recommendedIOSOptions,
+        mOptions: recommendedMacOsOptions,
+      );
+
   /// instance of [FlutterSecureStorage] to use for the
   /// [OidcStoreNamespace.secureTokens] namespace.
+  ///
+  /// When this is `null`, the [OidcStoreNamespace.secureTokens] namespace falls
+  /// back to `package:shared_preferences`, which is **not** secure (it is
+  /// plaintext on most platforms and `localStorage` on web). For the hardened
+  /// at-rest posture on Android/iOS/macOS, pass
+  /// [createHardenedSecureStorage].
+  ///
+  /// On web there is no real secret-storage primitive: `shared_preferences`
+  /// maps to `localStorage`, which is readable by any injected script
+  /// (Browser-Based Apps BCP §8). Prefer a BFF (tokens behind HttpOnly cookies)
+  /// or in-memory storage with service-worker refresh; treat web persistence as
+  /// best-effort.
   FlutterSecureStorage? secureStorage;
   SharedPreferences? __sharedPreferences;
   SharedPreferences get _sharedPreferences => __sharedPreferences!;
