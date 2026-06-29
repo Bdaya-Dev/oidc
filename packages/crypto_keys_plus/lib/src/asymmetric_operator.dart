@@ -131,8 +131,10 @@ class _AsymmetricVerifier extends Verifier<PublicKey>
                 keyParameter, DefaultSecureRandom(), saltLength));
         return (_algorithm as pc.PSSSigner)
             .verifySignature(data, pc.PSSSignature(signature.data));
-      } on ArgumentError {
-        // e.g. key too small for the requested hash + salt length.
+      } catch (_) {
+        // verify() must return false on ANY failure (bad signature, key too
+        // small for the requested hash+salt, malformed PSSSignature), never
+        // throw — mirroring the EdDSA verifier's fail-closed contract.
         return false;
       }
     }
