@@ -23,6 +23,12 @@ class _TestManager extends OidcUserManagerBase {
   /// Test hook to drive the protected auto-refresh-on-expiry path.
   Future<void> expire(OidcToken token) => handleTokenExpiring(token);
 
+  /// Test hook to drive the protected front-channel-logout path. Calling the
+  /// `@protected` member from inside this subclass avoids the
+  /// `invalid_use_of_protected_member` analyzer warning.
+  Future<void> fcl(OidcFrontChannelLogoutIncomingRequest request) =>
+      handleFrontChannelLogoutRequest(request);
+
   @override
   bool get isWeb => false;
   @override
@@ -200,7 +206,7 @@ void main() {
         expect(manager.currentUser, isNotNull);
 
         // A paramless front-channel logout request (iss=null, sid=null).
-        await manager.handleFrontChannelLogoutRequest(
+        await manager.fcl(
           OidcFrontChannelLogoutIncomingRequest.fromJson(const {}),
         );
 
@@ -220,7 +226,7 @@ void main() {
         final client = MockClient((req) async => http.Response('{}', 404));
         final manager = await _build(client);
 
-        await manager.handleFrontChannelLogoutRequest(
+        await manager.fcl(
           OidcFrontChannelLogoutIncomingRequest.fromJson(
             const {'iss': 'https://evil.example.com'},
           ),
