@@ -1011,12 +1011,23 @@ abstract class OidcUserManagerBase {
       if (stateData.managerId != id) {
         return null; // this state is not for this manager.
       }
-      // RFC 9207 mix-up attack defense: if the authorization server returned an
-      // `iss` parameter in the authorization response, it MUST match the
-      // provider's issuer. Validated only when present (a no-op for OPs that do
-      // not send it); a mismatch indicates a possible mix-up attack.
+      // RFC 9207 mix-up attack defense.
       final responseIss = response.iss;
       final expectedIssuer = metadata.issuer;
+      // §2.4: a client MUST reject a response that omits `iss` when the AS
+      // advertises support via `authorization_response_iss_parameter_supported`.
+      if (metadata.authorizationResponseIssParameterSupportedOrDefault &&
+          responseIss == null) {
+        logAndThrow(
+          'The authorization server advertises '
+          '`authorization_response_iss_parameter_supported` but the '
+          'authorization response is missing the `iss` parameter '
+          '(RFC 9207 §2.4); refusing as a possible mix-up attack.',
+        );
+      }
+      // When `iss` is present it MUST match the provider issuer (string compare,
+      // not Uri normalization — RFC 9207 §2.4). A no-op for OPs that omit it and
+      // do not advertise support.
       if (responseIss != null &&
           expectedIssuer != null &&
           responseIss.toString() != expectedIssuer.toString()) {
@@ -2406,6 +2417,11 @@ abstract class OidcUserManagerBase {
             allowedAlgorithms:
                 discoveryDocument.idTokenSigningAlgValuesSupported,
             expectedAudience: clientCredentials.clientId,
+            // RFC 9207: validate `iss` (incl. on error redirects) before the
+            // server-error throw; require it when the AS advertises support.
+            expectedIssuer: discoveryDocument.issuer,
+            requireIss: discoveryDocument
+                .authorizationResponseIssParameterSupportedOrDefault,
           );
 
           await handleSuccessfulAuthResponse(

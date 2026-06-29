@@ -426,6 +426,8 @@ class OidcEndpoints {
     JsonWebKeyStore? keyStore,
     List<String>? allowedAlgorithms,
     String? expectedAudience,
+    Uri? expectedIssuer,
+    bool requireIss = false,
   }) async {
     final (
       :parameters,
@@ -455,6 +457,28 @@ class OidcEndpoints {
       OidcConstants_AuthParameters.responseMode: resolvedResponseMode,
       ...?overrides,
     };
+    // RFC 9207 §2.4: validate `iss` BEFORE surfacing a server error, so the
+    // mix-up defense also applies to error redirects (which would otherwise
+    // throw `serverError` below before any issuer check). When the AS advertises
+    // iss support, a missing `iss` is rejected; a present `iss` must match the
+    // provider issuer (string compare, not Uri normalization).
+    final issStr = p[OidcConstants_AuthParameters.iss] as String?;
+    final iss = issStr == null ? null : Uri.tryParse(issStr);
+    if (requireIss && iss == null) {
+      throw const OidcException(
+        'Authorization response is missing the `iss` parameter from an AS that '
+        'advertises authorization_response_iss_parameter_supported '
+        '(RFC 9207 §2.4); refusing as a possible mix-up attack.',
+      );
+    }
+    if (iss != null &&
+        expectedIssuer != null &&
+        iss.toString() != expectedIssuer.toString()) {
+      throw OidcException(
+        'Authorization response `iss` ($iss) does not match the provider '
+        'issuer ($expectedIssuer); possible mix-up attack (RFC 9207).',
+      );
+    }
     if (p.containsKey(OidcConstants_AuthParameters.error)) {
       throw OidcException.serverError(
         errorResponse: OidcErrorResponse.fromJson(p),

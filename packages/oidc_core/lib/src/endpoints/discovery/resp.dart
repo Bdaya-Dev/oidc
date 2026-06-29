@@ -46,6 +46,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
     this.uiLocalesSupported,
     this.pushedAuthorizationRequestEndpoint,
     this.claimsParameterSupported,
+    this.authorizationResponseIssParameterSupported,
     this.requestParameterSupported,
     this.requireRequestUriRegistration,
     this.requestUriParameterSupported,
@@ -279,6 +280,17 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final bool? claimsParameterSupported;
   bool get claimsParameterSupportedOrDefault =>
       claimsParameterSupported ?? false;
+
+  /// RFC 9207 §3: whether the AS supports the authorization-response `iss`
+  /// parameter. When `true`, the client MUST reject a response missing `iss`
+  /// (RFC 9207 §2.4). Absent ⇒ treated as `false` (lenient).
+  @JsonKey(
+    name:
+        OidcConstants_ProviderMetadata.authorizationResponseIssParameterSupported,
+  )
+  final bool? authorizationResponseIssParameterSupported;
+  bool get authorizationResponseIssParameterSupportedOrDefault =>
+      authorizationResponseIssParameterSupported ?? false;
 
   /// `true` when the OP supports use of the `request` parameter.
   @JsonKey(name: OidcConstants_ProviderMetadata.requestParameterSupported)

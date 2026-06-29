@@ -89,6 +89,10 @@ abstract class _$OidcProviderMetadataCWProxy {
 
   OidcProviderMetadata claimsParameterSupported(bool? claimsParameterSupported);
 
+  OidcProviderMetadata authorizationResponseIssParameterSupported(
+    bool? authorizationResponseIssParameterSupported,
+  );
+
   OidcProviderMetadata requestParameterSupported(
     bool? requestParameterSupported,
   );
@@ -189,6 +193,7 @@ abstract class _$OidcProviderMetadataCWProxy {
     List<String>? uiLocalesSupported,
     Uri? pushedAuthorizationRequestEndpoint,
     bool? claimsParameterSupported,
+    bool? authorizationResponseIssParameterSupported,
     bool? requestParameterSupported,
     bool? requireRequestUriRegistration,
     bool? requestUriParameterSupported,
@@ -361,6 +366,14 @@ class _$OidcProviderMetadataCWProxyImpl
   ) => call(claimsParameterSupported: claimsParameterSupported);
 
   @override
+  OidcProviderMetadata authorizationResponseIssParameterSupported(
+    bool? authorizationResponseIssParameterSupported,
+  ) => call(
+    authorizationResponseIssParameterSupported:
+        authorizationResponseIssParameterSupported,
+  );
+
+  @override
   OidcProviderMetadata requestParameterSupported(
     bool? requestParameterSupported,
   ) => call(requestParameterSupported: requestParameterSupported);
@@ -511,6 +524,8 @@ class _$OidcProviderMetadataCWProxyImpl
     Object? uiLocalesSupported = const $CopyWithPlaceholder(),
     Object? pushedAuthorizationRequestEndpoint = const $CopyWithPlaceholder(),
     Object? claimsParameterSupported = const $CopyWithPlaceholder(),
+    Object? authorizationResponseIssParameterSupported =
+        const $CopyWithPlaceholder(),
     Object? requestParameterSupported = const $CopyWithPlaceholder(),
     Object? requireRequestUriRegistration = const $CopyWithPlaceholder(),
     Object? requestUriParameterSupported = const $CopyWithPlaceholder(),
@@ -666,6 +681,12 @@ class _$OidcProviderMetadataCWProxyImpl
           ? _value.claimsParameterSupported
           // ignore: cast_nullable_to_non_nullable
           : claimsParameterSupported as bool?,
+      authorizationResponseIssParameterSupported:
+          authorizationResponseIssParameterSupported ==
+              const $CopyWithPlaceholder()
+          ? _value.authorizationResponseIssParameterSupported
+          // ignore: cast_nullable_to_non_nullable
+          : authorizationResponseIssParameterSupported as bool?,
       requestParameterSupported:
           requestParameterSupported == const $CopyWithPlaceholder()
           ? _value.requestParameterSupported
@@ -865,6 +886,8 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
       ? null
       : Uri.parse(json['pushed_authorization_request_endpoint'] as String),
   claimsParameterSupported: json['claims_parameter_supported'] as bool?,
+  authorizationResponseIssParameterSupported:
+      json['authorization_response_iss_parameter_supported'] as bool?,
   requestParameterSupported: json['request_parameter_supported'] as bool?,
   requireRequestUriRegistration:
       json['require_request_uri_registration'] as bool?,
