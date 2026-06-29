@@ -108,6 +108,50 @@ class EcPrivateKeyImpl extends PrivateKey
           other.curve == curve);
 }
 
+class OkpPublicKeyImpl extends PublicKey
+    with Key
+    implements OkpPublicKey, OkpKey {
+  @override
+  final Uint8List rawBytes;
+
+  @override
+  final Identifier curve;
+
+  OkpPublicKeyImpl({required this.rawBytes, required this.curve});
+
+  @override
+  int get hashCode => Object.hash(const ListEquality().hash(rawBytes), curve);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OkpPublicKey &&
+          other.curve == curve &&
+          const ListEquality().equals(other.rawBytes, rawBytes));
+}
+
+class OkpPrivateKeyImpl extends PrivateKey
+    with Key
+    implements OkpPrivateKey, OkpKey {
+  @override
+  final Uint8List rawBytes;
+
+  @override
+  final Identifier curve;
+
+  OkpPrivateKeyImpl({required this.rawBytes, required this.curve});
+
+  @override
+  int get hashCode => Object.hash(const ListEquality().hash(rawBytes), curve);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OkpPrivateKey &&
+          other.curve == curve &&
+          const ListEquality().equals(other.rawBytes, rawBytes));
+}
+
 class SymmetricKeyImpl extends Object
     with Key, PublicKey, PrivateKey
     implements SymmetricKey {

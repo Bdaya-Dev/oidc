@@ -65,6 +65,21 @@ class _AsymmetricSigner extends Signer<PrivateKey>
   @override
   Signature sign(List<int> data) {
     data = data is Uint8List ? data : Uint8List.fromList(data);
+
+    // RSASSA-PSS MUST be handled before the generic `key is RsaKey` branch: a
+    // PSS key IS an RsaKey, but [pc.PSSSigner] needs a
+    // [pc.ParametersWithSaltConfiguration] (not [pc.ParametersWithRandom]) and
+    // produces a [pc.PSSSignature] (not a [pc.RSASignature]).
+    if (_algorithm is pc.PSSSigner) {
+      final saltLength = _pssSaltLength(algorithm.name);
+      _algorithm.init(
+          true,
+          pc.ParametersWithSaltConfiguration(
+              keyParameter, DefaultSecureRandom(), saltLength));
+      return Signature(
+          (_algorithm.generateSignature(data) as pc.PSSSignature).bytes);
+    }
+
     _algorithm.init(
         true, pc.ParametersWithRandom(keyParameter, DefaultSecureRandom()));
 
@@ -103,6 +118,24 @@ class _AsymmetricVerifier extends Verifier<PublicKey>
 
   @override
   bool verify(Uint8List data, Signature signature) {
+    // RSASSA-PSS MUST be handled before the generic `key is RsaKey` branch: a
+    // PSS key IS an RsaKey, but [pc.PSSSigner.verifySignature] takes a
+    // [pc.PSSSignature] and [pc.PSSSigner.init] only accepts a
+    // [pc.ParametersWithSaltConfiguration] / [pc.ParametersWithSalt].
+    if (_algorithm is pc.PSSSigner) {
+      final saltLength = _pssSaltLength(algorithm.name);
+      try {
+        _algorithm.init(
+            false,
+            pc.ParametersWithSaltConfiguration(
+                keyParameter, DefaultSecureRandom(), saltLength));
+        return (_algorithm as pc.PSSSigner)
+            .verifySignature(data, pc.PSSSignature(signature.data));
+      } on ArgumentError {
+        // e.g. key too small for the requested hash + salt length.
+        return false;
+      }
+    }
     if (key is RsaKey) {
       _algorithm.init(false,
           pc.ParametersWithRandom(keyParameter, pc.SecureRandom('Fortuna')));
@@ -169,4 +202,26 @@ Iterable<int> _bigIntToBytes(BigInt v, int length) sync* {
 
 BigInt _bigIntFromBytes(Iterable<int> bytes) {
   return bytes.fold(BigInt.zero, (a, b) => a * _b256 + BigInt.from(b));
+}
+
+/// Salt length for RSASSA-PSS.
+///
+/// For the JWA PS256/384/512 identifiers the salt length equals the hash output
+/// size (RFC 7518 §3.5). Identifiers built via
+/// `algorithms.signing.rsa.pss.withParameters` carry an explicit `/salt<N>`
+/// suffix instead.
+int _pssSaltLength(String algorithmName) {
+  switch (algorithmName) {
+    case 'sig/RSA/PSS/SHA-256':
+      return 32;
+    case 'sig/RSA/PSS/SHA-384':
+      return 48;
+    case 'sig/RSA/PSS/SHA-512':
+      return 64;
+  }
+  final match = RegExp(r'/salt(\d+)$').firstMatch(algorithmName);
+  if (match != null) {
+    return int.parse(match.group(1)!);
+  }
+  throw ArgumentError('Unknown RSASSA-PSS algorithm: $algorithmName');
 }
