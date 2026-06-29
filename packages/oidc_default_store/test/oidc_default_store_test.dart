@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_const_constructors
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
@@ -30,6 +31,37 @@ void main() {
       await store.setMany(ns, values: {'k2': 'v2'}, managerId: managerId);
       final keys = await store.getAllKeys(ns, managerId: managerId);
       expect(keys, containsAll(<String>['k1', 'k2']));
+    });
+
+    test('recommended secure-storage options expose the hardened posture', () {
+      // iOS/macOS: MSAL-style first_unlock_this_device, never iCloud-synced.
+      expect(
+        OidcDefaultStore.recommendedIOSOptions.accessibility,
+        KeychainAccessibility.first_unlock_this_device,
+      );
+      expect(OidcDefaultStore.recommendedIOSOptions.synchronizable, isFalse);
+      expect(
+        OidcDefaultStore.recommendedMacOsOptions.accessibility,
+        KeychainAccessibility.first_unlock_this_device,
+      );
+      expect(OidcDefaultStore.recommendedMacOsOptions.synchronizable, isFalse);
+
+      final secure = OidcDefaultStore.createHardenedSecureStorage();
+      expect(secure, isA<FlutterSecureStorage>());
+      expect(
+        secure.iOptions.accessibility,
+        KeychainAccessibility.first_unlock_this_device,
+      );
+      expect(
+        secure.mOptions.accessibility,
+        KeychainAccessibility.first_unlock_this_device,
+      );
+
+      // Passing the hardened instance must not break construction.
+      expect(
+        OidcDefaultStore(secureStorageInstance: secure),
+        isNotNull,
+      );
     });
 
     final storeConfigs = [

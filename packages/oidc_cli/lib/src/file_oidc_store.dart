@@ -50,10 +50,39 @@ class FileOidcStore implements OidcStore {
   }
 
   Future<void> _write(Map<String, dynamic> data) async {
-    if (!file.existsSync()) {
-      file.createSync(recursive: true);
+    final parent = file.parent;
+    if (!parent.existsSync()) {
+      parent.createSync(recursive: true);
     }
-    file.writeAsStringSync(jsonEncode(data));
+    final encoded = jsonEncode(data);
+    // Atomic write: serialize to a sibling temp file, restrict its permissions
+    // while it is still empty/owner-owned, then rename it over the target. A
+    // crash mid-write therefore cannot truncate or expose a half-written store.
+    final tmp = File('${file.path}.tmp')..writeAsStringSync(encoded);
+    _restrictToOwner(tmp);
+    tmp.renameSync(file.path);
+    // The renamed inode already carries 0600 from the temp file on POSIX, but
+    // re-assert in case the target pre-existed with looser permissions.
+    _restrictToOwner(file);
+  }
+
+  /// Restricts [f] to owner-only read/write (`0600`) on POSIX platforms so the
+  /// persisted tokens are not world-readable (RFC 9700 §4.9.3 — secrets must
+  /// not be stored in plaintext readable by other users).
+  ///
+  /// `dart:io` exposes no `chmod`, so we shell out to `chmod` and guard it
+  /// behind `!Platform.isWindows`. On Windows the store lives under the
+  /// per-user profile directory (`%USERPROFILE%\.oidc_cli`) whose ACL already
+  /// restricts access to the owning user.
+  void _restrictToOwner(File f) {
+    if (Platform.isWindows) {
+      return;
+    }
+    try {
+      Process.runSync('chmod', ['600', f.path]);
+    } on Exception catch (e) {
+      _logger.warn('Could not restrict permissions on ${f.path}: $e');
+    }
   }
 
   String _getPrefix(OidcStoreNamespace namespace, String? managerId) {
