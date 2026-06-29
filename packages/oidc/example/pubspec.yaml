@@ -25,25 +25,26 @@ dependencies:
   oidc_default_store: ^0.6.0+2
 dev_dependencies:
   archive: ^4.0.7
-  # integration_test + flutter_driver are retained ONLY for the linux/windows
-  # e2e jobs until the Patrol fork gains desktop backends. android/iOS/macOS/web
-  # run via Patrol (below).
-  flutter_driver:
-    sdk: flutter
+  # integration_test + flutter_test back the macOS e2e job only
+  # (`flutter test integration_test`); Patrol coverage is unsupported on macOS.
+  # Every other platform (android/iOS/web/linux/windows) runs via patrol_plus
+  # below. flutter_driver is no longer needed: web moved off flutter-drive/DWDS
+  # to the Patrol (Playwright) web runner.
   flutter_test:
     sdk: flutter
   integration_test:
     sdk: flutter
-  # Our Patrol fork (web tests run via Playwright, not flutter-drive/DWDS).
-  patrol:
-    git:
-      url: https://github.com/ahmednfwela/patrol.git
-      ref: fixed
-      path: packages/patrol
+  # patrol_plus: published fork of Patrol (pub.dev) that adds desktop
+  # (linux/windows) test backends and a Playwright-based web runner. The
+  # matching CLI, patrol_cli_plus, is activated globally in CI. Web tests run
+  # via Playwright (no flutter-drive/DWDS), which sidesteps Flutter's DWDS
+  # startup race (flutter/flutter#181357).
+  patrol_plus: ^5.0.1
   very_good_analysis: ^10.0.0
 
-# Patrol CLI config (patrol_cli is activated globally in CI, not depended on
-# here, so its deps don't enter the app's resolution).
+# Patrol CLI config (patrol_cli_plus is activated globally in CI, not depended
+# on here, so its deps don't enter the app's resolution). Tests live in the
+# default `patrol_test/` directory.
 patrol:
   app_name: OIDC Example
   android:

@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   flutter_secure_storage_linux
   oidc_linux
+  patrol_plus
   url_launcher_linux
   window_to_front
 )

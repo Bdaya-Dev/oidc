@@ -15,7 +15,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
-import 'package:patrol/patrol.dart';
+import 'package:patrol_plus/patrol.dart';
 
 import '../integration_test/shared_e2e.dart';
 
