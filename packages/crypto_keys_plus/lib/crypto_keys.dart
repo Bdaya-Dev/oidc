@@ -3,6 +3,7 @@ library crypto_keys;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:ed25519_edwards/ed25519_edwards.dart' as ed;
 import 'package:pointycastle/export.dart' as pc;
 
 import 'src/algorithms.dart';
@@ -14,7 +15,9 @@ export 'src/algorithms.dart'
 
 part 'src/asymmetric_operator.dart';
 part 'src/ec_keys.dart';
+part 'src/eddsa_operator.dart';
 part 'src/keys.dart';
+part 'src/okp_keys.dart';
 part 'src/operator.dart';
 part 'src/rsa_keys.dart';
 part 'src/symmetric_keys.dart';

@@ -1121,10 +1121,12 @@ void main() {
       });
 
       test('Example handling unkown curve', () {
+        // Ed25519 is supported (RFC 8037), but an unsupported OKP curve such as
+        // Ed448 must still yield a null KeyPair.
         var jwk = {
           'kty': 'OKP',
           'use': 'sig',
-          'crv': 'Ed25519',
+          'crv': 'Ed448',
           'kid': 'fd8709f3-df83-4c91-81dd-97d0c4ae3c79',
           'x': 'aigIzKFXi-h-wtqhbUmK3knnbBgd_I9169keewi5Fcc',
         };

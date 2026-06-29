@@ -68,11 +68,10 @@ class JsonWebAlgorithm {
     es384,
     es512,
     es256k,
-/*
     ps256,
     ps384,
     ps512,
-*/
+    eddsa,
     rsa1_5,
     rsa_oaep,
     rsa_oaep_256,
@@ -131,10 +130,9 @@ class JsonWebAlgorithm {
   static const es256k =
       JsonWebAlgorithm('ES256K', type: 'EC', use: 'sig', curve: 'P-256K');
 
-/* TODO: not supported yet in crypto_keys
   /// RSASSA-PSS using SHA-256 and MGF1 with SHA-256
   static const ps256 =
-      JsonWebAlgorithm('PS512', type: 'RSA', use: 'sig', minKeyBitLength: 2048);
+      JsonWebAlgorithm('PS256', type: 'RSA', use: 'sig', minKeyBitLength: 2048);
 
   /// RSASSA-PSS using SHA-384 and MGF1 with SHA-384
   static const ps384 =
@@ -143,7 +141,10 @@ class JsonWebAlgorithm {
   /// RSASSA-PSS using SHA-512 and MGF1 with SHA-512
   static const ps512 =
       JsonWebAlgorithm('PS512', type: 'RSA', use: 'sig', minKeyBitLength: 2048);
-*/
+
+  /// EdDSA signature algorithms (RFC 8037) using the Ed25519 curve.
+  static const eddsa =
+      JsonWebAlgorithm('EdDSA', type: 'OKP', use: 'sig', curve: 'Ed25519');
 
   /// RSAES-PKCS1-v1_5
   static const rsa1_5 = JsonWebAlgorithm('RSA1_5',
@@ -258,6 +259,16 @@ class JsonWebAlgorithm {
         'y': encodeBigInt((keyPair.publicKey as EcPublicKey).yCoordinate),
         'crv': curve,
       },
+      if (type == 'OKP') ...{
+        // RFC 8037 §2: `x`/`d` are base64url of the RAW octet string, not of a
+        // big-endian integer like the EC coordinates above.
+        'crv': curve,
+        'x': encodeBase64EncodedBytes(
+            (keyPair.publicKey as OkpPublicKey).rawBytes),
+        if (keyPair.privateKey != null)
+          'd': encodeBase64EncodedBytes(
+              (keyPair.privateKey as OkpPrivateKey).rawBytes),
+      },
       'alg': name,
       'use': use,
       'key_ops': keyOperations
@@ -283,6 +294,8 @@ class JsonWebAlgorithm {
         return KeyPair.generateRsa(bitStrength: _getKeyBitLength(keyBitLength));
       case 'EC':
         return KeyPair.generateEc(curvesByName[curve!]!);
+      case 'OKP':
+        return KeyPair.generateEd25519();
     }
     throw UnsupportedError('Algorithms of type \'$type\' not supported');
   }
