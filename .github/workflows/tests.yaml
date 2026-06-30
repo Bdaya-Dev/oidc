@@ -236,17 +236,25 @@ jobs:
         #   channel: master
         #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Start Simulator
-        # Boot an available iPhone simulator and export its UDID. patrol_cli_plus
-        # >= 5.0.3 targets the simulator by UDID (`-destination id=<udid>`), so we
-        # only need the UDID. Parsed from simctl JSON so it tracks whatever
-        # runtime the macOS runner image ships.
+        # Boot an available iPhone simulator and capture BOTH its UDID and its
+        # runtime version. patrol_cli_plus >= 5.0.3 targets the simulator by UDID
+        # (`-destination id=<udid>`) in the test-without-building step, but its
+        # BUILD step (build_ios.dart:195) still builds the xcodebuild destination
+        # as `platform=iOS Simulator,OS=<--ios>,name=<device name>`, defaulting
+        # --ios to `latest` (app_options.dart:290). `OS=latest` can produce a test
+        # product the booted runtime cannot execute -> "Unable to find a device
+        # matching the provided destination specifier" / exit 70. So pass the sim's
+        # REAL OS via `--ios $SIMULATOR_OS`. Parsed from simctl JSON so it tracks
+        # whatever runtime the macOS runner image ships.
         run: |
           SIM_JSON="$(xcrun simctl list devices available --json)"
           RUNTIME_KEY="$(echo "$SIM_JSON" | jq -r '.devices | to_entries[] | select(.key|test("SimRuntime.iOS")) | select([.value[]|select(.name|startswith("iPhone"))]|length>0) | .key' | head -n 1)"
           UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
-          echo "Booting UDID=$UDID (runtime $RUNTIME_KEY)"
+          OS_VER="$(echo "$RUNTIME_KEY" | sed -E 's/.*SimRuntime\.iOS-([0-9]+)-([0-9]+).*/\1.\2/')"
+          echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY)"
           xcrun simctl boot "${UDID:?No available iPhone simulator found}"
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "SIMULATOR_OS=${OS_VER:?Could not parse simulator OS version}" >> "$GITHUB_ENV"
       - name: Wait for Simulator to be Ready
         run: |
           COUNT=0
@@ -277,6 +285,8 @@ jobs:
             --coverage-ignore="**/*.g.dart" \
             --coverage-package oidc \
             -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
+            --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
+            --verbose \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
           cp coverage/patrol_lcov.info coverage/ios-coverage.info
