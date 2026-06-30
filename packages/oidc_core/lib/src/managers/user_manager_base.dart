@@ -1091,6 +1091,7 @@ abstract class OidcUserManagerBase {
           code: code,
           nonce: stateData.nonce,
           metadata: metadata,
+          maxAge: stateData.maxAge,
         );
       }
 
@@ -1829,6 +1830,10 @@ abstract class OidcUserManagerBase {
   ///
   /// This is an additional security gate run BEFORE the code is exchanged; the
   /// logged-in user is still built from the token-endpoint response.
+  ///
+  /// Per OpenID Connect Core §3.1.2.1 / §3.1.3.7 step 12, when [maxAge] was
+  /// requested the front-channel id_token MUST carry `auth_time` and is
+  /// rejected when `(now - auth_time) > maxAge + expiryTolerance`.
   @protected
   Future<void> validateFrontChannelIdToken({
     required String idToken,
@@ -1836,6 +1841,7 @@ abstract class OidcUserManagerBase {
     required String code,
     required String nonce,
     required OidcProviderMetadata metadata,
+    Duration? maxAge,
   }) async {
     final frontChannelUser = await OidcUser.fromIdToken(
       token: OidcToken(
@@ -1865,6 +1871,7 @@ abstract class OidcUserManagerBase {
       user: frontChannelUser,
       metadata: metadata,
       authorizationCode: code,
+      maxAge: maxAge,
     );
     if (errors.isNotEmpty) {
       for (final error in errors) {
@@ -2092,6 +2099,12 @@ abstract class OidcUserManagerBase {
             requireSignedResponseIssAud:
                 settings.userInfoSettings.requireSignedResponseIssAud,
             claimsExpiryTolerance: settings.expiryTolerance,
+            // A signed (application/jwt) UserInfo response that cannot be
+            // verified is rejected when strict. The managed flow always passes
+            // a non-null keyStore (see [keyStore]), so this path is unreachable
+            // here; threading keeps the contract explicit and consistent with
+            // id_token handling.
+            strictJwtVerification: settings.strictJwtVerification,
             // Present a DPoP-bound access token with the DPoP scheme + an
             // `ath`-bound proof (RFC 9449 §7.1).
             dpopManager: actualUser.token.tokenType?.toUpperCase() == 'DPOP'

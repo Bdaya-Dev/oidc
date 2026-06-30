@@ -820,12 +820,12 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
   tokenEndpoint: json['token_endpoint'] == null
       ? null
       : Uri.parse(json['token_endpoint'] as String),
-  userinfoEndpoint: json['userinfo_endpoint'] == null
-      ? null
-      : Uri.parse(json['userinfo_endpoint'] as String),
-  registrationEndpoint: json['registration_endpoint'] == null
-      ? null
-      : Uri.parse(json['registration_endpoint'] as String),
+  userinfoEndpoint: OidcInternalUtilities.tryParseUri(
+    json['userinfo_endpoint'],
+  ),
+  registrationEndpoint: OidcInternalUtilities.tryParseUri(
+    json['registration_endpoint'],
+  ),
   scopesSupported: (json['scopes_supported'] as List<dynamic>?)
       ?.map((e) => e as String)
       .toList(),
@@ -872,19 +872,18 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
   claimsSupported: (json['claims_supported'] as List<dynamic>?)
       ?.map((e) => e as String)
       .toList(),
-  serviceDocumentation: json['service_documentation'] == null
-      ? null
-      : Uri.parse(json['service_documentation'] as String),
+  serviceDocumentation: OidcInternalUtilities.tryParseUri(
+    json['service_documentation'],
+  ),
   claimsLocalesSupported: (json['claims_locales_supported'] as List<dynamic>?)
       ?.map((e) => e as String)
       .toList(),
   uiLocalesSupported: (json['ui_locales_supported'] as List<dynamic>?)
       ?.map((e) => e as String)
       .toList(),
-  pushedAuthorizationRequestEndpoint:
-      json['pushed_authorization_request_endpoint'] == null
-      ? null
-      : Uri.parse(json['pushed_authorization_request_endpoint'] as String),
+  pushedAuthorizationRequestEndpoint: OidcInternalUtilities.tryParseUri(
+    json['pushed_authorization_request_endpoint'],
+  ),
   claimsParameterSupported: json['claims_parameter_supported'] as bool?,
   authorizationResponseIssParameterSupported:
       json['authorization_response_iss_parameter_supported'] as bool?,
@@ -895,21 +894,17 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
       json['request_uri_parameter_supported'] as bool?,
   requirePushedAuthorizationRequests:
       json['require_pushed_authorization_requests'] as bool?,
-  opPolicyUri: json['op_policy_uri'] == null
-      ? null
-      : Uri.parse(json['op_policy_uri'] as String),
-  opTosUri: json['op_tos_uri'] == null
-      ? null
-      : Uri.parse(json['op_tos_uri'] as String),
-  checkSessionIframe: json['check_session_iframe'] == null
-      ? null
-      : Uri.parse(json['check_session_iframe'] as String),
-  endSessionEndpoint: json['end_session_endpoint'] == null
-      ? null
-      : Uri.parse(json['end_session_endpoint'] as String),
-  revocationEndpoint: json['revocation_endpoint'] == null
-      ? null
-      : Uri.parse(json['revocation_endpoint'] as String),
+  opPolicyUri: OidcInternalUtilities.tryParseUri(json['op_policy_uri']),
+  opTosUri: OidcInternalUtilities.tryParseUri(json['op_tos_uri']),
+  checkSessionIframe: OidcInternalUtilities.tryParseUri(
+    json['check_session_iframe'],
+  ),
+  endSessionEndpoint: OidcInternalUtilities.tryParseUri(
+    json['end_session_endpoint'],
+  ),
+  revocationEndpoint: OidcInternalUtilities.tryParseUri(
+    json['revocation_endpoint'],
+  ),
   revocationEndpointAuthMethodsSupported:
       (json['revocation_endpoint_auth_methods_supported'] as List<dynamic>?)
           ?.map((e) => e as String)
@@ -919,9 +914,9 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
               as List<dynamic>?)
           ?.map((e) => e as String)
           .toList(),
-  introspectionEndpoint: json['introspection_endpoint'] == null
-      ? null
-      : Uri.parse(json['introspection_endpoint'] as String),
+  introspectionEndpoint: OidcInternalUtilities.tryParseUri(
+    json['introspection_endpoint'],
+  ),
   introspectionEndpointAuthMethodsSupported:
       (json['introspection_endpoint_auth_methods_supported'] as List<dynamic>?)
           ?.map((e) => e as String)

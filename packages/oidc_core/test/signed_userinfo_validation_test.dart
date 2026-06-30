@@ -190,4 +190,89 @@ void main() {
       expect(resp.sub, 'user-1');
     },
   );
+
+  group('null keyStore + signed (application/jwt) UserInfo', () {
+    http.Client jwtClient(String body) => MockClient(
+      (req) async => http.Response(
+        body,
+        200,
+        headers: const {'content-type': 'application/jwt'},
+      ),
+    );
+
+    String signedJwt(Map<String, dynamic> claims) {
+      final key = JsonWebKey.generate('RS256');
+      return (JsonWebSignatureBuilder()
+            ..jsonContent = claims
+            ..addRecipient(key, algorithm: 'RS256'))
+          .build()
+          .toCompactSerialization();
+    }
+
+    test(
+      'strictJwtVerification=true (default) => throws OidcException '
+      '(no silent unverified trust)',
+      () async {
+        final client = jwtClient(signedJwt(_validClaims()));
+        await expectLater(
+          OidcEndpoints.userInfo(
+            userInfoEndpoint: _userInfoEndpoint,
+            accessToken: 'at',
+            followDistributedClaims: false,
+            client: client,
+          ),
+          throwsA(isA<OidcException>()),
+        );
+      },
+    );
+
+    test(
+      'strictJwtVerification=false => parses unverified claims (opt-out)',
+      () async {
+        final client = jwtClient(signedJwt(_validClaims()));
+        final resp = await OidcEndpoints.userInfo(
+          userInfoEndpoint: _userInfoEndpoint,
+          accessToken: 'at',
+          followDistributedClaims: false,
+          strictJwtVerification: false,
+          client: client,
+        );
+        expect(resp.sub, 'user-1');
+      },
+    );
+
+    test('forged application/jwt + strict (default) => throws', () async {
+      final signed = signedJwt(_validClaims());
+      // Tamper the signature segment so it can never verify.
+      final parts = signed.split('.');
+      final forged = '${parts[0]}.${parts[1]}.AAAA${parts[2]}';
+      final client = jwtClient(forged);
+      await expectLater(
+        OidcEndpoints.userInfo(
+          userInfoEndpoint: _userInfoEndpoint,
+          accessToken: 'at',
+          followDistributedClaims: false,
+          client: client,
+        ),
+        throwsA(isA<OidcException>()),
+      );
+    });
+
+    test('plain application/json with null keyStore => unaffected', () async {
+      final client = MockClient(
+        (req) async => http.Response(
+          jsonEncode({'sub': 'user-1'}),
+          200,
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      final resp = await OidcEndpoints.userInfo(
+        userInfoEndpoint: _userInfoEndpoint,
+        accessToken: 'at',
+        followDistributedClaims: false,
+        client: client,
+      );
+      expect(resp.sub, 'user-1');
+    });
+  });
 }

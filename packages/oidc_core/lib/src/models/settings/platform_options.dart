@@ -393,6 +393,7 @@ class OidcPlatformSpecificOptions_Native {
     this.methodMismatchResponse,
     this.notFoundResponse,
     this.launchUrl,
+    this.flowTimeoutSeconds,
   });
 
   /// What to return if a URI is matched
@@ -406,6 +407,18 @@ class OidcPlatformSpecificOptions_Native {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   final Future<bool> Function(Uri url)? launchUrl;
+
+  /// Maximum seconds the desktop loopback HTTP listener may wait for a redirect
+  /// before the flow auto-cancels by closing the bound socket and surfacing a
+  /// timeout error.
+  ///
+  /// `null` (default) means no timeout — the flow waits until a redirect
+  /// arrives or the future is otherwise abandoned, preserving current behavior.
+  /// Set a finite value for headless CI / unattended environments where no user
+  /// can complete the flow, otherwise `loginAuthorizationCodeFlow()` and logout
+  /// hang indefinitely and leak the bound loopback socket. Mirrors
+  /// [OidcNativeOptionsAndroid.flowTimeoutSeconds].
+  final int? flowTimeoutSeconds;
 
   Map<String, dynamic> toJson() {
     return _$OidcPlatformSpecificOptions_NativeToJson(this);

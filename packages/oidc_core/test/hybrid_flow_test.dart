@@ -23,12 +23,14 @@ class _HybridManager extends OidcUserManagerBase {
     required String code,
     required String nonce,
     String? accessToken,
+    Duration? maxAge,
   }) => validateFrontChannelIdToken(
     idToken: idToken,
     accessToken: accessToken,
     code: code,
     nonce: nonce,
     metadata: discoveryDocument,
+    maxAge: maxAge,
   );
 
   @override
@@ -169,5 +171,116 @@ void main() {
         throwsA(isA<OidcException>()),
       );
     });
+  });
+
+  group('Hybrid front-channel auth_time / max_age (§3.1.2.1 / §3.1.3.7)', () {
+    int secondsAgo(Duration d) =>
+        clock.now().subtract(d).millisecondsSinceEpoch ~/ 1000;
+
+    Map<String, dynamic> claims({
+      String nonce = 'nonce-1',
+      String? cHash,
+      int? authTime,
+    }) => {
+      'iss': 'https://op.example.com',
+      'sub': 'user-1',
+      'aud': 'client-1',
+      'azp': 'client-1',
+      'nonce': nonce,
+      'exp':
+          clock.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/
+          1000,
+      'iat': clock.now().millisecondsSinceEpoch ~/ 1000,
+      'c_hash': ?cHash,
+      'auth_time': ?authTime,
+    };
+
+    test(
+      'rejects when max_age requested but front-channel auth_time is missing',
+      () async {
+        const code = 'auth-code-1';
+        final idToken = await _signIdToken(claims(cHash: _hash(code)));
+        final m = await _manager();
+        await expectLater(
+          m.validateFrontChannel(
+            idToken: idToken,
+            code: code,
+            nonce: 'nonce-1',
+            maxAge: const Duration(minutes: 5),
+          ),
+          throwsA(
+            isA<OidcException>().having(
+              (e) => e.toString(),
+              'message',
+              contains('auth_time'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test('rejects a front-channel auth_time older than max_age', () async {
+      const code = 'auth-code-1';
+      final idToken = await _signIdToken(
+        claims(
+          cHash: _hash(code),
+          authTime: secondsAgo(const Duration(hours: 1)),
+        ),
+      );
+      final m = await _manager();
+      await expectLater(
+        m.validateFrontChannel(
+          idToken: idToken,
+          code: code,
+          nonce: 'nonce-1',
+          maxAge: const Duration(minutes: 5),
+        ),
+        throwsA(
+          isA<OidcException>().having(
+            (e) => e.toString(),
+            'message',
+            contains('older than'),
+          ),
+        ),
+      );
+    });
+
+    test('accepts a recent front-channel auth_time within max_age', () async {
+      const code = 'auth-code-1';
+      final idToken = await _signIdToken(
+        claims(
+          cHash: _hash(code),
+          authTime: secondsAgo(const Duration(minutes: 1)),
+        ),
+      );
+      final m = await _manager();
+      // Completes without throwing.
+      await m.validateFrontChannel(
+        idToken: idToken,
+        code: code,
+        nonce: 'nonce-1',
+        maxAge: const Duration(minutes: 5),
+      );
+    });
+
+    test(
+      'no auth_time enforcement when max_age was not requested (null)',
+      () async {
+        const code = 'auth-code-1';
+        // Stale auth_time, but max_age not requested => no error.
+        final idToken = await _signIdToken(
+          claims(
+            cHash: _hash(code),
+            authTime: secondsAgo(const Duration(hours: 10)),
+          ),
+        );
+        final m = await _manager();
+        await m.validateFrontChannel(
+          idToken: idToken,
+          code: code,
+          nonce: 'nonce-1',
+        );
+      },
+    );
   });
 }

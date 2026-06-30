@@ -262,6 +262,7 @@ OidcPlatformSpecificOptions_Native _$OidcPlatformSpecificOptions_NativeFromJson(
   successfulPageResponse: json['successfulPageResponse'] as String?,
   methodMismatchResponse: json['methodMismatchResponse'] as String?,
   notFoundResponse: json['notFoundResponse'] as String?,
+  flowTimeoutSeconds: (json['flowTimeoutSeconds'] as num?)?.toInt(),
 );
 
 Map<String, dynamic> _$OidcPlatformSpecificOptions_NativeToJson(
@@ -270,6 +271,7 @@ Map<String, dynamic> _$OidcPlatformSpecificOptions_NativeToJson(
   'successfulPageResponse': instance.successfulPageResponse,
   'methodMismatchResponse': instance.methodMismatchResponse,
   'notFoundResponse': instance.notFoundResponse,
+  'flowTimeoutSeconds': instance.flowTimeoutSeconds,
 };
 
 OidcPlatformSpecificOptions_Web _$OidcPlatformSpecificOptions_WebFromJson(

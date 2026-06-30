@@ -777,6 +777,7 @@ class OidcEndpoints {
     bool validateSignedResponseClaims = true,
     bool requireSignedResponseIssAud = false,
     Duration claimsExpiryTolerance = const Duration(minutes: 1),
+    bool strictJwtVerification = true,
   }) async {
     if (tokenLocation == OidcUserInfoAccessTokenLocations.formParameter &&
         requestMethod != OidcConstants_RequestMethod.post) {
@@ -862,6 +863,19 @@ class OidcEndpoints {
           allowedArguments: algs,
         );
       } else {
+        // No keyStore => we cannot verify a signed UserInfo response.
+        // OIDC Core 5.3.2: a signed UserInfo Response MUST have its signature
+        // validated. Refuse to silently trust it unless the caller has
+        // explicitly opted out (strictJwtVerification == false), mirroring
+        // id_token handling.
+        if (strictJwtVerification) {
+          throw const OidcException(
+            'UserInfo returned a signed (application/jwt) response but no '
+            'keyStore was provided to verify its signature; refusing to trust '
+            'an unverified UserInfo JWT (strictJwtVerification=true). Provide a '
+            'keyStore, or set strictJwtVerification=false to opt out (insecure).',
+          );
+        }
         jwt = JsonWebToken.unverified(resp.body);
       }
       ret = OidcUserInfoResponse.fromJson(jwt.claims.toJson());

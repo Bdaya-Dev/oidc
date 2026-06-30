@@ -107,9 +107,13 @@ class OidcUserManagerSettings {
   /// `false`, a verification failure is logged and the token is accepted
   /// *unverified* — which means a forged or tampered id_token would be trusted.
   ///
-  /// Defaults to `true` per OpenID Connect Core §3.1.3.7 and the OAuth 2.0
-  /// Security BCP (RFC 9700). Only set this to `false` if you fully understand
-  /// the risk (e.g. a controlled test environment).
+  /// This ALSO governs signed UserInfo responses: when `true`, an
+  /// `application/jwt` UserInfo response that cannot be verified (no keyStore /
+  /// no usable keys) is **rejected**; when `false` it is parsed *unverified*.
+  ///
+  /// Defaults to `true` per OpenID Connect Core §3.1.3.7 / §5.3.2 and the
+  /// OAuth 2.0 Security BCP (RFC 9700). Only set this to `false` if you fully
+  /// understand the risk (e.g. a controlled test environment).
   final bool strictJwtVerification;
 
   /// Optional explicit allowlist of JWS signing algorithms (canonical JWA

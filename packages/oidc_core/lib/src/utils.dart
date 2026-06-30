@@ -115,6 +115,22 @@ class OidcInternalUtilities {
     return dateTimeFromJsonRequired(rawValue);
   }
 
+  /// Tolerant parser for OPTIONAL `Uri` provider-metadata fields.
+  ///
+  /// Yields `null` instead of throwing on a malformed/non-string value so one
+  /// bad OPTIONAL endpoint cannot abort the whole discovery parse
+  /// (OIDC Discovery 1.0 §3 OPTIONAL fields / §4.3 robustness).
+  ///
+  /// Accepts an [Object] input (not `String`) on purpose so a non-string value
+  /// no longer triggers the `as String` TypeError that the generated code would
+  /// otherwise throw.
+  static Uri? tryParseUri(Object? value) {
+    if (value is! String) {
+      return null; // also covers null and JSON numbers/objects
+    }
+    return Uri.tryParse(value); // never throws; null where Uri.parse would fail
+  }
+
   static const commonConverters = <JsonConverter<dynamic, dynamic>>[
     OidcNumericDateConverter(),
     OidcDurationSecondsConverter(),

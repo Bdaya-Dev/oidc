@@ -50,9 +50,12 @@ mixin OidcDesktop on OidcPlatform {
       notFoundResponse: platformOpts.notFoundResponse,
     );
     final serverCompleter = Completer<HttpServer>();
+    final ts = platformOpts.flowTimeoutSeconds;
+    final timeout = (ts != null && ts > 0) ? Duration(seconds: ts) : null;
     //don't await the responseUriFuture until we launch the url.
     final responseUriFuture = listener.listenForSingleResponse(
       serverCompleter: serverCompleter,
+      timeout: timeout,
     );
     // wait until the server starts listening and we get a port.
     final server = await serverCompleter.future;
@@ -82,7 +85,23 @@ mixin OidcDesktop on OidcPlatform {
       );
     }
     // wait for a response from the server listener.
-    final responseUri = await responseUriFuture;
+    final Uri? responseUri;
+    try {
+      responseUri = await responseUriFuture;
+    } on TimeoutException catch (e, st) {
+      logger.warning(
+        'The $logRequestDesc flow timed out after $ts seconds without '
+        'receiving a redirect on the loopback listener.',
+        e,
+        st,
+      );
+      throw OidcException(
+        'The $logRequestDesc flow timed out after $ts seconds without '
+        'receiving a redirect on the loopback listener.',
+        internalException: e,
+        internalStackTrace: st,
+      );
+    }
     if (responseUri == null) {
       return null;
     }
