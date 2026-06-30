@@ -1155,6 +1155,22 @@ abstract class OidcUserManagerBase {
   ///
   /// if the manager already has a [currentUser], this function replaces
   /// its internal token (after validation).
+  /// Resolves the allowlist of JWS algorithms an id_token's `alg` header may
+  /// use during signature verification.
+  ///
+  /// When [OidcUserManagerSettings.allowedIdTokenAlgorithms] is set, it
+  /// **overrides** (replaces) the OP-advertised
+  /// `id_token_signing_alg_values_supported` (defense-in-depth: the RP stops
+  /// trusting the OP's self-declared list). When null (the default), the
+  /// OP-advertised list is used unchanged. This is the single point where the
+  /// pin overrides the OP-advertised list.
+  @protected
+  List<String>? resolveAllowedIdTokenAlgorithms(
+    OidcProviderMetadata metadata,
+  ) =>
+      settings.allowedIdTokenAlgorithms ??
+      metadata.idTokenSigningAlgValuesSupported;
+
   @protected
   Future<OidcUser?> createUserFromToken({
     required OidcToken token,
@@ -1175,8 +1191,9 @@ abstract class OidcUserManagerBase {
         token: token,
         // Constrain id_token signature verification to the algorithms the OP
         // advertises for ID Tokens (id_token_signing_alg_values_supported),
-        // not the token-endpoint client-authentication algorithms.
-        allowedAlgorithms: metadata.idTokenSigningAlgValuesSupported,
+        // not the token-endpoint client-authentication algorithms. An explicit
+        // `allowedIdTokenAlgorithms` pin overrides the OP-advertised list.
+        allowedAlgorithms: resolveAllowedIdTokenAlgorithms(metadata),
         keystore: keyStore,
         attributes: attributes,
         strictVerification: settings.strictJwtVerification,
@@ -1827,7 +1844,9 @@ abstract class OidcUserManagerBase {
         accessToken: accessToken,
         tokenType: accessToken == null ? null : 'Bearer',
       ),
-      allowedAlgorithms: metadata.idTokenSigningAlgValuesSupported,
+      // The hybrid/implicit front-channel id_token gate, where the signature is
+      // the sole protection — honour an explicit `allowedIdTokenAlgorithms` pin.
+      allowedAlgorithms: resolveAllowedIdTokenAlgorithms(metadata),
       keystore: keyStore,
       strictVerification: settings.strictJwtVerification,
       cacheStore: store,
@@ -2064,6 +2083,15 @@ abstract class OidcUserManagerBase {
             getAccessTokenForDistributedSource:
                 settings.userInfoSettings.getAccessTokenForDistributedSource,
             keyStore: keyStore,
+            // OIDC Core 5.3.2/5.3.4: validate iss/aud/exp on a signed
+            // (verified) UserInfo JWT.
+            expectedIssuer: metadata.issuer,
+            clientId: clientCredentials.clientId,
+            validateSignedResponseClaims:
+                settings.userInfoSettings.validateSignedResponseClaims,
+            requireSignedResponseIssAud:
+                settings.userInfoSettings.requireSignedResponseIssAud,
+            claimsExpiryTolerance: settings.expiryTolerance,
             // Present a DPoP-bound access token with the DPoP scheme + an
             // `ath`-bound proof (RFC 9449 §7.1).
             dpopManager: actualUser.token.tokenType?.toUpperCase() == 'DPOP'
@@ -2220,6 +2248,10 @@ abstract class OidcUserManagerBase {
     final uri = discoveryDocumentUri;
 
     if (currentDiscoveryDocument != null) {
+      // An eagerly-supplied discoveryDocument (eager constructor, where
+      // discoveryDocumentUri is null) is still validated against
+      // `settings.expectedIssuer`.
+      _validateDiscoveryIssuer();
       return;
     }
 
@@ -2275,11 +2307,83 @@ abstract class OidcUserManagerBase {
       }
     }
 
+    // Validate the final document (cache- or network-sourced) BEFORE persisting,
+    // so a mismatched/poisoned document is never written to the store.
+    _validateDiscoveryIssuer();
+
     await store.set(
       OidcStoreNamespace.discoveryDocument,
       key: key,
       value: jsonEncode(discoveryDocument.src),
       managerId: id,
+    );
+  }
+
+  /// OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3: the discovery document's `issuer`
+  /// MUST be identical to the issuer used to fetch it.
+  ///
+  /// Controlled by [OidcUserManagerSettings.strictIssuerValidation]: when
+  /// `true`, a mismatch (or a missing `issuer`) throws; when `false` (the
+  /// default), a mismatch is only logged as a warning and the document is still
+  /// used (preserves Entra multi-tenant / B2C compatibility).
+  void _validateDiscoveryIssuer() {
+    final strict = settings.strictIssuerValidation;
+    // Resolve the expected issuer: explicit `expectedIssuer` is authoritative;
+    // otherwise derive it from the well-known URL (the inverse of the builder
+    // every in-repo call site uses).
+    final uri = discoveryDocumentUri;
+    final expected =
+        settings.expectedIssuer ??
+        (uri == null
+            ? null
+            : OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(uri));
+
+    if (expected == null) {
+      if (strict) {
+        logger.warning(
+          'strictIssuerValidation is enabled but no expected issuer could be '
+          'determined (no `expectedIssuer` was set and the discovery URL could '
+          'not be inverted, e.g. an eagerly-supplied document or a custom '
+          'discovery URL); skipping the §4.3 issuer check.',
+        );
+      }
+      return;
+    }
+
+    final actual = currentDiscoveryDocument?.issuer;
+    if (actual == null) {
+      if (strict) {
+        logAndThrow(
+          'Discovery document is missing the required `issuer` member '
+          '(OIDC Discovery §3 / RFC 8414 §2).',
+          extra: {
+            OidcConstants_Exception.discoveryDocumentUri: uri,
+          },
+        );
+      }
+      logger.warning(
+        'Discovery document is missing the required `issuer` member; '
+        'strictIssuerValidation is disabled so it is being used anyway.',
+      );
+      return;
+    }
+
+    if (OidcUtils.issuersAreIdentical(expected, actual)) {
+      return;
+    }
+    if (strict) {
+      logAndThrow(
+        'Issuer mismatch (OIDC Discovery §4.3 / RFC 8414 §3.3): discovery '
+        'issuer ($actual) != expected issuer ($expected).',
+        extra: {
+          OidcConstants_Exception.discoveryDocumentUri: uri,
+        },
+      );
+    }
+    logger.warning(
+      'Issuer mismatch (OIDC Discovery §4.3 / RFC 8414 §3.3): discovery issuer '
+      '($actual) != expected issuer ($expected); strictIssuerValidation is '
+      'disabled so the document is being used anyway.',
     );
   }
 

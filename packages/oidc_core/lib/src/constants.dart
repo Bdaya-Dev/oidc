@@ -121,6 +121,14 @@ class OidcConstants_JWTClaims {
   ///	Session ID
   static const sid = 'sid';
 
+  /// The `events` claim of a Back-Channel Logout 1.0 §2.4 Logout Token.
+  static const events = 'events';
+
+  /// The REQUIRED `events` object member URI per OpenID Connect Back-Channel
+  /// Logout 1.0 §2.4.
+  static const backchannelLogoutEvent =
+      'http://schemas.openid.net/event/backchannel-logout';
+
   /// Used for aggregated claims.
   static const jwt = 'JWT';
 

@@ -546,6 +546,154 @@ class OidcEndpoints {
     return claims.toJson();
   }
 
+  /// Validates an encoded `logout_token` string per OpenID Connect Back-Channel
+  /// Logout 1.0 §2.6.
+  ///
+  /// This is a pure-Dart, no-HTTP helper for **backend** Relying Parties: a
+  /// `dart:io`/`shelf` server calls it from its `backchannel_logout_uri`
+  /// handler and, on success, signals the client out-of-band. It does NOT host
+  /// an endpoint and does NOT mutate session state. A browser SPA or native app
+  /// cannot host a server-reachable `backchannel_logout_uri`, so this is not
+  /// usable from the client packages — for client-side logout detection use the
+  /// Session Management / front-channel logout support instead.
+  ///
+  /// On success the verified [JsonWebToken] is returned so the caller can read
+  /// `sub`/`sid` to target the right session. On ANY validation failure an
+  /// [OidcException] is thrown (the caller maps it to HTTP 400 per §2.6).
+  ///
+  /// Pass the OP's `id_token_signing_alg_values_supported` as
+  /// [allowedAlgorithms]; `none` is always stripped before verification (§2.6
+  /// step 3). When [cacheStore] is supplied, JWKS are fetched + cached via
+  /// `OidcJwksStoreLoader` exactly like id_token verification.
+  ///
+  /// [maxAge], when set, additionally rejects a token whose `iat` is older than
+  /// `maxAge + expiryTolerance` (defense-in-depth; the spec validates `iat`
+  /// presence only). [seenJtis], when supplied, is a caller-owned replay guard
+  /// for the OPTIONAL §2.6 step 8 (the caller owns its persistence/TTL).
+  ///
+  /// Out of scope for this helper (left to the caller): §2.6 step 1 JWE
+  /// decryption (only works if the RP private key is already in [keyStore]) and
+  /// steps 9-11 (cross-checking iss/sub/sid against a stored prior ID Token,
+  /// which require RP session storage the core package does not own).
+  static Future<JsonWebToken> validateLogoutToken({
+    required String logoutToken,
+    required JsonWebKeyStore keyStore,
+    required Uri issuer,
+    required String clientId,
+    List<String>? allowedAlgorithms,
+    OidcStore? cacheStore,
+    Duration expiryTolerance = const Duration(minutes: 1),
+    Duration? maxAge,
+    Set<String>? seenJtis,
+  }) async {
+    // 1. alg/none strip (§2.6 step 3): jose_plus only auto-rejects `none` when
+    // the allow-list is null, so a supplied list containing `none` must have it
+    // removed before verification.
+    final algs = allowedAlgorithms
+        ?.where((a) => a.toLowerCase() != 'none')
+        .toList();
+
+    // 2. signature verify (§2.6 steps 2-3). NEVER fall back to
+    // `JsonWebToken.unverified`: a logout_token must never be accepted
+    // unverified. A bad signature / unsigned token / disallowed alg throws.
+    final JsonWebToken jwt;
+    try {
+      jwt = await JsonWebKeySetLoader.runZoned(
+        () => JsonWebToken.decodeAndVerify(
+          logoutToken,
+          keyStore,
+          allowedArguments: algs,
+        ),
+        loader: cacheStore == null
+            ? null
+            : OidcJwksStoreLoader(store: cacheStore),
+      );
+    } on OidcException {
+      rethrow;
+    } catch (e, st) {
+      throw OidcException(
+        'Failed to verify the logout_token signature.',
+        internalException: e,
+        internalStackTrace: st,
+      );
+    }
+    final claims = jwt.claims;
+
+    // 3. exp present guard (§2.4 lists exp as REQUIRED). MUST precede
+    // `claims.validate()`, which dereferences `expiry!`.
+    if (claims.expiry == null) {
+      throw const OidcException(
+        'logout_token is missing the required `exp` claim.',
+      );
+    }
+
+    // 4. iss/aud/exp (§2.6 step 4).
+    final errs = claims
+        .validate(
+          expiryTolerance: expiryTolerance,
+          issuer: issuer,
+          clientId: clientId,
+        )
+        .toList();
+    if (errs.isNotEmpty) {
+      throw OidcException(
+        'logout_token failed iss/aud/exp validation: ${errs.first}',
+      );
+    }
+
+    // 5. iat (§2.6 step 4; not covered by validate()).
+    final iat = claims.issuedAt;
+    if (iat == null) {
+      throw const OidcException(
+        'logout_token is missing the required `iat` claim.',
+      );
+    }
+    if (maxAge != null &&
+        clock.now().difference(iat) > maxAge + expiryTolerance) {
+      throw const OidcException(
+        'logout_token is older than the allowed maxAge.',
+      );
+    }
+
+    // 6. sub and/or sid (§2.6 step 5).
+    if (claims.subject == null && claims.sid == null) {
+      throw const OidcException(
+        'logout_token must contain a `sub` and/or `sid` claim.',
+      );
+    }
+
+    // 7. events member (§2.6 step 6). The member value MAY be an empty `{}`, so
+    // require it be a Map — do NOT require it be non-empty.
+    final json = claims.toJson();
+    final events = json[OidcConstants_JWTClaims.events];
+    if (events is! Map ||
+        events[OidcConstants_JWTClaims.backchannelLogoutEvent] is! Map) {
+      throw const OidcException(
+        'logout_token is missing the required backchannel-logout `events` '
+        'member.',
+      );
+    }
+
+    // 8. nonce prohibited (§2.6 step 7). Reject on PRESENCE (containsKey), not
+    // on a non-null value — a present-but-null nonce is still a violation.
+    if (json.containsKey(OidcConstants_AuthParameters.nonce)) {
+      throw const OidcException(
+        'logout_token must not contain a `nonce` claim.',
+      );
+    }
+
+    // 9. jti replay (§2.6 step 8, OPTIONAL).
+    final jti = claims.jwtId;
+    if (seenJtis != null && jti != null && !seenJtis.add(jti)) {
+      throw OidcException(
+        'logout_token `jti` ($jti) has already been seen (replay).',
+      );
+    }
+
+    // 10. success.
+    return jwt;
+  }
+
   /// Sends a token exchange request.
   ///
   /// if [credentials] is set to null, it's up to the caller how to authenticate
@@ -624,6 +772,11 @@ class OidcEndpoints {
     http.Client? client,
     Future<String?> Function(String, Uri)? getAccessTokenForDistributedSource,
     OidcDPoPManager? dpopManager,
+    Uri? expectedIssuer,
+    String? clientId,
+    bool validateSignedResponseClaims = true,
+    bool requireSignedResponseIssAud = false,
+    Duration claimsExpiryTolerance = const Duration(minutes: 1),
   }) async {
     if (tokenLocation == OidcUserInfoAccessTokenLocations.formParameter &&
         requestMethod != OidcConstants_RequestMethod.post) {
@@ -712,6 +865,56 @@ class OidcEndpoints {
         jwt = JsonWebToken.unverified(resp.body);
       }
       ret = OidcUserInfoResponse.fromJson(jwt.claims.toJson());
+      // OIDC Core 5.3.2/5.3.4: when the UserInfo response is a signed JWT that
+      // we VERIFIED against the keyStore, validate its iss/aud/exp. Gated on
+      // `keyStore != null` so the unverified path above never gains false
+      // assurance, and only on the signed-JWT branch (plain JSON is exempt).
+      //
+      // We deliberately do NOT call `jwt.claims.validate(...)`: that force-
+      // unwraps `exp` (crashing when a UserInfo JWT omits it, which is common)
+      // and treats an absent `iss` as a mismatch. UserInfo `iss`/`aud`/`exp`
+      // are validate-when-present (SHOULD), so use custom logic on the parsed
+      // model fields.
+      if (keyStore != null && validateSignedResponseClaims) {
+        final iss = ret.iss;
+        if (iss != null) {
+          // Simple-string compare (consistent with the repo's RFC 9207 `iss`
+          // handling), NOT `Uri==`.
+          if (expectedIssuer != null && iss != expectedIssuer.toString()) {
+            throw OidcException(
+              'Signed UserInfo `iss` ($iss) does not match the provider issuer '
+              '($expectedIssuer) — OIDC Core 5.3.4.',
+            );
+          }
+        } else if (requireSignedResponseIssAud) {
+          throw const OidcException(
+            'Signed UserInfo response is missing the required `iss` claim.',
+          );
+        }
+
+        final aud = ret.aud;
+        if (aud.isNotEmpty) {
+          if (clientId != null && !aud.contains(clientId)) {
+            throw OidcException(
+              'Signed UserInfo `aud` ($aud) does not contain the client_id '
+              '($clientId) — OIDC Core 5.3.2.',
+            );
+          }
+        } else if (requireSignedResponseIssAud) {
+          throw const OidcException(
+            'Signed UserInfo response is missing the required `aud` claim.',
+          );
+        }
+
+        final exp = ret.exp;
+        if (exp != null &&
+            clock.now().difference(exp) > claimsExpiryTolerance) {
+          throw OidcException(
+            'Signed UserInfo JWT expired at $exp (tolerance '
+            '$claimsExpiryTolerance) — RFC 7519 4.1.4.',
+          );
+        }
+      }
     } else {
       //defaults to json
       ret = _handleResponse(

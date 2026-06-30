@@ -193,6 +193,28 @@ class OidcUtils {
     );
   }
 
+  /// The inverse of [getOpenIdConfigWellKnownUri]: given an OIDC §4.1
+  /// `.well-known/openid-configuration` URL, recovers the issuer it was built
+  /// from by dropping the trailing `['.well-known','openid-configuration']`
+  /// path segments (and clearing query/fragment).
+  ///
+  /// Returns `null` when [wellKnown] does not end with those two segments (e.g.
+  /// an RFC 8414 insert-layout URL or an Entra `?appid=` query URL that cannot
+  /// be inverted), so callers can detect that the issuer could not be derived.
+  static Uri? getIssuerFromOpenIdConfigWellKnownUri(Uri wellKnown) {
+    final segments = wellKnown.pathSegments;
+    if (segments.length < 2 ||
+        segments[segments.length - 2] != '.well-known' ||
+        segments[segments.length - 1] != 'openid-configuration') {
+      return null;
+    }
+    return wellKnown.replace(
+      pathSegments: segments.sublist(0, segments.length - 2),
+      query: null,
+      fragment: null,
+    );
+  }
+
   /// OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3: the discovery document's `issuer`
   /// MUST be identical to the issuer used to fetch it (mix-up defense). Compares
   /// by simple string equality, case-folding ONLY scheme + host (a genuine path

@@ -73,6 +73,9 @@ class OidcUserManagerSettings {
         const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
     this.strictJwtVerification = true,
+    this.allowedIdTokenAlgorithms,
+    this.strictIssuerValidation = false,
+    this.expectedIssuer,
     this.pushedAuthorizationRequestsMode =
         OidcPushedAuthorizationRequestsMode.auto,
     this.dpop,
@@ -108,6 +111,64 @@ class OidcUserManagerSettings {
   /// Security BCP (RFC 9700). Only set this to `false` if you fully understand
   /// the risk (e.g. a controlled test environment).
   final bool strictJwtVerification;
+
+  /// Optional explicit allowlist of JWS signing algorithms (canonical JWA
+  /// names, e.g. `['RS256','ES256']`) that an id_token's `alg` header is
+  /// permitted to use.
+  ///
+  /// When non-null, this list **replaces** the OP-advertised
+  /// `id_token_signing_alg_values_supported` as the source of the verification
+  /// allowlist (defense-in-depth: the RP stops trusting the OP's self-declared
+  /// list). When null (the default), behavior is unchanged — the OP-advertised
+  /// `id_token_signing_alg_values_supported` is used.
+  ///
+  /// `none` is always stripped regardless of this setting (existing behavior in
+  /// [OidcUser]), so it can never be re-enabled via this list.
+  ///
+  /// Names must match `jose_plus`/JWA canonical casing (uppercase, e.g.
+  /// `'RS256'`); a wrong-case or empty effective list will reject every
+  /// id_token (fail-closed).
+  ///
+  /// Per OpenID Connect Core §3.1.3.7 (step 7) and RFC 8725 (JWT BCP) §3.1
+  /// "Perform Algorithm Verification", which require the verifier to constrain
+  /// accepted algorithms to an explicit caller-controlled set.
+  final List<String>? allowedIdTokenAlgorithms;
+
+  /// When `true`, after the discovery document is loaded the manager asserts
+  /// that its `issuer` is identical to the expected issuer (the issuer used to
+  /// compose the well-known URL, or [expectedIssuer] if set) per OIDC Discovery
+  /// 1.0 §4.3 / RFC 8414 §3.3, throwing on mismatch and refusing to persist the
+  /// document.
+  ///
+  /// When `false` (the **default**), a mismatch is only logged as a warning and
+  /// the document is still used — this preserves out-of-the-box Microsoft Entra
+  /// ID multi-tenant (`common`/`organizations`) and Azure AD B2C compatibility,
+  /// whose discovery `issuer` legitimately differs from the authority used to
+  /// fetch it (e.g. `https://login.microsoftonline.com/{tenantid}/v2.0`).
+  ///
+  /// Recommended `true` for single-tenant / non-Entra deployments and required
+  /// for FAPI / high-assurance profiles; when enabling against a trailing-slash
+  /// issuer or a custom discovery URL, also set [expectedIssuer].
+  final bool strictIssuerValidation;
+
+  /// Optional explicit issuer to compare the discovery document's `issuer`
+  /// against (authoritative when set).
+  ///
+  /// When null (default) and a `discoveryDocumentUri` is present, the expected
+  /// issuer is derived by stripping the trailing
+  /// `.well-known/openid-configuration` segments from `discoveryDocumentUri`
+  /// (the inverse of [OidcUtils.getOpenIdConfigWellKnownUri], which every
+  /// in-repo call site uses to build the URL).
+  ///
+  /// Set this for issuers that contain a trailing slash, for custom/non-standard
+  /// discovery URLs (e.g. Entra `?appid=` query, RFC 8414 insert-layout), or
+  /// when constructing the manager with an eagerly-supplied `discoveryDocument`
+  /// (no `discoveryDocumentUri` to derive from).
+  ///
+  /// Comparison is the spec-mandated simple-string match via
+  /// [OidcUtils.issuersAreIdentical] (case-folds scheme+host only; path and
+  /// trailing slash stay significant).
+  final Uri? expectedIssuer;
 
   /// Whether/when the authorization-code login flow uses RFC 9126 Pushed
   /// Authorization Requests (PAR). Defaults to
@@ -270,6 +331,8 @@ class OidcUserInfoSettings {
     this.sendUserInfoRequest = true,
     this.followDistributedClaims = true,
     this.getAccessTokenForDistributedSource,
+    this.validateSignedResponseClaims = true,
+    this.requireSignedResponseIssAud = false,
   });
 
   /// Where to put the access token.
@@ -290,6 +353,31 @@ class OidcUserInfoSettings {
   /// to try and get the access token.
   final Future<String?> Function(String, Uri)?
   getAccessTokenForDistributedSource;
+
+  /// When the UserInfo endpoint returns a signed JWT
+  /// (`Content-Type: application/jwt`) that was verified against the keyStore,
+  /// validate its `iss`/`aud`/`exp` claims per OIDC Core 5.3.2/5.3.4.
+  ///
+  /// `iss` (when present) MUST exactly match the OP issuer; `aud` (when present)
+  /// MUST contain the RP `client_id`; `exp` (when present) MUST NOT be past
+  /// (within `expiryTolerance`).
+  ///
+  /// Set `false` to opt out (e.g. a non-conformant OP). Has no effect on plain
+  /// `application/json` responses.
+  ///
+  /// Defaults to `true`.
+  final bool validateSignedResponseClaims;
+
+  /// Upgrades the OIDC Core 5.3.2 SHOULD for `iss`/`aud` presence on a signed
+  /// UserInfo JWT to a MUST.
+  ///
+  /// When `true`, a signed (verified) UserInfo JWT that omits `iss` OR `aud` is
+  /// rejected. Default `false` stays lenient (validate only when the claim is
+  /// present), matching common OP behaviour and the spec's SHOULD. Enable for
+  /// FAPI/strict deployments.
+  ///
+  /// Ignored when [validateSignedResponseClaims] is `false`.
+  final bool requireSignedResponseIssAud;
 }
 
 ///
