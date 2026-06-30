@@ -1201,6 +1201,7 @@ abstract class OidcUserManagerBase {
         userInfo: userInfo,
         idTokenOverride: idTokenOverride,
         cacheStore: store,
+        jwksCacheMaxAge: settings.jwksCacheMaxAge,
       );
     } else {
       final reusesExistingIdToken =
@@ -1211,6 +1212,7 @@ abstract class OidcUserManagerBase {
         strictVerification: settings.strictJwtVerification,
         cacheStore: store,
         allowExpiredIdToken: reusesExistingIdToken,
+        jwksCacheMaxAge: settings.jwksCacheMaxAge,
       );
       // OpenID Connect Core §12.2: a freshly-issued id_token MUST keep the same
       // `sub` (and `iss`) as the prior one — refuse a possible account swap on
@@ -1856,6 +1858,7 @@ abstract class OidcUserManagerBase {
       keystore: keyStore,
       strictVerification: settings.strictJwtVerification,
       cacheStore: store,
+      jwksCacheMaxAge: settings.jwksCacheMaxAge,
     );
     final idTokenNonce =
         frontChannelUser.parsedIdToken.claims[OidcConstants_AuthParameters
@@ -2316,6 +2319,52 @@ abstract class OidcUserManagerBase {
           extra: {
             OidcConstants_Exception.discoveryDocumentUri: uri,
           },
+        );
+      }
+    }
+
+    // RFC 8414 §2.1/§3.2: when enabled, verify the document's `signed_metadata`
+    // JWT (if present) and merge its verified claims OVER the plain JSON BEFORE
+    // issuer-validation and persistence, so a signed-metadata issuer change is
+    // still issuer-validated and only a verified+validated document is cached.
+    if (settings.verifySignedMetadata &&
+        currentDiscoveryDocument!.src.containsKey(
+          OidcConstants_ProviderMetadata.signedMetadata,
+        )) {
+      try {
+        currentDiscoveryDocument =
+            await OidcEndpoints.verifyAndMergeSignedMetadata(
+              metadata: currentDiscoveryDocument!,
+              expectedIssuer:
+                  settings.expectedIssuer ??
+                  OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(uri),
+              allowedAlgorithms:
+                  settings.allowedSignedMetadataAlgorithms ??
+                  currentDiscoveryDocument!.idTokenSigningAlgValuesSupported,
+              cacheStore: store,
+              client: httpClient,
+              jwksCacheMaxAge: settings.jwksCacheMaxAge,
+            );
+      } on OidcException catch (e, st) {
+        // Mirror the _validateDiscoveryIssuer strict/warn idiom.
+        if (settings.strictJwtVerification) {
+          logAndThrow(
+            'Failed to verify the discovery `signed_metadata` JWT '
+            '(RFC 8414 §2.1); refusing to use the document '
+            '(strictJwtVerification=true).',
+            error: e,
+            stackTrace: st,
+            extra: {
+              OidcConstants_Exception.discoveryDocumentUri: uri,
+            },
+          );
+        }
+        logger.warning(
+          'Failed to verify the discovery `signed_metadata` JWT '
+          '(RFC 8414 §2.1); strictJwtVerification is disabled so the plain '
+          '(unmerged) document is being used anyway.',
+          e,
+          st,
         );
       }
     }

@@ -121,7 +121,9 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   @JsonKey(name: OidcConstants_AuthParameters.responseMode)
   String? responseMode;
 
-  /// OPTIONAL.
+  /// OPTIONAL for the Authorization Code Flow; REQUIRED for the Implicit and
+  /// Hybrid Flows (response_type containing `id_token` or `token`) per OpenID
+  /// Connect Core §3.2.2.1 / §3.3.2.1 — [generateUri] enforces this.
   ///
   /// String value used to associate a Client session with an ID Token,
   /// and to mitigate replay attacks.
@@ -341,7 +343,11 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
         OidcConstants_AuthParameters.request: request,
       };
     } else {
-      // Otherwise, serialize the full parameter set as usual.
+      // Otherwise, serialize the full parameter set as usual. A front-channel
+      // implicit/hybrid request MUST carry a nonce (OIDC Core §3.2.2.1 /
+      // §3.3.2.1); enforce it here, the single choke point every usable
+      // authorization URL passes through.
+      _assertNonceForImplicitHybrid();
       params = OidcInternalUtilities.serializeQueryParameters(toMap());
     }
     return authorizationEndpoint.replace(
@@ -350,5 +356,37 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
         ...params,
       },
     );
+  }
+
+  /// Enforces the OpenID Connect Core §3.2.2.1 (Implicit) / §3.3.2.1 (Hybrid)
+  /// rule that `nonce` is REQUIRED whenever the front-channel `response_type`
+  /// returns an `id_token` or `token` directly from the Authorization Endpoint.
+  ///
+  /// This is a real `throw` (not an `assert`): nonce is a replay-protection
+  /// control that must hold in release/profile builds, where asserts are
+  /// stripped. Only invoked on the normal full-serialization path — the
+  /// PAR-by-reference (`request_uri`) and JAR-by-value (`request`) branches are
+  /// exempt because there the nonce travels inside the pushed/signed object,
+  /// not the front-channel URL.
+  void _assertNonceForImplicitHybrid() {
+    final responseTypes = responseType
+        .expand((e) => e.split(RegExp(r'\s+')))
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    final returnsFrontChannelToken =
+        responseTypes.contains(
+          OidcConstants_AuthorizationEndpoint_ResponseType.idToken,
+        ) ||
+        responseTypes.contains(
+          OidcConstants_AuthorizationEndpoint_ResponseType.token,
+        );
+    final nonce = this.nonce;
+    if (returnsFrontChannelToken && (nonce == null || nonce.isEmpty)) {
+      throw const OidcException(
+        'nonce is REQUIRED for the implicit and hybrid flows (OpenID Connect '
+        'Core 1.0 §3.2.2.1 / §3.3.2.1): response_type contains "id_token" or '
+        '"token" but no nonce was supplied.',
+      );
+    }
   }
 }

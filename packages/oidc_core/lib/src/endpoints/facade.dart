@@ -340,6 +340,121 @@ class OidcEndpoints {
     );
   }
 
+  /// Verifies the RFC 8414 §2.1 `signed_metadata` JWT (if present) carried by a
+  /// discovery document and merges its verified claims over the plain JSON
+  /// members (RFC 8414 §3.2: signed metadata takes precedence).
+  ///
+  /// When [metadata] carries no `signed_metadata` member, the input is returned
+  /// unchanged (no network, no crypto). Otherwise:
+  ///
+  /// - verification keys are bootstrapped from the plain `jwks_uri` (trusted
+  ///   because it arrived over TLS from the well-known endpoint); a missing
+  ///   `jwks_uri` makes the signed metadata unverifiable and throws;
+  /// - `none` is ALWAYS stripped from [allowedAlgorithms] (`jose_plus` only
+  ///   auto-rejects `none` when the allow-list is null — same hazard handled in
+  ///   [_decodeJarmResponse]/[validateLogoutToken]);
+  /// - the JWT MUST contain an `iss` claim (RFC 8414 §2.1) and, when an
+  ///   [expectedIssuer] is known, `iss` MUST be identical to it (mix-up
+  ///   defense);
+  /// - a present-and-expired `exp` is rejected, but `exp` is NOT required
+  ///   (RFC 8414 does not mandate it);
+  /// - on success the merged [OidcProviderMetadata] is returned (the caller
+  ///   then issuer-validates + persists it).
+  ///
+  /// Throws [OidcException] on ANY failure so the caller can apply its
+  /// strict/warn policy.
+  static Future<OidcProviderMetadata> verifyAndMergeSignedMetadata({
+    required OidcProviderMetadata metadata,
+    required Uri? expectedIssuer,
+    List<String>? allowedAlgorithms,
+    OidcStore? cacheStore,
+    http.Client? client,
+    Duration jwksCacheMaxAge = const Duration(days: 1),
+  }) async {
+    final signedMetadata =
+        metadata.src[OidcConstants_ProviderMetadata.signedMetadata];
+    if (signedMetadata is! String) {
+      // No signed_metadata member: use the plain JSON unchanged.
+      return metadata;
+    }
+
+    // Bootstrap verification keys from the plain (TLS-trusted) jwks_uri.
+    final jwksUri = metadata.jwksUri;
+    if (jwksUri == null) {
+      throw const OidcException(
+        'Discovery document carries a `signed_metadata` JWT but no `jwks_uri` '
+        'to bootstrap its verification keys (RFC 8414 §2.1); cannot verify.',
+      );
+    }
+    final keyStore = JsonWebKeyStore()..addKeySetUrl(jwksUri);
+
+    // signed_metadata MUST be signed; strip `none` explicitly.
+    final algs = allowedAlgorithms
+        ?.where((a) => a.toLowerCase() != 'none')
+        .toList();
+
+    final JsonWebToken jwt;
+    try {
+      jwt = await JsonWebKeySetLoader.runZoned(
+        () => JsonWebToken.decodeAndVerify(
+          signedMetadata,
+          keyStore,
+          allowedArguments: algs,
+        ),
+        loader: cacheStore == null
+            ? (client == null
+                  ? null
+                  : DefaultJsonWebKeySetLoader(httpClient: client))
+            : OidcJwksStoreLoader(
+                store: cacheStore,
+                httpClient: client,
+                staleCacheMaxAge: jwksCacheMaxAge,
+              ),
+      );
+    } on OidcException {
+      rethrow;
+    } catch (e, st) {
+      throw OidcException(
+        'Failed to verify the discovery `signed_metadata` JWT signature.',
+        internalException: e,
+        internalStackTrace: st,
+      );
+    }
+
+    final claims = jwt.claims;
+
+    // RFC 8414 §2.1: the JWT MUST contain an `iss` claim.
+    final iss = claims.issuer;
+    if (iss == null) {
+      throw const OidcException(
+        'Discovery `signed_metadata` JWT is missing the required `iss` claim '
+        '(RFC 8414 §2.1).',
+      );
+    }
+    // Mix-up defense: cross-check `iss` against the expected/document issuer
+    // when one can be derived (skip only when no expected issuer is known).
+    if (expectedIssuer != null &&
+        !OidcUtils.issuersAreIdentical(expectedIssuer, iss)) {
+      throw OidcException(
+        'Discovery `signed_metadata` JWT `iss` ($iss) does not match the '
+        'expected issuer ($expectedIssuer); possible mix-up attack '
+        '(RFC 8414 §2.1).',
+      );
+    }
+
+    // RFC 8414 does not require `exp`, but a present-and-expired one is invalid.
+    final exp = claims.expiry;
+    if (exp != null && clock.now().isAfter(exp)) {
+      throw const OidcException(
+        'Discovery `signed_metadata` JWT has expired.',
+      );
+    }
+
+    // RFC 8414 §3.2: signed claims OVERRIDE the corresponding plain JSON.
+    final merged = {...metadata.src}..addAll(claims.toJson());
+    return OidcProviderMetadata.fromJson(merged);
+  }
+
   /// takes an input response uri from the /authorize endpoint, and gets the parameters from it.
   static ({Map<String, dynamic> parameters, String responseMode})
   resolveAuthorizeResponseParameters({
@@ -585,6 +700,7 @@ class OidcEndpoints {
     Duration expiryTolerance = const Duration(minutes: 1),
     Duration? maxAge,
     Set<String>? seenJtis,
+    Duration jwksCacheMaxAge = const Duration(days: 1),
   }) async {
     // 1. alg/none strip (§2.6 step 3): jose_plus only auto-rejects `none` when
     // the allow-list is null, so a supplied list containing `none` must have it
@@ -606,7 +722,10 @@ class OidcEndpoints {
         ),
         loader: cacheStore == null
             ? null
-            : OidcJwksStoreLoader(store: cacheStore),
+            : OidcJwksStoreLoader(
+                store: cacheStore,
+                staleCacheMaxAge: jwksCacheMaxAge,
+              ),
       );
     } on OidcException {
       rethrow;

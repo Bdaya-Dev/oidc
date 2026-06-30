@@ -64,6 +64,7 @@ class OidcUserManagerSettings {
     this.maxAge,
     this.extraAuthenticationParameters,
     this.expiryTolerance = const Duration(minutes: 1),
+    this.jwksCacheMaxAge = const Duration(days: 1),
     this.extraTokenParameters,
     this.postLogoutRedirectUri,
     this.options,
@@ -75,6 +76,8 @@ class OidcUserManagerSettings {
     this.strictJwtVerification = true,
     this.allowedIdTokenAlgorithms,
     this.strictIssuerValidation = false,
+    this.verifySignedMetadata = false,
+    this.allowedSignedMetadataAlgorithms,
     this.expectedIssuer,
     this.pushedAuthorizationRequestsMode =
         OidcPushedAuthorizationRequestsMode.auto,
@@ -154,6 +157,38 @@ class OidcUserManagerSettings {
   /// for FAPI / high-assurance profiles; when enabling against a trailing-slash
   /// issuer or a custom discovery URL, also set [expectedIssuer].
   final bool strictIssuerValidation;
+
+  /// Master gate for RFC 8414 §2.1 signed authorization-server metadata
+  /// verification.
+  ///
+  /// When `true` AND the discovery document carries a `signed_metadata` member
+  /// (RFC 8414 §2.1), the JWT is signature-verified against keys bootstrapped
+  /// from the (TLS-fetched) plain `jwks_uri`, and its verified claims override
+  /// the corresponding plain JSON values (RFC 8414 §3.2) before the document is
+  /// issuer-validated and persisted.
+  ///
+  /// When `false` (the **default**), `signed_metadata` is ignored entirely and
+  /// the plain JSON is used as-is — preserving out-of-the-box Microsoft Entra /
+  /// Azure AD B2C compatibility (those IdPs do not emit `signed_metadata`).
+  ///
+  /// On a verification failure the existing [strictJwtVerification] knob decides
+  /// throw-vs-warn (strict = throw + don't persist; lenient = warn + fall back
+  /// to the plain document). Recommend `true` (with
+  /// [allowedSignedMetadataAlgorithms] pinned) for FAPI / high-assurance
+  /// deployments.
+  final bool verifySignedMetadata;
+
+  /// Optional explicit allowlist of JWS algorithms permitted for the
+  /// `signed_metadata` JWT (canonical JWA names, e.g. `['RS256','ES256']`),
+  /// mirroring [allowedIdTokenAlgorithms].
+  ///
+  /// `none` is ALWAYS stripped regardless of this list. When null (the
+  /// default), any non-`none` algorithm the AS used is accepted; set this to
+  /// pin a safe set (recommended). Names must use `jose_plus` canonical casing
+  /// (uppercase, e.g. `'RS256'`).
+  ///
+  /// Only consulted when [verifySignedMetadata] is `true`.
+  final List<String>? allowedSignedMetadataAlgorithms;
 
   /// Optional explicit issuer to compare the discovery document's `issuer`
   /// against (authoritative when set).
@@ -295,6 +330,20 @@ class OidcUserManagerSettings {
 
   /// see [OidcIdTokenVerificationOptions.expiryTolerance].
   final Duration expiryTolerance;
+
+  /// How long a persisted (offline) JWKS may be served as a fallback when the
+  /// OP's `jwks_uri` is unreachable, before it is treated as stale and
+  /// id_token/logout_token verification fails-closed instead of trusting a
+  /// possibly-rotated key.
+  ///
+  /// Threaded into [OidcJwksStoreLoader.staleCacheMaxAge] for every id_token
+  /// and front-channel/logout-token verification. Lower it for
+  /// high-assurance/FAPI deployments; raise it for longer offline tolerance.
+  ///
+  /// Defaults to `const Duration(days: 1)`. Per OpenID Connect Core 1.0 §10.1.1
+  /// (Rotation of Asymmetric Signing Keys), an RP must obtain rotated keys and
+  /// must not pin a stale/retired key set indefinitely.
+  final Duration jwksCacheMaxAge;
 
   /// Settings related to the session management spec.
   final OidcSessionManagementSettings sessionManagementSettings;

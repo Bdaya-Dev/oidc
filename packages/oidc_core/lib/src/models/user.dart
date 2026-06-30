@@ -35,6 +35,7 @@ class OidcUser {
     Map<String, dynamic>? attributes,
     Map<String, dynamic>? userInfo,
     String? idTokenOverride,
+    Duration jwksCacheMaxAge = const Duration(days: 1),
   }) async {
     final idToken = idTokenOverride ?? token.idToken;
     if (idToken == null) {
@@ -48,6 +49,7 @@ class OidcUser {
       allowedAlgorithms,
       cacheStore,
       strictVerification,
+      jwksCacheMaxAge,
     );
 
     return OidcUser._(
@@ -67,6 +69,7 @@ class OidcUser {
     List<String>? allowedAlgorithms,
     OidcStore? cacheStore,
     bool strictVerification,
+    Duration jwksCacheMaxAge,
   ) async {
     JsonWebToken webToken;
 
@@ -96,6 +99,7 @@ class OidcUser {
               ? null
               : OidcJwksStoreLoader(
                   store: cacheStore,
+                  staleCacheMaxAge: jwksCacheMaxAge,
                 ),
         );
       } catch (e, st) {
@@ -167,6 +171,7 @@ class OidcUser {
     bool strictVerification = true,
     OidcStore? cacheStore,
     bool allowExpiredIdToken = false,
+    Duration jwksCacheMaxAge = const Duration(days: 1),
   }) async {
     final idToken = idTokenOverride ?? newToken.idToken ?? this.idToken;
 
@@ -178,6 +183,7 @@ class OidcUser {
         allowedAlgorithms,
         cacheStore,
         strictVerification,
+        jwksCacheMaxAge,
       );
     } else {
       webToken = parsedIdToken;
