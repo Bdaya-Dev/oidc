@@ -93,6 +93,29 @@ void main() {
     },
   );
 
+  test('forwards apple flowTimeoutSeconds in the native options map', () async {
+    List<Object?>? received;
+    mockHostApi('authorizeApple', (args) async {
+      received = args;
+      return 'com.example.app://callback?code=c&state=state-1';
+    });
+
+    await OidcDarwin().getAuthorizationResponse(
+      metadata,
+      _authRequest(),
+      const OidcPlatformSpecificOptions(
+        ios: OidcNativeOptionsApple(flowTimeoutSeconds: 30),
+      ),
+      const {},
+    );
+
+    // Native OidcPlugin.scheduleFlowTimeout reads opts['flowTimeoutSeconds']
+    // to arm the timeout; assert the Dart->native wiring forwards the value
+    // (the Swift timer itself is exercised by the iOS integration job).
+    final opts = received![4]! as Map<Object?, Object?>;
+    expect(opts['flowTimeoutSeconds'], 30);
+  });
+
   test(
     'wraps a missing native plugin (channel-error) as OidcException',
     () async {

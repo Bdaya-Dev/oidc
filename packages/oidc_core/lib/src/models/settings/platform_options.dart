@@ -360,6 +360,7 @@ class OidcNativeOptionsApple implements OidcPlatformOptionsMarker {
     this.additionalHeaderFields,
     this.callbackMode = OidcAppleCallbackMode.auto,
     this.rawSessionOptions = const {},
+    this.flowTimeoutSeconds,
   });
 
   /// Whether to use an ephemeral session (no shared cookies/cache).
@@ -377,6 +378,18 @@ class OidcNativeOptionsApple implements OidcPlatformOptionsMarker {
   ///
   /// **Reserved — not yet read natively;** declared for forward compatibility.
   final Map<String, dynamic> rawSessionOptions;
+
+  /// Maximum seconds the native `ASWebAuthenticationSession` flow may wait for a
+  /// redirect before auto-cancelling with `USER_CANCELLED`.
+  ///
+  /// `null` (default) means no timeout — the flow waits until the user dismisses
+  /// the browser or a redirect arrives. Set a finite value for headless CI /
+  /// unattended environments (e.g. simulators, where no user can complete the
+  /// flow and — on the iOS-26 / Xcode-26 simulator — the redirect may never
+  /// auto-arrive), otherwise `loginAuthorizationCodeFlow()` hangs indefinitely.
+  /// Mirrors [OidcNativeOptionsAndroid.flowTimeoutSeconds]; honored natively in
+  /// `oidc_darwin`'s `OidcPlugin.scheduleFlowTimeout`.
+  final int? flowTimeoutSeconds;
 
   Map<String, dynamic> toJson() => _$OidcNativeOptionsAppleToJson(this);
 

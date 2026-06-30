@@ -115,6 +115,30 @@ public class OidcPlugin: NSObject, FlutterPlugin, OidcAppleHostApi {
     }
   }
 
+  /// Mirrors Android's `flowTimeoutSeconds` (OidcPlugin.kt `scheduleFlowTimeout`):
+  /// when the caller set `OidcNativeOptionsApple.flowTimeoutSeconds`, arm a
+  /// main-queue deadline that cancels a still-in-flight flow. On headless CI
+  /// simulators the `ASWebAuthenticationSession` redirect can never arrive (no
+  /// user can interact — and the iOS-26 simulator no longer auto-completes the
+  /// programmatic conformance redirect that the iOS-18 simulator did), so without
+  /// this the Dart Future never resolves and `loginAuthorizationCodeFlow` hangs
+  /// to the test/job timeout. `flowId` guards against cancelling a newer flow
+  /// that has already superseded this one.
+  private func scheduleFlowTimeout(_ opts: [String: Any]) {
+    guard let seconds = (opts["flowTimeoutSeconds"] as? NSNumber)?.intValue,
+      seconds > 0
+    else { return }
+    let expectedFlowId = flowId
+    DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(seconds)) {
+      [weak self] in
+      guard let self = self, self.pendingCompletion != nil,
+        self.flowId == expectedFlowId
+      else { return }
+      self.emit("timeout", ["afterSeconds": seconds])
+      self.cancelInFlight()
+    }
+  }
+
   /// Emits a redacted `redirectReceived` event (no raw URI / secrets).
   private func emitRedirect(_ url: URL?) {
     guard let url = url else { return }
@@ -259,6 +283,7 @@ public class OidcPlugin: NSObject, FlutterPlugin, OidcAppleHostApi {
           "sessionType": preferEphemeral ? "ephemeral" : "standard",
           "captureMode": "asWebAuthenticationSession",
         ])
+      scheduleFlowTimeout(opts)
     } else {
       pendingCompletion = nil
       session = nil

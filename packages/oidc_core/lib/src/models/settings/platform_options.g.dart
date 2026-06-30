@@ -238,6 +238,7 @@ OidcNativeOptionsApple _$OidcNativeOptionsAppleFromJson(
       OidcAppleCallbackMode.auto,
   rawSessionOptions:
       json['rawSessionOptions'] as Map<String, dynamic>? ?? const {},
+  flowTimeoutSeconds: (json['flowTimeoutSeconds'] as num?)?.toInt(),
 );
 
 Map<String, dynamic> _$OidcNativeOptionsAppleToJson(
@@ -248,6 +249,7 @@ Map<String, dynamic> _$OidcNativeOptionsAppleToJson(
   'additionalHeaderFields': instance.additionalHeaderFields,
   'callbackMode': _$OidcAppleCallbackModeEnumMap[instance.callbackMode]!,
   'rawSessionOptions': instance.rawSessionOptions,
+  'flowTimeoutSeconds': instance.flowTimeoutSeconds,
 };
 
 const _$OidcAppleCallbackModeEnumMap = {
