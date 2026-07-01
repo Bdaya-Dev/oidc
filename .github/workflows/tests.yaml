@@ -222,17 +222,15 @@ jobs:
           if-no-files-found: error
 
   ios:
-    # Pinned to macOS 15 / Xcode 16 (iOS-18 simulator). `macos-latest` moved to
-    # macOS 26 / Xcode 26, whose iOS-26 simulator has patrol/XCUITest lifecycle
-    # bugs on the headless runner: (a) the conformance ASWebAuthenticationSession
-    # redirect no longer auto-completes (mitigated by OidcNativeOptionsApple
-    # .flowTimeoutSeconds), and (b) XCUITest's app `terminate()` between
-    # patrolTests intermittently fails ("Failed to terminate ...:0" / exit 65),
-    # amplified by the Xcode-26 DebuggerLLDB.DebuggerVersionStore error. The
-    # iOS-18 sim (Xcode 16.4) runs conformance + offline green (run 28421392053).
-    # TODO(iOS-26): unpin to `macos-latest` once the patrol_plus iOS-26
-    # app-lifecycle fix lands upstream (tracked in the patrol_plus fork).
-    runs-on: macos-15
+    # Runs on the iOS-26 simulator (macos-latest = macOS 26 / Xcode 26). Two
+    # iOS-26-specific issues are handled so this stays green:
+    #   (a) the conformance ASWebAuthenticationSession redirect no longer
+    #       auto-completes on the headless iOS-26 sim -> the module fails fast
+    #       via OidcNativeOptionsApple.flowTimeoutSeconds (this repo).
+    #   (b) XCUITest's implicit app terminate between patrolTests failed on
+    #       Xcode 26 ("Failed to terminate ...:0" / exit 65) -> fixed in
+    #       patrol_plus 5.0.4 (explicit terminate + wait before launch).
+    runs-on: macos-latest
     timeout-minutes: 60
     defaults:
       run:
