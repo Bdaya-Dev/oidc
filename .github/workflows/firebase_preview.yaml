@@ -27,7 +27,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Only build+deploy a target whose sources actually changed in this PR.
+      # A Firebase Hosting preview release is non-idempotent: re-releasing a
+      # byte-identical version to a channel returns HTTP 400 FAILED_PRECONDITION
+      # ("supplied version is the current active version"). Deploying docs on a
+      # code-only PR (docs unchanged) therefore fails spuriously and also skips
+      # the example deploy. Gating each target on its own paths avoids the
+      # redundant release; the continue-on-error backstops below absorb any
+      # residual redundant release or transient Firebase-API "premature close".
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            docs:
+              - "docs/**"
+              - "mkdocs.yml"
+            example:
+              - "packages/oidc/example/**"
+
       - name: Setup Flutter
+        if: steps.filter.outputs.example == 'true'
         uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -35,11 +55,13 @@ jobs:
           cache-key: flutter-:os:-:channel:-:arch:-:hash:-${{ hashFiles('**/pubspec.lock') }}
 
       - name: Setup Python
+        if: steps.filter.outputs.docs == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: 3.x
 
       - name: Restore MkDocs cache
+        if: steps.filter.outputs.docs == 'true'
         uses: actions/cache@v5
         with:
           key: mkdocs-material-${{ runner.os }}-${{ hashFiles('mkdocs.yml') }}
@@ -48,12 +70,15 @@ jobs:
             mkdocs-material-${{ runner.os }}-
 
       - name: Install MkDocs
+        if: steps.filter.outputs.docs == 'true'
         run: pip install mkdocs mkdocs-material click-man
 
       - name: Build Docs (MkDocs)
+        if: steps.filter.outputs.docs == 'true'
         run: mkdocs build --site-dir dist/oidc-docs
 
       - name: Build Example (Flutter web + wasm)
+        if: steps.filter.outputs.example == 'true'
         shell: bash
         env:
           OIDC_ISSUER: https://demo.duendesoftware.com
@@ -80,8 +105,12 @@ jobs:
           rm -rf dist/oidc-example/*
           cp -R packages/oidc/example/build/web/. dist/oidc-example/
 
+      # continue-on-error: a Firebase preview deploy is best-effort (not a merge
+      # gate). A redundant release (unchanged content re-pushed on a later
+      # synchronize) or a transient "premature close" retry must not fail the PR.
       - name: Deploy Docs Preview to Firebase Hosting
-        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository && steps.filter.outputs.docs == 'true' }}
+        continue-on-error: true
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
@@ -92,7 +121,8 @@ jobs:
           expires: 7d
 
       - name: Deploy Example Preview to Firebase Hosting
-        if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository && steps.filter.outputs.example == 'true' }}
+        continue-on-error: true
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
