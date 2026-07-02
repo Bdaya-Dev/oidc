@@ -21,7 +21,6 @@ class _AddManagerDialogState extends State<AddManagerDialog> {
   final _scopeController = TextEditingController(text: 'openid profile email');
 
   OidcClientAuthenticationType _authType = OidcClientAuthenticationType.none;
-  bool _strictJwtVerification = true;
   bool _supportOfflineAuth = false;
 
   @override
@@ -190,16 +189,6 @@ class _AddManagerDialogState extends State<AddManagerDialog> {
                 ),
                 const SizedBox(height: 16),
                 SwitchListTile(
-                  title: const Text('Strict JWT Verification'),
-                  subtitle: const Text('Enable strict JWT token verification'),
-                  value: _strictJwtVerification,
-                  onChanged: (value) {
-                    setState(() {
-                      _strictJwtVerification = value;
-                    });
-                  },
-                ),
-                SwitchListTile(
                   title: const Text('Support Offline Auth'),
                   subtitle: const Text('Allow authentication when offline'),
                   value: _supportOfflineAuth,
@@ -263,7 +252,6 @@ class _AddManagerDialogState extends State<AddManagerDialog> {
         httpClient: app_state.client,
         settings: OidcUserManagerSettings(
           scope: scopes,
-          strictJwtVerification: _strictJwtVerification,
           supportOfflineAuth: _supportOfflineAuth,
           redirectUri: Uri.parse(_redirectUriController.text),
           postLogoutRedirectUri: _postLogoutRedirectUriController.text.isEmpty

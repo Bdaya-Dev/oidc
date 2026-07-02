@@ -25,11 +25,11 @@ void main() {
   );
   final settings = OidcUserManagerSettings(
     redirectUri: Uri.parse('http://example.com/redirect.html'),
-    // The mock id_tokens are HS256-signed with a symmetric key not served by
-    // the (Google) jwks_uri, so they can't be signature-verified here. These
-    // tests exercise manager/caching/refresh logic, not signature validation.
-    strictJwtVerification: false,
   );
+  // Signature verification is always-strict now; every manager below is
+  // constructed with a keyStore holding the mock id_tokens' HS256 signing
+  // key (see mock_client.dart's `mockSigningKey`) so they verify.
+  final managerKeyStore = JsonWebKeyStore()..addKey(mockSigningKey);
 
   setUp(() {
     oidcPlatform = MockOidcPlatform();
@@ -60,6 +60,7 @@ void main() {
           store: store,
           settings: settings,
           httpClient: client,
+          keyStore: managerKeyStore,
           id: 'test-manager',
         );
         expect(manager.didInit, isFalse);
@@ -77,6 +78,7 @@ void main() {
           store: store,
           settings: settings,
           httpClient: client,
+          keyStore: managerKeyStore,
         );
         expect(manager.didInit, isFalse);
         await manager.init();
@@ -126,6 +128,7 @@ void main() {
               store: store,
               settings: settings,
               httpClient: client,
+              keyStore: managerKeyStore,
             );
           });
 
@@ -212,6 +215,7 @@ void main() {
                 store: store,
                 settings: settings,
                 httpClient: client,
+                keyStore: managerKeyStore,
               );
 
               final nowMock = tokenCreatedAt.add(const Duration(hours: 2));
@@ -279,6 +283,7 @@ void main() {
                 store: store,
                 settings: settings,
                 httpClient: client,
+                keyStore: managerKeyStore,
               );
 
               final refreshedAt = tokenCreatedAt.add(const Duration(hours: 2));
@@ -301,6 +306,7 @@ void main() {
                 store: store,
                 settings: settings,
                 httpClient: client,
+                keyStore: managerKeyStore,
               );
 
               final reloadAt = refreshedAt.add(const Duration(minutes: 30));
@@ -373,7 +379,6 @@ void main() {
               final eventSettings = OidcUserManagerSettings(
                 redirectUri: settings.redirectUri,
                 refreshBefore: (_) => const Duration(milliseconds: 700),
-                strictJwtVerification: false,
               );
               manager = OidcUserManager(
                 id: managerId,
@@ -382,6 +387,7 @@ void main() {
                 store: store,
                 settings: eventSettings,
                 httpClient: client,
+                keyStore: managerKeyStore,
               );
 
               await manager.init();

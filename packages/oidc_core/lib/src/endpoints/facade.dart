@@ -896,7 +896,6 @@ class OidcEndpoints {
     bool validateSignedResponseClaims = true,
     bool requireSignedResponseIssAud = false,
     Duration claimsExpiryTolerance = const Duration(minutes: 1),
-    bool strictJwtVerification = true,
   }) async {
     if (tokenLocation == OidcUserInfoAccessTokenLocations.formParameter &&
         requestMethod != OidcConstants_RequestMethod.post) {
@@ -984,31 +983,26 @@ class OidcEndpoints {
       } else {
         // No keyStore => we cannot verify a signed UserInfo response.
         // OIDC Core 5.3.2: a signed UserInfo Response MUST have its signature
-        // validated. Refuse to silently trust it unless the caller has
-        // explicitly opted out (strictJwtVerification == false), mirroring
-        // id_token handling.
-        if (strictJwtVerification) {
-          throw const OidcException(
-            'UserInfo returned a signed (application/jwt) response but no '
-            'keyStore was provided to verify its signature; refusing to trust '
-            'an unverified UserInfo JWT (strictJwtVerification=true). Provide a '
-            'keyStore, or set strictJwtVerification=false to opt out (insecure).',
-          );
-        }
-        jwt = JsonWebToken.unverified(resp.body);
+        // validated. Always refuse to silently trust it — mirroring id_token
+        // handling, there is no unverified-fallback opt-out.
+        throw const OidcException(
+          'UserInfo returned a signed (application/jwt) response but no '
+          'keyStore was provided to verify its signature; refusing to trust '
+          'an unverified UserInfo JWT. Provide a keyStore.',
+        );
       }
       ret = OidcUserInfoResponse.fromJson(jwt.claims.toJson());
       // OIDC Core 5.3.2/5.3.4: when the UserInfo response is a signed JWT that
-      // we VERIFIED against the keyStore, validate its iss/aud/exp. Gated on
-      // `keyStore != null` so the unverified path above never gains false
-      // assurance, and only on the signed-JWT branch (plain JSON is exempt).
+      // we VERIFIED against the keyStore, validate its iss/aud/exp. Reaching
+      // here always means `keyStore != null` — the `else` branch above always
+      // throws, so the unverified path never gains false assurance.
       //
       // We deliberately do NOT call `jwt.claims.validate(...)`: that force-
       // unwraps `exp` (crashing when a UserInfo JWT omits it, which is common)
       // and treats an absent `iss` as a mismatch. UserInfo `iss`/`aud`/`exp`
       // are validate-when-present (SHOULD), so use custom logic on the parsed
       // model fields.
-      if (keyStore != null && validateSignedResponseClaims) {
+      if (validateSignedResponseClaims) {
         final iss = ret.iss;
         if (iss != null) {
           // Simple-string compare (consistent with the repo's RFC 9207 `iss`

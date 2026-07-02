@@ -12,7 +12,6 @@
 // patrol_test/app_test.dart` only.
 
 import 'dart:collection';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:clock/clock.dart';
@@ -29,6 +28,13 @@ typedef PumpFrame = Future<void> Function();
 const _issuer = 'https://test.example.com';
 const _audience = 'test-client';
 const _testSubject = 'user-123';
+
+/// Signature verification is always-strict now; every id_token this file
+/// mints is signed by this key, registered directly on the test manager's
+/// keyStore (see [createManager]) so it verifies without needing a real
+/// (mocked) `jwks_uri` fetch — these tests exercise OFFLINE / refresh
+/// behaviour, not JWKS resolution.
+final _signingKey = JsonWebKey.generate('RS256');
 
 /// Asserts the manager enters offline mode after a refresh network failure and
 /// keeps serving the cached token.
@@ -153,7 +159,7 @@ OfflineTestUserManager createManager({
     'jwks_uri': '$_issuer/jwks',
     'response_types_supported': ['code'],
     'subject_types_supported': ['public'],
-    'id_token_signing_alg_values_supported': ['none'],
+    'id_token_signing_alg_values_supported': ['RS256'],
     'token_endpoint_auth_methods_supported': ['none'],
     'grant_types_supported': ['authorization_code', 'refresh_token'],
   });
@@ -161,13 +167,6 @@ OfflineTestUserManager createManager({
   final settings = OidcUserManagerSettings(
     redirectUri: Uri.parse('com.example.test:/callback'),
     scope: const ['openid', 'offline_access'],
-    // These tests seed UNSIGNED (alg:none) id_tokens via the fake OP
-    // (id_token_signing_alg_values_supported: ['none']) to exercise OFFLINE /
-    // refresh behaviour — not signature verification. Since the library now
-    // correctly rejects alg:none (and strictJwtVerification defaults to true),
-    // opt this behaviour-test manager out so the seeded token is accepted as
-    // unverified. Production code must NOT set this.
-    strictJwtVerification: false,
     supportOfflineAuth: true,
     offlineRepeatFailureWarningThreshold: warningThreshold,
     userInfoSettings: const OidcUserInfoSettings(sendUserInfoRequest: false),
@@ -207,6 +206,7 @@ OfflineTestUserManager createManager({
     clientCredentials: const OidcClientAuthentication.none(clientId: _audience),
     store: OidcMemoryStore(),
     settings: settings,
+    keyStore: JsonWebKeyStore()..addKey(_signingKey),
   );
 }
 
@@ -216,7 +216,7 @@ OidcToken _buildToken(String label) {
 }
 
 OidcTokenResponse _buildTokenResponse(String label) {
-  final idToken = _createUnsignedIdToken(validity: const Duration(minutes: 10));
+  final idToken = _createSignedIdToken(validity: const Duration(minutes: 10));
   return OidcTokenResponse.fromJson({
     'access_token': 'access-$label',
     'refresh_token': 'refresh-$label',
@@ -226,25 +226,20 @@ OidcTokenResponse _buildTokenResponse(String label) {
   });
 }
 
-String _createUnsignedIdToken({
+String _createSignedIdToken({
   Duration validity = const Duration(minutes: 5),
 }) {
-  final header = base64UrlEncode(
-    utf8.encode(jsonEncode({'alg': 'none', 'typ': 'JWT'})),
-  ).replaceAll('=', '');
   final now = clock.now();
-  final payload = base64UrlEncode(
-    utf8.encode(
-      jsonEncode({
-        'iss': _issuer,
-        'sub': _testSubject,
-        'aud': _audience,
-        'exp': (now.add(validity).millisecondsSinceEpoch ~/ 1000),
-        'iat': (now.millisecondsSinceEpoch ~/ 1000),
-      }),
-    ),
-  ).replaceAll('=', '');
-  return '$header.$payload.';
+  final builder = JsonWebSignatureBuilder()
+    ..jsonContent = {
+      'iss': _issuer,
+      'sub': _testSubject,
+      'aud': _audience,
+      'exp': (now.add(validity).millisecondsSinceEpoch ~/ 1000),
+      'iat': (now.millisecondsSinceEpoch ~/ 1000),
+    }
+    ..addRecipient(_signingKey, algorithm: 'RS256');
+  return builder.build().toCompactSerialization();
 }
 
 class OfflineTestUserManager extends OidcUserManager {

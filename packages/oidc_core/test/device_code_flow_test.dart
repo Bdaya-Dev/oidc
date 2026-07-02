@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:fake_async/fake_async.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:jose_plus/jose.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
 
@@ -14,6 +15,7 @@ class _TestUserManager extends OidcUserManagerBase {
     required super.store,
     required super.settings,
     super.httpClient,
+    super.keyStore,
   });
 
   @override
@@ -64,34 +66,38 @@ class _TestUserManager extends OidcUserManagerBase {
   }
 }
 
-String _b64UrlJson(Map<String, Object?> json) {
-  final bytes = utf8.encode(jsonEncode(json));
-  return base64Url.encode(bytes).replaceAll('=', '');
-}
-
-String _unsignedJwt({
+String _signedJwt({
+  required JsonWebKey signingKey,
   required String issuer,
   required String audience,
   required String subject,
   required int issuedAt,
   required int expiresAt,
 }) {
-  final header = <String, Object?>{'alg': 'none', 'typ': 'JWT'};
-  final payload = <String, Object?>{
-    'iss': issuer,
-    'aud': audience,
-    'sub': subject,
-    'iat': issuedAt,
-    'exp': expiresAt,
-  };
-  // Compact JWS has 3 parts; with `alg=none` the signature can be empty.
-  return '${_b64UrlJson(header)}.${_b64UrlJson(payload)}.';
+  return (JsonWebSignatureBuilder()
+        ..jsonContent = {
+          'iss': issuer,
+          'aud': audience,
+          'sub': subject,
+          'iat': issuedAt,
+          'exp': expiresAt,
+        }
+        ..addRecipient(signingKey, algorithm: 'RS256'))
+      .build()
+      .toCompactSerialization();
 }
 
 void main() {
   group('OidcUserManagerBase.loginDeviceCodeFlow', () {
+    // This test exercises ONLY the poll-backoff timing (authorization_pending
+    // then slow_down), never the success path — under `fakeAsync`. Real
+    // id_token signature verification (always-strict now) is NOT exercised
+    // here: `jose_plus`'s key resolution goes through an `async*` Stream that
+    // does not settle under `fakeAsync` (a pre-existing jose_plus/fake_async
+    // interaction, unrelated to what this test exercises). The success +
+    // verification path is covered separately, with real async, below.
     test(
-      'polls until success; handles authorization_pending and slow_down',
+      'polls with authorization_pending/slow_down backoff timing',
       () {
         fakeAsync((async) {
           const issuer = 'https://server.example.com';
@@ -103,16 +109,6 @@ void main() {
             'token_endpoint': tokenEndpoint.toString(),
             'device_authorization_endpoint': deviceEndpoint.toString(),
           });
-
-          final nowSeconds =
-              DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-          final idToken = _unsignedJwt(
-            issuer: issuer,
-            audience: 'client',
-            subject: 'user',
-            issuedAt: nowSeconds,
-            expiresAt: nowSeconds + 3600,
-          );
 
           var tokenCalls = 0;
           final tokenCallOffsets = <Duration>[];
@@ -135,24 +131,15 @@ void main() {
             if (request.url == tokenEndpoint) {
               tokenCalls++;
               tokenCallOffsets.add(async.elapsed);
-              if (tokenCalls == 1) {
-                return http.Response(
-                  jsonEncode({'error': 'authorization_pending'}),
-                  400,
-                );
-              }
               if (tokenCalls == 2) {
                 return http.Response(jsonEncode({'error': 'slow_down'}), 400);
               }
-
+              // Stays pending on every other call (including the 3rd) — this
+              // test only cares about the interval/backoff timing, never
+              // reaches id_token verification.
               return http.Response(
-                jsonEncode({
-                  'access_token': 'access-token',
-                  'id_token': idToken,
-                  'token_type': 'Bearer',
-                  'expires_in': 3600,
-                }),
-                200,
+                jsonEncode({'error': 'authorization_pending'}),
+                400,
               );
             }
 
@@ -161,11 +148,6 @@ void main() {
 
           final settings = OidcUserManagerSettings(
             redirectUri: Uri.parse('com.example:/callback'),
-            // This flow test uses an intentionally-unsigned mock id_token and
-            // does not serve a JWKS, so opt out of the fail-closed signature
-            // verification (now the default) — it exercises device-code
-            // polling, not id_token validation.
-            strictJwtVerification: false,
             userInfoSettings: const OidcUserInfoSettings(
               sendUserInfoRequest: false,
             ),
@@ -181,24 +163,17 @@ void main() {
             httpClient: client,
           );
 
-          OidcUser? result;
-          Object? error;
-
           unawaited(
-            manager
-                .init()
-                .then((_) {
-                  return manager.loginDeviceCodeFlow(
-                    onVerification: (resp) async {
-                      verificationCalls++;
-                      expect(resp.deviceCode, 'device-code');
-                      expect(resp.userCode, 'user-code');
-                      expect(resp.interval, const Duration(seconds: 1));
-                    },
-                  );
-                })
-                .then<void>((u) => result = u)
-                .catchError((Object e) => error = e),
+            manager.init().then(
+              (_) => manager.loginDeviceCodeFlow(
+                onVerification: (resp) async {
+                  verificationCalls++;
+                  expect(resp.deviceCode, 'device-code');
+                  expect(resp.userCode, 'user-code');
+                  expect(resp.interval, const Duration(seconds: 1));
+                },
+              ),
+            ),
           );
 
           async
@@ -212,10 +187,6 @@ void main() {
             // After slow_down, interval increases by 5 seconds.
             ..elapse(const Duration(seconds: 6))
             ..flushMicrotasks();
-
-          expect(error, isNull);
-          expect(result, isNotNull);
-          expect(result!.token.accessToken, 'access-token');
 
           expect(verificationCalls, 1);
           expect(tokenCalls, 3);
@@ -233,6 +204,94 @@ void main() {
           unawaited(manager.dispose());
           async.flushMicrotasks();
         });
+      },
+    );
+
+    test(
+      'completes with a verified user when the device flow succeeds',
+      () async {
+        const issuer = 'https://server.example.com';
+        final deviceEndpoint = Uri.parse('$issuer/device');
+        final tokenEndpoint = Uri.parse('$issuer/token');
+
+        // Signature verification is always-strict now, so the id_token must
+        // be real. The signing key is added directly to the manager's
+        // keyStore (rather than served from a mocked `jwks_uri`) so
+        // verification resolves it synchronously from memory — see the note
+        // on the backoff-timing test above for why this test uses real async
+        // instead of `fakeAsync`.
+        final signingKey = JsonWebKey.generate('RS256');
+        final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+        final idToken = _signedJwt(
+          signingKey: signingKey,
+          issuer: issuer,
+          audience: 'client',
+          subject: 'user',
+          issuedAt: nowSeconds,
+          expiresAt: nowSeconds + 3600,
+        );
+
+        final metadata = OidcProviderMetadata.fromJson({
+          'issuer': issuer,
+          'token_endpoint': tokenEndpoint.toString(),
+          'device_authorization_endpoint': deviceEndpoint.toString(),
+        });
+
+        final client = MockClient((request) async {
+          if (request.url == deviceEndpoint) {
+            return http.Response(
+              jsonEncode({
+                'device_code': 'device-code',
+                'user_code': 'user-code',
+                'verification_uri': '$issuer/verify',
+                'expires_in': 60,
+                'interval': 0,
+              }),
+              200,
+            );
+          }
+
+          if (request.url == tokenEndpoint) {
+            return http.Response(
+              jsonEncode({
+                'access_token': 'access-token',
+                'id_token': idToken,
+                'token_type': 'Bearer',
+                'expires_in': 3600,
+              }),
+              200,
+            );
+          }
+
+          return http.Response('Not found', 404);
+        });
+
+        final settings = OidcUserManagerSettings(
+          redirectUri: Uri.parse('com.example:/callback'),
+          userInfoSettings: const OidcUserInfoSettings(
+            sendUserInfoRequest: false,
+          ),
+        );
+
+        final manager = _TestUserManager(
+          discoveryDocument: metadata,
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'client',
+          ),
+          store: OidcMemoryStore(),
+          settings: settings,
+          httpClient: client,
+          keyStore: JsonWebKeyStore()..addKey(signingKey),
+        );
+
+        await manager.init();
+        final result = await manager.loginDeviceCodeFlow();
+
+        expect(result, isNotNull);
+        expect(result!.token.accessToken, 'access-token');
+        expect(result.parsedIdToken.isVerified, isTrue);
+
+        await manager.dispose();
       },
     );
 

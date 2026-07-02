@@ -18,7 +18,7 @@ import 'package:test/test.dart';
 /// default [JsonWebKeySetLoader] whose in-memory TTL cache can mask a
 /// just-rotated signing key for its full cache lifetime.
 
-final _jwksUri = Uri.parse('https://op.example.com/jwks');
+final Uri _jwksUri = Uri.parse('https://op.example.com/jwks');
 
 JsonWebKey _withKid(JsonWebKey key, String kid) =>
     JsonWebKey.fromJson({...key.toJson(), 'kid': kid})!;
@@ -52,9 +52,7 @@ OidcToken _tokenWith(String idToken) => OidcToken(
 void main() {
   final t0 = DateTime.utc(2026, 1, 1, 12);
 
-  setUp(() {
-    jwksForceRefetchTimestamps.clear();
-  });
+  setUp(jwksForceRefetchTimestamps.clear);
 
   group('kid-miss JWKS refetch (cacheStore-less path)', () {
     test(

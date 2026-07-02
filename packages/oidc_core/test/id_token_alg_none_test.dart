@@ -45,7 +45,7 @@ void main() {
       // A real keystore is present (the verify path runs), and the OP-advertised
       // allow-list happens to include `none` — jose_plus only auto-rejects
       // `none` when the list is null, so without an explicit strip this would
-      // accept the forged unsigned token. Default strictVerification=true.
+      // accept the forged unsigned token. Verification is always-strict.
       final keystore = JsonWebKeyStore()..addKey(JsonWebKey.generate('RS256'));
 
       await expectLater(

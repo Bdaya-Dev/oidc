@@ -16,6 +16,7 @@ class _HybridManager extends OidcUserManagerBase {
     required super.clientCredentials,
     required super.store,
     required super.settings,
+    super.keyStore,
   });
 
   Future<void> validateFrontChannel({
@@ -72,11 +73,15 @@ final _metadata = OidcProviderMetadata.fromJson({
   'token_endpoint': 'https://op.example.com/token',
 });
 
+/// Signature verification is always-strict now, so every id_token this file
+/// mints is signed by this shared key, registered on the test manager's
+/// keyStore (see [_manager]).
+final _signingKey = JsonWebKey.generate('RS256');
+
 Future<String> _signIdToken(Map<String, dynamic> claims) async {
-  final key = JsonWebKey.generate('RS256');
   final builder = JsonWebSignatureBuilder()
     ..jsonContent = claims
-    ..addRecipient(key, algorithm: 'RS256');
+    ..addRecipient(_signingKey, algorithm: 'RS256');
   return builder.build().toCompactSerialization();
 }
 
@@ -97,9 +102,11 @@ Future<_HybridManager> _manager() async {
     store: OidcMemoryStore(),
     settings: OidcUserManagerSettings(
       redirectUri: Uri.parse('com.example.app://cb'),
-      // unsigned/keystore-less: exercise claim binding, not signature.
-      strictJwtVerification: false,
     ),
+    // Signature verification is always-strict now; register the shared
+    // signing key directly so these tests can focus on claim binding
+    // (nonce/c_hash/at_hash/auth_time), not signature trust.
+    keyStore: JsonWebKeyStore()..addKey(_signingKey),
   );
   await m.init();
   return m;

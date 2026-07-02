@@ -89,7 +89,6 @@ Future<OidcUser> _user() => OidcUser.fromIdToken(
     refreshToken: 'refresh-token-1',
     tokenType: 'Bearer',
   ),
-  strictVerification: false,
 );
 
 OidcProviderMetadata _metadata() => OidcProviderMetadata.fromJson({
@@ -111,7 +110,6 @@ Future<_TestManager> _build({Uri? postLogoutRedirectUri}) async {
     settings: OidcUserManagerSettings(
       redirectUri: Uri.parse('com.example.app://cb'),
       postLogoutRedirectUri: postLogoutRedirectUri,
-      strictJwtVerification: false,
     ),
   );
   await manager.init();

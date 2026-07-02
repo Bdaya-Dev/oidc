@@ -14,13 +14,13 @@ import 'package:test/test.dart';
 /// manager should force exactly ONE cache-busting JWKS refetch (rate-limited
 /// per issuer) and retry once before giving up — instead of trusting a
 /// possibly-stale JWKS view forever within a single verification call. See
-/// `OidcUser.fromIdToken` / `OidcJwksStoreLoader.forceFresh`.
+/// [OidcUser.fromIdToken] and `OidcJwksStoreLoader`'s `forceFresh` flag.
 ///
-/// These tests exercise the path where a [cacheStore] IS supplied (the
+/// These tests exercise the path where a `cacheStore` IS supplied (the
 /// `OidcUserManager`-managed flow). The `cacheStore`-less path is covered
 /// separately.
 
-final _jwksUri = Uri.parse('https://op.example.com/jwks');
+final Uri _jwksUri = Uri.parse('https://op.example.com/jwks');
 
 JsonWebKey _withKid(JsonWebKey key, String kid) =>
     JsonWebKey.fromJson({...key.toJson(), 'kid': kid})!;
@@ -60,11 +60,9 @@ Future<OidcStore> _store() async {
 void main() {
   final t0 = DateTime.utc(2026, 1, 1, 12);
 
-  setUp(() {
-    // The per-issuer cooldown tracker is process-lifetime global state; reset
-    // it between tests so they don't interfere with each other.
-    jwksForceRefetchTimestamps.clear();
-  });
+  // The per-issuer cooldown tracker is process-lifetime global state; reset
+  // it between tests so they don't interfere with each other.
+  setUp(jwksForceRefetchTimestamps.clear);
 
   group('kid-miss JWKS refetch (cacheStore path)', () {
     test(

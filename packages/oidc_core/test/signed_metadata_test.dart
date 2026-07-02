@@ -7,7 +7,6 @@ import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:jose_plus/jose.dart';
-import 'package:logging/logging.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
 
@@ -123,7 +122,6 @@ _DiscoveryManager _manager({
   required Uri wellKnown,
   required http.Client client,
   bool verify = true,
-  bool strictJwt = true,
   List<String>? allowedSignedMetadataAlgorithms,
   OidcStore? store,
 }) => _DiscoveryManager.lazy(
@@ -134,24 +132,9 @@ _DiscoveryManager _manager({
   settings: OidcUserManagerSettings(
     redirectUri: _redirect,
     verifySignedMetadata: verify,
-    strictJwtVerification: strictJwt,
     allowedSignedMetadataAlgorithms: allowedSignedMetadataAlgorithms,
   ),
 );
-
-Future<List<LogRecord>> _capture(Future<void> Function() action) async {
-  final records = <LogRecord>[];
-  final prev = Logger.root.level;
-  Logger.root.level = Level.ALL;
-  final sub = Logger.root.onRecord.listen(records.add);
-  try {
-    await action();
-  } finally {
-    await sub.cancel();
-    Logger.root.level = prev;
-  }
-  return records;
-}
 
 bool _jwksWasFetched(List<Uri> hits) =>
     hits.any((u) => u.path.endsWith('/jwks'));
@@ -264,49 +247,6 @@ void main() {
     );
 
     test(
-      'tampered signature + lenient => succeeds, one warning, plain retained',
-      () async {
-        final valid = _sign({
-          'iss': _issuer,
-          'token_endpoint': 'https://op.example.com/token-signed',
-        });
-        final parts = valid.split('.');
-        final tamperedPayload = base64Url
-            .encode(
-              utf8.encode(
-                jsonEncode({
-                  'iss': _issuer,
-                  'token_endpoint': 'https://attacker.example/token',
-                }),
-              ),
-            )
-            .replaceAll('=', '');
-        final tampered = '${parts[0]}.$tamperedPayload.${parts[2]}';
-        late _DiscoveryManager m;
-        final records = await _capture(() async {
-          m = _manager(
-            wellKnown: wellKnown,
-            client: _serving(
-              doc: _doc(signedMetadata: tampered),
-              hits: <Uri>[],
-            ),
-            strictJwt: false,
-          );
-          await m.init();
-        });
-        expect(
-          m.discoveryDocument.tokenEndpoint.toString(),
-          'https://op.example.com/token',
-        );
-        final warnings = records.where(
-          (r) =>
-              r.level == Level.WARNING && r.message.contains('signed_metadata'),
-        );
-        expect(warnings, hasLength(1));
-      },
-    );
-
-    test(
       'alg:none signed_metadata (none advertised) => rejected (strict)',
       () async {
         final unsigned = _unsigned({
@@ -355,28 +295,6 @@ void main() {
         ),
       );
       await expectLater(m.init(), throwsA(isA<OidcException>()));
-    });
-
-    test('missing iss claim => warn+fallback (lenient)', () async {
-      final signed = _sign({
-        'token_endpoint': 'https://op.example.com/token-signed',
-      });
-      late _DiscoveryManager m;
-      await _capture(() async {
-        m = _manager(
-          wellKnown: wellKnown,
-          client: _serving(
-            doc: _doc(signedMetadata: signed),
-            hits: <Uri>[],
-          ),
-          strictJwt: false,
-        );
-        await m.init();
-      });
-      expect(
-        m.discoveryDocument.tokenEndpoint.toString(),
-        'https://op.example.com/token',
-      );
     });
 
     test('iss mismatches expected issuer => rejected (strict)', () async {

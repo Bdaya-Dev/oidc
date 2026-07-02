@@ -91,7 +91,6 @@ Future<OidcUser> _user() async {
       refreshToken: 'refresh-token-1',
       tokenType: 'Bearer',
     ),
-    strictVerification: false,
   );
 }
 
@@ -120,7 +119,6 @@ Future<_LogoutManager> _build(
     httpClient: client,
     settings: OidcUserManagerSettings(
       redirectUri: Uri.parse('com.example.app://cb'),
-      strictJwtVerification: false,
       revokeTokensOnLogout: revokeOnLogout,
     ),
   );

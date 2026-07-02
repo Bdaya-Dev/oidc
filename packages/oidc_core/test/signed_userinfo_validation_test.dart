@@ -210,8 +210,7 @@ void main() {
     }
 
     test(
-      'strictJwtVerification=true (default) => throws OidcException '
-      '(no silent unverified trust)',
+      'always throws OidcException (no silent unverified trust, no opt-out)',
       () async {
         final client = jwtClient(signedJwt(_validClaims()));
         await expectLater(
@@ -226,22 +225,7 @@ void main() {
       },
     );
 
-    test(
-      'strictJwtVerification=false => parses unverified claims (opt-out)',
-      () async {
-        final client = jwtClient(signedJwt(_validClaims()));
-        final resp = await OidcEndpoints.userInfo(
-          userInfoEndpoint: _userInfoEndpoint,
-          accessToken: 'at',
-          followDistributedClaims: false,
-          strictJwtVerification: false,
-          client: client,
-        );
-        expect(resp.sub, 'user-1');
-      },
-    );
-
-    test('forged application/jwt + strict (default) => throws', () async {
+    test('forged application/jwt => throws', () async {
       final signed = signedJwt(_validClaims());
       // Tamper the signature segment so it can never verify.
       final parts = signed.split('.');

@@ -1229,11 +1229,11 @@ abstract class OidcUserManagerBase {
         allowedAlgorithms: resolveAllowedIdTokenAlgorithms(metadata),
         keystore: keyStore,
         attributes: attributes,
-        strictVerification: settings.strictJwtVerification,
         userInfo: userInfo,
         idTokenOverride: idTokenOverride,
         cacheStore: store,
         jwksCacheMaxAge: settings.jwksCacheMaxAge,
+        httpClient: httpClient,
       );
     } else {
       final reusesExistingIdToken =
@@ -1241,10 +1241,10 @@ abstract class OidcUserManagerBase {
       newUser = await currentUser.replaceToken(
         token,
         idTokenOverride: idTokenOverride,
-        strictVerification: settings.strictJwtVerification,
         cacheStore: store,
         allowExpiredIdToken: reusesExistingIdToken,
         jwksCacheMaxAge: settings.jwksCacheMaxAge,
+        httpClient: httpClient,
       );
       // OpenID Connect Core §12.2: a freshly-issued id_token MUST keep the same
       // `sub` (and `iss`) as the prior one — refuse a possible account swap on
@@ -1896,9 +1896,9 @@ abstract class OidcUserManagerBase {
       // the sole protection — honour an explicit `allowedIdTokenAlgorithms` pin.
       allowedAlgorithms: resolveAllowedIdTokenAlgorithms(metadata),
       keystore: keyStore,
-      strictVerification: settings.strictJwtVerification,
       cacheStore: store,
       jwksCacheMaxAge: settings.jwksCacheMaxAge,
+      httpClient: httpClient,
     );
     final idTokenNonce =
         frontChannelUser.parsedIdToken.claims[OidcConstants_AuthParameters
@@ -2142,12 +2142,6 @@ abstract class OidcUserManagerBase {
             requireSignedResponseIssAud:
                 settings.userInfoSettings.requireSignedResponseIssAud,
             claimsExpiryTolerance: settings.expiryTolerance,
-            // A signed (application/jwt) UserInfo response that cannot be
-            // verified is rejected when strict. The managed flow always passes
-            // a non-null keyStore (see [keyStore]), so this path is unreachable
-            // here; threading keeps the contract explicit and consistent with
-            // id_token handling.
-            strictJwtVerification: settings.strictJwtVerification,
             // Present a DPoP-bound access token with the DPoP scheme + an
             // `ath`-bound proof (RFC 9449 §7.1).
             dpopManager: actualUser.token.tokenType?.toUpperCase() == 'DPOP'
@@ -2387,25 +2381,16 @@ abstract class OidcUserManagerBase {
               jwksCacheMaxAge: settings.jwksCacheMaxAge,
             );
       } on OidcException catch (e, st) {
-        // Mirror the _validateDiscoveryIssuer strict/warn idiom.
-        if (settings.strictJwtVerification) {
-          logAndThrow(
-            'Failed to verify the discovery `signed_metadata` JWT '
-            '(RFC 8414 §2.1); refusing to use the document '
-            '(strictJwtVerification=true).',
-            error: e,
-            stackTrace: st,
-            extra: {
-              OidcConstants_Exception.discoveryDocumentUri: uri,
-            },
-          );
-        }
-        logger.warning(
+        // Always fail-closed: refuse to use the document. There is no
+        // unverified-fallback opt-out (mirrors id_token handling).
+        logAndThrow(
           'Failed to verify the discovery `signed_metadata` JWT '
-          '(RFC 8414 §2.1); strictJwtVerification is disabled so the plain '
-          '(unmerged) document is being used anyway.',
-          e,
-          st,
+          '(RFC 8414 §2.1); refusing to use the document.',
+          error: e,
+          stackTrace: st,
+          extra: {
+            OidcConstants_Exception.discoveryDocumentUri: uri,
+          },
         );
       }
     }

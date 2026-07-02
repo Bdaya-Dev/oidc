@@ -105,8 +105,6 @@ void main() {
       httpClient: client,
       settings: OidcUserManagerSettings(
         redirectUri: Uri.parse('com.example.app://cb'),
-        // Not testing id_token verification here.
-        strictJwtVerification: false,
         dpop: dpop,
       ),
     );
@@ -214,7 +212,6 @@ void main() {
         httpClient: client,
         settings: OidcUserManagerSettings(
           redirectUri: Uri.parse('com.example.app://cb'),
-          strictJwtVerification: false,
           dpop: const OidcDPoPSettings(),
         ),
       );
@@ -267,7 +264,6 @@ void main() {
         httpClient: client,
         settings: OidcUserManagerSettings(
           redirectUri: Uri.parse('com.example.app://cb'),
-          strictJwtVerification: false,
           dpop: const OidcDPoPSettings(),
           pushedAuthorizationRequestsMode:
               OidcPushedAuthorizationRequestsMode.always,

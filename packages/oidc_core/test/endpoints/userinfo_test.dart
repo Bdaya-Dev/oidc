@@ -2,23 +2,25 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:jose_plus/jose.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
 
-String _b64(Object json) =>
-    base64Url.encode(utf8.encode(jsonEncode(json))).replaceAll('=', '');
+/// Signature verification is always-strict now (no `keyStore`-less opt-out),
+/// so these Content-Type-routing tests sign with a real key and provide a
+/// matching keyStore, rather than the previous arbitrary-signature trick.
+final _signingKey = JsonWebKey.generate('RS256');
 
-/// Builds a compact JWS string carrying [claims]. The signature segment is
-/// arbitrary on purpose: these tests exercise the *unverified* parse path
-/// (no key store), which is enough to prove `Content-Type` detection routes an
-/// `application/jwt` body to the JWT branch instead of the JSON parser.
-///
-/// Because the unverified parse path is fail-closed by default
-/// (`strictJwtVerification: true` rejects an unverifiable signed UserInfo
-/// response), these content-type tests explicitly opt out with
-/// `strictJwtVerification: false` — they assert routing, not signature trust.
+/// Builds a compact JWS string carrying [claims], signed by [_signingKey].
+/// Verifying it (rather than parsing unverified) still exercises the thing
+/// under test: that `Content-Type` detection routes an `application/jwt`
+/// body to the JWT branch instead of the JSON parser.
 String _compactJwt(Map<String, dynamic> claims) =>
-    '${_b64(const {'alg': 'RS256', 'typ': 'JWT'})}.${_b64(claims)}.AQID';
+    (JsonWebSignatureBuilder()
+          ..jsonContent = claims
+          ..addRecipient(_signingKey, algorithm: 'RS256'))
+        .build()
+        .toCompactSerialization();
 
 void main() {
   group('OidcEndpoints.userInfo Content-Type handling', () {
@@ -27,9 +29,7 @@ void main() {
         userInfoEndpoint: Uri.parse('https://op.example.com/userinfo'),
         accessToken: 'access-token',
         followDistributedClaims: false,
-        // No keyStore is provided; opt out of the strict (fail-closed) guard so
-        // the unverified application/jwt routing path under test is reached.
-        strictJwtVerification: false,
+        keyStore: JsonWebKeyStore()..addKey(_signingKey),
         client: MockClient((_) async => response),
       );
     }
