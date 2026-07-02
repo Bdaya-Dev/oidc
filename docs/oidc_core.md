@@ -111,15 +111,21 @@ A wrapper around `OidcToken` that requires the existence of `id_token` to unders
 to create a user, you should call `fromIdToken` which takes the following parameters:
 
 - `OidcToken token`: the source token, this MUST contain `idToken`.
-- `strictVerification`: if true, will throw an error if we fail to verify the signature of the JWT id token.
-!!! Warning
-    The current jose package we use is unmaintained, and has multiple problems, so setting `strictVerification: true` might throw random errors.
+- `keystore`: the store that contains information about the public json web keys. When provided, signature
+  verification is **always strict** (fail-closed) — an id_token whose signature cannot be verified throws;
+  there is no opt-out. When omitted, the id_token is parsed but left unverified.
 
-    you MUST test if it works before using it in production.
+    !!! Info "Key rotation"
+        A `kid` absent from the currently-loaded JWKS triggers one rate-limited, cache-busting JWKS refetch
+        before failing (OpenID Connect Core 1.0 §10.1.1), so a routine signing-key rotation at the OP does not
+        cause a spurious verification failure.
 
-    see this issue for more information: [oidc#9](https://github.com/Bdaya-Dev/oidc/issues/9).
-
-- `keystore`: the store that contains information about the public json web keys.
+    !!! Warning "HS256 id_tokens"
+        Some OPs (e.g. Auth0, for confidential clients by default) sign id_tokens with the symmetric `HS256`
+        algorithm, keyed by the client secret rather than a JWKS-published key. Verifying these requires an
+        `oct` key derived from the client secret to be present in `keystore` — `OidcUserManagerBase.init()`
+        does this automatically when `clientCredentials` carries a `clientSecret`. Calling `fromIdToken`
+        directly (bypassing the manager) must add that key itself.
 - `attributes`: extra attributes to put with the user for customization.
 - `userInfo`: the response from the `/userinfo` endpoint.
 

@@ -118,7 +118,24 @@ settings to control the behavior of the instance.
     !!! Tip
         For detailed information about offline authentication, including security best practices, error handling, and implementation examples, see the [Offline Authentication Guide](oidc-offline-auth.md).
 
-- `bool strictJwtVerification = false`: whether JWTs are strictly verified.
+- ID-token (and signed UserInfo / signed discovery `signed_metadata`) signature
+  verification is **always strict** (fail-closed): a token/response whose
+  signature cannot be verified is rejected. There is no opt-out setting.
+
+    !!! Info "Key rotation"
+        A `kid` that isn't in the currently-cached JWKS (e.g. right after the
+        OP rotates its signing keys) triggers one rate-limited, cache-busting
+        JWKS refetch before failing, so a routine key rotation does not cause
+        spurious login failures.
+
+    !!! Warning "HS256 id_tokens (e.g. Auth0's default client signing algorithm)"
+        Some OPs (Auth0 in particular, for confidential clients by default)
+        sign id_tokens with `HS256`, a symmetric algorithm keyed by your
+        `client_secret` rather than a JWKS-published public key. Verifying
+        these requires passing `clientSecret` on your
+        `OidcClientAuthentication` — the manager registers it as the HS256
+        verification key during `init()`. Without a `clientSecret`, an
+        HS256-signed id_token cannot be verified and login will fail-closed.
 - `Uri redirectUri`: the redirect uri that was configured with the provider.
 - `Uri? postLogoutRedirectUri`: the post logout redirect uri that was configured with the provider.
 - `Uri? frontChannelLogoutUri`: the uri of the front channel logout flow. this Uri MUST be registered with the OP first. the OP will call this Uri when it wants to logout the user.
