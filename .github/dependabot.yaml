@@ -30,15 +30,11 @@ updates:
     schedule:
       interval: "monthly"
   - package-ecosystem: "pub"
-    directory: "/packages/oidc_ios"
+    directory: "/packages/oidc_darwin"
     schedule:
       interval: "monthly"
   - package-ecosystem: "pub"
     directory: "/packages/oidc_linux"
-    schedule:
-      interval: "monthly"
-  - package-ecosystem: "pub"
-    directory: "/packages/oidc_macos"
     schedule:
       interval: "monthly"
   - package-ecosystem: "pub"

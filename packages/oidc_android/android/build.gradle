@@ -55,9 +55,15 @@ android {
     defaultConfig {
         minSdkVersion 21
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Auth Tab captures the redirect via the Activity Result API — no
+        // oidcRedirectScheme manifest placeholder needed.
     }
 
     dependencies {
+        // Chrome Custom Tabs for the system-browser authorization flow
+        // (replaces the AppAuth-Android dependency). Pure Kotlin/AAR, so it
+        // ships no .so and is inherently 16 KB page-size compliant.
+        implementation 'androidx.browser:browser:1.10.0'
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
         testImplementation 'org.mockito:mockito-core:5.0.0'
     }

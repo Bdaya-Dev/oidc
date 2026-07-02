@@ -20,6 +20,8 @@ class OidcSimpleAuthorizationCodeFlowRequest {
     this.idTokenHint,
     this.loginHint,
     this.acrValues,
+    this.resource,
+    this.requestObjectSettings,
     this.extraStateData,
     this.extraParameters,
     this.extraTokenParameters,
@@ -78,6 +80,13 @@ class OidcSimpleAuthorizationCodeFlowRequest {
 
   /// see [OidcAuthorizeRequest.acrValues].
   List<String>? acrValues;
+
+  /// see [OidcAuthorizeRequest.resource] (RFC 8707 Resource Indicators).
+  List<Uri>? resource;
+
+  /// When set, the authorization parameters are signed into a JWT-Secured
+  /// Authorization Request object (JAR, RFC 9101) and sent as `request`.
+  OidcRequestObjectSettings? requestObjectSettings;
 
   /// see [OidcAuthorizeRequest.extra].
   Map<String, dynamic>? extraParameters;

@@ -6,19 +6,21 @@ topics: ["oidc", "openidconnect", "oauth", "authentication"]
 homepage: https://bdaya-dev.github.io/oidc/
 resolution: workspace
 environment:
-  sdk: ">=3.5.0 <4.0.0"
-  flutter: ">=3.22.0"
+  # Endorses oidc_darwin, which requires Flutter 3.41 / Dart 3.11 for its Swift
+  # Package Manager (FlutterFramework) support.
+  sdk: "^3.11.0"
+  flutter: ">=3.41.0"
 flutter:
   plugin:
     platforms:
       android:
         default_package: oidc_android
       ios:
-        default_package: oidc_ios
+        default_package: oidc_darwin
       linux:
         default_package: oidc_linux
       macos:
-        default_package: oidc_macos
+        default_package: oidc_darwin
       web:
         default_package: oidc_web
       windows:
@@ -30,9 +32,8 @@ dependencies:
   # Endorsed packages
   oidc_android: ^0.8.0+3
   oidc_core: ^0.16.1+1
-  oidc_ios: ^0.8.0+3
+  oidc_darwin: ^1.0.0
   oidc_linux: ^0.5.0+3
-  oidc_macos: ^0.8.0+3
   oidc_platform_interface: ^0.7.0+3
   oidc_web: ^0.7.0+3
   oidc_windows: ^0.4.0+3
@@ -40,9 +41,8 @@ dependencies:
   http: ^1.1.0
   jose_plus: ^0.5.0
   retry: ^3.1.2
-  rxdart: ">=0.27.7 <2.0.0"
   logging: ^1.2.0
-  json_annotation: ^4.8.1
+  json_annotation: ^4.12.0
   nonce: ^1.2.0
   uuid: ^4.0.0
   clock: ^1.1.1

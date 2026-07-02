@@ -41,6 +41,9 @@ GeneratedPluginRegistrant.h
 GeneratedPluginRegistrant.m
 GeneratedPluginRegistrant.swift
 build/
+# Swift Package Manager build artifacts
+.build/
+.swiftpm/
 .flutter-plugins
 
 .project
@@ -50,3 +53,6 @@ pubspec_overrides.yaml
 
 # oh-my-claudecode local session/state, plans, research & logs (not source)
 .omc/
+
+# Claude Code local state (agent worktrees, local settings — not source)
+.claude/

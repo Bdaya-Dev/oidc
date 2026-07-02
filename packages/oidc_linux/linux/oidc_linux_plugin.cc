@@ -6,7 +6,7 @@
 
 #include <cstring>
 
-const char kChannelName[] = "oidc_linux";
+const char kChannelName[] = "com.bdayadev.oidc/linux";
 const char kGetPlatformName[] = "getPlatformName";
 
 struct _FlOidcPlugin {

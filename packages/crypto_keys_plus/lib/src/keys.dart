@@ -19,6 +19,10 @@ abstract mixin class PublicKey implements Key {
     if (this is SymmetricKey) {
       return _SymmetricSignerAndVerifier(algorithm, this as SymmetricKey);
     }
+    if (this is OkpPublicKey) {
+      // EdDSA bypasses pointycastle (no Ed25519 support there).
+      return _EddsaVerifier(algorithm, this);
+    }
 
     return _AsymmetricVerifier(algorithm, this);
   }
@@ -30,6 +34,10 @@ abstract mixin class PrivateKey implements Key {
   Signer createSigner(Identifier algorithm) {
     if (this is SymmetricKey) {
       return _SymmetricSignerAndVerifier(algorithm, this as SymmetricKey);
+    }
+    if (this is OkpPrivateKey) {
+      // EdDSA bypasses pointycastle (no Ed25519 support there).
+      return _EddsaSigner(algorithm, this);
     }
 
     return _AsymmetricSigner(algorithm, this);
@@ -99,6 +107,22 @@ class KeyPair {
             EcPrivateKey(eccPrivateKey: pair.privateKey.d!, curve: curve));
   }
 
+  /// Generates a random Ed25519 (OKP) [KeyPair] (RFC 8037).
+  factory KeyPair.generateEd25519() {
+    final pair = ed.generateKey();
+    return KeyPair(
+      publicKey: OkpPublicKey(
+        rawBytes: Uint8List.fromList(pair.publicKey.bytes),
+        curve: curves.ed25519,
+      ),
+      privateKey: OkpPrivateKey(
+        // RFC 8037 `d` is the RFC 8032 seed, not the expanded private key.
+        rawBytes: ed.seed(pair.privateKey),
+        curve: curves.ed25519,
+      ),
+    );
+  }
+
   /// Create a key pair from a JsonWebKey
   static KeyPair? fromJwk(Map<String, dynamic> jwk) {
     switch (jwk['kty']) {
@@ -142,6 +166,25 @@ class KeyPair {
                     )
                   : null,
         );
+      case 'OKP':
+        // RFC 8037 §2: `x`/`d` are base64url of the RAW octet string, decoded
+        // as bytes (NOT via `_base64ToInt`, which would corrupt the key).
+        final curve = _parseOkpCurve(jwk['crv']);
+        if (curve == null) return null;
+        return KeyPair(
+          publicKey: jwk.containsKey('x')
+              ? OkpPublicKey(
+                  rawBytes: Uint8List.fromList(_base64ToBytes(jwk['x'])),
+                  curve: curve,
+                )
+              : null,
+          privateKey: jwk.containsKey('d')
+              ? OkpPrivateKey(
+                  rawBytes: Uint8List.fromList(_base64ToBytes(jwk['d'])),
+                  curve: curve,
+                )
+              : null,
+        );
     }
     return null;
   }
@@ -183,4 +226,10 @@ Identifier? _parseCurve(String name) {
     'P-521': curves.p521,
   }[name];
   return v;
+}
+
+Identifier? _parseOkpCurve(String? name) {
+  return {
+    'Ed25519': curves.ed25519,
+  }[name];
 }

@@ -34,6 +34,7 @@ Map<String, dynamic> _$OidcAuthorizeRequestToJson(
   ),
   'code_challenge': ?instance.codeChallenge,
   'code_challenge_method': ?instance.codeChallengeMethod,
+  'resource': ?instance.resource?.map((e) => e.toString()).toList(),
 };
 
 Json? _$JsonConverterToJson<Json, Value>(

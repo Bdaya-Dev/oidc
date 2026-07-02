@@ -1,2 +1,26 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      Android 11+ (API 30) package visibility: without this, the plugin (and the
+      OS) cannot resolve browsers / Chrome Custom Tabs providers to launch the
+      auth URL, and any browser-selection / warmup logic would silently fail.
+      Mirrors AppAuth-Android's library manifest. See
+      https://developer.android.com/training/package-visibility
+    -->
+    <queries>
+        <!-- Browsers able to handle an https auth URL. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <!-- Custom Tabs service providers (capability detection / warmup). -->
+        <intent>
+            <action android:name="androidx.browser.customtabs.action.CustomTabsService" />
+        </intent>
+    </queries>
+    <!--
+      Auth Tab captures the redirect via the Activity Result API — no
+      intent-filter / redirect Activity needed. The consuming app no longer
+      needs the `oidcRedirectScheme` manifest placeholder.
+    -->
 </manifest>

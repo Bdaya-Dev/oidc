@@ -62,7 +62,7 @@ class OidcUserManager extends OidcUserManagerBase {
 
   @override
   Stream<OidcFrontChannelLogoutIncomingRequest>
-      listenToFrontChannelLogoutRequests(
+  listenToFrontChannelLogoutRequests(
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions options,
   ) {
@@ -89,4 +89,8 @@ class OidcUserManager extends OidcUserManagerBase {
   ) {
     return OidcFlutter.prepareForRedirectFlow(options);
   }
+
+  @override
+  Stream<OidcEvent> listenToNativeBrowserEvents() =>
+      OidcFlutter.nativeBrowserEvents();
 }

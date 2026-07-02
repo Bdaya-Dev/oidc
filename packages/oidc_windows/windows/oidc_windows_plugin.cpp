@@ -34,7 +34,7 @@ void OidcWindows::RegisterWithRegistrar(
     flutter::PluginRegistrarWindows *registrar) {
   auto channel =
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-          registrar->messenger(), "oidc_windows",
+          registrar->messenger(), "com.bdayadev.oidc/windows",
           &flutter::StandardMethodCodec::GetInstance());
 
   auto plugin = std::make_unique<OidcWindows>();

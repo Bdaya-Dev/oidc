@@ -5,4 +5,5 @@ export 'events/_exports.dart';
 export 'exception.dart';
 export 'settings/_exports.dart';
 export 'state/_exports.dart';
+export 'step_up_challenge.dart';
 export 'user.dart';

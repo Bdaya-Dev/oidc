@@ -25,10 +25,19 @@ void main() {
   );
   final settings = OidcUserManagerSettings(
     redirectUri: Uri.parse('http://example.com/redirect.html'),
+    // The mock id_tokens are HS256-signed with a symmetric key not served by
+    // the (Google) jwks_uri, so they can't be signature-verified here. These
+    // tests exercise manager/caching/refresh logic, not signature validation.
+    strictJwtVerification: false,
   );
 
   setUp(() {
     oidcPlatform = MockOidcPlatform();
+    // `init` subscribes to native browser events; stub the stream so the mock
+    // platform doesn't return null for it.
+    when(
+      oidcPlatform.nativeBrowserEvents,
+    ).thenAnswer((_) => const Stream.empty());
     OidcPlatform.instance = oidcPlatform;
   });
 
@@ -76,10 +85,7 @@ void main() {
         expect(manager.discoveryDocumentUri, isNotNull);
       });
 
-      for (final managerId in [
-        null,
-        'test-manager',
-      ]) {
+      for (final managerId in [null, 'test-manager']) {
         group('loadCachedToken, managerId: $managerId', () {
           final tokenCreatedAt = DateTime.utc(2024, 03);
           final tokenCreatedAtClock = Clock.fixed(tokenCreatedAt);
@@ -93,17 +99,18 @@ void main() {
                   OidcConstants_Scopes.openid,
                   OidcConstants_Scopes.profile,
                   OidcConstants_Scopes.email,
-                  "offline_access"
+                  "offline_access",
                 ]),
                 "access_token": "SlAV32hkKG",
                 "token_type": "Bearer",
                 "refresh_token": "8xLOxBtZp8",
                 "expires_in": const Duration(hours: 1).inSeconds,
-                "id_token":
-                    createIdToken(claimsJson: defaultIdTokenClaimsJson()),
+                "id_token": createIdToken(
+                  claimsJson: defaultIdTokenClaimsJson(),
+                ),
                 "expiresInReferenceDate": clock.now().toIso8601String(),
                 "session_state":
-                    "YaSjXERcv7iG5F9euVQ_F4smjyt0jD3sYxARlJdBMVE.9A5536CDE44A8BE6D4F2A9E2ABD73ECF"
+                    "YaSjXERcv7iG5F9euVQ_F4smjyt0jD3sYxARlJdBMVE.9A5536CDE44A8BE6D4F2A9E2ABD73ECF",
               };
             });
             await store.set(
@@ -122,8 +129,7 @@ void main() {
             );
           });
 
-          test('with non-expired token should load the user normally',
-              () async {
+          test('with non-expired token should load the user normally', () async {
             final nowMock = tokenCreatedAt.add(const Duration(minutes: 1));
             nowClock = Clock.fixed(nowMock);
 
@@ -284,7 +290,8 @@ void main() {
               client = createMockOidcClient(
                 beforeDefault: (request) async {
                   throw StateError(
-                      'Unexpected network request: ${request.url}');
+                    'Unexpected network request: ${request.url}',
+                  );
                 },
               );
               manager = OidcUserManager(
@@ -317,7 +324,7 @@ void main() {
                   OidcConstants_Scopes.openid,
                   OidcConstants_Scopes.profile,
                   OidcConstants_Scopes.email,
-                  "offline_access"
+                  "offline_access",
                 ]),
                 "access_token": "short-lived-token",
                 "token_type": "Bearer",
@@ -331,7 +338,7 @@ void main() {
                 ),
                 "expiresInReferenceDate": createdAt.toIso8601String(),
                 "session_state":
-                    "YaSjXERcv7iG5F9euVQ_F4smjyt0jD3sYxARlJdBMVE.9A5536CDE44A8BE6D4F2A9E2ABD73ECF"
+                    "YaSjXERcv7iG5F9euVQ_F4smjyt0jD3sYxARlJdBMVE.9A5536CDE44A8BE6D4F2A9E2ABD73ECF",
               };
               await store.set(
                 OidcStoreNamespace.secureTokens,
@@ -366,6 +373,7 @@ void main() {
               final eventSettings = OidcUserManagerSettings(
                 redirectUri: settings.redirectUri,
                 refreshBefore: (_) => const Duration(milliseconds: 700),
+                strictJwtVerification: false,
               );
               manager = OidcUserManager(
                 id: managerId,
@@ -385,10 +393,7 @@ void main() {
               await Future<void>.delayed(const Duration(milliseconds: 450));
 
               expect(refreshRequestCount, equals(1));
-              expect(
-                events.whereType<OidcTokenExpiringEvent>(),
-                hasLength(1),
-              );
+              expect(events.whereType<OidcTokenExpiringEvent>(), hasLength(1));
               expect(events.whereType<OidcTokenExpiredEvent>(), isEmpty);
               expect(manager.currentUser, isNotNull);
               expect(manager.currentUser!.token.allowExpiredIdToken, isTrue);
@@ -402,32 +407,33 @@ void main() {
             },
           );
           test(
-              'With expired token and no refresh token available, should remove the token',
-              () async {
-            cachedTokenJson.remove('refresh_token');
-            await store.set(
-              OidcStoreNamespace.secureTokens,
-              key: OidcConstants_Store.currentToken,
-              value: jsonEncode(cachedTokenJson),
-              managerId: managerId,
-            );
-            //
-            final nowMock = tokenCreatedAt.add(const Duration(hours: 2));
-            nowClock = Clock.fixed(nowMock);
+            'With expired token and no refresh token available, should remove the token',
+            () async {
+              cachedTokenJson.remove('refresh_token');
+              await store.set(
+                OidcStoreNamespace.secureTokens,
+                key: OidcConstants_Store.currentToken,
+                value: jsonEncode(cachedTokenJson),
+                managerId: managerId,
+              );
+              //
+              final nowMock = tokenCreatedAt.add(const Duration(hours: 2));
+              nowClock = Clock.fixed(nowMock);
 
-            await withClock(nowClock, () async {
-              await manager.init();
-            });
-            expect(manager.didInit, isTrue);
-            expect(manager.currentUser, isNull);
+              await withClock(nowClock, () async {
+                await manager.init();
+              });
+              expect(manager.didInit, isTrue);
+              expect(manager.currentUser, isNull);
 
-            final storedToken = await store.get(
-              OidcStoreNamespace.secureTokens,
-              key: OidcConstants_Store.currentToken,
-              managerId: managerId,
-            );
-            expect(storedToken, isNull);
-          });
+              final storedToken = await store.get(
+                OidcStoreNamespace.secureTokens,
+                key: OidcConstants_Store.currentToken,
+                managerId: managerId,
+              );
+              expect(storedToken, isNull);
+            },
+          );
         });
       }
     });

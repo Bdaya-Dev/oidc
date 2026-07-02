@@ -28,13 +28,14 @@ class OidcUser {
   /// with the user.
   static Future<OidcUser> fromIdToken({
     required OidcToken token,
-    bool strictVerification = false,
+    bool strictVerification = true,
     JsonWebKeyStore? keystore,
     OidcStore? cacheStore,
     List<String>? allowedAlgorithms,
     Map<String, dynamic>? attributes,
     Map<String, dynamic>? userInfo,
     String? idTokenOverride,
+    Duration jwksCacheMaxAge = const Duration(days: 1),
   }) async {
     final idToken = idTokenOverride ?? token.idToken;
     if (idToken == null) {
@@ -48,6 +49,7 @@ class OidcUser {
       allowedAlgorithms,
       cacheStore,
       strictVerification,
+      jwksCacheMaxAge,
     );
 
     return OidcUser._(
@@ -67,25 +69,37 @@ class OidcUser {
     List<String>? allowedAlgorithms,
     OidcStore? cacheStore,
     bool strictVerification,
+    Duration jwksCacheMaxAge,
   ) async {
     JsonWebToken webToken;
 
     if (keystore == null) {
       webToken = JsonWebToken.unverified(idToken);
     } else {
+      // An ID token MUST NOT be unsigned. `jose_plus` only auto-rejects
+      // `alg:none` when the allowed-algorithm list is null, so strip it
+      // explicitly: an OP MAY list `none` in
+      // `id_token_signing_alg_values_supported`, which would otherwise let an
+      // attacker forge an unsigned id_token — most dangerously on the
+      // front-channel implicit/hybrid path where the signature is the sole
+      // protection. (Mirrors the JARM `alg:none` strip in `facade.dart`.)
+      final algs = allowedAlgorithms
+          ?.where((a) => a.toLowerCase() != 'none')
+          .toList();
       try {
         webToken = await JsonWebKeySetLoader.runZoned(
           () async {
             return JsonWebToken.decodeAndVerify(
               idToken,
               keystore,
-              allowedArguments: allowedAlgorithms,
+              allowedArguments: algs,
             );
           },
           loader: cacheStore == null
               ? null
               : OidcJwksStoreLoader(
                   store: cacheStore,
+                  staleCacheMaxAge: jwksCacheMaxAge,
                 ),
         );
       } catch (e, st) {
@@ -154,9 +168,10 @@ class OidcUser {
   Future<OidcUser> replaceToken(
     OidcToken newToken, {
     String? idTokenOverride,
-    bool strictVerification = false,
+    bool strictVerification = true,
     OidcStore? cacheStore,
     bool allowExpiredIdToken = false,
+    Duration jwksCacheMaxAge = const Duration(days: 1),
   }) async {
     final idToken = idTokenOverride ?? newToken.idToken ?? this.idToken;
 
@@ -168,6 +183,7 @@ class OidcUser {
         allowedAlgorithms,
         cacheStore,
         strictVerification,
+        jwksCacheMaxAge,
       );
     } else {
       webToken = parsedIdToken;

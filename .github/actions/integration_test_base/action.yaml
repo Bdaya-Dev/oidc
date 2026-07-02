@@ -7,7 +7,9 @@ inputs:
     default: "stable"
   flutter-version:
     description: "Flutter version to use"
-    default: "3.35.4"
+    # >=3.41 required: the SwiftPM (FlutterFramework) plugin layout in
+    # oidc_darwin needs Flutter 3.41+ / Dart 3.11+.
+    default: "3.44.0"
 
 runs:
   using: "composite"

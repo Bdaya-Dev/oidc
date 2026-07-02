@@ -17,35 +17,58 @@ dart pub add oidc oidc_default_store oidc_core
 
 every platform you support has its own configuration and set up.
 
-for Android, IOS, Macos, The current implementation relies on the [appauth SDK](https://appauth.io/) made by openid themselves, we use it via [![flutter_appauth][flutter_appauth_image]][flutter_appauth_link].
+Native browser handling is **first-party on every platform** (no third-party
+auth SDK):
+
+- **Android** — **Chrome Custom Tabs**.
+- **iOS** — **ASWebAuthenticationSession** (requires **iOS 13+**).
+- **macOS** — **ASWebAuthenticationSession** (requires **macOS 10.15+**).
 
 we also rely on [![flutter_secure_storage][flutter_secure_storage_image]][flutter_secure_storage_link] in our `oidc_default_store` implementation, to encrypt the stored access tokens.
 
 ## Android
 
-### AppAuth Android setup
-[Source](https://github.com/openid/AppAuth-Android#capturing-the-authorization-redirect)
+### Redirect handling (Chrome Custom Tabs)
 
-go to `android/app/build.gradle`, and add the following line under `defaultConfig`:
+`oidc_android` opens the system browser via Chrome Custom Tabs and ships its own
+transparent redirect receiver (`OidcRedirectActivity`), so you only declare the
+**scheme** of your `redirect_uri` with a single manifest placeholder.
+
+go to `android/app/build.gradle`, and add the following under `defaultConfig`:
 
 ```diff
-defaultConfig {   
-    
-    applicationId "com.my_app"
+defaultConfig {
+    applicationId "com.my.app"
     minSdkVersion flutter.minSdkVersion
     targetSdkVersion flutter.targetSdkVersion
     versionCode flutterVersionCode.toInteger()
     versionName flutterVersionName
 +   manifestPlaceholders += [
-+       'appAuthRedirectScheme': 'com.my.app'
++       'oidcRedirectScheme': 'com.my.app'
 +   ]
 }
 ```
-replace `com.my.app` with your `applicationId`
+replace `com.my.app` with the scheme of your `redirect_uri` (a reverse-DNS
+scheme you own, per [RFC 8252 §7.1](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1));
+your `redirect_uri` then looks like `com.my.app://oauth2redirect`.
+
+- You do **not** add any `<intent-filter>`, `launchMode`, or `taskAffinity` to
+  `MainActivity` — the plugin handles redirect delivery.
 
 > IMPORTANT NOTE
-> 
-> if your `applicationId` contains an underscore (`_`), replace it with a dot (`.`) in the `appAuthRedirectScheme`
+>
+> if your `applicationId`/scheme contains an underscore (`_`), replace it with a
+> dot (`.`) in the `oidcRedirectScheme` (schemes can't contain underscores).
+
+> **Upgrading from a flutter_appauth-based setup?** Delete the old
+> `appAuthRedirectScheme` placeholder and any redirect `<intent-filter>` you
+> hand-added to `MainActivity` — `package:oidc` no longer depends on
+> `flutter_appauth` on any platform, so they are no longer used.
+
+> **HTTPS redirect (App Links)?** A `https://` `redirect_uri` additionally needs
+> a verified [Android App Link](https://developer.android.com/training/app-links/verify-android-applinks)
+> (host an `assetlinks.json`). Custom schemes need no verification and are the
+> simpler choice for most apps.
 
 
 ### flutter_secure_storage setup
@@ -63,7 +86,7 @@ replace `com.my.app` with your `applicationId`
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         manifestPlaceholders += [
-            'appAuthRedirectScheme': 'com.my.app'
+            'oidcRedirectScheme': 'com.my.app'
         ]
     }
     ```
@@ -101,25 +124,52 @@ replace `com.my.app` with your `applicationId`
 
 just do `flutter run` from your terminal (not IDE) once, and it will ask you to enable it (press y).
 
-## iOS/macOS
+## iOS
 
-### AppAuth setup
-Append the following to your `ios/Info.plist` and `macos/Info.plist` file
+### Redirect handling (ASWebAuthenticationSession)
+
+`oidc_darwin` (iOS) uses the system `ASWebAuthenticationSession`, which
+registers your `redirect_uri` scheme **at runtime**. You do **not** need a
+`CFBundleURLTypes` / `CFBundleURLSchemes` entry in `ios/Info.plist` for the OIDC
+redirect, and you do not add any third-party SDK.
+
+Requirements:
+
+- **iOS 13.0+** — set the deployment target accordingly in Xcode and in
+  `ios/Podfile` (`platform :ios, '13.0'` or higher).
+- For an `https`/Universal-Link `redirect_uri` (optional, iOS 17.4+), your app
+  must declare an [Associated Domains](https://developer.apple.com/documentation/xcode/supporting-associated-domains)
+  entitlement. Custom schemes need no entitlement and are the simpler choice.
+
+## macOS
+
+### Redirect handling (ASWebAuthenticationSession)
+
+`oidc_darwin` (macOS) uses the system `ASWebAuthenticationSession` (the same
+first-party approach as iOS — no third-party SDK), which registers your
+`redirect_uri` scheme **at runtime**. You do **not** need a `CFBundleURLTypes` /
+`CFBundleURLSchemes` entry in `macos/Info.plist` for the OIDC redirect.
+
+Requirements:
+
+- **macOS 10.15+** — set the deployment target accordingly in Xcode and in
+  `macos/Podfile` (`platform :osx, '10.15'` or higher).
+
+### App Sandbox network entitlement (macOS)
+
+macOS runs under the App Sandbox, which **blocks outbound network by default**.
+The OIDC flow needs network access, so add the network-client entitlement to
+**both** `macos/Runner/DebugProfile.entitlements` **and**
+`macos/Runner/Release.entitlements`:
 
 ```xml
-<key>CFBundleURLTypes</key>
-<array>
-    <dict>
-        <key>CFBundleTypeRole</key>
-        <string>Editor</string>
-        <key>CFBundleURLSchemes</key>
-        <array>
-            <string>com.my.app</string>
-        </array>
-    </dict>
-</array>
+<key>com.apple.security.network.client</key>
+<true/>
 ```
-replace `com.my.app` with your application id
+
+(For signed/notarized distribution, the
+[Hardened Runtime](https://docs.flutter.dev/platform-integration/macos/building#hardened-runtime)
+is required and is compatible with these entitlements.)
 
 ### flutter_secure_storage setup for macos
 
@@ -219,6 +269,3 @@ Apart from `libsecret` you also need a keyring service, for that you need either
 
 [flutter_secure_storage_link]: https://pub.dev/packages/flutter_secure_storage
 [flutter_secure_storage_image]: https://img.shields.io/badge/package-flutter__secure__storage-0175C2?logo=dart&logoColor=white
-
-[flutter_appauth_link]: https://pub.dev/packages/flutter_appauth
-[flutter_appauth_image]: https://img.shields.io/badge/package-flutter__appauth-0175C2?logo=dart&logoColor=white
