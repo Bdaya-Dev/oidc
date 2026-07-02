@@ -550,6 +550,35 @@ abstract class OidcUserManagerBase {
       if (state != null) {
         await store.setStateResponseData(state: state, stateData: null);
       }
+      // RFC 9207 mix-up attack defense, mirroring handleSuccessfulAuthResponse:
+      // an authorization ERROR response is just as capable of originating
+      // from the wrong AS as a successful one, so it gets the same `iss`
+      // check before the original server-error is allowed to propagate.
+      final responseIss = response.iss;
+      final expectedIssuer = metadata.issuer;
+      // §2.4: a client MUST reject a response that omits `iss` when the AS
+      // advertises support via `authorization_response_iss_parameter_supported`.
+      if (metadata.authorizationResponseIssParameterSupportedOrDefault &&
+          responseIss == null) {
+        logAndThrow(
+          'The authorization server advertises '
+          '`authorization_response_iss_parameter_supported` but the '
+          'authorization error response is missing the `iss` parameter '
+          '(RFC 9207 §2.4); refusing as a possible mix-up attack.',
+        );
+      }
+      // When `iss` is present it MUST match the provider issuer (string compare,
+      // not Uri normalization — RFC 9207 §2.4). A no-op for OPs that omit it and
+      // do not advertise support.
+      if (responseIss != null &&
+          expectedIssuer != null &&
+          responseIss.toString() != expectedIssuer.toString()) {
+        logAndThrow(
+          'Authorization error response `iss` ($responseIss) does not '
+          'match the provider issuer ($expectedIssuer); possible mix-up '
+          'attack (RFC 9207).',
+        );
+      }
       rethrow;
     }
   }

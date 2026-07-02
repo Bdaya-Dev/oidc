@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'package:http/testing.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
 
@@ -8,6 +9,95 @@ Uri _cb(Map<String, String> params) =>
     Uri.parse('https://app.example.com/cb').replace(queryParameters: params);
 
 final _issuer = Uri.parse('https://op.example.com');
+
+/// Minimal concrete manager for driving [OidcUserManagerBase.tryGetAuthResponse]
+/// (via [OidcUserManagerBase.loginAuthorizationCodeFlow]) in a VM test.
+///
+/// [getAuthorizationResponse] simulates a platform channel that returns an
+/// authorization ERROR response without doing any `iss` validation of its
+/// own — exactly like a native platform's raw callback parsing — so the test
+/// exercises the manager-level RFC 9207 defense in `tryGetAuthResponse`'s
+/// catch block, independent of [OidcEndpoints.parseAuthorizeResponse].
+class _TestManager extends OidcUserManagerBase {
+  _TestManager({
+    required super.discoveryDocument,
+    required super.clientCredentials,
+    required super.store,
+    required super.settings,
+    required this.buildErrorResponse,
+    super.httpClient,
+  });
+
+  final OidcErrorResponse Function(String? state) buildErrorResponse;
+
+  @override
+  bool get isWeb => false;
+  @override
+  Future<OidcAuthorizeResponse?> getAuthorizationResponse(
+    OidcProviderMetadata metadata,
+    OidcAuthorizeRequest request,
+    OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
+  ) async {
+    throw OidcException.serverError(
+      errorResponse: buildErrorResponse(request.state),
+    );
+  }
+
+  @override
+  Future<OidcEndSessionResponse?> getEndSessionResponse(
+    OidcProviderMetadata metadata,
+    OidcEndSessionRequest request,
+    OidcPlatformSpecificOptions options,
+    Map<String, dynamic> preparationResult,
+  ) async => null;
+  @override
+  Map<String, dynamic> prepareForRedirectFlow(
+    OidcPlatformSpecificOptions options,
+  ) => const {};
+  @override
+  Stream<OidcFrontChannelLogoutIncomingRequest>
+  listenToFrontChannelLogoutRequests(
+    Uri listenOn,
+    OidcFrontChannelRequestListeningOptions options,
+  ) => const Stream.empty();
+  @override
+  Stream<OidcMonitorSessionResult> monitorSessionStatus({
+    required Uri checkSessionIframe,
+    required OidcMonitorSessionStatusRequest request,
+  }) => const Stream.empty();
+}
+
+OidcProviderMetadata _metadata({required bool issSupported}) =>
+    OidcProviderMetadata.fromJson({
+      'issuer': _issuer.toString(),
+      'authorization_endpoint': 'https://op.example.com/authorize',
+      'token_endpoint': 'https://op.example.com/token',
+      if (issSupported) 'authorization_response_iss_parameter_supported': true,
+    });
+
+Future<_TestManager> _buildManager({
+  required bool issSupported,
+  required OidcErrorResponse Function(String? state) buildErrorResponse,
+}) async {
+  final manager = _TestManager(
+    discoveryDocument: _metadata(issSupported: issSupported),
+    clientCredentials: const OidcClientAuthentication.none(
+      clientId: 'client-1',
+    ),
+    store: OidcMemoryStore(),
+    httpClient: MockClient(
+      (_) async => throw UnimplementedError('no HTTP calls expected'),
+    ),
+    settings: OidcUserManagerSettings(
+      redirectUri: Uri.parse('com.example.app://cb'),
+      strictJwtVerification: false,
+    ),
+    buildErrorResponse: buildErrorResponse,
+  );
+  await manager.init();
+  return manager;
+}
 
 void main() {
   group('RFC 9207 authorization-response iss validation', () {
@@ -98,4 +188,110 @@ void main() {
       },
     );
   });
+
+  group(
+    'manager-level: iss is validated on the authorization ERROR path '
+    '(tryGetAuthResponse catch block, independent of parseAuthorizeResponse)',
+    () {
+      test(
+        'require-when-advertised: an error response missing iss is rejected '
+        'as a mix-up, not surfaced as the original server error',
+        () async {
+          final manager = await _buildManager(
+            issSupported: true,
+            buildErrorResponse: (state) => OidcErrorResponse.fromJson({
+              'error': 'access_denied',
+              'state': ?state,
+            }),
+          );
+
+          await expectLater(
+            manager.loginAuthorizationCodeFlow(),
+            throwsA(
+              predicate(
+                (e) => e is OidcException && e.toString().contains('mix-up'),
+              ),
+            ),
+          );
+        },
+      );
+
+      test(
+        'present-but-mismatched iss on an error response is rejected as a '
+        'mix-up',
+        () async {
+          final manager = await _buildManager(
+            issSupported: true,
+            buildErrorResponse: (state) => OidcErrorResponse.fromJson({
+              'error': 'access_denied',
+              'iss': 'https://attacker.example',
+              'state': ?state,
+            }),
+          );
+
+          await expectLater(
+            manager.loginAuthorizationCodeFlow(),
+            throwsA(
+              predicate(
+                (e) => e is OidcException && e.toString().contains('mix-up'),
+              ),
+            ),
+          );
+        },
+      );
+
+      test(
+        'matching iss on an error response lets the original server error '
+        'through unchanged',
+        () async {
+          final manager = await _buildManager(
+            issSupported: true,
+            buildErrorResponse: (state) => OidcErrorResponse.fromJson({
+              'error': 'access_denied',
+              'iss': _issuer.toString(),
+              'state': ?state,
+            }),
+          );
+
+          await expectLater(
+            manager.loginAuthorizationCodeFlow(),
+            throwsA(
+              predicate(
+                (e) =>
+                    e is OidcException &&
+                    !e.toString().contains('mix-up') &&
+                    e.errorResponse?.error == 'access_denied',
+              ),
+            ),
+          );
+        },
+      );
+
+      test(
+        'lenient: when the AS does not advertise iss support, a missing iss '
+        'on an error response is not treated as a mix-up',
+        () async {
+          final manager = await _buildManager(
+            issSupported: false,
+            buildErrorResponse: (state) => OidcErrorResponse.fromJson({
+              'error': 'access_denied',
+              'state': ?state,
+            }),
+          );
+
+          await expectLater(
+            manager.loginAuthorizationCodeFlow(),
+            throwsA(
+              predicate(
+                (e) =>
+                    e is OidcException &&
+                    !e.toString().contains('mix-up') &&
+                    e.errorResponse?.error == 'access_denied',
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
 }
