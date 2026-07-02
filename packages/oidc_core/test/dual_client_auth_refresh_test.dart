@@ -23,6 +23,10 @@ class _TestManager extends OidcUserManagerBase {
   /// Test hook to drive the protected auto-refresh-on-expiry path.
   Future<void> expire(OidcToken token) => handleTokenExpiring(token);
 
+  /// Test hook to drive the protected RFC 8693 token exchange path.
+  Future<OidcTokenResponse> exchange({String? subjectToken}) =>
+      exchangeToken(subjectToken: subjectToken);
+
   @override
   bool get isWeb => false;
   @override
@@ -91,6 +95,7 @@ OidcProviderMetadata _metadata() => OidcProviderMetadata.fromJson({
   'issuer': 'https://op.example.com',
   'authorization_endpoint': 'https://op.example.com/authorize',
   'token_endpoint': 'https://op.example.com/token',
+  'introspection_endpoint': 'https://op.example.com/introspect',
 });
 
 Future<_TestManager> _build(http.Client client) async {
@@ -192,6 +197,83 @@ void main() {
           final req = tokenCalls.first;
           expect(req.headers['Authorization'], startsWith('Basic '));
           expect(_qp(req).containsKey('client_secret'), isFalse);
+        },
+      );
+
+      test(
+        'exchangeToken(): Basic header present, no client_secret in body',
+        () async {
+          final tokenCalls = <http.Request>[];
+          final client = MockClient((req) async {
+            if (req.url.path.endsWith('/token')) {
+              tokenCalls.add(req);
+              return http.Response(
+                '{"access_token":"exchanged-access","token_type":"Bearer",'
+                '"expires_in":3600}',
+                200,
+                headers: const {'content-type': 'application/json'},
+              );
+            }
+            return http.Response('{}', 404);
+          });
+          final manager = await _build(client);
+
+          final result = await manager.exchange(
+            subjectToken: 'access-token-1',
+          );
+
+          expect(tokenCalls, isNotEmpty);
+          final req = tokenCalls.first;
+          expect(
+            req.headers['Authorization'],
+            startsWith('Basic '),
+            reason: 'client_secret_basic must authenticate via the header',
+          );
+          expect(
+            _qp(req).containsKey('client_secret'),
+            isFalse,
+            reason:
+                'the secret must not ALSO be duplicated into the request '
+                'body when a Basic header is already present',
+          );
+          expect(result.accessToken, 'exchanged-access');
+        },
+      );
+
+      test(
+        'introspectToken(): Basic header present, no client_secret in body',
+        () async {
+          final introspectCalls = <http.Request>[];
+          final client = MockClient((req) async {
+            if (req.url.path.endsWith('/introspect')) {
+              introspectCalls.add(req);
+              return http.Response(
+                '{"active":true}',
+                200,
+                headers: const {'content-type': 'application/json'},
+              );
+            }
+            return http.Response('{}', 404);
+          });
+          final manager = await _build(client);
+
+          final result = await manager.introspectToken();
+
+          expect(introspectCalls, isNotEmpty);
+          final req = introspectCalls.first;
+          expect(
+            req.headers['Authorization'],
+            startsWith('Basic '),
+            reason: 'client_secret_basic must authenticate via the header',
+          );
+          expect(
+            _qp(req).containsKey('client_secret'),
+            isFalse,
+            reason:
+                'the secret must not ALSO be duplicated into the request '
+                'body when a Basic header is already present',
+          );
+          expect(result.active, isTrue);
         },
       );
     },
