@@ -221,7 +221,8 @@ void main() {
         // on the backoff-timing test above for why this test uses real async
         // instead of `fakeAsync`.
         final signingKey = JsonWebKey.generate('RS256');
-        final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+        final nowSeconds =
+            DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
         final idToken = _signedJwt(
           signingKey: signingKey,
           issuer: issuer,

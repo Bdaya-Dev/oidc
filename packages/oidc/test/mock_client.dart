@@ -35,6 +35,7 @@ Map<String, dynamic> defaultIdTokenClaimsJson({
   "sub": "248289761001",
   "nonce": "n-0S6_WzA2Mj",
 };
+
 /// The (well-known, RFC 7515/7520 test-vector) HS256 key every mock id_token
 /// in this file is signed with. Signature verification is always-strict now,
 /// so tests that build an [OidcUserManager] must register this key on its

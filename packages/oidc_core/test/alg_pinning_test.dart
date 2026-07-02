@@ -350,7 +350,6 @@ void main() {
         );
       },
     );
-
   });
 
   group('front-channel/hybrid path honours the pin (:1830 site)', () {

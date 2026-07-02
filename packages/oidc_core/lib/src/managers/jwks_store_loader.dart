@@ -15,8 +15,7 @@ import 'package:oidc_core/oidc_core.dart';
 Uri cacheBustJwksUri(Uri uri) => uri.replace(
   queryParameters: {
     ...uri.queryParameters,
-    '_oidc_jwks_refresh': clock.now().toUtc().microsecondsSinceEpoch
-        .toString(),
+    '_oidc_jwks_refresh': clock.now().toUtc().microsecondsSinceEpoch.toString(),
   },
 );
 

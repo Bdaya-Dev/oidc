@@ -226,9 +226,7 @@ OidcTokenResponse _buildTokenResponse(String label) {
   });
 }
 
-String _createSignedIdToken({
-  Duration validity = const Duration(minutes: 5),
-}) {
+String _createSignedIdToken({Duration validity = const Duration(minutes: 5)}) {
   final now = clock.now();
   final builder = JsonWebSignatureBuilder()
     ..jsonContent = {
