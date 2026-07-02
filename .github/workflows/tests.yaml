@@ -122,7 +122,7 @@ jobs:
           sudo chown -R "$USER":"$USER" /mnt/.android
 
       - name: Gradle cache
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
       - name: Run flutter precache
         run: flutter precache -v
       - name: AVD cache
