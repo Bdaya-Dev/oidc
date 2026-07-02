@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 Uri _cb(Map<String, String> params) =>
     Uri.parse('https://app.example.com/cb').replace(queryParameters: params);
 
-final _issuer = Uri.parse('https://op.example.com');
+final Uri _issuer = Uri.parse('https://op.example.com');
 
 /// Minimal concrete manager for driving [OidcUserManagerBase.tryGetAuthResponse]
 /// (via [OidcUserManagerBase.loginAuthorizationCodeFlow]) in a VM test.
