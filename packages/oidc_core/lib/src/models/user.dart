@@ -136,10 +136,19 @@ class OidcUser {
             allowedArguments: algs,
           ),
           loader: cacheStore == null
-              // The no-cacheStore path still reuses the process-wide default
-              // loader on retry here; a dedicated cache-busting loader for
-              // that path is wired in separately.
-              ? null
+              ? (forceFreshJwks
+                    // No OidcStore to persist an offline fallback to: force a
+                    // brand-new, cache-busted loader instance so the retry
+                    // bypasses BOTH this call's own cache AND the long-lived
+                    // process-wide default loader's TTL cache (which can
+                    // otherwise mask a just-rotated key for its full TTL).
+                    ? OidcForceFreshJwksLoader(httpClient: httpClient)
+                    // First attempt: preserve existing behavior (the
+                    // process-wide default loader) unless a caller supplied
+                    // an explicit httpClient (e.g. for testing).
+                    : (httpClient == null
+                          ? null
+                          : DefaultJsonWebKeySetLoader(httpClient: httpClient)))
               : OidcJwksStoreLoader(
                   store: cacheStore,
                   staleCacheMaxAge: jwksCacheMaxAge,

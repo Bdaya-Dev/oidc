@@ -116,3 +116,23 @@ class OidcJwksStoreLoader extends DefaultJsonWebKeySetLoader {
     }
   }
 }
+
+/// A one-shot [JsonWebKeySetLoader] used to force a live, cache-busted JWKS
+/// refetch when no [OidcStore] is available to persist an offline fallback
+/// copy — the `cacheStore`-less `OidcUser.fromIdToken` path.
+///
+/// A fresh instance's own (per-instance) HTTP response cache starts empty, so
+/// pairing it with [cacheBustJwksUri] guarantees the request bypasses BOTH
+/// this loader's cache and any HTTP/CDN cache in front of the `jwks_uri` —
+/// unlike the long-lived, process-wide default loader
+/// ([JsonWebKeySetLoader.current]'s fallback when no loader is zoned in),
+/// whose in-memory TTL cache (default 5 minutes, longer when the OP sends a
+/// generous `Cache-Control`/`Expires`) can otherwise mask a just-rotated
+/// signing key for its full cache lifetime.
+class OidcForceFreshJwksLoader extends DefaultJsonWebKeySetLoader {
+  OidcForceFreshJwksLoader({super.httpClient});
+
+  @override
+  Future<String> readAsString(Uri uri) =>
+      super.readAsString(cacheBustJwksUri(uri));
+}
