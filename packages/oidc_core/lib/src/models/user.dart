@@ -1,8 +1,46 @@
+import 'package:clock/clock.dart';
+import 'package:http/http.dart' as http;
 import 'package:jose_plus/jose.dart';
 import 'package:logging/logging.dart';
+import 'package:meta/meta.dart';
 import 'package:oidc_core/oidc_core.dart';
 
 final _logger = Logger('Oidc.User');
+
+/// Minimum time between forced cache-busting JWKS refetches triggered by an
+/// id_token verification failure, per issuer. Prevents a forged/garbage `kid`
+/// from being used to flood the JWKS endpoint (DoS) while still self-healing
+/// a genuine key rotation quickly.
+///
+/// 5 minutes matches Microsoft Entra's key-rollover guidance and the
+/// panva/WorkOS JWKS guide (OpenID Connect Core 1.0 §10.1.1).
+const _jwksForceRefetchCooldown = Duration(minutes: 5);
+
+/// Tracks, per issuer, the last time a verification failure triggered a
+/// forced JWKS refetch. Process-lifetime only (deliberately not persisted):
+/// the goal is rate-limiting a hot loop within a running process, not
+/// surviving restarts.
+@visibleForTesting
+final Map<String, DateTime> jwksForceRefetchTimestamps = {};
+
+bool _shouldForceJwksRefetch(String idToken) {
+  final issuerKey = _tryGetUnverifiedIssuer(idToken) ?? '<unknown-issuer>';
+  final now = clock.now();
+  final last = jwksForceRefetchTimestamps[issuerKey];
+  if (last != null && now.difference(last) < _jwksForceRefetchCooldown) {
+    return false;
+  }
+  jwksForceRefetchTimestamps[issuerKey] = now;
+  return true;
+}
+
+String? _tryGetUnverifiedIssuer(String idToken) {
+  try {
+    return JsonWebToken.unverified(idToken).claims.issuer?.toString();
+  } on Object catch (_) {
+    return null;
+  }
+}
 
 /// A user is a verified JWT id_token, with an optional access_token.
 class OidcUser {
@@ -36,6 +74,7 @@ class OidcUser {
     Map<String, dynamic>? userInfo,
     String? idTokenOverride,
     Duration jwksCacheMaxAge = const Duration(days: 1),
+    http.Client? httpClient,
   }) async {
     final idToken = idTokenOverride ?? token.idToken;
     if (idToken == null) {
@@ -50,6 +89,7 @@ class OidcUser {
       cacheStore,
       strictVerification,
       jwksCacheMaxAge,
+      httpClient,
     );
 
     return OidcUser._(
@@ -70,6 +110,7 @@ class OidcUser {
     OidcStore? cacheStore,
     bool strictVerification,
     Duration jwksCacheMaxAge,
+    http.Client? httpClient,
   ) async {
     JsonWebToken webToken;
 
@@ -86,22 +127,44 @@ class OidcUser {
       final algs = allowedAlgorithms
           ?.where((a) => a.toLowerCase() != 'none')
           .toList();
-      try {
-        webToken = await JsonWebKeySetLoader.runZoned(
-          () async {
-            return JsonWebToken.decodeAndVerify(
-              idToken,
-              keystore,
-              allowedArguments: algs,
-            );
-          },
+
+      Future<JsonWebToken> attemptVerify({required bool forceFreshJwks}) {
+        return JsonWebKeySetLoader.runZoned(
+          () => JsonWebToken.decodeAndVerify(
+            idToken,
+            keystore,
+            allowedArguments: algs,
+          ),
           loader: cacheStore == null
+              // The no-cacheStore path still reuses the process-wide default
+              // loader on retry here; a dedicated cache-busting loader for
+              // that path is wired in separately.
               ? null
               : OidcJwksStoreLoader(
                   store: cacheStore,
                   staleCacheMaxAge: jwksCacheMaxAge,
+                  forceFresh: forceFreshJwks,
+                  httpClient: httpClient,
                 ),
         );
+      }
+
+      try {
+        try {
+          webToken = await attemptVerify(forceFreshJwks: false);
+        } catch (e) {
+          // The id_token's `kid` may reference a signing key that rotated in
+          // after our (possibly cached/CDN-served) JWKS view was read. Per
+          // OIDC Core §10.1.1 and the Entra/Cognito/panva key-rotation
+          // guidance: force exactly ONE fresh, cache-busting JWKS refetch and
+          // retry before giving up — rate-limited per issuer
+          // ([_shouldForceJwksRefetch]) so a forged/garbage `kid` can't be
+          // used to flood the JWKS endpoint.
+          if (!_shouldForceJwksRefetch(idToken)) {
+            rethrow;
+          }
+          webToken = await attemptVerify(forceFreshJwks: true);
+        }
       } catch (e, st) {
         if (strictVerification) {
           rethrow;
@@ -172,6 +235,7 @@ class OidcUser {
     OidcStore? cacheStore,
     bool allowExpiredIdToken = false,
     Duration jwksCacheMaxAge = const Duration(days: 1),
+    http.Client? httpClient,
   }) async {
     final idToken = idTokenOverride ?? newToken.idToken ?? this.idToken;
 
@@ -184,6 +248,7 @@ class OidcUser {
         cacheStore,
         strictVerification,
         jwksCacheMaxAge,
+        httpClient,
       );
     } else {
       webToken = parsedIdToken;
