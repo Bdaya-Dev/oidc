@@ -46,6 +46,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
     this.uiLocalesSupported,
     this.pushedAuthorizationRequestEndpoint,
     this.claimsParameterSupported,
+    this.authorizationResponseIssParameterSupported,
     this.requestParameterSupported,
     this.requireRequestUriRegistration,
     this.requestUriParameterSupported,
@@ -84,7 +85,10 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final Uri? tokenEndpoint;
 
   /// URL of the OP's UserInfo Endpoint.
-  @JsonKey(name: OidcConstants_ProviderMetadata.userinfoEndpoint)
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.userinfoEndpoint,
+    fromJson: OidcInternalUtilities.tryParseUri,
+  )
   final Uri? userinfoEndpoint;
 
   /// URL of the OP's JSON Web Key Set document.
@@ -95,7 +99,10 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final Uri? jwksUri;
 
   /// URL of the OP's Dynamic Client Registration Endpoint.
-  @JsonKey(name: OidcConstants_ProviderMetadata.registrationEndpoint)
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.registrationEndpoint,
+    fromJson: OidcInternalUtilities.tryParseUri,
+  )
   final Uri? registrationEndpoint;
 
   /// A list of the OAuth 2.0 scope values that this server supports.
@@ -260,7 +267,10 @@ class OidcProviderMetadata extends JsonBasedResponse {
 
   /// URL of a page containing human-readable information that developers might
   /// want or need to know when using the OpenID Provider.
-  @JsonKey(name: OidcConstants_ProviderMetadata.serviceDocumentation)
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.serviceDocumentation,
+    fromJson: OidcInternalUtilities.tryParseUri,
+  )
   final Uri? serviceDocumentation;
 
   /// Languages and scripts supported for values in Claims being returned.
@@ -280,6 +290,17 @@ class OidcProviderMetadata extends JsonBasedResponse {
   bool get claimsParameterSupportedOrDefault =>
       claimsParameterSupported ?? false;
 
+  /// RFC 9207 §3: whether the AS supports the authorization-response `iss`
+  /// parameter. When `true`, the client MUST reject a response missing `iss`
+  /// (RFC 9207 §2.4). Absent ⇒ treated as `false` (lenient).
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata
+        .authorizationResponseIssParameterSupported,
+  )
+  final bool? authorizationResponseIssParameterSupported;
+  bool get authorizationResponseIssParameterSupportedOrDefault =>
+      authorizationResponseIssParameterSupported ?? false;
+
   /// `true` when the OP supports use of the `request` parameter.
   @JsonKey(name: OidcConstants_ProviderMetadata.requestParameterSupported)
   final bool? requestParameterSupported;
@@ -298,12 +319,18 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// URL that the OpenID Provider provides to the person registering the Client
   /// to read about the OP's requirements on how the Relying Party can use the
   /// data provided by the OP.
-  @JsonKey(name: OidcConstants_ProviderMetadata.opPolicyUri)
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.opPolicyUri,
+    fromJson: OidcInternalUtilities.tryParseUri,
+  )
   final Uri? opPolicyUri;
 
   /// URL that the OpenID Provider provides to the person registering the Client
   /// to read about OpenID Provider's terms of service.
-  @JsonKey(name: OidcConstants_ProviderMetadata.opTosUri)
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.opTosUri,
+    fromJson: OidcInternalUtilities.tryParseUri,
+  )
   final Uri? opTosUri;
 
   /// URL of an OP iframe that supports cross-origin communications for session
@@ -313,16 +340,25 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// it can run in the OP's security context. It accepts postMessage requests
   /// from the relevant RP iframe and uses postMessage to post back the login
   /// status of the End-User at the OP.
-  @JsonKey(name: OidcConstants_ProviderMetadata.checkSessionIframe)
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.checkSessionIframe,
+    fromJson: OidcInternalUtilities.tryParseUri,
+  )
   final Uri? checkSessionIframe;
 
   /// URL at the OP to which an RP can perform a redirect to request that the
   /// End-User be logged out at the OP.
-  @JsonKey(name: OidcConstants_ProviderMetadata.endSessionEndpoint)
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.endSessionEndpoint,
+    fromJson: OidcInternalUtilities.tryParseUri,
+  )
   final Uri? endSessionEndpoint;
 
   /// URL of the authorization server's OAuth 2.0 revocation endpoint.
-  @JsonKey(name: OidcConstants_ProviderMetadata.revocationEndpoint)
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.revocationEndpoint,
+    fromJson: OidcInternalUtilities.tryParseUri,
+  )
   final Uri? revocationEndpoint;
 
   /// A list of client authentication methods supported by this revocation
@@ -343,7 +379,10 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final List<String>? revocationEndpointAuthSigningAlgValuesSupported;
 
   /// URL of the authorization server's OAuth 2.0 introspection endpoint.
-  @JsonKey(name: OidcConstants_ProviderMetadata.introspectionEndpoint)
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.introspectionEndpoint,
+    fromJson: OidcInternalUtilities.tryParseUri,
+  )
   final Uri? introspectionEndpoint;
 
   /// A list of client authentication methods supported by this introspection
@@ -376,6 +415,7 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// at the authorization server.
   @JsonKey(
     name: OidcConstants_ProviderMetadata.pushedAuthorizationRequestEndpoint,
+    fromJson: OidcInternalUtilities.tryParseUri,
   )
   final Uri? pushedAuthorizationRequestEndpoint;
 

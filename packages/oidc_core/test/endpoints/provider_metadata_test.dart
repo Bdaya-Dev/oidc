@@ -130,6 +130,92 @@ void main() {
           'urn:ietf:params:oauth:grant-type:jwt-bearer',
         ]);
       });
+
+      group('optional Uri resilience', () {
+        Map<String, dynamic> validDiscovery([
+          Map<String, dynamic>? overrides,
+        ]) => {
+          'issuer': 'https://op.example.com',
+          'authorization_endpoint': 'https://op.example.com/authorize',
+          'token_endpoint': 'https://op.example.com/token',
+          'jwks_uri': 'https://op.example.com/jwks',
+          ...?overrides,
+        };
+
+        test('a malformed OPTIONAL url does not abort the parse', () {
+          final parsed = OidcProviderMetadata.fromJson(
+            validDiscovery({
+              'registration_endpoint': 'https://op.example:notaport',
+            }),
+          );
+          expect(parsed.registrationEndpoint, isNull);
+          // Required fields are still populated.
+          expect(parsed.issuer.toString(), 'https://op.example.com');
+          expect(
+            parsed.tokenEndpoint.toString(),
+            'https://op.example.com/token',
+          );
+          expect(parsed.jwksUri.toString(), 'https://op.example.com/jwks');
+        });
+
+        test('multiple malformed OPTIONAL urls all become null', () {
+          final parsed = OidcProviderMetadata.fromJson(
+            validDiscovery({
+              'revocation_endpoint': 'https://[:::]',
+              'introspection_endpoint': 'https://[:::]',
+              'end_session_endpoint': 'https://[:::]',
+            }),
+          );
+          expect(parsed.revocationEndpoint, isNull);
+          expect(parsed.introspectionEndpoint, isNull);
+          expect(parsed.endSessionEndpoint, isNull);
+          expect(parsed.issuer, isNotNull);
+        });
+
+        test('a non-string OPTIONAL value becomes null (no TypeError)', () {
+          final parsed = OidcProviderMetadata.fromJson(
+            validDiscovery({'op_policy_uri': 12345}),
+          );
+          expect(parsed.opPolicyUri, isNull);
+        });
+
+        test('REQUIRED url fields still fail fast on malformed input', () {
+          for (final field in const ['issuer', 'jwks_uri', 'token_endpoint']) {
+            expect(
+              () => OidcProviderMetadata.fromJson(
+                validDiscovery({field: 'https://op.example:notaport'}),
+              ),
+              throwsA(isA<FormatException>()),
+              reason: '$field must stay strict',
+            );
+          }
+        });
+
+        test('a valid optional url still parses', () {
+          final parsed = OidcProviderMetadata.fromJson(
+            validDiscovery({
+              'userinfo_endpoint': 'https://op.example.com/userinfo',
+            }),
+          );
+          expect(
+            parsed.userinfoEndpoint,
+            Uri.parse('https://op.example.com/userinfo'),
+          );
+        });
+
+        test('an absent optional field stays null', () {
+          final parsed = OidcProviderMetadata.fromJson(validDiscovery());
+          expect(parsed.registrationEndpoint, isNull);
+        });
+
+        test('the raw malformed value is preserved in src', () {
+          const malformed = 'https://op.example:notaport';
+          final parsed = OidcProviderMetadata.fromJson(
+            validDiscovery({'registration_endpoint': malformed}),
+          );
+          expect(parsed.src['registration_endpoint'], malformed);
+        });
+      });
     });
   });
 }

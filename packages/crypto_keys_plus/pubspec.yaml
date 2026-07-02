@@ -14,6 +14,11 @@ dependencies:
   pointycastle: ^4.0.0
   meta: ^1.3.0
   collection: ^1.14.13
+  # Pinned to an EXACT version: pre-1.0, third-party pure-Dart Ed25519 port
+  # (no FFI, web/wasm-safe) with a stale SDK bound — pin to avoid an unreviewed
+  # resolution bump of a crypto dependency. TODO(#324): evaluate migrating to a
+  # maintained, audited Ed25519 (e.g. cryptography_plus).
+  ed25519_edwards: 0.3.1
 
 dev_dependencies:
   test: ^1.16.2

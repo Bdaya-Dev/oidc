@@ -161,6 +161,11 @@ void main() {
 
           final settings = OidcUserManagerSettings(
             redirectUri: Uri.parse('com.example:/callback'),
+            // This flow test uses an intentionally-unsigned mock id_token and
+            // does not serve a JWKS, so opt out of the fail-closed signature
+            // verification (now the default) — it exercises device-code
+            // polling, not id_token validation.
+            strictJwtVerification: false,
             userInfoSettings: const OidcUserInfoSettings(
               sendUserInfoRequest: false,
             ),

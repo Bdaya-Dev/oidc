@@ -38,14 +38,32 @@ class OidcLoopbackListener {
   /// Listens for a single successful response from the server.
   ///
   /// pass [serverCompleter] to get the [HttpServer] instance that was bound.
+  ///
+  /// When [timeout] is non-null, the listener auto-cancels after that duration
+  /// by force-closing the bound socket and throwing a [TimeoutException]; this
+  /// prevents an unattended flow from hanging forever and leaking the loopback
+  /// socket. The bound server is ALWAYS released (success, IO error, and
+  /// timeout paths) via the `finally` below.
   Future<Uri?> listenForSingleResponse({
     Completer<HttpServer>? serverCompleter,
+    Duration? timeout,
   }) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
     if (serverCompleter != null) {
       serverCompleter.complete(server);
     }
     final targetUri = path == null ? null : Uri(path: path);
+    Timer? timeoutTimer;
+    var timedOut = false;
+    if (timeout != null) {
+      timeoutTimer = Timer(timeout, () {
+        timedOut = true;
+        // Force-close so a half-open connection (socket opened, request never
+        // completed) cannot keep the `await for` stream alive past the
+        // deadline; this terminates the loop below.
+        unawaited(server.close(force: true));
+      });
+    }
     try {
       await for (final request in server) {
         request.response.headers.contentType = ContentType.html;
@@ -80,7 +98,17 @@ class OidcLoopbackListener {
         return res;
       }
     } catch (e) {
-      await server.close();
+      // Genuine IO error: preserve the historical return-null behavior. A
+      // timeout is signalled separately below via `timedOut` (the stream ends
+      // cleanly when the server is force-closed, so it is not caught here).
+    } finally {
+      // ALWAYS release the bound listening socket, on every exit path.
+      timeoutTimer?.cancel();
+      await server.close(force: true);
+    }
+    // The `await for` ended without a successful match.
+    if (timedOut) {
+      throw TimeoutException('Loopback listener timed out', timeout);
     }
     return null;
   }

@@ -22,6 +22,7 @@ class OidcAuthorizeState extends OidcState {
     required this.extraTokenParams,
     required this.extraTokenHeaders,
     required this.options,
+    this.maxAge,
     super.id,
     super.createdAt,
     super.data,
@@ -68,6 +69,13 @@ class OidcAuthorizeState extends OidcState {
 
   @JsonKey(name: OidcConstants_AuthParameters.nonce)
   String nonce;
+
+  /// The `max_age` that was requested on the authorization request, persisted
+  /// so the returned id_token's `auth_time` can be validated against it
+  /// (OpenID Connect Core §3.1.2.1) after the redirect round-trip. Serialized
+  /// as integer seconds via [OidcDurationSecondsConverter].
+  @JsonKey(name: OidcConstants_AuthParameters.maxAge)
+  Duration? maxAge;
 
   @override
   Map<String, dynamic> toJson() => _$OidcAuthorizeStateToJson(this);

@@ -34,6 +34,9 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     this.idTokenHint,
     this.loginHint,
     this.acrValues,
+    this.requestUri,
+    this.resource,
+    this.request,
   });
 
   /// REQUIRED.
@@ -118,7 +121,9 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   @JsonKey(name: OidcConstants_AuthParameters.responseMode)
   String? responseMode;
 
-  /// OPTIONAL.
+  /// OPTIONAL for the Authorization Code Flow; REQUIRED for the Implicit and
+  /// Hybrid Flows (response_type containing `id_token` or `token`) per OpenID
+  /// Connect Core §3.2.2.1 / §3.3.2.1 — [generateUri] enforces this.
   ///
   /// String value used to associate a Client session with an ID Token,
   /// and to mitigate replay attacks.
@@ -276,6 +281,34 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   @JsonKey(name: OidcConstants_AuthParameters.codeChallengeMethod)
   String? codeChallengeMethod;
 
+  /// The single-use `request_uri` obtained from a Pushed Authorization Request
+  /// (RFC 9126 §4).
+  ///
+  /// Deliberately excluded from serialization: when set, [generateUri] emits
+  /// ONLY `client_id` + `request_uri` on the front channel (the authorization
+  /// server resolves the rest of the already-pushed parameters by reference),
+  /// and it must never appear in the PAR request body itself (RFC 9126 §2.1).
+  /// Leave null for a normal (non-PAR) authorization request.
+  @JsonKey(includeToJson: false)
+  Uri? requestUri;
+
+  /// RFC 8707 Resource Indicators: the resource(s) the client intends to access
+  /// with the issued tokens. Emitted as one repeated `resource` query parameter
+  /// per value (and likewise in the PAR request body).
+  @JsonKey(name: OidcConstants_AuthParameters.resource)
+  List<Uri>? resource;
+
+  /// A JWT-Secured Authorization Request object (RFC 9101) carrying the
+  /// authorization parameters by value.
+  ///
+  /// When set, [generateUri] emits `client_id` + `response_type` + `scope` +
+  /// `request`; the authorization server reads the remaining parameters from
+  /// the signed request object. Excluded from serialization (it IS the
+  /// serialized form). Ignored when [requestUri] is also set (a PAR
+  /// `request_uri` takes precedence).
+  @JsonKey(includeToJson: false)
+  String? request;
+
   /// converts the request into a JSON Map.
   @override
   Map<String, dynamic> toMap() => {
@@ -283,10 +316,77 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     ...super.toMap(),
   };
 
-  Uri generateUri(Uri authorizationEndpoint) => authorizationEndpoint.replace(
-    queryParameters: {
-      ...authorizationEndpoint.queryParameters,
-      ...OidcInternalUtilities.serializeQueryParameters(toMap()),
-    },
-  );
+  Uri generateUri(Uri authorizationEndpoint) {
+    final requestUri = this.requestUri;
+    final request = this.request;
+    final Map<String, dynamic> params;
+    if (requestUri != null) {
+      // After a Pushed Authorization Request (RFC 9126 §4), the front-channel
+      // authorization request carries ONLY `client_id` + `request_uri`; the
+      // authorization server retrieves the (already-pushed) parameters by
+      // reference.
+      params = {
+        OidcConstants_AuthParameters.clientId: clientId,
+        OidcConstants_AuthParameters.requestUri: requestUri.toString(),
+      };
+    } else if (request != null) {
+      // JAR (RFC 9101 / OpenID Connect Core §6.1): the signed request object
+      // carries the parameters by value. `client_id` + `response_type` MUST
+      // still appear as plain OAuth parameters (and `scope` for OIDC), matching
+      // those inside the request object.
+      params = {
+        OidcConstants_AuthParameters.clientId: clientId,
+        OidcConstants_AuthParameters.responseType:
+            OidcInternalUtilities.joinSpaceDelimitedList(responseType),
+        OidcConstants_AuthParameters.scope:
+            OidcInternalUtilities.joinSpaceDelimitedList(scope),
+        OidcConstants_AuthParameters.request: request,
+      };
+    } else {
+      // Otherwise, serialize the full parameter set as usual. A front-channel
+      // implicit/hybrid request MUST carry a nonce (OIDC Core §3.2.2.1 /
+      // §3.3.2.1); enforce it here, the single choke point every usable
+      // authorization URL passes through.
+      _assertNonceForImplicitHybrid();
+      params = OidcInternalUtilities.serializeQueryParameters(toMap());
+    }
+    return authorizationEndpoint.replace(
+      queryParameters: {
+        ...authorizationEndpoint.queryParameters,
+        ...params,
+      },
+    );
+  }
+
+  /// Enforces the OpenID Connect Core §3.2.2.1 (Implicit) / §3.3.2.1 (Hybrid)
+  /// rule that `nonce` is REQUIRED whenever the front-channel `response_type`
+  /// returns an `id_token` or `token` directly from the Authorization Endpoint.
+  ///
+  /// This is a real `throw` (not an `assert`): nonce is a replay-protection
+  /// control that must hold in release/profile builds, where asserts are
+  /// stripped. Only invoked on the normal full-serialization path — the
+  /// PAR-by-reference (`request_uri`) and JAR-by-value (`request`) branches are
+  /// exempt because there the nonce travels inside the pushed/signed object,
+  /// not the front-channel URL.
+  void _assertNonceForImplicitHybrid() {
+    final responseTypes = responseType
+        .expand((e) => e.split(RegExp(r'\s+')))
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    final returnsFrontChannelToken =
+        responseTypes.contains(
+          OidcConstants_AuthorizationEndpoint_ResponseType.idToken,
+        ) ||
+        responseTypes.contains(
+          OidcConstants_AuthorizationEndpoint_ResponseType.token,
+        );
+    final nonce = this.nonce;
+    if (returnsFrontChannelToken && (nonce == null || nonce.isEmpty)) {
+      throw const OidcException(
+        'nonce is REQUIRED for the implicit and hybrid flows (OpenID Connect '
+        'Core 1.0 §3.2.2.1 / §3.3.2.1): response_type contains "id_token" or '
+        '"token" but no nonce was supplied.',
+      );
+    }
+  }
 }

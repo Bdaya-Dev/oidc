@@ -20,6 +20,10 @@ OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
       extraTokenHeaders: (json['extraTokenHeaders'] as Map<String, dynamic>?)
           ?.map((k, e) => MapEntry(k, e as String)),
       options: json['options'] as Map<String, dynamic>?,
+      maxAge: _$JsonConverterFromJson<int, Duration>(
+        json['max_age'],
+        const OidcDurationSecondsConverter().fromJson,
+      ),
       id: json['id'] as String?,
       createdAt: _$JsonConverterFromJson<int, DateTime>(
         json['created_at'],
@@ -45,9 +49,18 @@ Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
       'client_id': instance.clientId,
       'original_uri': instance.originalUri?.toString(),
       'nonce': instance.nonce,
+      'max_age': _$JsonConverterToJson<int, Duration>(
+        instance.maxAge,
+        const OidcDurationSecondsConverter().toJson,
+      ),
     };
 
 Value? _$JsonConverterFromJson<Json, Value>(
   Object? json,
   Value? Function(Json json) fromJson,
 ) => json == null ? null : fromJson(json as Json);
+
+Json? _$JsonConverterToJson<Json, Value>(
+  Value? value,
+  Json? Function(Value value) toJson,
+) => value == null ? null : toJson(value);

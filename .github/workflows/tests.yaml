@@ -152,11 +152,17 @@ jobs:
         run: flutter precache -v
       - name: Run flutter doctor
         run: flutter doctor -v
+      - name: Activate Patrol CLI (patrol_cli_plus)
+        run: dart pub global activate patrol_cli_plus
       - name: Prepare Android integration script
         run: |
           cat <<'EOF' > android_emulator_ci.sh
           #!/usr/bin/env bash
           set -eo pipefail
+
+          # patrol_cli_plus installs the `patrol_plus` executable into the pub
+          # cache bin; make sure it's resolvable inside the emulator-runner shell.
+          export PATH="$PATH:$HOME/.pub-cache/bin"
 
           echo "ADB devices before:"
           adb devices -l || true
@@ -174,7 +180,17 @@ jobs:
 
           echo "Using device: $EMU_ID"
           flutter devices
-          flutter test integration_test --coverage --coverage-package "oidc*" --branch-coverage -d "$EMU_ID" --coverage-path coverage/android-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
+          # Runs every patrol_test/*_test.dart (conformance + e2e + offline) on
+          # the emulator and collects Dart coverage via the VM service.
+          patrol_plus test \
+            --coverage \
+            --coverage-ignore="**/*.g.dart" \
+            --coverage-package oidc \
+            -d "$EMU_ID" \
+            --dart-define=CI=true \
+            --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
+          # patrol writes coverage/patrol_lcov.info; rename for the combine step.
+          cp coverage/patrol_lcov.info coverage/android-coverage.info
           EOF
           chmod +x android_emulator_ci.sh
       - name: Run Android Emulator and Integration Tests
@@ -206,7 +222,16 @@ jobs:
           if-no-files-found: error
 
   ios:
-    runs-on: macos-latest
+    # Pinned to macos-15 (Xcode 16.4 / iOS-18 sim). On the macOS-26 image
+    # (Xcode 26.5, iOS 26.4 simruntime) XCUITest's app relaunch between
+    # patrolTests still fails ("Failed to terminate com.bdayadev:...") even
+    # with patrol_plus 5.1.0's explicit-terminate + recordIssue suppression:
+    # 2/3 offline_mode tests fail and the patrol app server at ::1.8082 is
+    # unreachable (run 28593820533, job 84783903097, 2026-07-02). Note the
+    # conformance test DOES pass on iOS-26 thanks to
+    # OidcNativeOptionsApple.flowTimeoutSeconds. Unpin once the patrol fork
+    # fix is validated on Xcode 26.5 (tracking: Bdaya-Dev/patrol#15).
+    runs-on: macos-15
     timeout-minutes: 60
     defaults:
       run:
@@ -220,11 +245,25 @@ jobs:
         #   channel: master
         #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Start Simulator
-        # Start an iPhone simulator
+        # Boot an available iPhone simulator and capture BOTH its UDID and its
+        # runtime version. patrol_cli_plus >= 5.0.3 targets the simulator by UDID
+        # (`-destination id=<udid>`) in the test-without-building step, but its
+        # BUILD step (build_ios.dart:195) still builds the xcodebuild destination
+        # as `platform=iOS Simulator,OS=<--ios>,name=<device name>`, defaulting
+        # --ios to `latest` (app_options.dart:290). `OS=latest` can produce a test
+        # product the booted runtime cannot execute -> "Unable to find a device
+        # matching the provided destination specifier" / exit 70. So pass the sim's
+        # REAL OS via `--ios $SIMULATOR_OS`. Parsed from simctl JSON so it tracks
+        # whatever runtime the macOS runner image ships.
         run: |
-          UDID=$(xcrun xctrace list devices | grep "^iPhone" | awk '{gsub(/[()]/,""); print $NF}' | head -n 1)
-          echo $UDID
-          xcrun simctl boot "${UDID:?No Simulator with this name found}"
+          SIM_JSON="$(xcrun simctl list devices available --json)"
+          RUNTIME_KEY="$(echo "$SIM_JSON" | jq -r '.devices | to_entries[] | select(.key|test("SimRuntime.iOS")) | select([.value[]|select(.name|startswith("iPhone"))]|length>0) | .key' | head -n 1)"
+          UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
+          OS_VER="$(echo "$RUNTIME_KEY" | sed -E 's/.*SimRuntime\.iOS-([0-9]+)-([0-9]+).*/\1.\2/')"
+          echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY)"
+          xcrun simctl boot "${UDID:?No available iPhone simulator found}"
+          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "SIMULATOR_OS=${OS_VER:?Could not parse simulator OS version}" >> "$GITHUB_ENV"
       - name: Wait for Simulator to be Ready
         run: |
           COUNT=0
@@ -243,8 +282,23 @@ jobs:
         run: flutter precache -v
       - name: Run flutter doctor
         run: flutter doctor -v
-      - name: Integration Tests
-        run: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage --ignore-timeouts -d iPhone --coverage-path coverage/ios-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} -r expanded
+      - name: Activate Patrol CLI (patrol_cli_plus)
+        run: dart pub global activate patrol_cli_plus
+      - name: Integration Tests (Patrol)
+        run: |
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          # Runs every patrol_test/*_test.dart (conformance + e2e + offline) on
+          # the iOS simulator and collects Dart coverage via the VM service.
+          patrol_plus test \
+            --coverage \
+            --coverage-ignore="**/*.g.dart" \
+            --coverage-package oidc \
+            -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
+            --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
+            --verbose \
+            --dart-define=CI=true \
+            --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
+          cp coverage/patrol_lcov.info coverage/ios-coverage.info
         working-directory: packages/oidc/example
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
@@ -261,39 +315,70 @@ jobs:
       matrix:
         working-directory: ["packages/oidc/example"]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Patrol web-runner double-initializes Flutter's engine on 3.44 ("Bad state:
+    # initializeEngineServices already started"). Root cause is in the fork's
+    # web_runner setup.ts $dartRunMain handling, not the test-tree polling.
+    # Conformance gates on android/iOS/macOS/linux/windows meanwhile.
+    continue-on-error: true
+    # Patrol web runs through Playwright (patrol_cli activation + npx playwright
+    # install + the web build + the live conformance flow); 30 min is headroom.
+    timeout-minutes: 30
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
-      # for reference: https://github.com/firebase/flutterfire/blob/d41e30a808b47458d7ebd402862bcd55d8563ccb/.github/workflows/e2e_tests.yaml#L281-L289
-      - name: Run Web Integration Tests
+      - name: Preload Flutter web artifacts
+        run: flutter precache --web
+      # Patrol drives web via Playwright (its own bundled Chromium over CDP),
+      # NOT flutter-drive/DWDS, so Flutter's DWDS startup race
+      # (flutter/flutter#181357) never applies. patrol_cli runs
+      # `npx playwright install` itself; ubuntu-latest ships Node/npx.
+      - name: Activate Patrol CLI (patrol_cli_plus)
+        run: dart pub global activate patrol_cli_plus
+      # ubuntu-latest is 24.04, which restricts unprivileged user namespaces via
+      # AppArmor; re-allow them so Playwright's Chromium sandbox can initialize.
+      # https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
+      - name: Allow Chromium sandbox (unprivileged userns)
+        run: echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+      - name: Run Web Integration Tests (Patrol + Playwright)
         working-directory: ${{ matrix.working-directory }}
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         run: |
-          # first we run chromedriver on port 4444 and Xvfb
-          export DISPLAY=:99
-          chromedriver --port=4444 --trace-buffer-size=100000 &
-          sudo Xvfb -ac :99 -screen 0 1280x1024x24 > /dev/null 2>&1 & # optional
-          # then we start flutter drive
-          flutter drive --driver=./test_driver/integration_test.dart --target=./integration_test/app_test.dart -d chrome --web-port=22433 --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} | tee output.log
-          # We have to check the output for failed tests matching the string "[E]"
-          output=$(<output.log)
-          if [[ "$output" =~ \[E\] ]]; then
-          # You will see "All tests passed." in the logs even when tests failed.
-          echo "All tests did not pass. Please check the logs for more information."
-          exit 1
-          fi
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          # Patrol serves the Flutter web app and drives Chromium via Playwright
+          # (over CDP) -- no flutter drive, no DWDS, so the DWDS startup race
+          # cannot occur. patrol_cli_plus installs Playwright + its browser on
+          # first run. -d chrome selects the web target; --web-headless for CI.
+          # On web, --coverage collects V8/JS coverage via Playwright and emits
+          # an lcov into ./coverage. Only patrol_test/app_test.dart is targeted
+          # (the offline entrypoint imports dart:io, unavailable on web).
+          patrol_plus test \
+            --target patrol_test/app_test.dart \
+            --coverage \
+            --coverage-ignore="**/*.g.dart" \
+            --coverage-package oidc \
+            -d chrome \
+            --web-headless true \
+            --web-workers 1 \
+            --verbose \
+            --dart-define=CI=true \
+            --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
+          # Best-effort: web V8->lcov path differs from native; don't fail the
+          # job if the file isn't produced.
+          cp coverage/patrol_lcov.info coverage/web-coverage.info || \
+            echo "No web lcov produced (V8 coverage may be unavailable)."
         shell: bash
 
-      # web has no test coverage for now
-      # - name: Upload Coverage Report
-      #   uses: actions/upload-artifact@v6
-      #   with:
-      #     name: web-coverage
-      #     path: packages/oidc/example/coverage/web-coverage.info
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: web-integration-coverage
+          path: packages/oidc/example/coverage/web-coverage.info
+          include-hidden-files: true
+          # web coverage is best-effort (continue-on-error job); don't fail.
+          if-no-files-found: warn
 
   macos:
     runs-on: macos-latest
@@ -349,16 +434,18 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libsecret-1-dev libgtk-3-dev libx11-dev pkg-config cmake ninja-build libblkid-dev liblzma-dev xdg-utils libvulkan1 fonts-liberation
+          sudo apt-get install -y xvfb libsecret-1-dev libgtk-3-dev libx11-dev pkg-config cmake ninja-build libblkid-dev liblzma-dev xdg-utils libvulkan1 fonts-liberation libatspi2.0-dev xdotool
         shell: bash
       - name: Run flutter precache
         run: flutter precache -v
-      
-      - name: Integration Tests
+      - name: Activate Patrol CLI (patrol_cli_plus)
+        run: dart pub global activate patrol_cli_plus
+      - name: Integration Tests (Patrol)
         working-directory: packages/oidc/example
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         run: |
+          export PATH="$PATH:$HOME/.pub-cache/bin"
           if [ -z "$OIDC_CONFORMANCE_TOKEN" ]; then
             echo "OIDC_CONFORMANCE_TOKEN is not set or is empty"
           else
@@ -367,19 +454,23 @@ jobs:
           google-chrome --version
           chmod +x .ci/scripts/set_default_linux_apps.sh
           ./.ci/scripts/set_default_linux_apps.sh
-          # Work around flaky desktop integration test runs when executing
-          # multiple test entrypoints in a single `flutter test integration_test`
-          # (same workaround already used by the macOS and Windows jobs above):
-          # run each entrypoint in its own invocation, otherwise the second app
-          # launch fails with "Unable to start the app on the device".
-          xvfb-run --auto-servernum flutter test integration_test/app_test.dart --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-app-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN -r expanded
-
-          xvfb-run --auto-servernum flutter test integration_test/offline_mode_test.dart --coverage --branch-coverage --coverage-package oidc* -d linux --coverage-path coverage/linux-offline-coverage.info --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN -r expanded
+          # patrol_cli_plus drives the Linux desktop backend (via AT-SPI2 /
+          # xdotool, installed above). A single invocation runs every
+          # patrol_test/*_test.dart (conformance + e2e + offline) and collects
+          # Dart coverage via the VM service.
+          xvfb-run --auto-servernum patrol_plus test \
+            --coverage \
+            --coverage-ignore="**/*.g.dart" \
+            --coverage-package oidc \
+            -d linux \
+            --dart-define=CI=true \
+            --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
+          cp coverage/patrol_lcov.info coverage/linux-coverage.info
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v6
         with:
           name: linux-integration-coverage
-          path: packages/oidc/example/coverage/linux-*-coverage.info
+          path: packages/oidc/example/coverage/linux-coverage.info
           include-hidden-files: true
           if-no-files-found: error
       - name: Upload Conformance Logs
@@ -401,22 +492,29 @@ jobs:
         uses: ./.github/actions/integration_test_base
       - name: Run flutter precache
         run: flutter precache -v
-      - name: Integration Tests
+      - name: Activate Patrol CLI (patrol_cli_plus)
+        run: dart pub global activate patrol_cli_plus
+      - name: Integration Tests (Patrol)
         working-directory: packages/oidc/example
         run: |
-          # Work around flaky desktop integration test runs when executing
-          # multiple test entrypoints in a single `flutter test integration_test`.
-          flutter test integration_test/app_test.dart \
-            --coverage --branch-coverage --coverage-package oidc* \
-            -d windows --coverage-path coverage/windows-app-coverage.info \
-            --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} \
-            -r expanded
-
-          flutter test integration_test/offline_mode_test.dart \
-            --coverage --branch-coverage --coverage-package oidc* \
-            -d windows --coverage-path coverage/windows-offline-coverage.info \
-            --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }} \
-            -r expanded
+          export PATH="$PATH:$HOME/AppData/Local/Pub/Cache/bin:$HOME/.pub-cache/bin"
+          # patrol_cli_plus drives the Windows desktop backend. A single
+          # invocation runs every patrol_test/*_test.dart (conformance + e2e +
+          # offline) and collects Dart coverage via the VM service.
+          #
+          # `dart pub global activate` on Windows installs `patrol_plus.bat`
+          # (a cmd shim), NOT an extensionless shell script. git-bash does NOT
+          # honor PATHEXT, so bare `patrol_plus` is "command not found" (exit
+          # 127) even with the pub-cache bin on PATH. Invoke the .bat by its
+          # full name — git-bash resolves it on PATH and execs it via cmd.
+          patrol_plus.bat test \
+            --coverage \
+            --coverage-ignore="**/*.g.dart" \
+            --coverage-package oidc \
+            -d windows \
+            --dart-define=CI=true \
+            --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
+          cp coverage/patrol_lcov.info coverage/windows-coverage.info
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         shell: bash
@@ -424,13 +522,15 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: windows-integration-coverage
-          path: packages/oidc/example/coverage/windows-*-coverage.info
+          path: packages/oidc/example/coverage/windows-coverage.info
           include-hidden-files: true
           if-no-files-found: error
 
   upload-coverage:
     runs-on: ubuntu-latest
-    needs: [unit_tests, android, ios, macos, linux, windows]
+    # `web` is continue-on-error, so a web failure won't block this job; it's
+    # listed so its (best-effort) coverage artifact can be combined when present.
+    needs: [unit_tests, android, ios, web, macos, linux, windows]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6

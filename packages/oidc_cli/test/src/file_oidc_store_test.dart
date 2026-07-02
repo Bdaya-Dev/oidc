@@ -120,6 +120,34 @@ void main() {
       expect(remaining, {'k1': 'v1'});
     });
 
+    test(
+      'written store file is created with 0600 (owner rw only) on POSIX',
+      () async {
+        await store.setConfig({'issuer': 'https://example.com'});
+
+        expect(storeFile.existsSync(), isTrue);
+        // 0x1FF masks the permission bits; 0x180 == 0o600 (owner read+write).
+        expect(storeFile.statSync().mode & 0x1FF, 0x180);
+      },
+      // dart:io has no chmod; the 0600 enforcement shells out to `chmod`,
+      // which only applies on POSIX. On Windows access is governed by the
+      // per-user profile ACL instead.
+      skip: Platform.isWindows ? 'POSIX-only file permission check' : false,
+    );
+
+    test('overwriting an existing store stays 0600 on POSIX', () async {
+      await store.setConfig({'issuer': 'https://first.example'});
+      await store.setConfig({'issuer': 'https://second.example'});
+
+      final config = await store.getConfig();
+      expect(config['issuer'], 'https://second.example');
+      if (!Platform.isWindows) {
+        expect(storeFile.statSync().mode & 0x1FF, 0x180);
+      }
+      // The temp file used for the atomic write must not linger.
+      expect(File('${storeFile.path}.tmp').existsSync(), isFalse);
+    });
+
     test('invalid JSON store content is treated as empty (no throw)', () async {
       storeFile
         ..createSync(recursive: true)

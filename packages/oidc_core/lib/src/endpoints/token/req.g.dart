@@ -25,4 +25,6 @@ Map<String, dynamic> _$OidcTokenRequestToJson(OidcTokenRequest instance) =>
       'redirect_uri': ?instance.redirectUri?.toString(),
       'refresh_token': ?instance.refreshToken,
       'scope': ?OidcInternalUtilities.joinSpaceDelimitedList(instance.scope),
+      'resource': ?instance.resource?.map((e) => e.toString()).toList(),
+      'requested_token_type': ?instance.requestedTokenType,
     };

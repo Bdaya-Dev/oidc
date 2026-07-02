@@ -89,4 +89,8 @@ class OidcUserManager extends OidcUserManagerBase {
   ) {
     return OidcFlutter.prepareForRedirectFlow(options);
   }
+
+  @override
+  Stream<OidcEvent> listenToNativeBrowserEvents() =>
+      OidcFlutter.nativeBrowserEvents();
 }

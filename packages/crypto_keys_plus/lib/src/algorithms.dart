@@ -171,6 +171,9 @@ class _SigAlgorithms extends Identifier {
   /// Contains the identifiers for supported ECDSA signing algorithms
   final ecdsa = _EcdsaSigAlgorithms();
 
+  /// Contains the identifiers for supported EdDSA signing algorithms
+  final eddsa = _EddsaSigAlgorithms();
+
   _SigAlgorithms() : super._('sig');
 }
 
@@ -212,14 +215,50 @@ class _RsaSigAlgorithms extends Identifier {
 class _RsaPssAlgorithms extends Identifier {
   _RsaPssAlgorithms() : super._('sig/RSA/PSS');
 
+  /// RSASSA-PSS using SHA-256 and MGF1 with SHA-256 (salt length 32).
+  final sha256 = AlgorithmIdentifier._('sig/RSA/PSS/SHA-256',
+      () => pc.PSSSigner(pc.RSAEngine(), pc.SHA256Digest(), pc.SHA256Digest()));
+
+  /// RSASSA-PSS using SHA-384 and MGF1 with SHA-384 (salt length 48).
+  final sha384 = AlgorithmIdentifier._('sig/RSA/PSS/SHA-384',
+      () => pc.PSSSigner(pc.RSAEngine(), pc.SHA384Digest(), pc.SHA384Digest()));
+
+  /// RSASSA-PSS using SHA-512 and MGF1 with SHA-512 (salt length 64).
+  final sha512 = AlgorithmIdentifier._('sig/RSA/PSS/SHA-512',
+      () => pc.PSSSigner(pc.RSAEngine(), pc.SHA512Digest(), pc.SHA512Digest()));
+
+  /// RSASSA-PSS with an explicit content digest, MGF1 digest and salt length.
+  ///
+  /// The chosen [saltLength] is encoded into the resulting identifier name (as
+  /// a `/salt<N>` suffix) so the signer/verifier can recover it.
   AlgorithmIdentifier withParameters(
       {required AlgorithmIdentifier sigHash,
       required AlgorithmIdentifier mgf1Hash,
       required int saltLength}) {
     return AlgorithmIdentifier._(
-        'sig/RSA/PSS/$sigHash/mgf1$mgf1Hash/$saltLength',
-        () => throw UnimplementedError());
+        'sig/RSA/PSS/${sigHash.name}/mgf1${mgf1Hash.name}/salt$saltLength',
+        () => pc.PSSSigner(pc.RSAEngine(), sigHash.factory() as pc.Digest,
+            mgf1Hash.factory() as pc.Digest));
   }
+}
+
+/// Placeholder pointycastle [pc.Algorithm] for EdDSA.
+///
+/// pointycastle has no Ed25519 implementation. The EdDSA signer/verifier
+/// (see `eddsa_operator.dart`) bypass pointycastle entirely and never use this
+/// instance; it exists only so the generic [Operator] constructor (which eagerly
+/// builds a [pc.Algorithm]) has something to hold.
+class _Ed25519Algorithm implements pc.Algorithm {
+  @override
+  String get algorithmName => 'Ed25519';
+}
+
+class _EddsaSigAlgorithms extends Identifier {
+  _EddsaSigAlgorithms() : super._('sig/EdDSA');
+
+  /// EdDSA using the Ed25519 curve (RFC 8037).
+  final ed25519 = AlgorithmIdentifier<pc.Algorithm>._(
+      'sig/EdDSA/Ed25519', () => _Ed25519Algorithm());
 }
 
 class _EcdsaSigAlgorithms extends Identifier {
@@ -253,6 +292,9 @@ class _Curves {
 
   /// P-256K
   final p256k = const Identifier._('curve/P-256K');
+
+  /// Ed25519 (RFC 8037 / RFC 8032)
+  final ed25519 = const Identifier._('curve/Ed25519');
 }
 
 /// An identifier for uniquely identify algorithms and other objects
@@ -307,13 +349,19 @@ class AlgorithmIdentifier<T extends pc.Algorithm> extends Identifier {
     'ES512': algorithms.signing.ecdsa.sha512,
 
     /// RSASSA-PSS using SHA-256 and MGF1 with SHA-256
-    'PS256': null,
+    'PS256': algorithms.signing.rsa.pss.sha256,
 
     /// RSASSA-PSS using SHA-384 and MGF1 with SHA-384
-    'PS384': null,
+    'PS384': algorithms.signing.rsa.pss.sha384,
 
     /// RSASSA-PSS using SHA-512 and MGF1 with SHA-512
-    'PS512': null,
+    'PS512': algorithms.signing.rsa.pss.sha512,
+
+    /// EdDSA using Ed25519 (RFC 8037)
+    'EdDSA': algorithms.signing.eddsa.ed25519,
+
+    /// The fully-specified Ed25519 algorithm identifier, treated as `EdDSA`.
+    'Ed25519': algorithms.signing.eddsa.ed25519,
 
     /// No digital signature or MAC
     'none': null,

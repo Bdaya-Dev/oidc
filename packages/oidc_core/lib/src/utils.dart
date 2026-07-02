@@ -115,6 +115,22 @@ class OidcInternalUtilities {
     return dateTimeFromJsonRequired(rawValue);
   }
 
+  /// Tolerant parser for OPTIONAL `Uri` provider-metadata fields.
+  ///
+  /// Yields `null` instead of throwing on a malformed/non-string value so one
+  /// bad OPTIONAL endpoint cannot abort the whole discovery parse
+  /// (OIDC Discovery 1.0 §3 OPTIONAL fields / §4.3 robustness).
+  ///
+  /// Accepts an [Object] input (not `String`) on purpose so a non-string value
+  /// no longer triggers the `as String` TypeError that the generated code would
+  /// otherwise throw.
+  static Uri? tryParseUri(Object? value) {
+    if (value is! String) {
+      return null; // also covers null and JSON numbers/objects
+    }
+    return Uri.tryParse(value); // never throws; null where Uri.parse would fail
+  }
+
   static const commonConverters = <JsonConverter<dynamic, dynamic>>[
     OidcNumericDateConverter(),
     OidcDurationSecondsConverter(),
@@ -149,14 +165,81 @@ extension OidcDateTime on DateTime {
 
 /// Utilities for the Oidc spec
 class OidcUtils {
-  /// Takes a base Url and adds /.well-known/openid-configuration to it
+  /// Drops trailing empty path segments (the encoding of a terminating `/`).
+  ///
+  /// OIDC Discovery 1.0 §4.1 / RFC 8414 §3.1 require any terminating `/` on the
+  /// issuer to be removed before composing the well-known URL. `Uri.parse(
+  /// 'https://op/realm/').pathSegments == ['realm', '']`, and spreading that
+  /// empty tail produced a double slash (`/realm//.well-known/...`) → a 404 on
+  /// path-bearing issuers (Keycloak/IdentityServer/Zitadel pattern).
+  static List<String> _trimTrailingEmptySegments(List<String> segments) {
+    final out = [...segments];
+    while (out.isNotEmpty && out.last.isEmpty) {
+      out.removeLast();
+    }
+    return out;
+  }
+
+  /// Takes a base issuer Url and APPENDS `/.well-known/openid-configuration`
+  /// (OpenID Connect Discovery 1.0 §4.1), stripping any terminating slash first.
   static Uri getOpenIdConfigWellKnownUri(Uri base) {
     return base.replace(
       pathSegments: [
-        ...base.pathSegments,
+        ..._trimTrailingEmptySegments(base.pathSegments),
         '.well-known',
         'openid-configuration',
       ],
+      query: null,
+      fragment: null,
     );
+  }
+
+  /// Takes a base issuer Url and INSERTS `/.well-known/oauth-authorization-server`
+  /// BEFORE the path (RFC 8414 §3.1 — the OPPOSITE layout to OIDC §4.1):
+  /// `https://op/issuer1` → `https://op/.well-known/oauth-authorization-server/issuer1`.
+  static Uri getOAuthAuthServerWellKnownUri(Uri base) {
+    return base.replace(
+      pathSegments: [
+        '.well-known',
+        'oauth-authorization-server',
+        ..._trimTrailingEmptySegments(base.pathSegments),
+      ],
+      query: null,
+      fragment: null,
+    );
+  }
+
+  /// The inverse of [getOpenIdConfigWellKnownUri]: given an OIDC §4.1
+  /// `.well-known/openid-configuration` URL, recovers the issuer it was built
+  /// from by dropping the trailing `['.well-known','openid-configuration']`
+  /// path segments (and clearing query/fragment).
+  ///
+  /// Returns `null` when [wellKnown] does not end with those two segments (e.g.
+  /// an RFC 8414 insert-layout URL or an Entra `?appid=` query URL that cannot
+  /// be inverted), so callers can detect that the issuer could not be derived.
+  static Uri? getIssuerFromOpenIdConfigWellKnownUri(Uri wellKnown) {
+    final segments = wellKnown.pathSegments;
+    if (segments.length < 2 ||
+        segments[segments.length - 2] != '.well-known' ||
+        segments[segments.length - 1] != 'openid-configuration') {
+      return null;
+    }
+    return wellKnown.replace(
+      pathSegments: segments.sublist(0, segments.length - 2),
+      query: null,
+      fragment: null,
+    );
+  }
+
+  /// OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3: the discovery document's `issuer`
+  /// MUST be identical to the issuer used to fetch it (mix-up defense). Compares
+  /// by simple string equality, case-folding ONLY scheme + host (a genuine path
+  /// difference, including a trailing slash, is a real mismatch and stays
+  /// significant — do NOT normalize it away).
+  static bool issuersAreIdentical(Uri expected, Uri actual) {
+    String norm(Uri u) => u
+        .replace(scheme: u.scheme.toLowerCase(), host: u.host.toLowerCase())
+        .toString();
+    return norm(expected) == norm(actual);
   }
 }

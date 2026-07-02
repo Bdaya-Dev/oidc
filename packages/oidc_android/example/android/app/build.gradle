@@ -48,9 +48,8 @@ android {
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        manifestPlaceholders += [
-          'appAuthRedirectScheme': 'com.bdayadev.oidc_example'
-        ]        
+        // Auth Tab captures the redirect via the Activity Result API — no
+        // oidcRedirectScheme manifest placeholder needed.
     }
 
     buildTypes {

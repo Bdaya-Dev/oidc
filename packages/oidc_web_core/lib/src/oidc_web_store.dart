@@ -56,7 +56,9 @@ class OidcWebStore implements OidcStore {
     Set<String> keys,
     String? managerId,
   ) async {
-    final prev = await getAllKeys(namespace);
+    // Read from the SAME per-manager bucket `_setAllKeys` writes to (keyed by
+    // managerId); reading the default bucket corrupted per-manager key cleanup.
+    final prev = await getAllKeys(namespace, managerId: managerId);
     final newKeys = prev.union(keys).toList();
     await _setAllKeys(namespace, newKeys, managerId);
   }
@@ -66,7 +68,9 @@ class OidcWebStore implements OidcStore {
     Set<String> keys,
     String? managerId,
   ) async {
-    final prev = await getAllKeys(namespace);
+    // Read from the SAME per-manager bucket `_setAllKeys` writes to (keyed by
+    // managerId); reading the default bucket corrupted per-manager key cleanup.
+    final prev = await getAllKeys(namespace, managerId: managerId);
     final newKeys = prev.difference(keys).toList();
     await _setAllKeys(namespace, newKeys, managerId);
   }

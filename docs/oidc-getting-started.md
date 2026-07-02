@@ -128,10 +128,10 @@ just do `flutter run` from your terminal (not IDE) once, and it will ask you to 
 
 ### Redirect handling (ASWebAuthenticationSession)
 
-`oidc_ios` uses the system `ASWebAuthenticationSession`, which registers your
-`redirect_uri` scheme **at runtime**. You do **not** need a `CFBundleURLTypes` /
-`CFBundleURLSchemes` entry in `ios/Info.plist` for the OIDC redirect, and you do
-not add any third-party SDK.
+`oidc_darwin` (iOS) uses the system `ASWebAuthenticationSession`, which
+registers your `redirect_uri` scheme **at runtime**. You do **not** need a
+`CFBundleURLTypes` / `CFBundleURLSchemes` entry in `ios/Info.plist` for the OIDC
+redirect, and you do not add any third-party SDK.
 
 Requirements:
 
@@ -145,9 +145,9 @@ Requirements:
 
 ### Redirect handling (ASWebAuthenticationSession)
 
-`oidc_macos` uses the system `ASWebAuthenticationSession` (the same first-party
-approach as iOS — no third-party SDK), which registers your `redirect_uri`
-scheme **at runtime**. You do **not** need a `CFBundleURLTypes` /
+`oidc_darwin` (macOS) uses the system `ASWebAuthenticationSession` (the same
+first-party approach as iOS — no third-party SDK), which registers your
+`redirect_uri` scheme **at runtime**. You do **not** need a `CFBundleURLTypes` /
 `CFBundleURLSchemes` entry in `macos/Info.plist` for the OIDC redirect.
 
 Requirements:
@@ -269,6 +269,3 @@ Apart from `libsecret` you also need a keyring service, for that you need either
 
 [flutter_secure_storage_link]: https://pub.dev/packages/flutter_secure_storage
 [flutter_secure_storage_image]: https://img.shields.io/badge/package-flutter__secure__storage-0175C2?logo=dart&logoColor=white
-
-[flutter_appauth_link]: https://pub.dev/packages/flutter_appauth
-[flutter_appauth_image]: https://img.shields.io/badge/package-flutter__appauth-0175C2?logo=dart&logoColor=white
