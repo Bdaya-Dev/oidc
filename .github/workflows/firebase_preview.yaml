@@ -12,9 +12,8 @@ on:
       - "packages/oidc/example/**"
 
 permissions:
-  checks: write
   contents: read
-  pull-requests: write
+  pull-requests: write # sticky preview-URL comment
 
 concurrency:
   group: "firebase-preview-${{ github.event.pull_request.number }}"
@@ -30,11 +29,9 @@ jobs:
       # Only build+deploy a target whose sources actually changed in this PR.
       # A Firebase Hosting preview release is non-idempotent: re-releasing a
       # byte-identical version to a channel returns HTTP 400 FAILED_PRECONDITION
-      # ("supplied version is the current active version"). Deploying docs on a
-      # code-only PR (docs unchanged) therefore fails spuriously and also skips
-      # the example deploy. Gating each target on its own paths avoids the
-      # redundant release; the continue-on-error backstops below absorb any
-      # residual redundant release or transient Firebase-API "premature close".
+      # ("supplied version is the current active version"). Gating each target
+      # on its own paths avoids most redundant releases; the deploy script
+      # classifies the residual ones (see .github/scripts/firebase_channel_deploy.sh).
       - name: Detect changed paths
         uses: dorny/paths-filter@v3
         id: filter
@@ -105,32 +102,60 @@ jobs:
           rm -rf dist/oidc-example/*
           cp -R packages/oidc/example/build/web/. dist/oidc-example/
 
-      # continue-on-error: a Firebase preview deploy is best-effort (not a merge
-      # gate). A redundant release (unchanged content re-pushed on a later
-      # synchronize) or a transient "premature close" retry must not fail the PR.
+      # Direct firebase-tools CLI instead of FirebaseExtended/action-hosting-deploy:
+      # the script treats the retry-after-premature-close redundant-release 400 as
+      # success and fails honestly on anything else, and no repoToken means no
+      # spurious failing "Deploy Preview" check-run on the PR.
       - name: Deploy Docs Preview to Firebase Hosting
+        id: deploy_docs
         if: ${{ github.event.pull_request.head.repo.full_name == github.repository && steps.filter.outputs.docs == 'true' }}
-        continue-on-error: true
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC }}
-          projectId: bdaya-oidc
-          target: oidc-flutter-docs
-          channelId: pr-${{ github.event.pull_request.number }}-docs
-          expires: 7d
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC }}
+          PROJECT_ID: bdaya-oidc
+          TARGET: oidc-flutter-docs
+          CHANNEL: pr-${{ github.event.pull_request.number }}-docs
+        run: bash .github/scripts/firebase_channel_deploy.sh
 
       - name: Deploy Example Preview to Firebase Hosting
+        id: deploy_example
         if: ${{ github.event.pull_request.head.repo.full_name == github.repository && steps.filter.outputs.example == 'true' }}
-        continue-on-error: true
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC }}
-          projectId: bdaya-oidc
-          target: oidc-flutter-example
-          channelId: pr-${{ github.event.pull_request.number }}-example
-          expires: 7d
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BDAYA_OIDC }}
+          PROJECT_ID: bdaya-oidc
+          TARGET: oidc-flutter-example
+          CHANNEL: pr-${{ github.event.pull_request.number }}-example
+        run: bash .github/scripts/firebase_channel_deploy.sh
+
+      - name: Comment preview URLs on PR
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository && (steps.deploy_docs.outputs.url != '' || steps.deploy_example.outputs.url != '') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCS_URL: ${{ steps.deploy_docs.outputs.url }}
+          EXAMPLE_URL: ${{ steps.deploy_example.outputs.url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          marker="<!-- firebase-preview-urls -->"
+          body="${marker}
+          ### 🔥 Firebase Hosting previews
+
+          | Target | Preview |
+          | --- | --- |"
+          if [ -n "${DOCS_URL}" ]; then body="${body}
+          | Docs | ${DOCS_URL} |"; fi
+          if [ -n "${EXAMPLE_URL}" ]; then body="${body}
+          | Example | ${EXAMPLE_URL} |"; fi
+          body="${body}
+
+          _Channels expire 7 days after their last deploy._"
+          cids="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"${marker}\")) | .id")"
+          cid="$(head -1 <<<"${cids}")"
+          if [ -n "${cid}" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="${body}" >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="${body}" >/dev/null
+          fi
 
       - name: Note for forked PRs
         if: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
