@@ -33,7 +33,7 @@ jobs:
       # on its own paths avoids most redundant releases; the deploy script
       # classifies the residual ones (see .github/scripts/firebase_channel_deploy.sh).
       - name: Detect changed paths
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
