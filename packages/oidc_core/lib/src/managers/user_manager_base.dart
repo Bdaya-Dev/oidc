@@ -2124,8 +2124,9 @@ abstract class OidcUserManagerBase {
           );
 
           logger.info('UserInfo response: ${userInfoResp.src}');
-          if (userInfoResp.sub != null &&
-              userInfoResp.sub != actualUser.claims.subject) {
+          // OIDC Core §5.3.2: `sub` is REQUIRED in the UserInfo response; a
+          // response omitting it MUST be rejected, not silently accepted.
+          if (userInfoResp.sub != actualUser.claims.subject) {
             errors.add(
               const OidcException("UserInfo didn't return the same subject."),
             );
