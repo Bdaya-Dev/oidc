@@ -916,7 +916,10 @@ abstract class OidcUserManagerBase {
         clientId: clientCredentials.clientId,
         postLogoutRedirectUri: postLogoutRedirectUri,
         uiLocales: uiLocalesOverride ?? settings.uiLocales,
-        idTokenHint: postLogoutRedirectUri == null ? null : currentUser.idToken,
+        // Always send id_token_hint: it's the RP-initiated-logout mechanism
+        // OPs use to identify/authenticate the logout request, independent
+        // of whether a post_logout_redirect_uri was also requested.
+        idTokenHint: currentUser.idToken,
         extra: extraParameters,
         logoutHint: logoutHint,
         state: stateData?.id,
