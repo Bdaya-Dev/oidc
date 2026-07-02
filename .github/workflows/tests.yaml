@@ -43,7 +43,7 @@ jobs:
       CHROME_FLAGS: --headless --no-sandbox --disable-dev-shm-usage --disable-gpu
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Environment
         uses: ./.github/actions/flutter_base
         with:
@@ -94,7 +94,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Free disk space
@@ -238,7 +238,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
         # with:
@@ -325,7 +325,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Preload Flutter web artifacts
@@ -388,7 +388,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Run flutter precache
@@ -428,7 +428,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Install Dependencies
@@ -487,7 +487,7 @@ jobs:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Run flutter precache
@@ -533,7 +533,7 @@ jobs:
     needs: [unit_tests, android, ios, web, macos, linux, windows]
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Download unit test coverage

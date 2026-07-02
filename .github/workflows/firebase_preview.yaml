@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # Only build+deploy a target whose sources actually changed in this PR.
       # A Firebase Hosting preview release is non-idempotent: re-releasing a
