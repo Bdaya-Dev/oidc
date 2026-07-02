@@ -159,6 +159,47 @@ void main() {
       },
     );
 
+    test(
+      'a UserInfo response with a PRESENT but DIFFERENT sub fails '
+      'validation and the refresh is rejected',
+      () async {
+        final client = MockClient((req) async {
+          if (req.url.path.endsWith('/token')) {
+            return _tokenResponse();
+          }
+          if (req.url.path.endsWith('/userinfo')) {
+            return http.Response(
+              '{"sub":"someone-else","email":"user@example.com"}',
+              200,
+              headers: const {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('{}', 404);
+        });
+        final manager = await _build(client);
+        final originalUser = manager.currentUser;
+        expect(originalUser, isNotNull);
+
+        final result = await manager.refreshToken();
+
+        expect(
+          result,
+          isNull,
+          reason:
+              'a UserInfo `sub` that does not match the authenticated '
+              'subject (OIDC Core §5.3.2 comparison) must be rejected, not '
+              'silently accepted',
+        );
+        expect(
+          manager.currentUser?.token.accessToken,
+          originalUser!.token.accessToken,
+          reason:
+              'a failed validation must not apply the new (unverified) '
+              'token/identity to the current user',
+        );
+      },
+    );
+
     test('a UserInfo response WITH a matching sub is accepted', () async {
       final client = MockClient((req) async {
         if (req.url.path.endsWith('/token')) {

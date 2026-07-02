@@ -1802,6 +1802,11 @@ abstract class OidcUserManagerBase {
         headers: {...?settings.extraTokenHeaders, ...?headers},
         client: httpClient,
         options: settings.options,
+        // clientSecret is intentionally NOT passed here: `credentials`
+        // above is the single source of client authentication (RFC 6749
+        // §2.3). Also setting it on the request would duplicate it into
+        // the body even when `credentials` already authenticates via the
+        // Basic header (see OidcEndpoints.token).
         request: OidcTokenRequest.tokenExchange(
           subjectToken: actualSubjectToken,
           subjectTokenType: subjectTokenType,
@@ -1812,7 +1817,6 @@ abstract class OidcUserManagerBase {
           resource: resource ?? settings.resource,
           scope: scope,
           clientId: clientCredentials.clientId,
-          clientSecret: clientCredentials.clientSecret,
           extra: extra,
         ),
       ),
@@ -1855,11 +1859,15 @@ abstract class OidcUserManagerBase {
       credentials: clientCredentials,
       client: httpClient,
       headers: {...?settings.extraTokenHeaders, ...?headers},
+      // clientSecret is intentionally NOT passed here: `credentials`
+      // above is the single source of client authentication (RFC 6749
+      // §2.3). Also setting it on the request would duplicate it into
+      // the body even when `credentials` already authenticates via the
+      // Basic header (see OidcEndpoints.token).
       request: OidcIntrospectionRequest(
         token: actualToken,
         tokenTypeHint: tokenTypeHint,
         clientId: clientCredentials.clientId,
-        clientSecret: clientCredentials.clientSecret,
         extra: extra,
       ),
     );
