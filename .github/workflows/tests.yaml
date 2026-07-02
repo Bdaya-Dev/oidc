@@ -222,15 +222,16 @@ jobs:
           if-no-files-found: error
 
   ios:
-    # Runs on the iOS-26 simulator (macos-latest = macOS 26 / Xcode 26). Two
-    # iOS-26-specific issues are handled so this stays green:
-    #   (a) the conformance ASWebAuthenticationSession redirect no longer
-    #       auto-completes on the headless iOS-26 sim -> the module fails fast
-    #       via OidcNativeOptionsApple.flowTimeoutSeconds (this repo).
-    #   (b) XCUITest's implicit app terminate between patrolTests failed on
-    #       Xcode 26 ("Failed to terminate ...:0" / exit 65) -> fixed in
-    #       patrol_plus 5.0.4 (explicit terminate + wait before launch).
-    runs-on: macos-latest
+    # Pinned to macos-15 (Xcode 16.4 / iOS-18 sim). On the macOS-26 image
+    # (Xcode 26.5, iOS 26.4 simruntime) XCUITest's app relaunch between
+    # patrolTests still fails ("Failed to terminate com.bdayadev:...") even
+    # with patrol_plus 5.1.0's explicit-terminate + recordIssue suppression:
+    # 2/3 offline_mode tests fail and the patrol app server at ::1.8082 is
+    # unreachable (run 28593820533, job 84783903097, 2026-07-02). Note the
+    # conformance test DOES pass on iOS-26 thanks to
+    # OidcNativeOptionsApple.flowTimeoutSeconds. Unpin once the patrol fork
+    # fix is validated on Xcode 26.5 (tracking: Bdaya-Dev/patrol#15).
+    runs-on: macos-15
     timeout-minutes: 60
     defaults:
       run:
