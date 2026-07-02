@@ -125,10 +125,16 @@ class OidcClientAuthentication {
         OidcConstants_ClientAuthenticationMethods.clientSecretBasic) {
       return null;
     }
-    if (clientSecret == null) {
+    final secret = clientSecret;
+    if (secret == null) {
       return null;
     }
-    final concat = '$clientId:$clientSecret';
+    // RFC 6749 §2.3.1: the client_id and client_secret are each individually
+    // encoded with the "application/x-www-form-urlencoded" encoding algorithm
+    // (per Appendix B) BEFORE being concatenated with a colon and base64'd.
+    final concat =
+        '${Uri.encodeQueryComponent(clientId)}:'
+        '${Uri.encodeQueryComponent(secret)}';
     return 'Basic ${_utf8ThenBase64.encode(concat)}';
   }
 
