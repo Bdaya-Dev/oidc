@@ -309,6 +309,66 @@ jobs:
           path: packages/oidc/example/coverage/ios-coverage.info
           include-hidden-files: true
           if-no-files-found: error
+  # Non-gating canary for the macos-latest image (currently Xcode 26.5).
+  # Purpose: signal when the pinned `ios` job above can be unpinned. The
+  # structural relaunch failure (patrol#15) does NOT reproduce on Xcode 26.6
+  # locally (2/2 clean offline-suite runs, 2026-07-03) but was real on the GH
+  # image's Xcode 26.5 (run 28593820533). When this canary is consistently
+  # green, move `ios` back to macos-latest and delete this job.
+  # continue-on-error: its result never gates CI by construction.
+  ios_canary:
+    runs-on: macos-latest
+    continue-on-error: true
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+      - name: Start Simulator
+        run: |
+          SIM_JSON="$(xcrun simctl list devices available --json)"
+          RUNTIME_KEY="$(echo "$SIM_JSON" | jq -r '.devices | to_entries[] | select(.key|test("SimRuntime.iOS")) | select([.value[]|select(.name|startswith("iPhone"))]|length>0) | .key' | head -n 1)"
+          UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
+          OS_VER="$(echo "$RUNTIME_KEY" | sed -E 's/.*SimRuntime\.iOS-([0-9]+)-([0-9]+).*/\1.\2/')"
+          echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY)"
+          xcrun simctl boot "${UDID:?No available iPhone simulator found}"
+          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "SIMULATOR_OS=${OS_VER:?Could not parse simulator OS version}" >> "$GITHUB_ENV"
+      - name: Wait for Simulator to be Ready
+        run: |
+          COUNT=0
+          MAX_RETRIES=12
+          until xcrun simctl list devices | grep -q "Booted"; do
+            if [ $COUNT -ge $MAX_RETRIES ]; then
+              echo "Simulator did not boot within the expected time."
+              exit 1
+            fi
+            echo "Waiting for simulator to boot... Attempt: $((COUNT+1))"
+            sleep 20
+            COUNT=$((COUNT+1))
+          done
+          echo "Simulator is ready."
+      - name: Run flutter precache
+        run: flutter precache -v
+      - name: Activate Patrol CLI (patrol_cli_plus)
+        run: dart pub global activate patrol_cli_plus
+      # Offline suite only: 3 sequential patrolTests whose between-test
+      # relaunch boundaries are exactly what patrol#15 breaks. No conformance
+      # token needed; no coverage; fast signal.
+      - name: Offline relaunch canary (Patrol)
+        run: |
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          patrol_plus test \
+            -t patrol_test/offline_mode_test.dart \
+            -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
+            --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
+            --verbose \
+            --dart-define=CI=true
+
   web:
     strategy:
       fail-fast: false
