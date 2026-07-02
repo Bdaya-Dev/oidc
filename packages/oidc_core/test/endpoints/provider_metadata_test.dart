@@ -216,6 +216,79 @@ void main() {
           expect(parsed.src['registration_endpoint'], malformed);
         });
       });
+
+      group('typed logout capability flags', () {
+        Map<String, dynamic> validDiscovery([
+          Map<String, dynamic>? overrides,
+        ]) => {
+          'issuer': 'https://op.example.com',
+          'authorization_endpoint': 'https://op.example.com/authorize',
+          'token_endpoint': 'https://op.example.com/token',
+          'jwks_uri': 'https://op.example.com/jwks',
+          ...?overrides,
+        };
+
+        test('a JSON round-trip exposes all four flags when true', () {
+          final parsed = OidcProviderMetadata.fromJson(
+            validDiscovery({
+              'frontchannel_logout_supported': true,
+              'frontchannel_logout_session_supported': true,
+              'backchannel_logout_supported': true,
+              'backchannel_logout_session_supported': true,
+            }),
+          );
+
+          expect(parsed.frontchannelLogoutSupported, isTrue);
+          expect(parsed.frontchannelLogoutSessionSupported, isTrue);
+          expect(parsed.backchannelLogoutSupported, isTrue);
+          expect(parsed.backchannelLogoutSessionSupported, isTrue);
+
+          expect(parsed.frontchannelLogoutSupportedOrDefault, isTrue);
+          expect(parsed.frontchannelLogoutSessionSupportedOrDefault, isTrue);
+          expect(parsed.backchannelLogoutSupportedOrDefault, isTrue);
+          expect(parsed.backchannelLogoutSessionSupportedOrDefault, isTrue);
+        });
+
+        test('a JSON round-trip exposes all four flags when false', () {
+          final parsed = OidcProviderMetadata.fromJson(
+            validDiscovery({
+              'frontchannel_logout_supported': false,
+              'frontchannel_logout_session_supported': false,
+              'backchannel_logout_supported': false,
+              'backchannel_logout_session_supported': false,
+            }),
+          );
+
+          expect(parsed.frontchannelLogoutSupported, isFalse);
+          expect(parsed.frontchannelLogoutSessionSupported, isFalse);
+          expect(parsed.backchannelLogoutSupported, isFalse);
+          expect(parsed.backchannelLogoutSessionSupported, isFalse);
+        });
+
+        test(
+          'absent flags are null, and the ...OrDefault getters fall back to '
+          'the spec default of false',
+          () {
+            final parsed = OidcProviderMetadata.fromJson(validDiscovery());
+
+            expect(parsed.frontchannelLogoutSupported, isNull);
+            expect(parsed.frontchannelLogoutSessionSupported, isNull);
+            expect(parsed.backchannelLogoutSupported, isNull);
+            expect(parsed.backchannelLogoutSessionSupported, isNull);
+
+            expect(parsed.frontchannelLogoutSupportedOrDefault, isFalse);
+            expect(
+              parsed.frontchannelLogoutSessionSupportedOrDefault,
+              isFalse,
+            );
+            expect(parsed.backchannelLogoutSupportedOrDefault, isFalse);
+            expect(
+              parsed.backchannelLogoutSessionSupportedOrDefault,
+              isFalse,
+            );
+          },
+        );
+      });
     });
   });
 }

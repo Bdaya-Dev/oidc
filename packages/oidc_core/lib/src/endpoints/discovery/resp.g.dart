@@ -117,6 +117,22 @@ abstract class _$OidcProviderMetadataCWProxy {
 
   OidcProviderMetadata endSessionEndpoint(Uri? endSessionEndpoint);
 
+  OidcProviderMetadata frontchannelLogoutSupported(
+    bool? frontchannelLogoutSupported,
+  );
+
+  OidcProviderMetadata frontchannelLogoutSessionSupported(
+    bool? frontchannelLogoutSessionSupported,
+  );
+
+  OidcProviderMetadata backchannelLogoutSupported(
+    bool? backchannelLogoutSupported,
+  );
+
+  OidcProviderMetadata backchannelLogoutSessionSupported(
+    bool? backchannelLogoutSessionSupported,
+  );
+
   OidcProviderMetadata revocationEndpoint(Uri? revocationEndpoint);
 
   OidcProviderMetadata revocationEndpointAuthMethodsSupported(
@@ -202,6 +218,10 @@ abstract class _$OidcProviderMetadataCWProxy {
     Uri? opTosUri,
     Uri? checkSessionIframe,
     Uri? endSessionEndpoint,
+    bool? frontchannelLogoutSupported,
+    bool? frontchannelLogoutSessionSupported,
+    bool? backchannelLogoutSupported,
+    bool? backchannelLogoutSessionSupported,
     Uri? revocationEndpoint,
     List<String>? revocationEndpointAuthMethodsSupported,
     List<String>? revocationEndpointAuthSigningAlgValuesSupported,
@@ -411,6 +431,30 @@ class _$OidcProviderMetadataCWProxyImpl
       call(endSessionEndpoint: endSessionEndpoint);
 
   @override
+  OidcProviderMetadata frontchannelLogoutSupported(
+    bool? frontchannelLogoutSupported,
+  ) => call(frontchannelLogoutSupported: frontchannelLogoutSupported);
+
+  @override
+  OidcProviderMetadata frontchannelLogoutSessionSupported(
+    bool? frontchannelLogoutSessionSupported,
+  ) => call(
+    frontchannelLogoutSessionSupported: frontchannelLogoutSessionSupported,
+  );
+
+  @override
+  OidcProviderMetadata backchannelLogoutSupported(
+    bool? backchannelLogoutSupported,
+  ) => call(backchannelLogoutSupported: backchannelLogoutSupported);
+
+  @override
+  OidcProviderMetadata backchannelLogoutSessionSupported(
+    bool? backchannelLogoutSessionSupported,
+  ) => call(
+    backchannelLogoutSessionSupported: backchannelLogoutSessionSupported,
+  );
+
+  @override
   OidcProviderMetadata revocationEndpoint(Uri? revocationEndpoint) =>
       call(revocationEndpoint: revocationEndpoint);
 
@@ -534,6 +578,10 @@ class _$OidcProviderMetadataCWProxyImpl
     Object? opTosUri = const $CopyWithPlaceholder(),
     Object? checkSessionIframe = const $CopyWithPlaceholder(),
     Object? endSessionEndpoint = const $CopyWithPlaceholder(),
+    Object? frontchannelLogoutSupported = const $CopyWithPlaceholder(),
+    Object? frontchannelLogoutSessionSupported = const $CopyWithPlaceholder(),
+    Object? backchannelLogoutSupported = const $CopyWithPlaceholder(),
+    Object? backchannelLogoutSessionSupported = const $CopyWithPlaceholder(),
     Object? revocationEndpoint = const $CopyWithPlaceholder(),
     Object? revocationEndpointAuthMethodsSupported =
         const $CopyWithPlaceholder(),
@@ -723,6 +771,26 @@ class _$OidcProviderMetadataCWProxyImpl
           ? _value.endSessionEndpoint
           // ignore: cast_nullable_to_non_nullable
           : endSessionEndpoint as Uri?,
+      frontchannelLogoutSupported:
+          frontchannelLogoutSupported == const $CopyWithPlaceholder()
+          ? _value.frontchannelLogoutSupported
+          // ignore: cast_nullable_to_non_nullable
+          : frontchannelLogoutSupported as bool?,
+      frontchannelLogoutSessionSupported:
+          frontchannelLogoutSessionSupported == const $CopyWithPlaceholder()
+          ? _value.frontchannelLogoutSessionSupported
+          // ignore: cast_nullable_to_non_nullable
+          : frontchannelLogoutSessionSupported as bool?,
+      backchannelLogoutSupported:
+          backchannelLogoutSupported == const $CopyWithPlaceholder()
+          ? _value.backchannelLogoutSupported
+          // ignore: cast_nullable_to_non_nullable
+          : backchannelLogoutSupported as bool?,
+      backchannelLogoutSessionSupported:
+          backchannelLogoutSessionSupported == const $CopyWithPlaceholder()
+          ? _value.backchannelLogoutSessionSupported
+          // ignore: cast_nullable_to_non_nullable
+          : backchannelLogoutSessionSupported as bool?,
       revocationEndpoint: revocationEndpoint == const $CopyWithPlaceholder()
           ? _value.revocationEndpoint
           // ignore: cast_nullable_to_non_nullable
@@ -902,6 +970,12 @@ OidcProviderMetadata _$OidcProviderMetadataFromJson(
   endSessionEndpoint: OidcInternalUtilities.tryParseUri(
     json['end_session_endpoint'],
   ),
+  frontchannelLogoutSupported: json['frontchannel_logout_supported'] as bool?,
+  frontchannelLogoutSessionSupported:
+      json['frontchannel_logout_session_supported'] as bool?,
+  backchannelLogoutSupported: json['backchannel_logout_supported'] as bool?,
+  backchannelLogoutSessionSupported:
+      json['backchannel_logout_session_supported'] as bool?,
   revocationEndpoint: OidcInternalUtilities.tryParseUri(
     json['revocation_endpoint'],
   ),
