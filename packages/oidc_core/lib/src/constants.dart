@@ -608,6 +608,10 @@ class OidcConstants_ProviderMetadata {
   ///Boolean value specifying whether the OP supports HTTP-based logout, with true indicating support
   static const frontchannelLogoutSupported = 'frontchannel_logout_supported';
 
+  ///Boolean value specifying whether the OP can pass a sid (session ID) Claim in the Logout Token to identify the RP session with the OP, when front-channel logout is supported
+  static const frontchannelLogoutSessionSupported =
+      'frontchannel_logout_session_supported';
+
   ///Boolean value specifying whether the OP supports back-channel logout, with true indicating support
   static const backchannelLogoutSupported = 'backchannel_logout_supported';
 

@@ -55,6 +55,10 @@ class OidcProviderMetadata extends JsonBasedResponse {
     this.opTosUri,
     this.checkSessionIframe,
     this.endSessionEndpoint,
+    this.frontchannelLogoutSupported,
+    this.frontchannelLogoutSessionSupported,
+    this.backchannelLogoutSupported,
+    this.backchannelLogoutSessionSupported,
     this.revocationEndpoint,
     this.revocationEndpointAuthMethodsSupported,
     this.revocationEndpointAuthSigningAlgValuesSupported,
@@ -353,6 +357,40 @@ class OidcProviderMetadata extends JsonBasedResponse {
     fromJson: OidcInternalUtilities.tryParseUri,
   )
   final Uri? endSessionEndpoint;
+
+  /// `true` when the OP supports HTTP-based (front-channel) logout, as
+  /// specified by OpenID Connect Front-Channel Logout 1.0. Absent ⇒ `false`.
+  @JsonKey(name: OidcConstants_ProviderMetadata.frontchannelLogoutSupported)
+  final bool? frontchannelLogoutSupported;
+  bool get frontchannelLogoutSupportedOrDefault =>
+      frontchannelLogoutSupported ?? false;
+
+  /// `true` when the OP can pass a `sid` (session ID) query parameter to
+  /// identify the RP session at the OP when front-channel logout is
+  /// supported. Absent ⇒ `false`.
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.frontchannelLogoutSessionSupported,
+  )
+  final bool? frontchannelLogoutSessionSupported;
+  bool get frontchannelLogoutSessionSupportedOrDefault =>
+      frontchannelLogoutSessionSupported ?? false;
+
+  /// `true` when the OP supports back-channel logout, as specified by
+  /// OpenID Connect Back-Channel Logout 1.0. Absent ⇒ `false`.
+  @JsonKey(name: OidcConstants_ProviderMetadata.backchannelLogoutSupported)
+  final bool? backchannelLogoutSupported;
+  bool get backchannelLogoutSupportedOrDefault =>
+      backchannelLogoutSupported ?? false;
+
+  /// `true` when the OP can pass a `sid` (session ID) Claim in the Logout
+  /// Token to identify the RP session at the OP when back-channel logout is
+  /// supported. Absent ⇒ `false`.
+  @JsonKey(
+    name: OidcConstants_ProviderMetadata.backchannelLogoutSessionSupported,
+  )
+  final bool? backchannelLogoutSessionSupported;
+  bool get backchannelLogoutSessionSupportedOrDefault =>
+      backchannelLogoutSessionSupported ?? false;
 
   /// URL of the authorization server's OAuth 2.0 revocation endpoint.
   @JsonKey(
