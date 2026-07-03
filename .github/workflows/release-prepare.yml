@@ -3,6 +3,13 @@ on:
   push:
     branches: [main]
 
+# Serialize runs so two Prepare-release jobs never race each other while
+# opening/closing the release PR (otherwise each could close the other's
+# freshly-created PR and leave zero, or two, PRs open).
+concurrency:
+  group: release-prepare-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   prepare-release:
     name: Prepare release
@@ -20,8 +27,8 @@ jobs:
       - uses: bluefireteam/melos-action@main
         continue-on-error: true
         with:
-          run-bootstrap: true          
-          bootstrap-no-example: false      
+          run-bootstrap: true
+          bootstrap-no-example: false
       - uses: bluefireteam/melos-action@main
         with:
           run-bootstrap: true
@@ -32,3 +39,41 @@ jobs:
           run-versioning: true
           publish-dry-run: true
           create-pr: true
+      # melos-action (peter-evans/create-pull-request under the hood) always
+      # opens a *new* PR from a run-id-suffixed branch (release-<run_id>), it
+      # never reuses/updates a previous one. Without this step every push to
+      # main that touches package versions piles up another open release PR.
+      # melos-action doesn't expose the PR number/branch as an action output,
+      # so the keeper is derived as "the newest open release-* PR".
+      - name: Close superseded release PRs
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Must match melos-action's `pr-title` default (not overridden above).
+          RELEASE_PR_TITLE: "chore(release): Publish packages"
+        run: |
+          set -euo pipefail
+
+          mapfile -t PR_NUMBERS < <(
+            gh pr list \
+              --repo "${{ github.repository }}" \
+              --state open \
+              --json number,headRefName,title \
+              --jq '.[] | select(.title == env.RELEASE_PR_TITLE and (.headRefName | startswith("release-"))) | .number' \
+            | sort -rn
+          )
+
+          if [ "${#PR_NUMBERS[@]}" -le 1 ]; then
+            echo "No superseded release PRs to close (found ${#PR_NUMBERS[@]})."
+            exit 0
+          fi
+
+          keeper="${PR_NUMBERS[0]}"
+          echo "Keeping newest release PR #$keeper"
+
+          for number in "${PR_NUMBERS[@]:1}"; do
+            echo "Closing superseded release PR #$number"
+            gh pr comment "$number" --repo "${{ github.repository }}" \
+              --body "Superseded by the latest Prepare release run."
+            gh pr close "$number" --repo "${{ github.repository }}"
+          done
