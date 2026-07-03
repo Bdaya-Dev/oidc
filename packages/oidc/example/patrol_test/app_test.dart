@@ -50,7 +50,11 @@ void main() {
       await runManagerSmokeTest(() => _launch($));
     });
   } else {
-    patrolTest('OIDC Conformance Test', ($) async {
+    // Tagged so CI can exclude it selectively (currently only the web job
+    // does, via `--exclude-tags conformance`; see tests.yaml and
+    // https://github.com/Bdaya-Dev/oidc/issues/337 — the live IdP redirect
+    // flow hangs on web until Playwright's per-test timeout kills it).
+    patrolTest('OIDC Conformance Test', tags: const ['conformance'], ($) async {
       await runOidcConformanceTest(() => _launch($));
     });
   }
