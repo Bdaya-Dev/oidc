@@ -344,16 +344,40 @@ jobs:
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
       - name: Start Simulator
+        # `xcrun simctl boot` only *initiates* the boot and returns almost
+        # immediately; `simctl list devices` can report "Booted" before
+        # CoreSimulatorService has actually finished registering the device
+        # with Xcode's destination resolver. patrol_cli_plus's
+        # `test-without-building` invocation targets the simulator by exact
+        # UDID (`-destination id=<udid>`, unambiguous, no `--ios`/OS-string
+        # matching involved for simulators as of patrol_cli_plus 5.2.0) but
+        # pairs it with a hardcoded `-destination-timeout 1` (one second).
+        # On run 28667951809 (macos-26, no --coverage) that 1s window was
+        # enough -- xcodebuild found the device (even logging a "multiple
+        # matching destinations" WARNING for duplicate arm64/x86_64 entries)
+        # and proceeded. On PR #344's first macos-26 canary run
+        # (job 85040957868) the same boot-then-poll-for-"Booted" pattern lost
+        # that race: xcodebuild reported "Unable to find a device matching
+        # the provided destination specifier" for the exact same booted UDID
+        # (exit 70, before any test ran) -- a CoreSimulatorService
+        # registration race, not a destination-string mismatch. `simctl
+        # bootstatus <udid> -b` is Apple's CI-safe boot primitive: it boots
+        # the device (if needed) and blocks until CoreSimulatorService
+        # reports it has *actually* finished booting, closing this race at
+        # the source instead of relying on `simctl list` polling downstream.
         run: |
           SIM_JSON="$(xcrun simctl list devices available --json)"
           RUNTIME_KEY="$(echo "$SIM_JSON" | jq -r '.devices | to_entries[] | select(.key|test("SimRuntime.iOS")) | select([.value[]|select(.name|startswith("iPhone"))]|length>0) | .key' | head -n 1)"
           UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
           OS_VER="$(echo "$RUNTIME_KEY" | sed -E 's/.*SimRuntime\.iOS-([0-9]+)-([0-9]+).*/\1.\2/')"
           echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY)"
-          xcrun simctl boot "${UDID:?No available iPhone simulator found}"
+          xcrun simctl bootstatus "${UDID:?No available iPhone simulator found}" -b
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
           echo "SIMULATOR_OS=${OS_VER:?Could not parse simulator OS version}" >> "$GITHUB_ENV"
       - name: Wait for Simulator to be Ready
+        # Redundant with `simctl bootstatus -b` above (which already blocks
+        # until booted) but kept as a cheap defense-in-depth check -- it
+        # passes on the first iteration once bootstatus has returned.
         run: |
           COUNT=0
           MAX_RETRIES=12
