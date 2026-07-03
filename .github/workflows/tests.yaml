@@ -309,15 +309,30 @@ jobs:
           path: packages/oidc/example/coverage/ios-coverage.info
           include-hidden-files: true
           if-no-files-found: error
-  # Non-gating canary for the macos-latest image (currently Xcode 26.5).
-  # Purpose: signal when the pinned `ios` job above can be unpinned. The
-  # structural relaunch failure (patrol#15) does NOT reproduce on Xcode 26.6
-  # locally (2/2 clean offline-suite runs, 2026-07-03) but was real on the GH
-  # image's Xcode 26.5 (run 28593820533). When this canary is consistently
-  # green, move `ios` back to macos-latest and delete this job.
+  # Canary for Xcode 26.5, pinned to the explicit `macos-26` label rather
+  # than `macos-latest`. As of 2026-07-03, `macos-latest` still resolves to
+  # the macos-15-arm64 image (Xcode 16.4) -- confirmed empirically: run
+  # 28665781383 (runs-on: macos-latest) landed on Xcode 16.4, while run
+  # 28667951809 (runs-on: macos-26) landed on Xcode 26.5. Using macos-latest
+  # here would silently test the wrong environment and defeat the purpose
+  # of this canary.
+  #
+  # The structural relaunch failure (patrol#15) appears RESOLVED on Xcode
+  # 26.5: 3/3 offline tests pass with a clean xcresult on both local Xcode
+  # 26.6 and the GH-hosted lab image's Xcode 26.5. This canary now exists to
+  # catch regressions and confirm sustained green on macos-26 before
+  # unpinning the gating `ios` job. When this canary is consistently green,
+  # move `ios` back to a floating label and delete this job.
+  #
+  # --coverage (mirroring the gating `ios` job's flags) is required here even
+  # though this job discards the coverage output: without it, patrol_plus
+  # never exits post-xcodebuild (patrol#24) and the step times out
+  # regardless of whether the tests themselves pass.
+  #
+  # Tracking: Bdaya-Dev/patrol#15, Bdaya-Dev/patrol#24.
   # continue-on-error: its result never gates CI by construction.
   ios_canary:
-    runs-on: macos-latest
+    runs-on: macos-26
     continue-on-error: true
     timeout-minutes: 40
     defaults:
@@ -358,7 +373,9 @@ jobs:
         run: dart pub global activate patrol_cli_plus
       # Offline suite only: 3 sequential patrolTests whose between-test
       # relaunch boundaries are exactly what patrol#15 breaks. No conformance
-      # token needed; no coverage; fast signal.
+      # token needed. --coverage below is required to avoid the patrol#24
+      # CLI-never-exits hang, not to collect coverage data for this
+      # non-gating job.
       - name: Offline relaunch canary (Patrol)
         # Step-level timeout so a hang becomes a STEP FAILURE (maskable by the
         # job's continue-on-error). A job-level timeout instead CANCELS the job,
@@ -369,6 +386,9 @@ jobs:
           export PATH="$PATH:$HOME/.pub-cache/bin"
           patrol_plus test \
             -t patrol_test/offline_mode_test.dart \
+            --coverage \
+            --coverage-ignore="**/*.g.dart" \
+            --coverage-package oidc \
             -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
             --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
             --verbose \
