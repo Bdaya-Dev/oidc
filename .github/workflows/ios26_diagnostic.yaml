@@ -1,0 +1,228 @@
+# One-shot diagnostic workflow for Bdaya-Dev/patrol#15 (iOS-26 / Xcode 26.5
+# structural relaunch failure). Mirrors the `ios_canary` job's setup/boot
+# steps in tests.yaml but, unlike the canary, always collects deep evidence
+# (xcresult bundle + parsed JSON, simulator syslog around the failure window,
+# raw patrol CLI output) as workflow artifacts regardless of pass/fail.
+#
+# workflow_dispatch only -- intentionally NOT wired into any push/PR trigger
+# and does NOT modify tests.yaml. Safe to delete once patrol#15 is diagnosed.
+name: iOS 26 Diagnostic (patrol#15)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios26_diagnostic:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: packages/oidc/example
+        shell: bash
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+
+      - name: Environment info
+        run: |
+          mkdir -p diagnostics
+          {
+            echo "== sw_vers =="
+            sw_vers
+            echo
+            echo "== xcodebuild -version =="
+            xcodebuild -version
+            echo
+            echo "== xcrun simctl list runtimes =="
+            xcrun simctl list runtimes
+            echo
+            echo "== patrol_plus resolved version =="
+            grep -A2 '^  patrol_plus:' pubspec.lock || true
+          } > diagnostics/environment_info.txt 2>&1
+          cat diagnostics/environment_info.txt
+
+      - name: Start Simulator
+        # Same UDID/OS discovery as the ios_canary job in tests.yaml -- boot by
+        # UDID and export the sim's REAL OS (not "latest") since patrol_cli_plus's
+        # build step derives the xcodebuild destination from --ios.
+        run: |
+          SIM_JSON="$(xcrun simctl list devices available --json)"
+          RUNTIME_KEY="$(echo "$SIM_JSON" | jq -r '.devices | to_entries[] | select(.key|test("SimRuntime.iOS")) | select([.value[]|select(.name|startswith("iPhone"))]|length>0) | .key' | head -n 1)"
+          UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
+          OS_VER="$(echo "$RUNTIME_KEY" | sed -E 's/.*SimRuntime\.iOS-([0-9]+)-([0-9]+).*/\1.\2/')"
+          echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY)"
+          xcrun simctl boot "${UDID:?No available iPhone simulator found}"
+          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "SIMULATOR_OS=${OS_VER:?Could not parse simulator OS version}" >> "$GITHUB_ENV"
+
+      - name: Wait for Simulator to be Ready
+        run: |
+          COUNT=0
+          MAX_RETRIES=12
+          until xcrun simctl list devices | grep -q "Booted"; do
+            if [ $COUNT -ge $MAX_RETRIES ]; then
+              echo "Simulator did not boot within the expected time."
+              exit 1
+            fi
+            echo "Waiting for simulator to boot... Attempt: $((COUNT+1))"
+            sleep 20
+            COUNT=$((COUNT+1))
+          done
+          echo "Simulator is ready."
+
+      - name: Validate `log show` predicate syntax (smoke test)
+        # Empirically validate the predicate before relying on it after the
+        # real test run. Never fails the job -- just records what happened so
+        # the artifact tells us whether the syntax was accepted on this image.
+        run: |
+          mkdir -p diagnostics
+          set +e
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --last 1m \
+            --predicate 'process CONTAINS "Runner" OR process CONTAINS "patrol"' \
+            > diagnostics/log_show_predicate_smoketest.txt 2>&1
+          echo "log show (predicate) smoke test exit code: $?" | tee -a diagnostics/log_show_predicate_smoketest.txt
+          set -e
+
+      - name: Run flutter precache
+        run: flutter precache -v
+
+      - name: Activate Patrol CLI (patrol_cli_plus)
+        run: dart pub global activate patrol_cli_plus
+
+      - name: Offline suite (Patrol, diagnostic run)
+        id: patrol_run
+        # Step-level (not job-level) continue-on-error + timeout: a hang
+        # becomes a STEP FAILURE we can still collect evidence for, instead of
+        # cancelling the whole job (a cancelled job drops straight to
+        # "cancelled" and skips later steps regardless of continue-on-error).
+        continue-on-error: true
+        timeout-minutes: 25
+        run: |
+          set -o pipefail
+          mkdir -p diagnostics
+          export PATH="$PATH:$HOME/.pub-cache/bin"
+          patrol_plus test \
+            -t patrol_test/offline_mode_test.dart \
+            -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
+            --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
+            --verbose \
+            --dart-define=CI=true \
+            2>&1 | tee diagnostics/patrol_cli_output.log
+          exit_code=${PIPESTATUS[0]}
+          echo "patrol_plus exit code: $exit_code" | tee -a diagnostics/patrol_cli_output.log
+          exit "$exit_code"
+
+      - name: Report offline suite outcome
+        if: always()
+        run: |
+          echo "Offline suite outcome: ${{ steps.patrol_run.outcome }} (conclusion: ${{ steps.patrol_run.conclusion }})"
+
+      - name: Collect simulator syslog around the failure window
+        if: always()
+        run: |
+          mkdir -p diagnostics
+          set +e
+          # Primary: filtered to the app + patrol server processes.
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --last 30m \
+            --predicate 'process CONTAINS "Runner" OR process CONTAINS "patrol"' \
+            > diagnostics/sim_log_filtered.txt 2>&1
+          echo "filtered log show exit code: $?" >> diagnostics/sim_log_filtered.txt
+
+          # Fallback: unfiltered, shorter window, in case the predicate above
+          # was rejected on this Xcode/log(1) version -- keeps us from coming
+          # back with zero log evidence.
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --last 10m \
+            > diagnostics/sim_log_unfiltered.txt 2>&1
+          echo "unfiltered log show exit code: $?" >> diagnostics/sim_log_unfiltered.txt
+
+          wc -l diagnostics/sim_log_filtered.txt diagnostics/sim_log_unfiltered.txt
+          set -e
+
+      - name: Capture simulator/app process state
+        if: always()
+        run: |
+          mkdir -p diagnostics
+          set +e
+          {
+            echo "== xcrun simctl list devices (post-run) =="
+            xcrun simctl list devices
+            echo
+            echo "== xcrun simctl spawn <udid> launchctl list (post-run) =="
+            xcrun simctl spawn "$SIMULATOR_UDID" launchctl list
+          } > diagnostics/simulator_state_post_run.txt 2>&1
+          set -e
+
+      - name: Locate and extract xcresult bundle
+        if: always()
+        run: |
+          mkdir -p diagnostics
+          set +e
+          # patrol_cli_plus writes result bundles to
+          # <project_root>/build/ios_results_<timestamp>.xcresult
+          # (packages/patrol_cli_plus/lib/src/ios/ios_test_backend.dart:
+          # resultBundlePath()). Search there first, then fall back to
+          # DerivedData in case the CLI's root directory assumption changed.
+          XCRESULT="$(find build -maxdepth 2 -iname '*.xcresult' -type d 2>/dev/null | head -n 1)"
+          if [ -z "$XCRESULT" ]; then
+            XCRESULT="$(find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 6 -iname '*.xcresult' -type d 2>/dev/null | head -n 1)"
+          fi
+          echo "XCRESULT=$XCRESULT" | tee diagnostics/xcresult_path.txt
+
+          if [ -n "$XCRESULT" ]; then
+            mkdir -p diagnostics/ios_results.xcresult
+            cp -R "$XCRESULT/." diagnostics/ios_results.xcresult/ 2>&1 | tee diagnostics/xcresult_copy.log
+
+            echo "== xcresulttool get object --legacy (root) ==" | tee diagnostics/xcresult_legacy_root.err
+            xcrun xcresulttool get object --legacy --format json --path "$XCRESULT" \
+              > diagnostics/xcresult_legacy_root.json 2>> diagnostics/xcresult_legacy_root.err
+            echo "legacy root extraction exit code: $?" >> diagnostics/xcresult_legacy_root.err
+
+            TESTS_REF_ID="$(jq -r '.actions._values[0].actionResult.testsRef.id._value // empty' diagnostics/xcresult_legacy_root.json 2>/dev/null)"
+            if [ -n "$TESTS_REF_ID" ]; then
+              xcrun xcresulttool get object --legacy --format json --id "$TESTS_REF_ID" --path "$XCRESULT" \
+                > diagnostics/xcresult_legacy_tests.json 2> diagnostics/xcresult_legacy_tests.err
+              echo "legacy tests extraction exit code: $?" >> diagnostics/xcresult_legacy_tests.err
+            else
+              echo "No testsRef.id found in legacy root object" > diagnostics/xcresult_legacy_tests.err
+            fi
+
+            # Modern xcresulttool surface, as a supplement/fallback in case
+            # --legacy is unsupported or restricted on this Xcode version.
+            echo "== xcresulttool get test-results summary (modern) ==" | tee diagnostics/xcresult_modern.err
+            xcrun xcresulttool get test-results summary --path "$XCRESULT" \
+              > diagnostics/xcresult_modern_summary.json 2>> diagnostics/xcresult_modern.err
+            xcrun xcresulttool get test-results tests --path "$XCRESULT" \
+              > diagnostics/xcresult_modern_tests.json 2>> diagnostics/xcresult_modern.err
+
+            {
+              echo "--- legacy issues (root, if present) ---"
+              jq -r '.. | .testFailureSummaries?._values[]? | (.message._value // empty) as $m | select($m != "") | $m' diagnostics/xcresult_legacy_root.json 2>/dev/null
+              echo "--- legacy issues (tests, if present) ---"
+              jq -r '.. | .testFailureSummaries?._values[]? | (.message._value // empty) as $m | select($m != "") | $m' diagnostics/xcresult_legacy_tests.json 2>/dev/null
+              echo "--- modern failureText (if present) ---"
+              jq -r '.. | .failureText? // empty | select(. != "")' diagnostics/xcresult_modern_tests.json 2>/dev/null
+            } > diagnostics/issues_summary.txt
+          else
+            echo "No .xcresult bundle found under build/ or DerivedData" > diagnostics/issues_summary.txt
+          fi
+          set -e
+
+      - name: List diagnostics payload
+        if: always()
+        run: |
+          find diagnostics -type f -exec ls -lh {} \;
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios26-diagnostics
+          path: packages/oidc/example/diagnostics
+          include-hidden-files: true
+          if-no-files-found: warn
