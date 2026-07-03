@@ -1,3 +1,26 @@
+## 0.15.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**(oidc_darwin): implement flowTimeoutSeconds for the Apple ASWebAuthenticationSession flow. ([482f0186](https://github.com/Bdaya-Dev/oidc/commit/482f0186b8cdb37d309118de187e1c8496555d9a))
+ - **FIX**(example): add patrol RunnerUITests UI-testing target for iOS. ([21b740f6](https://github.com/Bdaya-Dev/oidc/commit/21b740f645be41a0792299660d2a96db26fb378a))
+ - **FIX**(example): wrap patrol conformance placeholder with SharedValue.wrapApp. ([831df91c](https://github.com/Bdaya-Dev/oidc/commit/831df91c7f041a96af10bf1c80ef92f49d45a2c8))
+ - **FIX**(example): use FlutterFragmentActivity for Auth Tab (ComponentActivity). ([e6e9be47](https://github.com/Bdaya-Dev/oidc/commit/e6e9be47683d80897a6dce6f92433408c89155f4))
+ - **FIX**: pre-v1 correctness — certification claim, license, Android queries, honest native option docs. ([3b8ef447](https://github.com/Bdaya-Dev/oidc/commit/3b8ef447f2a1c0af68ec6711c77d435531fb827f))
+ - **FIX**(spm,native): SwiftPM layout migration + conformance fixes; fix Android build. ([47f7bd25](https://github.com/Bdaya-Dev/oidc/commit/47f7bd25feb5d4b7a2e3db67165a44ecdf4dae29))
+ - **FIX**(native): harden iOS threading, simplify Android redirect to one-line setup. ([a7553f32](https://github.com/Bdaya-Dev/oidc/commit/a7553f326c1d67ac2bd057b0864688d73df24661))
+ - **FIX**: handle refresh responses without id_token. ([4af363be](https://github.com/Bdaya-Dev/oidc/commit/4af363bed630d18394b28af1664f334aca3df8d9))
+ - **FEAT**(observability): native browser events via the existing OidcEvent stream (Phase 3). ([91d1f5bd](https://github.com/Bdaya-Dev/oidc/commit/91d1f5bdfa1526aec170474181ec71ad1bf38c59))
+ - **BREAKING** **REFACTOR**: remove rxdart; adopt bdaya_shared_value ^5.0.0. ([0d65d7fd](https://github.com/Bdaya-Dev/oidc/commit/0d65d7fde062e2db7ffbdd31a47735c59954045a))
+ - **BREAKING** **FEAT**(oidc_core): remove the strictJwtVerification fail-open opt-out. ([ee2146f9](https://github.com/Bdaya-Dev/oidc/commit/ee2146f9fa966c352a7c751673550bdcb5e7c0a5))
+ - **BREAKING** **FEAT**(oidc_android): switch to Auth Tab only, remove Custom Tabs path. ([05bf0181](https://github.com/Bdaya-Dev/oidc/commit/05bf01811e299c472d49efb303fb657c939f0bd4))
+ - **BREAKING** **FEAT**(oidc_android): add flowTimeoutSeconds to fix headless CI hang. ([01c844f5](https://github.com/Bdaya-Dev/oidc/commit/01c844f5bd98a3d983b9e50f9fa2192ed7013e50))
+ - **BREAKING** **FEAT**: merge oidc_ios + oidc_macos into a unified oidc_darwin plugin. ([db73858e](https://github.com/Bdaya-Dev/oidc/commit/db73858e71b3b869326867b05b9d1ead3629acb9))
+ - **BREAKING** **FEAT**(options): redesign native options API (v1 clean break, no AppAuth framing). ([a78954fe](https://github.com/Bdaya-Dev/oidc/commit/a78954feb4c4c6dfb0abc15f7e0a308be74d4e95))
+ - **BREAKING** **FEAT**(oidc_macos): first-party ASWebAuthenticationSession; drop flutter_appauth. ([dc13f411](https://github.com/Bdaya-Dev/oidc/commit/dc13f411a3bfca4572a0f0e8fea2705365314d3c))
+ - **BREAKING** **FEAT**: consolidate jose_plus, crypto_keys_plus, x509_plus into the workspace. ([3fffc6cd](https://github.com/Bdaya-Dev/oidc/commit/3fffc6cd51f2abb0ead643acc2ec4d5741fac8e5))
+ - **BREAKING** **CHORE**: v1 dependency upgrade + drop the pigeon global-tool wrapper. ([45b62a3e](https://github.com/Bdaya-Dev/oidc/commit/45b62a3ef3f5b42cfb590111c9e37e144bbc11b0))
+
 ## 0.14.0+2
 
  - **DOCS**: remove logo branding from screenshots. ([2acf65d3](https://github.com/Bdaya-Dev/oidc/commit/2acf65d34fb47c0449653a73373168df3deb1735))
