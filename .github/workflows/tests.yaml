@@ -360,6 +360,11 @@ jobs:
       # relaunch boundaries are exactly what patrol#15 breaks. No conformance
       # token needed; no coverage; fast signal.
       - name: Offline relaunch canary (Patrol)
+        # Step-level timeout so a hang becomes a STEP FAILURE (maskable by the
+        # job's continue-on-error). A job-level timeout instead CANCELS the job,
+        # and a cancelled job drags the run conclusion to 'cancelled' even with
+        # continue-on-error (observed: run 28626433633 attempt 2).
+        timeout-minutes: 25
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
           patrol_plus test \
