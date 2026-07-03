@@ -11,10 +11,10 @@ environment:
   sdk: ">=3.5.0 <4.0.0"
 
 dependencies:
-  crypto_keys_plus: ">=0.4.0 <1.0.0"
+  crypto_keys_plus: ^0.5.0
   meta: ^1.1.6
   typed_data: ^1.0.0
-  x509_plus: ">=0.3.3 <1.0.0"
+  x509_plus: ^0.3.3
   http: ">=0.13.0 <2.0.0"
   http_parser: ^4.0.0
   asn1lib: ^1.0.0
