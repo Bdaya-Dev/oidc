@@ -22,7 +22,6 @@ OidcUserManager conformanceManager(
     redirectUri: redirectUri,
     postLogoutRedirectUri: postLogoutRedirectUri,
     frontChannelLogoutUri: frontChannelLogoutUri,
-    strictJwtVerification: true,
     options: const OidcPlatformSpecificOptions(
       // On headless CI emulators/simulators the system auth browser opens but no
       // user can interact, so the redirect never arrives and

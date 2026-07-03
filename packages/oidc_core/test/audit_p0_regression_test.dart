@@ -1,6 +1,8 @@
 @TestOn('vm')
 library;
 
+import 'dart:convert';
+
 import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -62,8 +64,16 @@ class _TestManager extends OidcUserManagerBase {
   }) => const Stream.empty();
 }
 
+/// Fixed signing key shared by every id_token this file mints, so a single
+/// mocked `/jwks` response (see [_jwksResponseBody]) can verify all of them
+/// under the now-always-strict verification path.
+final JsonWebKey _signingKey = JsonWebKey.generate('RS256');
+final Uri _jwksUri = Uri.parse('https://op.example.com/jwks');
+
+String _jwksResponseBody() =>
+    jsonEncode(JsonWebKeySet.fromKeys([_signingKey]).toJson());
+
 String _signIdToken([Map<String, dynamic>? extra]) {
-  final key = JsonWebKey.generate('RS256');
   return (JsonWebSignatureBuilder()
         ..jsonContent = {
           'iss': 'https://op.example.com',
@@ -78,7 +88,7 @@ String _signIdToken([Map<String, dynamic>? extra]) {
           'iat': clock.now().millisecondsSinceEpoch ~/ 1000,
           ...?extra,
         }
-        ..addRecipient(key, algorithm: 'RS256'))
+        ..addRecipient(_signingKey, algorithm: 'RS256'))
       .build()
       .toCompactSerialization();
 }
@@ -91,15 +101,16 @@ Future<OidcUser> _user() => OidcUser.fromIdToken(
     refreshToken: 'refresh-token-1',
     tokenType: 'Bearer',
   ),
-  strictVerification: false,
 );
 
-/// Discovery metadata that OMITS `grant_types_supported` (and jwks_uri),
-/// exactly like Facebook and other compliant OPs that don't advertise it.
+/// Discovery metadata that OMITS `grant_types_supported`, exactly like
+/// Facebook and other compliant OPs that don't advertise it. `jwks_uri` IS
+/// present (verification is always-strict now, so a real key set is needed).
 OidcProviderMetadata _metadataNoGrantTypes() => OidcProviderMetadata.fromJson({
   'issuer': 'https://op.example.com',
   'authorization_endpoint': 'https://op.example.com/authorize',
   'token_endpoint': 'https://op.example.com/token',
+  'jwks_uri': _jwksUri.toString(),
 });
 
 Future<_TestManager> _build(http.Client client) async {
@@ -112,7 +123,6 @@ Future<_TestManager> _build(http.Client client) async {
     httpClient: client,
     settings: OidcUserManagerSettings(
       redirectUri: Uri.parse('com.example.app://cb'),
-      strictJwtVerification: false,
     ),
   );
   await manager.init();
@@ -127,6 +137,13 @@ void main() {
       () async {
         final tokenCalls = <http.Request>[];
         final client = MockClient((req) async {
+          if (req.url.path.endsWith('/jwks')) {
+            return http.Response(
+              _jwksResponseBody(),
+              200,
+              headers: const {'content-type': 'application/json'},
+            );
+          }
           if (req.url.path.endsWith('/token')) {
             tokenCalls.add(req);
             return http.Response(
@@ -161,6 +178,13 @@ void main() {
       () async {
         final tokenCalls = <http.Request>[];
         final client = MockClient((req) async {
+          if (req.url.path.endsWith('/jwks')) {
+            return http.Response(
+              _jwksResponseBody(),
+              200,
+              headers: const {'content-type': 'application/json'},
+            );
+          }
           if (req.url.path.endsWith('/token')) {
             tokenCalls.add(req);
             return http.Response(

@@ -1,8 +1,43 @@
+import 'package:clock/clock.dart';
+import 'package:http/http.dart' as http;
 import 'package:jose_plus/jose.dart';
-import 'package:logging/logging.dart';
+import 'package:meta/meta.dart';
 import 'package:oidc_core/oidc_core.dart';
 
-final _logger = Logger('Oidc.User');
+/// Minimum time between forced cache-busting JWKS refetches triggered by an
+/// id_token verification failure, per issuer. Prevents a forged/garbage `kid`
+/// from being used to flood the JWKS endpoint (DoS) while still self-healing
+/// a genuine key rotation quickly.
+///
+/// 5 minutes matches Microsoft Entra's key-rollover guidance and the
+/// panva/WorkOS JWKS guide (OpenID Connect Core 1.0 §10.1.1).
+const _jwksForceRefetchCooldown = Duration(minutes: 5);
+
+/// Tracks, per issuer, the last time a verification failure triggered a
+/// forced JWKS refetch. Process-lifetime only (deliberately not persisted):
+/// the goal is rate-limiting a hot loop within a running process, not
+/// surviving restarts.
+@visibleForTesting
+final Map<String, DateTime> jwksForceRefetchTimestamps = {};
+
+bool _shouldForceJwksRefetch(String idToken) {
+  final issuerKey = _tryGetUnverifiedIssuer(idToken) ?? '<unknown-issuer>';
+  final now = clock.now();
+  final last = jwksForceRefetchTimestamps[issuerKey];
+  if (last != null && now.difference(last) < _jwksForceRefetchCooldown) {
+    return false;
+  }
+  jwksForceRefetchTimestamps[issuerKey] = now;
+  return true;
+}
+
+String? _tryGetUnverifiedIssuer(String idToken) {
+  try {
+    return JsonWebToken.unverified(idToken).claims.issuer?.toString();
+  } on Object catch (_) {
+    return null;
+  }
+}
 
 /// A user is a verified JWT id_token, with an optional access_token.
 class OidcUser {
@@ -22,13 +57,19 @@ class OidcUser {
 
   /// Creates a OidcUser from an encoded id_token passed via [token].
   ///
-  /// You can verify the idToken by passing the [keystore] parameter.
+  /// You can verify the idToken by passing the [keystore] parameter. When
+  /// [keystore] is provided, verification is always strict (fail-closed) per
+  /// OpenID Connect Core §3.1.3.7 / §5.3.2 and the OAuth 2.0 Security BCP
+  /// (RFC 9700): an id_token whose signature cannot be verified throws,
+  /// there is no unverified-fallback opt-out. A `kid` absent from the
+  /// current JWKS view triggers one rate-limited, cache-busting refetch
+  /// before failing (key-rotation self-heal — OIDC Core §10.1.1). When
+  /// [keystore] is omitted, the id_token is parsed but left unverified.
   ///
   /// You can also pass optional [attributes] that will get stored
   /// with the user.
   static Future<OidcUser> fromIdToken({
     required OidcToken token,
-    bool strictVerification = true,
     JsonWebKeyStore? keystore,
     OidcStore? cacheStore,
     List<String>? allowedAlgorithms,
@@ -36,6 +77,7 @@ class OidcUser {
     Map<String, dynamic>? userInfo,
     String? idTokenOverride,
     Duration jwksCacheMaxAge = const Duration(days: 1),
+    http.Client? httpClient,
   }) async {
     final idToken = idTokenOverride ?? token.idToken;
     if (idToken == null) {
@@ -48,8 +90,8 @@ class OidcUser {
       idToken,
       allowedAlgorithms,
       cacheStore,
-      strictVerification,
       jwksCacheMaxAge,
+      httpClient,
     );
 
     return OidcUser._(
@@ -68,8 +110,8 @@ class OidcUser {
     String idToken,
     List<String>? allowedAlgorithms,
     OidcStore? cacheStore,
-    bool strictVerification,
     Duration jwksCacheMaxAge,
+    http.Client? httpClient,
   ) async {
     JsonWebToken webToken;
 
@@ -86,32 +128,54 @@ class OidcUser {
       final algs = allowedAlgorithms
           ?.where((a) => a.toLowerCase() != 'none')
           .toList();
-      try {
-        webToken = await JsonWebKeySetLoader.runZoned(
-          () async {
-            return JsonWebToken.decodeAndVerify(
-              idToken,
-              keystore,
-              allowedArguments: algs,
-            );
-          },
+
+      Future<JsonWebToken> attemptVerify({required bool forceFreshJwks}) {
+        return JsonWebKeySetLoader.runZoned(
+          () => JsonWebToken.decodeAndVerify(
+            idToken,
+            keystore,
+            allowedArguments: algs,
+          ),
           loader: cacheStore == null
-              ? null
+              ? (forceFreshJwks
+                    // No OidcStore to persist an offline fallback to: force a
+                    // brand-new, cache-busted loader instance so the retry
+                    // bypasses BOTH this call's own cache AND the long-lived
+                    // process-wide default loader's TTL cache (which can
+                    // otherwise mask a just-rotated key for its full TTL).
+                    ? OidcForceFreshJwksLoader(httpClient: httpClient)
+                    // First attempt: preserve existing behavior (the
+                    // process-wide default loader) unless a caller supplied
+                    // an explicit httpClient (e.g. for testing).
+                    : (httpClient == null
+                          ? null
+                          : DefaultJsonWebKeySetLoader(httpClient: httpClient)))
               : OidcJwksStoreLoader(
                   store: cacheStore,
                   staleCacheMaxAge: jwksCacheMaxAge,
+                  forceFresh: forceFreshJwks,
+                  httpClient: httpClient,
                 ),
         );
-      } catch (e, st) {
-        if (strictVerification) {
+      }
+
+      try {
+        webToken = await attemptVerify(forceFreshJwks: false);
+      } catch (e) {
+        // The id_token's `kid` may reference a signing key that rotated in
+        // after our (possibly cached/CDN-served) JWKS view was read. Per
+        // OIDC Core §10.1.1 and the Entra/Cognito/panva key-rotation
+        // guidance: force exactly ONE fresh, cache-busting JWKS refetch and
+        // retry before giving up — rate-limited per issuer
+        // ([_shouldForceJwksRefetch]) so a forged/garbage `kid` can't be used
+        // to flood the JWKS endpoint. A failure past this point is fatal: an
+        // id_token whose signature cannot be verified is always rejected
+        // (OpenID Connect Core §3.1.3.7 / §5.3.2, OAuth 2.0 Security BCP RFC
+        // 9700) — there is no unverified-fallback opt-out.
+        if (!_shouldForceJwksRefetch(idToken)) {
           rethrow;
         }
-        _logger.warning(
-          'Failed to verify id_token, using unverified instead.',
-          e,
-          st,
-        );
-        webToken = JsonWebToken.unverified(idToken);
+        webToken = await attemptVerify(forceFreshJwks: true);
       }
     }
     return webToken;
@@ -168,10 +232,10 @@ class OidcUser {
   Future<OidcUser> replaceToken(
     OidcToken newToken, {
     String? idTokenOverride,
-    bool strictVerification = true,
     OidcStore? cacheStore,
     bool allowExpiredIdToken = false,
     Duration jwksCacheMaxAge = const Duration(days: 1),
+    http.Client? httpClient,
   }) async {
     final idToken = idTokenOverride ?? newToken.idToken ?? this.idToken;
 
@@ -182,8 +246,8 @@ class OidcUser {
         idToken,
         allowedAlgorithms,
         cacheStore,
-        strictVerification,
         jwksCacheMaxAge,
+        httpClient,
       );
     } else {
       webToken = parsedIdToken;

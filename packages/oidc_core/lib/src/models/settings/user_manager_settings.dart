@@ -73,7 +73,6 @@ class OidcUserManagerSettings {
     this.frontChannelRequestListeningOptions =
         const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
-    this.strictJwtVerification = true,
     this.allowedIdTokenAlgorithms,
     this.strictIssuerValidation = false,
     this.verifySignedMetadata = false,
@@ -102,22 +101,6 @@ class OidcUserManagerSettings {
 
   /// Settings to control using the user_info endpoint.
   final OidcUserInfoSettings userInfoSettings;
-
-  /// Whether id_token signatures are strictly verified (fail-closed).
-  ///
-  /// When `true` (the default), an id_token whose signature cannot be verified
-  /// against the OP's JWKS is **rejected** (an exception is thrown). When
-  /// `false`, a verification failure is logged and the token is accepted
-  /// *unverified* — which means a forged or tampered id_token would be trusted.
-  ///
-  /// This ALSO governs signed UserInfo responses: when `true`, an
-  /// `application/jwt` UserInfo response that cannot be verified (no keyStore /
-  /// no usable keys) is **rejected**; when `false` it is parsed *unverified*.
-  ///
-  /// Defaults to `true` per OpenID Connect Core §3.1.3.7 / §5.3.2 and the
-  /// OAuth 2.0 Security BCP (RFC 9700). Only set this to `false` if you fully
-  /// understand the risk (e.g. a controlled test environment).
-  final bool strictJwtVerification;
 
   /// Optional explicit allowlist of JWS signing algorithms (canonical JWA
   /// names, e.g. `['RS256','ES256']`) that an id_token's `alg` header is
@@ -171,11 +154,10 @@ class OidcUserManagerSettings {
   /// the plain JSON is used as-is — preserving out-of-the-box Microsoft Entra /
   /// Azure AD B2C compatibility (those IdPs do not emit `signed_metadata`).
   ///
-  /// On a verification failure the existing [strictJwtVerification] knob decides
-  /// throw-vs-warn (strict = throw + don't persist; lenient = warn + fall back
-  /// to the plain document). Recommend `true` (with
-  /// [allowedSignedMetadataAlgorithms] pinned) for FAPI / high-assurance
-  /// deployments.
+  /// On a verification failure, the document is refused and NOT persisted
+  /// (fail-closed — there is no fall back to the unverified plain document).
+  /// Recommend `true` (with [allowedSignedMetadataAlgorithms] pinned) for
+  /// FAPI / high-assurance deployments.
   final bool verifySignedMetadata;
 
   /// Optional explicit allowlist of JWS algorithms permitted for the

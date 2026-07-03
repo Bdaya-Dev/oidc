@@ -36,7 +36,8 @@ OidcToken _tokenWith(String idToken) => OidcToken(
 
 void main() {
   test(
-    'fromIdToken rejects an unverifiable signature by default (fail-closed)',
+    'fromIdToken always rejects an unverifiable/bad signature (fail-closed, '
+    'no unverified-fallback opt-out)',
     () async {
       final signingKey = JsonWebKey.generate('RS256');
       final idToken = await _signIdToken(signingKey, _baseClaims());
@@ -46,7 +47,6 @@ void main() {
         ..addKey(JsonWebKey.generate('RS256'));
 
       await expectLater(
-        // No strictVerification arg -> exercises the fail-closed DEFAULT.
         OidcUser.fromIdToken(
           token: _tokenWith(idToken),
           keystore: foreignKeystore,
@@ -56,24 +56,6 @@ void main() {
       );
     },
   );
-
-  test('fromIdToken accepts an unverifiable signature only when strict '
-      'verification is explicitly disabled', () async {
-    final signingKey = JsonWebKey.generate('RS256');
-    final idToken = await _signIdToken(signingKey, _baseClaims());
-    final foreignKeystore = JsonWebKeyStore()
-      ..addKey(JsonWebKey.generate('RS256'));
-
-    final user = await OidcUser.fromIdToken(
-      token: _tokenWith(idToken),
-      keystore: foreignKeystore,
-      strictVerification: false,
-      allowedAlgorithms: const ['RS256'],
-    );
-    // The unverified token is still parsed (claims readable) but NOT verified.
-    expect(user.claims.subject, 'user-1');
-    expect(user.parsedIdToken.isVerified, isNot(true));
-  });
 
   test('fromIdToken accepts a signature the keystore can verify', () async {
     final signingKey = JsonWebKey.generate('RS256');

@@ -164,7 +164,6 @@ final duendeManager = OidcUserManager.lazy(
     refreshBefore: (token) {
       return const Duration(seconds: 5);
     },
-    strictJwtVerification: true,
     // set to true to enable offline auth
     supportOfflineAuth: true,
     // Scopes supported by the provider and needed by the client.
@@ -237,7 +236,6 @@ final duendeManager = OidcUserManager.lazy(
 //   ),
 //   store: OidcDefaultStore(),
 //   settings: OidcUserManagerSettings(
-//     strictJwtVerification: true,
 //     scope: ['profile', 'email'],
 //     redirectUri: Uri.parse('http://localhost:22433/redirect.html'),
 //     frontChannelLogoutUri: Uri.parse(

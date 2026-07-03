@@ -91,7 +91,6 @@ Future<_TestManager> _buildManager({
     ),
     settings: OidcUserManagerSettings(
       redirectUri: Uri.parse('com.example.app://cb'),
-      strictJwtVerification: false,
     ),
     buildErrorResponse: buildErrorResponse,
   );

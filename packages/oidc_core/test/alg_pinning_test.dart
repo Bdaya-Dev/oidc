@@ -80,7 +80,6 @@ OidcProviderMetadata _meta(List<String>? algs) =>
 _PinManager _manager({
   List<String>? pin,
   JsonWebKeyStore? keyStore,
-  bool strict = true,
   List<String>? opAlgs,
 }) => _PinManager(
   discoveryDocument: _meta(opAlgs),
@@ -89,7 +88,6 @@ _PinManager _manager({
   settings: OidcUserManagerSettings(
     redirectUri: Uri.parse('com.example.app://cb'),
     allowedIdTokenAlgorithms: pin,
-    strictJwtVerification: strict,
   ),
   keyStore: keyStore,
 );
@@ -350,30 +348,6 @@ void main() {
           throwsA(anything),
           reason: 'canonical uppercase JWA names are required',
         );
-      },
-    );
-
-    test(
-      'strictJwtVerification=false + pin [RS256] + HS256 token => downgraded '
-      'to an unverified token (the pin only hardens the strict path)',
-      () async {
-        const secret = 'a-very-secret-client-secret-value-0123456789';
-        final hsKey = JsonWebKey.fromJson({
-          'kty': 'oct',
-          'k': base64Url.encode(utf8.encode(secret)).replaceAll('=', ''),
-          'alg': 'HS256',
-        })!;
-        final m = _manager(pin: const ['RS256'], strict: false);
-        final ks = JsonWebKeyStore()..addKey(_octFromSecret(secret));
-        final user = await OidcUser.fromIdToken(
-          token: _tokenWith(_signHs(hsKey, _baseClaims())),
-          keystore: ks,
-          strictVerification: false,
-          allowedAlgorithms: m.resolvePin(_meta(const ['RS256', 'HS256'])),
-        );
-        // Built, but NOT verified (fail-open opt-out path).
-        expect(user.parsedIdToken.isVerified, isNot(isTrue));
-        expect(user.claims.subject, 'user-1');
       },
     );
   });

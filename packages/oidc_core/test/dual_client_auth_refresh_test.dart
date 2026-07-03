@@ -16,6 +16,7 @@ class _TestManager extends OidcUserManagerBase {
     required super.store,
     required super.settings,
     super.httpClient,
+    super.keyStore,
   });
 
   void seed(OidcUser user) => userSubject.add(user);
@@ -60,8 +61,12 @@ class _TestManager extends OidcUserManagerBase {
   }) => const Stream.empty();
 }
 
+/// Fixed signing key shared by every id_token this file mints, so it
+/// verifies under the now-always-strict verification path when registered
+/// directly on the test manager's keyStore (see [_build]).
+final _signingKey = JsonWebKey.generate('RS256');
+
 String _signIdToken() {
-  final key = JsonWebKey.generate('RS256');
   return (JsonWebSignatureBuilder()
         ..jsonContent = {
           'iss': 'https://op.example.com',
@@ -75,7 +80,7 @@ String _signIdToken() {
               1000,
           'iat': clock.now().millisecondsSinceEpoch ~/ 1000,
         }
-        ..addRecipient(key, algorithm: 'RS256'))
+        ..addRecipient(_signingKey, algorithm: 'RS256'))
       .build()
       .toCompactSerialization();
 }
@@ -88,7 +93,6 @@ Future<OidcUser> _user() => OidcUser.fromIdToken(
     refreshToken: 'refresh-token-1',
     tokenType: 'Bearer',
   ),
-  strictVerification: false,
 );
 
 OidcProviderMetadata _metadata() => OidcProviderMetadata.fromJson({
@@ -111,8 +115,8 @@ Future<_TestManager> _build(http.Client client) async {
     httpClient: client,
     settings: OidcUserManagerSettings(
       redirectUri: Uri.parse('com.example.app://cb'),
-      strictJwtVerification: false,
     ),
+    keyStore: JsonWebKeyStore()..addKey(_signingKey),
   );
   await manager.init();
   manager.seed(await _user());
