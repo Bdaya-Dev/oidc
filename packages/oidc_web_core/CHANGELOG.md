@@ -1,3 +1,31 @@
+## 0.5.0
+
+- **FEAT**: encrypt the `secureTokens` namespace (access/refresh/id tokens,
+  the OIDC nonce) at rest in `OidcWebStore`. AES-GCM via WebCrypto, with a
+  non-extractable 256-bit key persisted (as a structured-clone `CryptoKey`
+  object, never its raw bytes) in IndexedDB and a fresh random IV per write.
+  Values are stored as a versioned `oidcenc.v1.<iv>.<ciphertext>` envelope.
+  This is **defense-in-depth against disk/backup scraping and casual
+  inspection -- it is NOT protection against XSS**: same-origin script can
+  still call `crypto.subtle.decrypt` or simply read decrypted tokens back
+  out through the `OidcStore` API. Harden against XSS itself (CSP, trusted
+  types, dependency hygiene) and prefer a BFF for high-value applications.
+  (audit #324 item 15)
+  - No new required settings: `const OidcWebStore()` still works, and
+    encryption is on by default (`OidcWebStoreEncryption.preferred`).
+  - Values written before this feature (or written by the `preferred`
+    fallback) are read through transparently and re-encrypted on next write
+    -- no forced re-login. This migration is **forward-only**: downgrading
+    to a version predating this feature will see encrypted values as opaque
+    strings.
+  - If WebCrypto/IndexedDB are unavailable (a non-secure-context origin, or
+    IndexedDB disabled/ephemeral in some private-browsing modes), the
+    default `preferred` mode falls back to the previous plaintext behavior
+    with a one-shot warning; pass `encryption: OidcWebStoreEncryption.required`
+    to throw an `OidcException` instead of ever writing plaintext.
+  - No new dependencies: WebCrypto and IndexedDB are both already exposed by
+    `package:web`.
+
 ## 0.4.0+3
 
  - **DOCS**: remove logo branding from screenshots. ([2acf65d3](https://github.com/Bdaya-Dev/oidc/commit/2acf65d34fb47c0449653a73373168df3deb1735))
