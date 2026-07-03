@@ -6,6 +6,12 @@
 #
 # workflow_dispatch only -- intentionally NOT wired into any push/PR trigger
 # and does NOT modify tests.yaml. Safe to delete once patrol#15 is diagnosed.
+#
+# Run 1 (macos-latest, 2026-07-03): landed on Xcode 16.4 / macOS 15.7.7, NOT
+# Xcode 26.5 -- macos-latest currently appears to still resolve to the
+# macos-15-equivalent image, not the newer macos-26 image (which does exist
+# per actions/runner-images and ships Xcode 26.5 command line tools). Pinning
+# runs-on to macos-26 explicitly to reliably target the intended environment.
 name: iOS 26 Diagnostic (patrol#15)
 
 on:
@@ -16,7 +22,7 @@ permissions:
 
 jobs:
   ios26_diagnostic:
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 40
     defaults:
       run:
@@ -38,6 +44,12 @@ jobs:
             echo
             echo "== xcodebuild -version =="
             xcodebuild -version
+            echo
+            echo "== xcode-select -p =="
+            xcode-select -p
+            echo
+            echo "== available Xcode installs (/Applications) =="
+            ls -1d /Applications/Xcode*.app 2>&1
             echo
             echo "== xcrun simctl list runtimes =="
             xcrun simctl list runtimes
