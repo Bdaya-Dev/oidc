@@ -1,3 +1,11 @@
+## 2.0.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**(oidc_darwin): implement flowTimeoutSeconds for the Apple ASWebAuthenticationSession flow. ([482f0186](https://github.com/Bdaya-Dev/oidc/commit/482f0186b8cdb37d309118de187e1c8496555d9a))
+ - **DOCS**(oidc_darwin): add the on-device verification checklist. ([b22a1c06](https://github.com/Bdaya-Dev/oidc/commit/b22a1c06316a33198dbcd2826bee4fe4f9c608c8))
+ - **BREAKING** **FEAT**: merge oidc_ios + oidc_macos into a unified oidc_darwin plugin. ([db73858e](https://github.com/Bdaya-Dev/oidc/commit/db73858e71b3b869326867b05b9d1ead3629acb9))
+
 ## 1.0.0
 
  - **FEAT**: initial release of `oidc_darwin`, the unified iOS + macOS
