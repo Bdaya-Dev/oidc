@@ -40,7 +40,7 @@ dependency_overrides:
   patrol_plus:
     git:
       url: https://github.com/Bdaya-Dev/patrol.git
-      ref: 6e45af3681ea1294b7f6b2571442f32afc6cdd5a
+      ref: e59db2853eb2c21956d8e62df80716b6ebadc56f
       path: packages/patrol_plus
 
 

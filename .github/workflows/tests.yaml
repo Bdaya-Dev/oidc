@@ -333,7 +333,7 @@ jobs:
         # to 30s (was a hardcoded 1s -> exit-70 device-resolution races on the
         # slow macos-26 simulator). Revert to the pub.dev activation once the
         # fork PR is merged + released.
-        run: dart pub global activate --source git https://github.com/Bdaya-Dev/patrol.git --git-ref 6e45af3681ea1294b7f6b2571442f32afc6cdd5a --git-path packages/patrol_cli_plus
+        run: dart pub global activate --source git https://github.com/Bdaya-Dev/patrol.git --git-ref e59db2853eb2c21956d8e62df80716b6ebadc56f --git-path packages/patrol_cli_plus
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
