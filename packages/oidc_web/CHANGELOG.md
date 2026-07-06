@@ -1,3 +1,7 @@
+## 0.7.1
+
+ - **FEAT**(oidc_web_core): encrypt secureTokens at rest (AES-GCM via WebCrypto) ([#324](https://github.com/Bdaya-Dev/oidc/issues/324) item 15). ([cf504300](https://github.com/Bdaya-Dev/oidc/commit/cf504300b1922a7f68a82c39ab8dfb42aafe487d))
+
 ## 0.7.0+3
 
  - **DOCS**: remove logo branding from screenshots. ([2acf65d3](https://github.com/Bdaya-Dev/oidc/commit/2acf65d34fb47c0449653a73373168df3deb1735))
