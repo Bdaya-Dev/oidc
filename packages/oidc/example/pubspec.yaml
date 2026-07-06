@@ -39,7 +39,7 @@ dev_dependencies:
   # matching CLI, patrol_cli_plus, is activated globally in CI. Web tests run
   # via Playwright (no flutter-drive/DWDS), which sidesteps Flutter's DWDS
   # startup race (flutter/flutter#181357).
-  patrol_plus: ^5.0.1
+  patrol_plus: ^5.6.1  # >=5.6.1 for the Xcode-26 iOS CI fixes (terminate suppression)
   very_good_analysis: ^10.0.0
 
 # Patrol CLI config (patrol_cli_plus is activated globally in CI, not depended

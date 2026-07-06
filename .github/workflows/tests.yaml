@@ -222,16 +222,31 @@ jobs:
           if-no-files-found: error
 
   ios:
-    # Pinned to macos-15 (Xcode 16.4 / iOS-18 sim). On the macOS-26 image
-    # (Xcode 26.5, iOS 26.4 simruntime) XCUITest's app relaunch between
-    # patrolTests still fails ("Failed to terminate com.bdayadev:...") even
-    # with patrol_plus 5.1.0's explicit-terminate + recordIssue suppression:
-    # 2/3 offline_mode tests fail and the patrol app server at ::1.8082 is
-    # unreachable (run 28593820533, job 84783903097, 2026-07-02). Note the
-    # conformance test DOES pass on iOS-26 thanks to
-    # OidcNativeOptionsApple.flowTimeoutSeconds. Unpin once the patrol fork
-    # fix is validated on Xcode 26.5 (tracking: Bdaya-Dev/patrol#15).
-    runs-on: macos-15
+    # Gating iOS environment: macos-26 image, Xcode 26.6 (selected explicitly
+    # in the step below), iOS 26 simulator. Previously pinned to macos-15
+    # (Xcode 16.4) because XCUITest's app relaunch between patrolTests failed
+    # on Xcode 26 ("Failed to terminate com.bdayadev:..." -> xcodebuild exit
+    # 65) even though every Dart test passed. That is now fixed in our patrol
+    # fork and shipped to pub.dev:
+    #   - patrol_plus >= 5.6.1 suppresses the benign XCUITest app
+    #     relaunch/terminate framework failures (Bdaya-Dev/patrol#15) so they
+    #     no longer fail the run; a genuine Dart-test failure is unaffected.
+    #   - patrol_cli_plus >= 5.4.1 defaults xcodebuild's -destination-timeout
+    #     to 30s (was a hardcoded 1s), fixing the exit-70 device-resolution
+    #     race on the slow macos-26 simulator.
+    # Validated green across multiple full-suite runs with the flake firing
+    # and being suppressed each time; the macos-15 pin is lifted. Xcode 26.6
+    # (not the image default 26.5) is selected because the XCUITest relaunch
+    # flake is markedly rarer on 26.6.
+    #
+    # The Start Simulator step uses `simctl bootstatus -b` (not `simctl boot`)
+    # to close a separate CoreSimulatorService registration race: `simctl
+    # boot` returns before the device is registered with Xcode's destination
+    # resolver, so `xcodebuild -destination id=<udid>` can fail with "Unable
+    # to find a device matching the provided destination specifier" (exit 70)
+    # for a booted UDID. `bootstatus -b` boots and blocks until the device is
+    # actually registered.
+    runs-on: macos-26
     timeout-minutes: 60
     defaults:
       run:
@@ -239,110 +254,23 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+      - name: Select Xcode 26.6
+        # The macos-26 image ships several Xcode versions side by side; its
+        # default is 26.5. The patrol#15 XCUITest terminate flake is markedly
+        # less frequent on 26.6, so select it explicitly when present.
+        run: |
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.6.app
+          else
+            echo "::warning::Xcode 26.6 not found; available Xcodes:"
+            ls -d /Applications/Xcode_*.app || true
+          fi
+          xcodebuild -version
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
         # with:
         #   channel: master
         #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
-      - name: Start Simulator
-        # Boot an available iPhone simulator and capture BOTH its UDID and its
-        # runtime version. patrol_cli_plus >= 5.0.3 targets the simulator by UDID
-        # (`-destination id=<udid>`) in the test-without-building step, but its
-        # BUILD step (build_ios.dart:195) still builds the xcodebuild destination
-        # as `platform=iOS Simulator,OS=<--ios>,name=<device name>`, defaulting
-        # --ios to `latest` (app_options.dart:290). `OS=latest` can produce a test
-        # product the booted runtime cannot execute -> "Unable to find a device
-        # matching the provided destination specifier" / exit 70. So pass the sim's
-        # REAL OS via `--ios $SIMULATOR_OS`. Parsed from simctl JSON so it tracks
-        # whatever runtime the macOS runner image ships.
-        run: |
-          SIM_JSON="$(xcrun simctl list devices available --json)"
-          RUNTIME_KEY="$(echo "$SIM_JSON" | jq -r '.devices | to_entries[] | select(.key|test("SimRuntime.iOS")) | select([.value[]|select(.name|startswith("iPhone"))]|length>0) | .key' | head -n 1)"
-          UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
-          OS_VER="$(echo "$RUNTIME_KEY" | sed -E 's/.*SimRuntime\.iOS-([0-9]+)-([0-9]+).*/\1.\2/')"
-          echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY)"
-          xcrun simctl boot "${UDID:?No available iPhone simulator found}"
-          echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
-          echo "SIMULATOR_OS=${OS_VER:?Could not parse simulator OS version}" >> "$GITHUB_ENV"
-      - name: Wait for Simulator to be Ready
-        run: |
-          COUNT=0
-          MAX_RETRIES=12  # Wait for a maximum of 12 * 5 = 60 seconds
-          until xcrun simctl list devices | grep -q "Booted"; do
-            if [ $COUNT -ge $MAX_RETRIES ]; then
-              echo "Simulator did not boot within the expected time."
-              exit 1
-            fi
-            echo "Waiting for simulator to boot... Attempt: $((COUNT+1))"
-            sleep 20
-            COUNT=$((COUNT+1))
-          done
-          echo "Simulator is ready."
-      - name: Run flutter precache
-        run: flutter precache -v
-      - name: Run flutter doctor
-        run: flutter doctor -v
-      - name: Activate Patrol CLI (patrol_cli_plus)
-        run: dart pub global activate patrol_cli_plus
-      - name: Integration Tests (Patrol)
-        run: |
-          export PATH="$PATH:$HOME/.pub-cache/bin"
-          # Runs every patrol_test/*_test.dart (conformance + e2e + offline) on
-          # the iOS simulator and collects Dart coverage via the VM service.
-          patrol_plus test \
-            --coverage \
-            --coverage-ignore="**/*.g.dart" \
-            --coverage-package oidc \
-            -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
-            --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
-            --verbose \
-            --dart-define=CI=true \
-            --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
-          cp coverage/patrol_lcov.info coverage/ios-coverage.info
-        working-directory: packages/oidc/example
-        env:
-          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
-      - name: Upload Coverage Report
-        uses: actions/upload-artifact@v7
-        with:
-          name: ios-integration-coverage
-          path: packages/oidc/example/coverage/ios-coverage.info
-          include-hidden-files: true
-          if-no-files-found: error
-  # Canary for Xcode 26.5, pinned to the explicit `macos-26` label rather
-  # than `macos-latest`. As of 2026-07-03, `macos-latest` still resolves to
-  # the macos-15-arm64 image (Xcode 16.4) -- confirmed empirically: run
-  # 28665781383 (runs-on: macos-latest) landed on Xcode 16.4, while run
-  # 28667951809 (runs-on: macos-26) landed on Xcode 26.5. Using macos-latest
-  # here would silently test the wrong environment and defeat the purpose
-  # of this canary.
-  #
-  # The structural relaunch failure (patrol#15) appears RESOLVED on Xcode
-  # 26.5: 3/3 offline tests pass with a clean xcresult on both local Xcode
-  # 26.6 and the GH-hosted lab image's Xcode 26.5. This canary now exists to
-  # catch regressions and confirm sustained green on macos-26 before
-  # unpinning the gating `ios` job. When this canary is consistently green,
-  # move `ios` back to a floating label and delete this job.
-  #
-  # --coverage (mirroring the gating `ios` job's flags) is required here even
-  # though this job discards the coverage output: without it, patrol_plus
-  # never exits post-xcodebuild (patrol#24) and the step times out
-  # regardless of whether the tests themselves pass.
-  #
-  # Tracking: Bdaya-Dev/patrol#15, Bdaya-Dev/patrol#24.
-  # continue-on-error: its result never gates CI by construction.
-  ios_canary:
-    runs-on: macos-26
-    continue-on-error: true
-    timeout-minutes: 40
-    defaults:
-      run:
-        working-directory: packages/oidc/example
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-      - name: Set up Environment
-        uses: ./.github/actions/integration_test_base
       - name: Start Simulator
         # `xcrun simctl boot` only *initiates* the boot and returns almost
         # immediately; `simctl list devices` can report "Booted" before
@@ -375,12 +303,9 @@ jobs:
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
           echo "SIMULATOR_OS=${OS_VER:?Could not parse simulator OS version}" >> "$GITHUB_ENV"
       - name: Wait for Simulator to be Ready
-        # Redundant with `simctl bootstatus -b` above (which already blocks
-        # until booted) but kept as a cheap defense-in-depth check -- it
-        # passes on the first iteration once bootstatus has returned.
         run: |
           COUNT=0
-          MAX_RETRIES=12
+          MAX_RETRIES=12  # Wait for a maximum of 12 * 5 = 60 seconds
           until xcrun simctl list devices | grep -q "Booted"; do
             if [ $COUNT -ge $MAX_RETRIES ]; then
               echo "Simulator did not boot within the expected time."
@@ -393,30 +318,37 @@ jobs:
           echo "Simulator is ready."
       - name: Run flutter precache
         run: flutter precache -v
+      - name: Run flutter doctor
+        run: flutter doctor -v
       - name: Activate Patrol CLI (patrol_cli_plus)
+        # patrol_cli_plus >= 5.4.1 defaults xcodebuild -destination-timeout to 30s,
+        # fixing the exit-70 device-resolution race on the slow macos-26 simulator.
         run: dart pub global activate patrol_cli_plus
-      # Offline suite only: 3 sequential patrolTests whose between-test
-      # relaunch boundaries are exactly what patrol#15 breaks. No conformance
-      # token needed. --coverage below is required to avoid the patrol#24
-      # CLI-never-exits hang, not to collect coverage data for this
-      # non-gating job.
-      - name: Offline relaunch canary (Patrol)
-        # Step-level timeout so a hang becomes a STEP FAILURE (maskable by the
-        # job's continue-on-error). A job-level timeout instead CANCELS the job,
-        # and a cancelled job drags the run conclusion to 'cancelled' even with
-        # continue-on-error (observed: run 28626433633 attempt 2).
-        timeout-minutes: 25
+      - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
+          # Runs every patrol_test/*_test.dart (conformance + e2e + offline) on
+          # the iOS simulator and collects Dart coverage via the VM service.
           patrol_plus test \
-            -t patrol_test/offline_mode_test.dart \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-package oidc \
             -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
             --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
             --verbose \
-            --dart-define=CI=true
+            --dart-define=CI=true \
+            --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
+          cp coverage/patrol_lcov.info coverage/ios-coverage.info
+        working-directory: packages/oidc/example
+        env:
+          OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-integration-coverage
+          path: packages/oidc/example/coverage/ios-coverage.info
+          include-hidden-files: true
+          if-no-files-found: error
 
   web:
     strategy:
