@@ -254,6 +254,18 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+      - name: Select Xcode 26.6
+        # The macos-26 image ships several Xcode versions side by side; its
+        # default is 26.5. The patrol#15 XCUITest terminate flake is markedly
+        # less frequent on 26.6, so select it explicitly when present.
+        run: |
+          if [ -d /Applications/Xcode_26.6.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.6.app
+          else
+            echo "::warning::Xcode 26.6 not found; available Xcodes:"
+            ls -d /Applications/Xcode_*.app || true
+          fi
+          xcodebuild -version
       - name: Set up Environment
         uses: ./.github/actions/integration_test_base
         # with:
@@ -309,7 +321,12 @@ jobs:
       - name: Run flutter doctor
         run: flutter doctor -v
       - name: Activate Patrol CLI (patrol_cli_plus)
-        run: dart pub global activate patrol_cli_plus
+        # Validation: consume the patched CLI from the fork branch
+        # (fix/xcode26-ios-ci-stability), which defaults -destination-timeout
+        # to 30s (was a hardcoded 1s -> exit-70 device-resolution races on the
+        # slow macos-26 simulator). Revert to the pub.dev activation once the
+        # fork PR is merged + released.
+        run: dart pub global activate --source git https://github.com/Bdaya-Dev/patrol.git --git-ref fix/xcode26-ios-ci-stability --git-path packages/patrol_cli_plus
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"

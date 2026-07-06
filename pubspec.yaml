@@ -33,6 +33,15 @@ dev_dependencies:
 
 dependency_overrides:
   matcher: 0.12.18
+  # Xcode-26 iOS CI validation: consume the patched patrol_plus (widened
+  # recordIssue terminate-suppression for the non-System "Failed to terminate"
+  # variant on Xcode 26) from the Bdaya-Dev/patrol fork branch. Revert to the
+  # published version once fix/xcode26-ios-ci-stability is merged + released.
+  patrol_plus:
+    git:
+      url: https://github.com/Bdaya-Dev/patrol.git
+      ref: fix/xcode26-ios-ci-stability
+      path: packages/patrol_plus
 
 
 melos:
