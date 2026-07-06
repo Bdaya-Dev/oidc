@@ -252,7 +252,7 @@ jobs:
         # VALIDATION ONLY: fan the gating iOS job across parallel runs to
         # sample the intermittent macos-26 XCUITest flake rate in one CI run.
         # Remove before finalizing the real unpin PR.
-        attempt: [1, 2, 3]
+        attempt: [1, 2, 3, 4, 5]
     runs-on: macos-26
     timeout-minutes: 60
     defaults:
@@ -333,7 +333,7 @@ jobs:
         # to 30s (was a hardcoded 1s -> exit-70 device-resolution races on the
         # slow macos-26 simulator). Revert to the pub.dev activation once the
         # fork PR is merged + released.
-        run: dart pub global activate --source git https://github.com/Bdaya-Dev/patrol.git --git-ref fix/xcode26-ios-ci-stability --git-path packages/patrol_cli_plus
+        run: dart pub global activate --source git https://github.com/Bdaya-Dev/patrol.git --git-ref 6e45af3681ea1294b7f6b2571442f32afc6cdd5a --git-path packages/patrol_cli_plus
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"

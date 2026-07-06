@@ -40,7 +40,7 @@ dependency_overrides:
   patrol_plus:
     git:
       url: https://github.com/Bdaya-Dev/patrol.git
-      ref: fix/xcode26-ios-ci-stability
+      ref: 6e45af3681ea1294b7f6b2571442f32afc6cdd5a
       path: packages/patrol_plus
 
 
