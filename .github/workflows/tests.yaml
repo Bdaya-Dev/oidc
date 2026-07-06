@@ -246,6 +246,13 @@ jobs:
     # until CoreSimulatorService reports it has *actually* finished booting,
     # closing this race at the source instead of relying on `simctl list`
     # polling downstream.
+    strategy:
+      fail-fast: false
+      matrix:
+        # VALIDATION ONLY: fan the gating iOS job across parallel runs to
+        # sample the intermittent macos-26 XCUITest flake rate in one CI run.
+        # Remove before finalizing the real unpin PR.
+        attempt: [1, 2, 3]
     runs-on: macos-26
     timeout-minutes: 60
     defaults:
