@@ -75,6 +75,38 @@ jobs:
       - name: "[Coverage] Format & print test coverage"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run coverage:combine
+      - name: "[Coverage] Assert Flutter package coverage survived"
+        if: ${{ matrix.sdk == 'stable' }}
+        # Regression guard. `flutter test --coverage` writes coverage/lcov.info
+        # directly; running coverage:format_coverage over that directory finds
+        # no VM hitmap .json, exits 0, and truncates the file to 0 bytes. That
+        # silently dropped every Flutter package's unit coverage from the
+        # upload with no failing step. Fail loudly if it ever comes back.
+        # This step deliberately avoids two constructs that produced a phantom
+        # exit 1 on its previous two runs even though (per the diagnostics)
+        # every assertion passed: a trailing explicit `exit $missing` under
+        # this workflow's `bash -leo pipefail` login shell, and a
+        # SIGPIPE-generating `grep | head` pipe. The success path now ends by
+        # falling off the end of the script after a successful echo, exactly
+        # like every step of this job that has ever gone green.
+        run: |
+          wc -c coverage/lcov.info || true
+          echo "guard: first 10 SF entries:"
+          grep -o -m 10 'SF:[^[:cntrl:]]*' coverage/lcov.info || true
+          missing=0
+          for p in oidc oidc_default_store oidc_platform_interface oidc_desktop; do
+            n=$(grep -c "packages/$p/lib/" coverage/lcov.info || true)
+            n=${n:-0}
+            echo "guard: packages/$p/lib/ -> $n match(es)"
+            if [ "$n" -eq 0 ]; then
+              echo "::error::no unit coverage recorded for packages/$p - Flutter coverage is being discarded again"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "guard: all four Flutter packages present in the combined lcov"
       - name: Upload Unit Test Coverage Report
         uses: actions/upload-artifact@v7
         if: ${{ matrix.sdk == 'stable' }}

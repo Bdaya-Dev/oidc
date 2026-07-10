@@ -223,6 +223,13 @@ melos:
       name: Format coverage for each package
       exec: dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
       packageFilters:
+        # Dart-only. `dart test --coverage=<dir>` writes VM hitmap JSON that
+        # still needs format_coverage to become lcov; `flutter test --coverage`
+        # already writes coverage/lcov.info directly. Running format_coverage
+        # over a Flutter package's coverage/ dir finds no .json, exits 0, and
+        # truncates that lcov.info to 0 bytes -- silently discarding every
+        # Flutter package's unit coverage before it is ever uploaded.
+        flutter: false
         dirExists: coverage
 
     coverage:combine:
