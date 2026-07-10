@@ -192,6 +192,100 @@ void main() {
     });
   });
 
+  group(
+    'OidcWebStore session namespace (sessionStorage location, default)',
+    () {
+      test(
+        'setMany/getMany/removeMany round-trip through window.sessionStorage',
+        () async {
+          const store = OidcWebStore(storagePrefix: 'session-default');
+          await store.init();
+
+          await store.setMany(
+            OidcStoreNamespace.session,
+            values: {'sid': 'abc123'},
+          );
+
+          // Written to sessionStorage, NOT localStorage.
+          expect(
+            web.window.sessionStorage.getItem('session-default.session.sid'),
+            'abc123',
+          );
+          expect(
+            web.window.localStorage.getItem('session-default.session.sid'),
+            isNull,
+          );
+
+          final result = await store.getMany(
+            OidcStoreNamespace.session,
+            keys: {'sid'},
+          );
+          expect(result['sid'], 'abc123');
+
+          await store.removeMany(OidcStoreNamespace.session, keys: {'sid'});
+          expect(
+            web.window.sessionStorage.getItem('session-default.session.sid'),
+            isNull,
+          );
+          final afterRemove = await store.getMany(
+            OidcStoreNamespace.session,
+            keys: {'sid'},
+          );
+          expect(afterRemove.containsKey('sid'), isFalse);
+        },
+      );
+
+      test('a missing session key is simply absent from getMany', () async {
+        const store = OidcWebStore(storagePrefix: 'session-missing');
+        await store.init();
+
+        final result = await store.getMany(
+          OidcStoreNamespace.session,
+          keys: {'nope'},
+        );
+        expect(result.containsKey('nope'), isFalse);
+      });
+    },
+  );
+
+  group('OidcWebStore session namespace (localStorage location)', () {
+    test('setMany/getMany/removeMany round-trip through window.localStorage '
+        'instead of sessionStorage', () async {
+      const store = OidcWebStore(
+        storagePrefix: 'session-local',
+        webSessionManagementLocation:
+            OidcWebStoreSessionManagementLocation.localStorage,
+      );
+      await store.init();
+
+      await store.setMany(
+        OidcStoreNamespace.session,
+        values: {'sid': 'xyz789'},
+      );
+
+      expect(
+        web.window.localStorage.getItem('session-local.session.sid'),
+        'xyz789',
+      );
+      expect(
+        web.window.sessionStorage.getItem('session-local.session.sid'),
+        isNull,
+      );
+
+      final result = await store.getMany(
+        OidcStoreNamespace.session,
+        keys: {'sid'},
+      );
+      expect(result['sid'], 'xyz789');
+
+      await store.removeMany(OidcStoreNamespace.session, keys: {'sid'});
+      expect(
+        web.window.localStorage.getItem('session-local.session.sid'),
+        isNull,
+      );
+    });
+  });
+
   group('when WebCrypto/IndexedDB are unavailable', () {
     test('OidcWebStoreEncryption.preferred falls back to a warned plaintext '
         'write', () async {
