@@ -68,6 +68,7 @@ melos:
 
     generate:
       run: |
+        set -e
         melos run generate:dart
         melos run generate:native
       description: Regenerate every generated file (Dart build_runner + native Pigeon).
@@ -85,6 +86,7 @@ melos:
     test:
       name: All tests
       run: |
+        set -e
         melos run test:vm
         TEST_PLATFORM=chrome melos run test:web
         TEST_PLATFORM=firefox melos run test:web
@@ -105,6 +107,7 @@ melos:
     test:web:
       name: Dart Web tests
       run: |
+        set -e
         melos run test:web:chrome
         melos run test:web:firefox
     test:web:chrome:
@@ -126,6 +129,11 @@ melos:
         WITH_WASM: false
       # We have to use --timeout 60m alongside --ignore-timeouts
       exec: |
+        # set -e: without it this script's exit status is that of its LAST
+        # statement -- the WITH_WASM if-block, which is 0 whenever WITH_WASM
+        # != true -- so a `dart test` failure was silently discarded and the
+        # CI step stayed green (issue #353: 27 web test failures hidden).
+        set -e
         if [ "$TARGET_DART_SDK" = "min" ]; then
           dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --chain-stack-traces
         else
@@ -216,6 +224,7 @@ melos:
     coverage:format:
       name: Format coverage
       run: |
+        set -e
         dart pub global activate coverage
         melos run coverage:format:package
 
@@ -228,6 +237,7 @@ melos:
     coverage:combine:
       name: Combine & convert coverage report
       run: |
+        set -e
         rm -rf coverage
         dart pub global activate combine_coverage
         dart pub global activate remove_from_coverage

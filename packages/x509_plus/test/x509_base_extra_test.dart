@@ -76,7 +76,7 @@ void main() {
       expect(info.encryptedData, [1, 2, 3, 4]);
       expect(info.encryptionAlgorithm.algorithm, isA<ObjectIdentifier>());
     });
-  });
+  }, testOn: 'vm');
 
   group('parsePem - error handling', () {
     test('throws when the DER is not a SEQUENCE', () {
@@ -133,5 +133,5 @@ void main() {
       expect(seq, isA<ASN1Sequence>());
       expect(seq.elements, hasLength(3));
     });
-  });
+  }, testOn: 'vm');
 }

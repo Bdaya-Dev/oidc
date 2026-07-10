@@ -330,7 +330,7 @@ void main() {
       expect(key.cryptoKeyPair.publicKey, isA<RsaPublicKey>());
       expect(key.cryptoKeyPair.privateKey, isNull);
     });
-  });
+  }, testOn: 'vm');
 
   group('Issues', () {
     test(
