@@ -230,7 +230,12 @@ melos:
 
     coverage:format:package:
       name: Format coverage for each package
-      exec: dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+      # --check-ignore: honor // coverage:ignore-file / ignore-start markers in
+      # pure-Dart packages, matching what flutter test does natively for the
+      # Flutter packages (evidence: ignore-marked platform.dart never appears
+      # in their lcov). Without it the two halves of the repo obey different
+      # ignore semantics.
+      exec: dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib --check-ignore
       packageFilters:
         # Dart-only. `dart test --coverage=<dir>` writes VM hitmap JSON that
         # still needs format_coverage to become lcov; `flutter test --coverage`
@@ -250,7 +255,7 @@ melos:
         dart pub global activate remove_from_coverage
         melos run coverage:format
         dart pub global run combine_coverage --repo-path=$pwd
-        dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$'
+        dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$' -r 'oidc_cli/lib/src/version\.dart$'
 
     oidc:activate:
       name: Activate OIDC CLI locally

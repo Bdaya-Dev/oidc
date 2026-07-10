@@ -669,6 +669,16 @@ jobs:
           find . -type f -name "*-coverage.info"
           dart pub global activate combine_coverage
           dart pub global run combine_coverage --repo-path="$REPO_PATH"
+      - name: Strip generated files from combined coverage
+        # Parity with the unit pipeline's coverage:combine: without this the
+        # final-coverage artifact and the Codecov upload include *.g.dart and
+        # the generated oidc_cli version.dart from integration runs.
+        run: |
+          set -e
+          dart pub global activate remove_from_coverage
+          dart pub global run remove_from_coverage:remove_from_coverage \
+            -f coverage/lcov.info \
+            -r '\.g\.dart$' -r 'oidc_cli/lib/src/version\.dart$'
       # Upload
       - name: Upload the final coverage as an artifact
         uses: actions/upload-artifact@v7
