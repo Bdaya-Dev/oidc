@@ -4,11 +4,10 @@
 // mutates the *actual* developer machine's global pub credentials store
 // (there is no injection seam for `Process.start`). Exercising it for real
 // in a unit test would add a spurious/real credential entry to the host's
-// pub token store, which conflicts with the hard constraint elsewhere in
-// this task ("NEVER run ... dart pub get/upgrade") in spirit: tests must
-// not mutate the developer's pub configuration. Every call site that would
-// reach this function (in the `login *`/`dart pub`/`flutter pub` proxy
-// commands) is documented with the same rationale where it is skipped.
+// pub token store — tests must not mutate the developer's pub
+// configuration. Every call site that would reach this function (in the
+// `login *`/`dart pub`/`flutter pub` proxy commands) is documented with the
+// same rationale where it is skipped.
 import 'dart:convert';
 import 'dart:io';
 

@@ -18,10 +18,12 @@ void main() {
   // NOTE: none of these tests result in a stored access token being found,
   // so the command never reaches `addToDartPub` (which shells out to the
   // real `dart pub token add` and would mutate the machine's actual pub
-  // credentials). `cache list` forwarded to the real `dart` binary below is
-  // read-only (deliberately NOT `--version`: that string collides with the
-  // CLI's own global `-v, --version` flag, which short-circuits the whole
-  // command runner before the subcommand even runs). The issuer always
+  // credentials). The one test that reaches the real `dart` binary forwards
+  // `token list`: read-only, and its runtime does not scale with the
+  // machine's global pub cache the way `cache list` does (which timed out on
+  // a large dev cache). Deliberately NOT `--version`: that string collides
+  // with the CLI's own global `-v, --version` flag, which short-circuits the
+  // whole command runner before the subcommand even runs. The issuer always
   // points at a local fake OIDC server rather than a real host, so
   // discovery resolution is deterministic and offline-safe.
   group('oidc dart pub (proxy)', () {
@@ -72,7 +74,7 @@ void main() {
           storePath,
           'dart',
           'pub',
-          'cache',
+          'token',
           'list',
         ]);
 

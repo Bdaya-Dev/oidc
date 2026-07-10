@@ -1,3 +1,8 @@
+// Reads DER fixtures from disk in setUpAll: dart:io File reads cannot run on
+// the web platform (see #353's convention: fixture tests are pinned to vm).
+@TestOn('vm')
+library;
+
 import 'dart:io';
 import 'dart:typed_data';
 
