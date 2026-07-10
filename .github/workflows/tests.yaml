@@ -217,7 +217,7 @@ jobs:
           patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
-            --coverage-package oidc \
+            --coverage-workspace \
             -d "$EMU_ID" \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
@@ -364,7 +364,7 @@ jobs:
           patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
-            --coverage-package oidc \
+            --coverage-workspace \
             -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
             --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
             --verbose \
@@ -486,13 +486,13 @@ jobs:
           # Work around flaky desktop integration test runs when executing
           # multiple test entrypoints in a single `flutter test integration_test`.
           flutter test integration_test/app_test.dart \
-            --coverage --branch-coverage --coverage-package "oidc*" \
+            --coverage --branch-coverage --coverage-package "^(oidc|jose_plus|x509_plus|crypto_keys_plus)" \
             -d macos --coverage-path coverage/macos-app-coverage.info \
             --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} \
             -r expanded
 
           flutter test integration_test/offline_mode_test.dart \
-            --coverage --branch-coverage --coverage-package "oidc*" \
+            --coverage --branch-coverage --coverage-package "^(oidc|jose_plus|x509_plus|crypto_keys_plus)" \
             -d macos --coverage-path coverage/macos-offline-coverage.info \
             --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} \
             -r expanded
@@ -548,7 +548,7 @@ jobs:
           xvfb-run --auto-servernum patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
-            --coverage-package oidc \
+            --coverage-workspace \
             -d linux \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
@@ -597,7 +597,7 @@ jobs:
           patrol_plus.bat test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
-            --coverage-package oidc \
+            --coverage-workspace \
             -d windows \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
