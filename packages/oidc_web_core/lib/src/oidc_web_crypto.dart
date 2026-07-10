@@ -240,17 +240,45 @@ class OidcWebCrypto {
     try {
       final db = await _openDatabase();
       try {
-        final store = db
-            .transaction(_cryptoKeysStoreName.toJS, 'readwrite')
+        // IndexedDB transactions auto-commit as soon as control returns to
+        // the event loop with no request pending on them, so a transaction
+        // must never be held across a non-IndexedDB await. Firefox enforces
+        // this strictly: reusing the read transaction for the write after
+        // awaiting `generateKey` throws TransactionInactiveError (which made
+        // the store fall back to writing secureTokens as PLAINTEXT on every
+        // Firefox session). Chrome merely happened not to trip the
+        // auto-commit. One transaction per await-separated operation.
+        final readStore = db
+            .transaction(_cryptoKeysStoreName.toJS, 'readonly')
             .objectStore(_cryptoKeysStoreName);
-        final existing = await _requestResult(store.get(recordKey.toJS));
+        final existing = await _requestResult(readStore.get(recordKey.toJS));
         if (existing != null) {
-          await _requestPersistBestEffort();
+          _requestPersistBestEffort();
           return existing as web.CryptoKey;
         }
         final generated = await _generateKey();
-        await _requestResult(store.put(generated, recordKey.toJS));
-        await _requestPersistBestEffort();
+        final writeStore = db
+            .transaction(_cryptoKeysStoreName.toJS, 'readwrite')
+            .objectStore(_cryptoKeysStoreName);
+        try {
+          // `add` (not `put`): fails with ConstraintError if another
+          // same-origin context (tab, iframe) won the generate race between
+          // our read and this write. Overwriting with `put` would leave the
+          // two contexts encrypting under DIFFERENT keys, each unable to
+          // decrypt the other's values on the next load.
+          await _requestResult(writeStore.add(generated, recordKey.toJS));
+        } catch (_) {
+          final rereadStore = db
+              .transaction(_cryptoKeysStoreName.toJS, 'readonly')
+              .objectStore(_cryptoKeysStoreName);
+          final winner = await _requestResult(rereadStore.get(recordKey.toJS));
+          if (winner == null) {
+            rethrow;
+          }
+          _requestPersistBestEffort();
+          return winner as web.CryptoKey;
+        }
+        _requestPersistBestEffort();
         return generated;
       } finally {
         db.close();
@@ -321,9 +349,20 @@ class OidcWebCrypto {
   /// pressure. Failures here must never fail key acquisition -- this is
   /// pure hardening, not a correctness requirement (see the design
   /// proposal's persistence/eviction trade-off section).
-  static Future<void> _requestPersistBestEffort() async {
+  ///
+  /// Fire-and-forget by contract: Firefox surfaces `persist()` as a
+  /// permission doorhanger and the returned promise stays PENDING until the
+  /// user answers it -- in headless/CI (and for any user who ignores the
+  /// prompt) that is forever, so `await`ing it wedges key acquisition.
+  /// Nothing may ever await this.
+  static void _requestPersistBestEffort() {
     try {
-      await web.window.navigator.storage.persist().toDart;
+      unawaited(
+        web.window.navigator.storage.persist().toDart.then(
+          (_) {},
+          onError: (Object _) {},
+        ),
+      );
     } catch (_) {
       // Not all browsers/contexts implement the Storage Manager API; a
       // failure here just means we didn't get the (best-effort) hardening.
