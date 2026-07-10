@@ -32,21 +32,12 @@ class ObjectIdentifier {
   }
 
   ASN1ObjectIdentifier toAsn1() {
-    var bytes = <int>[];
-    bytes.add(nodes.first * 40 + nodes[1]);
-    for (var v in nodes.skip(2)) {
-      var w = [];
-      while (v > 128) {
-        var u = v % 128;
-        v -= u;
-        v ~/= 128;
-        w.add(u);
-      }
-      w.add(v);
-      bytes.addAll(w.skip(1).toList().reversed.map((v) => v + 128));
-      bytes.add(w.first);
-    }
-    return ASN1ObjectIdentifier(bytes);
+    // asn1lib's ASN1ObjectIdentifier constructor takes the plain arc
+    // components (its `oi` field) and performs the base-128 DER encoding
+    // itself in `_encode()`. Passing pre-encoded bytes here caused the arcs
+    // to be encoded twice, producing corrupt DER from every re-encode path
+    // (including toPem()). Hand the constructor the raw nodes instead.
+    return ASN1ObjectIdentifier(nodes);
   }
 
   @override

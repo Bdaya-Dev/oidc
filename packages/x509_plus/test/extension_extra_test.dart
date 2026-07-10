@@ -102,8 +102,6 @@ void main() {
 
   group('PolicyQualifierInfo', () {
     test('parses a user-notice qualifier with explicit text', () {
-      // Note: a noticeRef with noticeNumbers is intentionally omitted because
-      // NoticeReference.fromAsn1 throws a TypeError (see bugsFound).
       final userNotice = ASN1Sequence()
         ..add(ASN1PrintableString('See the CPS'));
       final qualifier = ASN1Sequence()
@@ -116,6 +114,36 @@ void main() {
       expect(pqi.userNotice!.noticeRef, isNull);
       expect(pqi.userNotice.toString(), contains('Explicit Text: See the CPS'));
       expect(pqi.toString(), contains('User Notice'));
+    });
+
+    test('parses a user-notice qualifier with a noticeRef', () {
+      // NoticeReference ::= SEQUENCE {
+      //   organization  DisplayText,
+      //   noticeNumbers SEQUENCE OF INTEGER }
+      final noticeNumbers = ASN1Sequence()
+        ..add(ASN1Integer(BigInt.from(1)))
+        ..add(ASN1Integer(BigInt.from(2)))
+        ..add(ASN1Integer(BigInt.from(300)));
+      final noticeRef = ASN1Sequence()
+        ..add(ASN1PrintableString('Example CA'))
+        ..add(noticeNumbers);
+      final userNotice = ASN1Sequence()..add(noticeRef);
+      final qualifier = ASN1Sequence()
+        ..add(_oid([1, 3, 6, 1, 5, 5, 7, 2, 2])) // id-qt-unotice
+        ..add(userNotice);
+
+      final pqi = PolicyQualifierInfo.fromAsn1(qualifier);
+      final ref = pqi.userNotice!.noticeRef!;
+      expect(ref.organization, 'Example CA');
+      expect(ref.noticeNumbers, <int>[1, 2, 300]);
+      expect(ref.noticeNumbers, isA<List<int>>());
+      expect(ref.toString(), 'Example CA [1, 2, 300]');
+      // UserNotice.toString() with a non-null noticeRef (and no
+      // explicitText) must render the "Notice Reference:" line.
+      expect(
+        pqi.userNotice.toString(),
+        'Notice Reference: Example CA [1, 2, 300]\n',
+      );
     });
 
     test('rejects an unsupported qualifier id when parsing', () {
