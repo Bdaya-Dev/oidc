@@ -214,9 +214,12 @@ class OidcUtils {
   /// from by dropping the trailing `['.well-known','openid-configuration']`
   /// path segments (and clearing query/fragment).
   ///
-  /// Returns `null` when [wellKnown] does not end with those two segments (e.g.
-  /// an RFC 8414 insert-layout URL or an Entra `?appid=` query URL that cannot
-  /// be inverted), so callers can detect that the issuer could not be derived.
+  /// Returns `null` when [wellKnown] does not end with those two segments
+  /// (e.g. an RFC 8414 insert-layout URL), so callers can detect that the
+  /// issuer could not be derived. A query-carrying well-known URL with the
+  /// standard path layout (e.g. an Entra `?appid=` form) IS inverted: the
+  /// query and fragment are dropped from the derived issuer, and any
+  /// downstream mismatch is caught by [issuersAreIdentical].
   static Uri? getIssuerFromOpenIdConfigWellKnownUri(Uri wellKnown) {
     final segments = wellKnown.pathSegments;
     if (segments.length < 2 ||
@@ -224,10 +227,17 @@ class OidcUtils {
         segments[segments.length - 1] != 'openid-configuration') {
       return null;
     }
-    return wellKnown.replace(
+    // NOTE: `wellKnown.replace(query: null, fragment: null)` would NOT clear
+    // an existing query/fragment — `Uri.replace`'s `null` means "keep the
+    // current value", not "clear it" (and `query: ''` would instead leave a
+    // dangling `?`). Building a fresh [Uri] from components is the only way
+    // to genuinely omit them.
+    return Uri(
+      scheme: wellKnown.scheme,
+      userInfo: wellKnown.userInfo.isEmpty ? null : wellKnown.userInfo,
+      host: wellKnown.host,
+      port: wellKnown.hasPort ? wellKnown.port : null,
       pathSegments: segments.sublist(0, segments.length - 2),
-      query: null,
-      fragment: null,
     );
   }
 
