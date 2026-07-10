@@ -641,6 +641,22 @@ jobs:
           pattern: "*-integration-coverage"
           merge-multiple: true
 
+      - name: Normalize macOS-absolute SF paths
+        env:
+          REPO_PATH: ${{ github.workspace }}
+        # The ios and macos jobs run on macOS runners, so their lcov files
+        # carry SF: paths under /Users/runner/work/oidc/oidc/... while this
+        # job's combine_coverage strips the LINUX workspace prefix
+        # ($REPO_PATH = /home/runner/work/oidc/oidc). Unrewritten, those
+        # entries (106 of them on run 28821969853) stay absolute in
+        # final-coverage and Codecov cannot map them to repo files. Rewrite
+        # the macOS prefix to this job's workspace prefix so the combine
+        # relativizes every record uniformly.
+        run: |
+          set -e
+          find packages/oidc/example/coverage -type f -name "*.info"             -exec sed -i "s|^SF:/Users/runner/work/oidc/oidc/|SF:$REPO_PATH/|" {} +
+          remaining=$(grep -rhc '^SF:/Users/' packages/oidc/example/coverage --include='*.info' | awk '{s+=$1} END {print s+0}')
+          echo "macOS-absolute SF entries remaining after normalization: $remaining"
       - name: Combine Coverage Results
         env:
           REPO_PATH: ${{ github.workspace }}
