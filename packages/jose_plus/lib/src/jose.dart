@@ -73,7 +73,7 @@ class JoseHeader extends JsonObject {
 
   /// Indicates that extensions to this specification and/or [JsonWebAlgorithm]
   /// are being used that MUST be understood and processed.
-  List<String>? get critical => getTyped('crit');
+  List<String>? get critical => getTypedList('crit');
 
   /// The content encryption algorithm used to perform authenticated encryption
   /// on the plaintext to produce the ciphertext and the Authentication Tag.

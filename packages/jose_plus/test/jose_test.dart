@@ -52,6 +52,21 @@ void main() {
       final header = JoseHeader.fromBase64EncodedString(encoded);
       expect(header.algorithm, 'HS256');
     });
+
+    test('critical reads a `crit` header parameter as a string list', () {
+      final header = JoseHeader.fromJson({
+        'alg': 'RS256',
+        'crit': ['exp'],
+      });
+
+      expect(header.critical, ['exp']);
+    });
+
+    test('critical is null when `crit` is absent', () {
+      final header = JoseHeader.fromJson({'alg': 'RS256'});
+
+      expect(header.critical, isNull);
+    });
   });
 
   group('JoseObject.fromJson', () {
