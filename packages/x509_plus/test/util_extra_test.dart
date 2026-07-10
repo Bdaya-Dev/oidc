@@ -107,7 +107,7 @@ void main() {
     test('encodes an RSA public key to a BIT STRING', () {
       expect(keyToAsn1(rsaPublic), isA<ASN1BitString>());
     });
-  });
+  }, testOn: 'vm');
 
   group('keyPairToAsn1', () {
     test('encodes a parsed RSA key pair', () {
@@ -115,7 +115,7 @@ void main() {
       final keyPair = parsePem(pem).single as KeyPair;
       expect(keyPairToAsn1(keyPair), isA<ASN1BitString>());
     });
-  });
+  }, testOn: 'vm');
 
   group('ecPublicKeyFromAsn1', () {
     late BigInt x;
@@ -155,7 +155,7 @@ void main() {
       expect(() => ecPublicKeyFromAsn1(ASN1BitString(bytes)),
           throwsA(isA<UnsupportedError>()));
     });
-  });
+  }, testOn: 'vm');
 
   group('keyPairFromAsn1 / publicKeyFromAsn1 unsupported algorithms', () {
     test('keyPairFromAsn1 throws UnimplementedError for a signature OID', () {

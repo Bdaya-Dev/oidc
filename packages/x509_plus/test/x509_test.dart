@@ -18,7 +18,7 @@ void main() {
       expect(privateKey.privateExponent, isNotNull);
       expect(publicKey.exponent, isNotNull);
     });
-  });
+  }, testOn: 'vm');
 
   group('ec', () {
     test('parse ec 256 public key', () {
@@ -162,14 +162,14 @@ void main() {
 
       expect(verified, isTrue);
     });
-  });
+  }, testOn: 'vm');
 
   group('csr', () {
     test('parse csr', () {
       var pem = File('test/files/csr.pem').readAsStringSync();
       parsePem(pem).single as CertificationRequest;
     });
-  });
+  }, testOn: 'vm');
 
   group('rfc5280', () {
     test('RSA Self-Signed Certificate', () {
@@ -189,7 +189,7 @@ void main() {
           ASN1Parser(bytes).nextObject() as ASN1Sequence);
       expect(c, isA<X509Certificate>());
     });
-  });
+  }, testOn: 'vm');
 
   group('v3 extension General Name', () {
     var generalNameEncodeBytes = [
@@ -366,7 +366,7 @@ MIIIHzCCB8WgAwIBAgIJf35N0O0if7S5MAoGCCqGSM49BAMCMIGwMT8wPQYDVQQDDDZFQURUcnVzdCBF
         ['https://eadtrust.eu/documentos-vigentes/', 'es']
       ]);
     });
-  });
+  }, testOn: 'vm');
 
   group('PolicyInformation', () {
     var subject = ASN1Sequence.fromBytes(Uint8List.fromList([
@@ -457,5 +457,5 @@ MIIIHzCCB8WgAwIBAgIJf35N0O0if7S5MAoGCCqGSM49BAMCMIGwMT8wPQYDVQQDDDZFQURUcnVzdCBF
       var c = X509Certificate.fromAsn1(parser.nextObject() as ASN1Sequence);
       expect(c, isA<X509Certificate>());
     });
-  });
+  }, testOn: 'vm');
 }
