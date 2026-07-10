@@ -83,10 +83,21 @@ jobs:
         # silently dropped every Flutter package's unit coverage from the
         # upload with no failing step. Fail loudly if it ever comes back.
         run: |
+          # Diagnostics first: the previous run of this step exited 1 with its
+          # entire stdout/stderr lost from the log, so print the observable
+          # state before asserting anything.
+          echo "guard: pwd=$(pwd)"
+          ls -l coverage/ || true
+          wc -c coverage/lcov.info || true
+          echo "guard: first 10 SF entries:"
+          grep -o 'SF:[^[:cntrl:]]*' coverage/lcov.info | head -10 || true
           missing=0
           for p in oidc oidc_default_store oidc_platform_interface oidc_desktop; do
-            if ! grep -q "packages/$p/lib/" coverage/lcov.info; then
-              echo "::error::no unit coverage recorded for packages/$p — Flutter coverage is being discarded again"
+            n=$(grep -c "packages/$p/lib/" coverage/lcov.info || true)
+            n=${n:-0}
+            echo "guard: packages/$p/lib/ -> $n match(es)"
+            if [ "$n" -eq 0 ]; then
+              echo "::error::no unit coverage recorded for packages/$p - Flutter coverage is being discarded again"
               missing=1
             fi
           done
