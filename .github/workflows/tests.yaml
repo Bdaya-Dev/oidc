@@ -655,7 +655,11 @@ jobs:
         run: |
           set -e
           find packages/oidc/example/coverage -type f -name "*.info"             -exec sed -i "s|^SF:/Users/runner/work/oidc/oidc/|SF:$REPO_PATH/|" {} +
-          remaining=$(grep -rhc '^SF:/Users/' packages/oidc/example/coverage --include='*.info' | awk '{s+=$1} END {print s+0}')
+          # `|| true` inside the substitution: in the healthy zero-remaining
+          # case grep exits 1 (no matching lines), and under this workflow's
+          # pipefail+errexit shell that would fail the step; awk's stdout
+          # ("0") is captured either way.
+          remaining=$(grep -rhc '^SF:/Users/' packages/oidc/example/coverage --include='*.info' | awk '{s+=$1} END {print s+0}' || true)
           echo "macOS-absolute SF entries remaining after normalization: $remaining"
       - name: Combine Coverage Results
         env:
