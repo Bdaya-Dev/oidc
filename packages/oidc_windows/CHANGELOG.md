@@ -1,3 +1,7 @@
+## 0.4.0+4
+
+ - **FIX**(spm,native): SwiftPM layout migration + conformance fixes; fix Android build. ([47f7bd25](https://github.com/Bdaya-Dev/oidc/commit/47f7bd25feb5d4b7a2e3db67165a44ecdf4dae29))
+
 ## 0.4.0+3
 
  - **DOCS**: remove logo branding from screenshots. ([2acf65d3](https://github.com/Bdaya-Dev/oidc/commit/2acf65d34fb47c0449653a73373168df3deb1735))
