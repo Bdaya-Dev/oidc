@@ -383,10 +383,18 @@ jobs:
       matrix:
         working-directory: ["packages/oidc/example"]
     runs-on: ubuntu-latest
-    # Patrol web-runner double-initializes Flutter's engine on 3.44 ("Bad state:
-    # initializeEngineServices already started"). Root cause is in the fork's
-    # web_runner setup.ts $dartRunMain handling, not the test-tree polling.
-    # Conformance gates on android/iOS/macOS/linux/windows meanwhile.
+    # Root cause of past web-job flakiness (see #337): the OIDC redirect URI
+    # is hardcoded to localhost:22433 (integration_test/helpers.dart:11), but
+    # this job never pinned --web-port, so Flutter's web server bound to a
+    # random port. The IdP's redirect could never land back on the app's own
+    # origin, so OidcWebCore's response Completer never resolved -- the
+    # conformance test just hung until Playwright's 10-minute per-test
+    # timeout killed it (Total:1/Successful:0/Failed:0, not an assertion
+    # failure). Fixed below by pinning --web-port 22433 to match; confirmed
+    # green with conformance actually executing in run 28666114227 (web job:
+    # "OIDC Conformance Test" passed in 31s). continue-on-error stays on as a
+    # safety net (this is a live third-party IdP dependency), but the job is
+    # expected to be green now, not masked-red.
     continue-on-error: true
     # Patrol web runs through Playwright (patrol_cli activation + npx playwright
     # install + the web build + the live conformance flow); 30 min is headroom.
@@ -422,8 +430,14 @@ jobs:
           # On web, --coverage collects V8/JS coverage via Playwright and emits
           # an lcov into ./coverage. Only patrol_test/app_test.dart is targeted
           # (the offline entrypoint imports dart:io, unavailable on web).
+          #
+          # --web-port 22433 pins the Flutter web server to the same port the
+          # OIDC redirect URI is hardcoded to (integration_test/helpers.dart:11),
+          # so the IdP's redirect actually lands back on this app's origin. See
+          # #337 for the full diagnosis of the hang this fixes.
           patrol_plus test \
             --target patrol_test/app_test.dart \
+            --web-port 22433 \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-package oidc \
