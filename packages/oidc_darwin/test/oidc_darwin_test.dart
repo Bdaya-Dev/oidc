@@ -5,6 +5,26 @@ import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_darwin/oidc_darwin.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
+/// Injectable [OidcAppleHostApi] stand-in that throws a raw
+/// [MissingPluginException] directly (bypassing the Pigeon channel), used to
+/// exercise `_guard`'s "no native plugin registered at all" branch. Pigeon's
+/// generated `send()` always resolves under `TestDefaultBinaryMessengerBinding`
+/// (an unregistered channel decodes to a `channel-error` `PlatformException`,
+/// covered separately), so a real `MissingPluginException` can only be
+/// produced this way in a unit test.
+class _MissingPluginHostApi extends OidcAppleHostApi {
+  @override
+  Future<String?> authorizeApple(
+    String url,
+    String? redirectUri,
+    String? callbackScheme,
+    bool preferEphemeral,
+    Map<String, Object?> options,
+  ) {
+    throw MissingPluginException('no implementation found');
+  }
+}
+
 OidcAuthorizeRequest _authRequest() => OidcAuthorizeRequest(
   clientId: 'client-1',
   redirectUri: Uri.parse('com.example.app://callback'),
@@ -257,5 +277,94 @@ void main() {
       const {},
     );
     expect(resp, isNull);
+  });
+
+  test('wraps a raw MissingPluginException (no plugin registered) as '
+      'OidcException', () async {
+    await expectLater(
+      OidcDarwin(hostApi: _MissingPluginHostApi()).getAuthorizationResponse(
+        metadata,
+        _authRequest(),
+        const OidcPlatformSpecificOptions(),
+        const {},
+      ),
+      throwsA(
+        isA<OidcException>().having(
+          (e) => e.message,
+          'message',
+          contains('not available on this platform'),
+        ),
+      ),
+    );
+  });
+
+  test(
+    'rethrows any other PlatformException code wrapped as OidcException',
+    () async {
+      mockHostApi('authorizeApple', (args) async {
+        throw PlatformException(code: 'SOME_OTHER_ERROR', message: 'boom');
+      });
+
+      await expectLater(
+        OidcDarwin().getAuthorizationResponse(
+          metadata,
+          _authRequest(),
+          const OidcPlatformSpecificOptions(),
+          const {},
+        ),
+        throwsA(
+          isA<OidcException>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('SOME_OTHER_ERROR'), contains('boom')),
+          ),
+        ),
+      );
+    },
+  );
+
+  group('nativeBrowserEvents', () {
+    const eventChannel = EventChannel(
+      'dev.flutter.pigeon.oidc_platform_interface.OidcNativeEventApi'
+      '.streamNativeEvents',
+    );
+
+    tearDown(() => messenger.setMockStreamHandler(eventChannel, null));
+
+    test('maps native event maps into typed OidcNativeBrowserEvents, dropping '
+        'unrecognized event types', () async {
+      messenger.setMockStreamHandler(
+        eventChannel,
+        MockStreamHandler.inline(
+          onListen: (arguments, events) {
+            events
+              ..success({
+                'type': 'redirectReceived',
+                'flowId': 'flow-1',
+                'scheme': 'com.example.app',
+                'host': 'callback',
+                'hasCode': true,
+                'hasState': true,
+                'hasError': false,
+              })
+              // Forward-compatibility: an unrecognized type must be
+              // dropped, not surfaced or thrown.
+              ..success({'type': 'some-future-event-type'})
+              ..endOfStream();
+          },
+        ),
+      );
+
+      final events = await OidcDarwin().nativeBrowserEvents().toList();
+
+      expect(events, hasLength(1));
+      final event = events.single as OidcBrowserRedirectReceivedEvent;
+      expect(event.flowId, 'flow-1');
+      expect(event.scheme, 'com.example.app');
+      expect(event.host, 'callback');
+      expect(event.hasCode, isTrue);
+      expect(event.hasState, isTrue);
+      expect(event.hasError, isFalse);
+    });
   });
 }

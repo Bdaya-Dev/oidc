@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:mason_logger/mason_logger.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:oidc_cli/src/command_runner.dart';
+import 'package:oidc_cli/src/commands/proxy/pub_proxy_command.dart';
 import 'package:oidc_cli/src/file_oidc_store.dart';
 import 'package:pub_updater/pub_updater.dart';
 import 'package:test/test.dart';
@@ -55,6 +56,11 @@ void main() {
       if (tempDir.existsSync()) {
         tempDir.deleteSync(recursive: true);
       }
+    });
+
+    test('description explains what the command proxies', () {
+      final command = PubProxyCommand(executable: 'dart', logger: logger);
+      expect(command.description, contains('Proxy commands to `<tool> pub'));
     });
 
     test(
@@ -140,6 +146,61 @@ void main() {
           'pub',
           '--hosted-url',
           'https://override.example.com',
+          'cache',
+          'list',
+        ]);
+
+        expect(result, ExitCode.software.code);
+        expect(
+          errMessages,
+          contains(
+            'No active session/token found for pub. '
+            'Run `oidc login --add-to-dart-pub <hostedUrl>` first.',
+          ),
+        );
+      },
+    );
+
+    test(
+      'errors when the stored session has a blank (non-null) access token',
+      () async {
+        late final TestOidcServer server;
+        server = await TestOidcServer.start(
+          onToken: (form, callCount) =>
+              server.tokenResponseJson(sub: 'user-1', accessToken: ''),
+        );
+        addTearDown(server.close);
+
+        final store = FileOidcStore.fromPath(storePath, logger: logger);
+        await store.setConfig({
+          'issuer': server.issuer.toString(),
+          'clientId': 'my-client',
+          'clientSecret': null,
+          'scopes': ['openid'],
+          'port': 3000,
+          'hostedUrl': 'https://pub.example.com',
+        });
+
+        // Log in directly through the CLI's manager wiring so a
+        // `currentUser` with a blank access token exists in the store.
+        final loginResult = await runner.run([
+          '--store',
+          storePath,
+          'login',
+          'password',
+          '--username',
+          'alice',
+          '--password',
+          'secret',
+        ]);
+        expect(loginResult, ExitCode.success.code);
+        errMessages.clear();
+
+        final result = await runner.run([
+          '--store',
+          storePath,
+          'dart',
+          'pub',
           'cache',
           'list',
         ]);

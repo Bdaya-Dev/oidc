@@ -41,7 +41,9 @@ class TestOidcServer {
     String clientId = 'my-client',
     int expiresIn = 300,
     String accessToken = 'access-token-abc',
-    String refreshToken = 'refresh-token-1',
+    // `null` omits `refresh_token` from the response entirely, so callers
+    // can exercise the "no refresh_token available" branch of `refreshToken`.
+    String? refreshToken = 'refresh-token-1',
   }) {
     final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
     final idToken = signIdToken({
@@ -56,7 +58,7 @@ class TestOidcServer {
       'id_token': idToken,
       'token_type': 'Bearer',
       'expires_in': expiresIn,
-      'refresh_token': refreshToken,
+      'refresh_token': ?refreshToken,
     };
   }
 
@@ -71,6 +73,11 @@ class TestOidcServer {
       int callCount,
     )
     onToken,
+    // When true, discovery advertises a `revocation_endpoint` (pointing at
+    // this same server's `/revoke` path, which always answers 200), so
+    // callers can exercise `revokeAccessToken`/`revokeRefreshToken` actually
+    // making a network call instead of the endpoint-not-advertised no-op.
+    bool advertiseRevocationEndpoint = false,
   }) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final signingKey = JsonWebKey.generate('RS256');
@@ -89,7 +96,16 @@ class TestOidcServer {
                 .toString(),
             'jwks_uri': testServer.issuer.replace(path: '/jwks').toString(),
             'id_token_signing_alg_values_supported': ['RS256'],
+            if (advertiseRevocationEndpoint)
+              'revocation_endpoint': testServer.issuer
+                  .replace(path: '/revoke')
+                  .toString(),
           });
+          return;
+        }
+        if (request.method == 'POST' && path == '/revoke') {
+          request.response.statusCode = HttpStatus.ok;
+          await request.response.close();
           return;
         }
         if (request.method == 'GET' && path == '/jwks') {

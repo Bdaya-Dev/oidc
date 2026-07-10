@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:jose_plus/jose.dart';
@@ -147,6 +148,141 @@ void main() {
         ),
         throwsA(isA<ArgumentError>()),
       );
+    });
+  });
+
+  group('ecdhEsDerive with a JWK whose `crv` is not in curvesByName', () {
+    test('throws UnsupportedError before any curve arithmetic runs', () {
+      // `JsonWebKey.fromKeyPair` (unlike `fromJson`) does not cross-check the
+      // JSON `crv` against the crypto_keys `EcPublicKey.curve` it is paired
+      // with, so this builds a JWK whose `cryptoKeyPair.publicKey` really is
+      // an `EcPublicKey` (passing `ecdhEsDerive`'s initial type check) but
+      // whose own `['crv']` is an unrecognized string — reaching
+      // `curveId == null` directly, one layer earlier than the P-256K case
+      // above (which resolves a curveId but then fails deeper).
+      final normal = JsonWebKey.generate('ES256');
+      final weirdKey = JsonWebKey.fromKeyPair(
+        keyPair: normal.cryptoKeyPair,
+        json: {
+          'kty': 'EC',
+          'crv': 'BOGUS-CURVE',
+          'x': normal['x'],
+          'y': normal['y'],
+        },
+      );
+      expect(
+        () => ecdhEsDerive(
+          recipientPublicKey: weirdKey,
+          algorithmId: 'A128GCM',
+          keyDataLen: 128,
+        ),
+        throwsA(isA<UnsupportedError>().having(
+          (e) => e.message,
+          'message',
+          'Unsupported curve: BOGUS-CURVE',
+        )),
+      );
+    });
+  });
+
+  group('ecdhEsDerive with a curve unsupported by ECDH-ES key agreement', () {
+    test(
+        'P-256K passes the curvesByName lookup but fails ECDH parameter '
+        'construction', () {
+      // `curvesByName` (shared with EC signing) recognizes 'P-256K', so the
+      // initial `curveId == null` guard in `ecdhEsDerive` passes — but
+      // RFC 7518 §4.6 (and this file's local `_ECCurve` table) only defines
+      // ECDH-ES domain parameters for P-256/P-384/P-521, so curve-parameter
+      // resolution fails one layer deeper, inside `_ecdhAgreement`.
+      final recipient = _bareEcKey('ES256K');
+      expect(
+        () => ecdhEsDerive(
+          recipientPublicKey: recipient,
+          algorithmId: 'A128GCM',
+          keyDataLen: 128,
+        ),
+        throwsA(isA<UnsupportedError>().having(
+          (e) => e.message,
+          'message',
+          contains('Unsupported curve'),
+        )),
+      );
+    });
+  });
+
+  group('ecdhEsDecrypt point-at-infinity guard', () {
+    test(
+        'a zero private scalar produces a point at infinity and throws '
+        'StateError', () {
+      // Scalar multiplication by 0 short-circuits `_ECPoint.multiply`'s
+      // double-and-add loop, returning the infinity point directly —
+      // independent of which public key point it would otherwise have been
+      // multiplied against.
+      final recipient = _bareEcKey('ES256');
+      final ephemeral = _bareEcKey('ES256');
+      final zeroScalarJson = Map<String, dynamic>.from(recipient.toJson())
+        ..['d'] = base64Url.encode([0]).replaceAll('=', '');
+      final zeroScalarKey = JsonWebKey.fromJson(zeroScalarJson)!;
+
+      expect(
+        () => ecdhEsDecrypt(
+          recipientPrivateKey: zeroScalarKey,
+          ephemeralPublicKey: ephemeral,
+          algorithmId: 'A128GCM',
+          keyDataLen: 128,
+        ),
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('point at infinity'),
+        )),
+      );
+    });
+  });
+
+  group('_bigIntToBytes short-coordinate padding', () {
+    test('a shared secret shorter than the field size is left-zero-padded', () {
+      // `_ecdhAgreement`'s result.x is only guaranteed to be < curve.p, not
+      // exactly `fieldSize` bytes — its minimal big-endian encoding is one
+      // byte short whenever the top byte happens to be zero (~1/256 of
+      // random keys). Using random keys per-test-run would make this
+      // assertion flaky, so this pins a specific (private, harmless-to-leak)
+      // P-256 key pair, found by brute-force search, that deterministically
+      // reproduces a 31-byte (not 32-byte) shared secret.
+      final recipient = JsonWebKey.fromJson({
+        'kty': 'EC',
+        'd': 'cgfsVBNkdlzuwDqmg8IwIpzQtkpCZ-kz2mzPnd913uA=',
+        'x': 'rWk9DoplEjp_ljpMD_izHRMJ1z9fQJa27GBEKxyDq2c=',
+        'y': '-yGzFUeWjY5ZbYdvvc5wQZZQcLBxGtYatrzd0rv6j68=',
+        'crv': 'P-256',
+      })!;
+      final ephemeral = JsonWebKey.fromJson({
+        'kty': 'EC',
+        'd': 'fUZk1M60Tgr_eHDvuWjxqriDvuikgNT1VGSdLeUUH8w=',
+        'x': 'NFCvO3XvAkaqm1XI7dj1filojdyYKAUcv7UeTX34Z1c=',
+        'y': 'lw_1QmVG-ovIpEzd0bDc5sKkr1_IJoH3AEmx7x-oRbw=',
+        'crv': 'P-256',
+      })!;
+
+      final result = ecdhEsDerive(
+        recipientPublicKey: recipient,
+        algorithmId: 'A128GCM',
+        keyDataLen: 128,
+        ephemeralKeyPair: ephemeral.cryptoKeyPair,
+      );
+      // The derived key is still the full requested length regardless of the
+      // padding applied to the intermediate shared secret.
+      expect(result.derivedKey, hasLength(16));
+
+      // ECDH is symmetric: deriving from the other side with the same two
+      // points must reach the identical padding branch and agree on the key.
+      final recovered = ecdhEsDecrypt(
+        recipientPrivateKey: recipient,
+        ephemeralPublicKey: result.ephemeralPublicKey,
+        algorithmId: 'A128GCM',
+        keyDataLen: 128,
+      );
+      expect(recovered, result.derivedKey);
     });
   });
 

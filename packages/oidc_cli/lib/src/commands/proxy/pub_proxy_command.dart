@@ -66,7 +66,13 @@ class PubProxyCommand extends OidcBaseCommand {
         return ExitCode.software.code;
       }
 
+      // coverage:ignore-start
+      // See `dart_pub.dart`: `addToDartPub` shells out to the real `dart`
+      // executable and would mutate the developer machine's actual pub
+      // credentials store, so unit tests deliberately never let this reach
+      // a real (non-blank) stored token.
       await addToDartPub(logger: logger, hostedUrl: hostedUrl, token: token);
+      // coverage:ignore-end
     }
 
     final process = await Process.start(executable, [

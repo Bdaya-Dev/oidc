@@ -141,6 +141,52 @@ void main() {
     });
   });
 
+  group('JsonWebKey.fromPem with an unsupported PEM block type', () {
+    test('throws UnsupportedError for a PKCS#10 certificate request', () {
+      // `x509.parsePem` decodes a "CERTIFICATE REQUEST" block into a
+      // `CertificationRequest`, which `fromPem` has no conversion for (only
+      // `PrivateKeyInfo`, `KeyPair`, `X509Certificate` and
+      // `SubjectPublicKeyInfo` are supported).
+      const csrPem = '-----BEGIN CERTIFICATE REQUEST-----\n'
+          'MIICxDCCAawCAQAwfzELMAkGA1UEBhMCQkUxEzARBgNVBAgTClNvbWUtU3RhdGUx\n'
+          'DjAMBgNVBAcTBUdoZW50MQ8wDQYDVQQKEwZBcHBzVXAxFDASBgNVBAMTC1JpayBC\n'
+          'ZWxsZW5zMSQwIgYJKoZIhvcNAQkBFhVyaWsuYmVsbGVuc0BhcHBzdXAuYmUwggEi\n'
+          'MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDIEQi/Jsu5D1d6G4tUBGFBfzBr\n'
+          'Om72d0nPo2nitdw4mjnqdSn08xPeu8ILIUds3Mbti4AXyk/Ar+RsnxtG8j85RvH+\n'
+          'sx8nIc41J4//9cIlYjVCScjAvuklz2JWIMCT50y2rJ1pf0NFrs/pghRQBX5yAP0z\n'
+          'KTWjQsgojLp1V4UVLfyWKdBQRDA6W2dybc8WtvCc4n3cLrMDYRY3Kwl7zl5TmIr9\n'
+          'cw+B50W/9Q+lv4x3Yzj7zxs2CHrjhY1x14es1hTf6VlNH07Bb9MM8HtONq73616S\n'
+          'ojzo3Wd16Zps2Kl7COHu5pG2WSR95ddjpaJur9pbZLft8n2nLLMNd+c4u2YzAgMB\n'
+          'AAGgADANBgkqhkiG9w0BAQsFAAOCAQEAJyv7nIC2g//naaXwMAiBML6JlSQcrPIb\n'
+          'GoVvgAXdcT9GLTg7h4So2XRj3R/qq5yzSRjZ6tSjEHpufG2z/6ewZNb/kynQjdKp\n'
+          'wQ8sumReuGgOcnHw6ggEadRxVBRjCvLI2Vdz1K8aVQc0bpeEJydop+aMjLaYNypo\n'
+          'dQxDBcoDQqpn5ocxQCVLXUVtuWdJQLPwaN+EuSoeuqoFgsx2MCKjCpdOfRBONqQZ\n'
+          '3661iihx1kYj3BT3pUDuf8Ztbpf4th0iRX0HaQ86Cv23csvlGEggo332tuHE8nqt\n'
+          'QRHW6F76DyflCMF+rSGKlf6PvU9bDjNccjxiYMum4HG+hoUqsnTW2g==\n'
+          '-----END CERTIFICATE REQUEST-----\n';
+      expect(
+        () => JsonWebKey.fromPem(csrPem),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+  });
+
+  group('JsonWebKey._getAlgorithm', () {
+    test(
+        'sign with algorithm "none" throws UnsupportedError '
+        '(AlgorithmIdentifier.getByJwaName returns null only for "none")', () {
+      final key = JsonWebKey.fromJson({
+        'kty': 'oct',
+        'k': 'AyM1SysPpbyDfgZld3umj1qzKObwVMkoqQ-EstJQLr_T-1qS0gZH75'
+            'aKtMN3Yj0iPS4hcgUuTwjAzZr1Z9CAow',
+      })!;
+      expect(
+        () => key.sign([1, 2, 3], algorithm: 'none'),
+        throwsA(isA<UnsupportedError>()),
+      );
+    });
+  });
+
   group('JsonWebKey cryptographic operation guards', () {
     test('sign throws StateError when the key cannot sign', () {
       final publicOnly = JsonWebKey.fromJson({

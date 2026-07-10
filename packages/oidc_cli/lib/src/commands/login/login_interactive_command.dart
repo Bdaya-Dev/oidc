@@ -115,6 +115,11 @@ class LoginInteractiveCommand extends OidcBaseCommand {
         ..success('Authentication successful!')
         ..info('Access Token: ${user.token.accessToken}');
 
+      // coverage:ignore-start
+      // See `dart_pub.dart`: `addToDartPub` shells out to the real `dart`
+      // executable and would mutate the developer machine's actual pub
+      // credentials store, so unit tests deliberately never let a login
+      // succeed while `--add-to-dart-pub` is set.
       if (hostedUrl != null && user.token.accessToken != null) {
         await addToDartPub(
           logger: logger,
@@ -122,6 +127,7 @@ class LoginInteractiveCommand extends OidcBaseCommand {
           token: user.token.accessToken!,
         );
       }
+      // coverage:ignore-end
 
       return ExitCode.success.code;
     } finally {

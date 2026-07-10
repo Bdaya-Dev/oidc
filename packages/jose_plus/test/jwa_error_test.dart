@@ -1,5 +1,21 @@
+import 'package:crypto_keys_plus/crypto_keys.dart';
 import 'package:jose_plus/jose.dart';
 import 'package:test/test.dart';
+
+/// A [JsonWebAlgorithm] whose [jwkFromCryptoKeyPair] always returns `null`,
+/// simulating a mismatch between [JsonWebAlgorithm.generateCryptoKeyPair]
+/// (which always succeeds for the 4 known `type`s) and
+/// [JsonWebAlgorithm.jwkFromCryptoKeyPair] (which the base implementation
+/// also always populates for those same 4 types) — a "should never happen"
+/// combination that [JsonWebAlgorithm.generateRandomKey] still guards
+/// against.
+class _AlwaysNullJwk extends JsonWebAlgorithm {
+  const _AlwaysNullJwk()
+      : super('X-NULL', type: 'oct', use: 'sig', minKeyBitLength: 8);
+
+  @override
+  JsonWebKey? jwkFromCryptoKeyPair(KeyPair keyPair) => null;
+}
 
 void main() {
   group('JsonWebAlgorithm.getByName', () {
@@ -71,6 +87,14 @@ void main() {
     test('accepts a key length at or above the minimum', () {
       final key = JsonWebKey.generate('HS256', keyBitLength: 256);
       expect(key.keyType, 'oct');
+    });
+  });
+
+  group('JsonWebAlgorithm.generateRandomKey', () {
+    test('throws UnimplementedError when jwkFromCryptoKeyPair returns null',
+        () {
+      const alg = _AlwaysNullJwk();
+      expect(() => alg.generateRandomKey(), throwsA(isA<UnimplementedError>()));
     });
   });
 }

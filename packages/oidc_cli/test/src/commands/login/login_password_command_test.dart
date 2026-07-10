@@ -300,5 +300,131 @@ void main() {
         );
       },
     );
+
+    test(
+      'authenticates with a confidential client (--client-secret) using '
+      'client_secret_post',
+      () async {
+        late final TestOidcServer server;
+        server = await TestOidcServer.start(
+          onToken: (form, callCount) {
+            expect(form['client_secret'], 'shh-its-a-secret');
+            return server.tokenResponseJson(sub: 'user-1', expiresIn: 3600);
+          },
+        );
+        addTearDown(server.close);
+
+        final result = await runner.run([
+          '--store',
+          storePath,
+          'login',
+          'password',
+          '--username',
+          'alice',
+          '--password',
+          'secret',
+          '--issuer',
+          server.issuer.toString(),
+          '--client-id',
+          'my-client',
+          '--client-secret',
+          'shh-its-a-secret',
+        ]);
+
+        expect(result, ExitCode.success.code);
+        expect(infoMessages, contains('Authentication successful!'));
+      },
+    );
+
+    test(
+      'persists --add-to-dart-pub as hostedUrl even when the subsequent '
+      'login attempt fails (so `dart pub token add` is never invoked)',
+      () async {
+        late final TestOidcServer server;
+        server = await TestOidcServer.start(
+          onToken: (form, callCount) {
+            // Fail the password grant with a network-level error so
+            // `loginPassword` throws before ever reaching hostedUrl/pub
+            // logic; the config write (including hostedUrl) already
+            // happened earlier in `run()`.
+            throw Exception('simulated token endpoint outage');
+          },
+        );
+        addTearDown(server.close);
+
+        await expectLater(
+          runner.run([
+            '--store',
+            storePath,
+            'login',
+            'password',
+            '--username',
+            'alice',
+            '--password',
+            'secret',
+            '--issuer',
+            server.issuer.toString(),
+            '--client-id',
+            'my-client',
+            '--add-to-dart-pub',
+            'https://pub.example.com',
+          ]),
+          throwsA(anything),
+        );
+
+        final store = FileOidcStore.fromPath(storePath, logger: logger);
+        final config = await store.getConfig();
+        expect(config['hostedUrl'], 'https://pub.example.com');
+      },
+    );
+
+    // NOTE: there is intentionally no test for the "Login failed." /
+    // `user == null` branch below: `OidcUserManagerBase.loginPassword`
+    // never returns `null` in this SDK -- on any failure (network error,
+    // missing id_token, invalid signature, ...) `createUserFromToken` /
+    // `OidcUser.fromIdToken` throw rather than returning `null` (verified
+    // empirically: a token response with no id_token throws
+    // `OidcException: Server didn't return the id_token.` instead of
+    // resolving to `null`). The `if (user == null)` check is defensive
+    // dead code given the current SDK behavior; see `bugsFound` in this
+    // package's coverage report.
+
+    test(
+      'reports "Refresh failed." when the initial token has no '
+      'refresh_token and the access token is expiring soon',
+      () async {
+        late final TestOidcServer server;
+        server = await TestOidcServer.start(
+          onToken: (form, callCount) => server.tokenResponseJson(
+            sub: 'user-1',
+            expiresIn: 10,
+            refreshToken: null,
+          ),
+        );
+        addTearDown(server.close);
+
+        final result = await runner.run([
+          '--store',
+          storePath,
+          'login',
+          'password',
+          '--username',
+          'alice',
+          '--password',
+          'secret',
+          '--issuer',
+          server.issuer.toString(),
+          '--client-id',
+          'my-client',
+        ]);
+
+        expect(result, ExitCode.software.code);
+        expect(
+          infoMessages,
+          contains('Token expired or expiring soon. Refreshing...'),
+        );
+        expect(errMessages, contains('Refresh failed.'));
+      },
+    );
   });
 }

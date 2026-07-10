@@ -35,6 +35,50 @@ void main() {
       expect(config, isEmpty);
     });
 
+    test('can be instantiated with a default (non-injected) logger', () {
+      final defaultStore = FileOidcStore(file: storeFile);
+      expect(defaultStore, isNotNull);
+    });
+
+    test(
+      'userHome() builds a path under HOME/USERPROFILE/.oidc_cli/store.json',
+      () {
+        final home =
+            Platform.environment['HOME'] ??
+            Platform.environment['USERPROFILE'] ??
+            '.';
+        final userHomeStore = FileOidcStore.userHome(logger: logger);
+        expect(userHomeStore.file.path, contains(home));
+        expect(userHomeStore.file.path, contains('.oidc_cli'));
+        expect(userHomeStore.file.path, endsWith('store.json'));
+      },
+    );
+
+    test('getConfig returns empty map when the store file is empty', () async {
+      storeFile
+        ..createSync(recursive: true)
+        ..writeAsStringSync('');
+
+      final config = await store.getConfig();
+      expect(config, isEmpty);
+    });
+
+    test(
+      'setConfig creates missing parent directories before writing',
+      () async {
+        final nestedFile = File(
+          '${tempDir.path}/nested/does/not/exist/store.json',
+        );
+        final nestedStore = FileOidcStore(file: nestedFile, logger: logger);
+
+        await nestedStore.setConfig({'issuer': 'https://example.com'});
+
+        expect(nestedFile.existsSync(), isTrue);
+        final config = await nestedStore.getConfig();
+        expect(config['issuer'], 'https://example.com');
+      },
+    );
+
     test('setConfig persists and getConfig reads it back', () async {
       await store.setConfig({'issuer': 'https://example.com'});
 
