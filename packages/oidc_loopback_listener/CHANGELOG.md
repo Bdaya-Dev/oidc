@@ -1,3 +1,7 @@
+## 0.3.1
+
+ - **FEAT**(oidc): batch-2 audit hardening (loopback timeout, auth_time/max_age, resilient discovery parse, unverified-userinfo guard). ([d7f5965a](https://github.com/Bdaya-Dev/oidc/commit/d7f5965ac4ecbad0d7a79849e0e89d729a736169))
+
 ## 0.3.0+1
 
  - **DOCS**: remove logo branding from screenshots. ([2acf65d3](https://github.com/Bdaya-Dev/oidc/commit/2acf65d34fb47c0449653a73373168df3deb1735))

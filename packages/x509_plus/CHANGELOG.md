@@ -1,3 +1,11 @@
+## 0.4.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**(ci): stop swallowing web test failures; pin dart:io fixture tests to vm ([#363](https://github.com/Bdaya-Dev/oidc/issues/363)). ([6102d835](https://github.com/Bdaya-Dev/oidc/commit/6102d8353b0d330f888ea8b8e9b4c52937be2236))
+ - **FIX**(release): add package-name entrypoints for jose_plus and x509_plus. ([4bbcb7f3](https://github.com/Bdaya-Dev/oidc/commit/4bbcb7f3df69cf393be29bd5997f49c15add7ff4))
+ - **BREAKING** **FEAT**: consolidate jose_plus, crypto_keys_plus, x509_plus into the workspace. ([3fffc6cd](https://github.com/Bdaya-Dev/oidc/commit/3fffc6cd51f2abb0ead643acc2ec4d5741fac8e5))
+
 ## 0.3.3
 
  - **UPGRADE**: Updated to use crypto_keys_plus 0.5.0 which uses pointycastle 4.0.0.
