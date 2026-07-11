@@ -92,13 +92,25 @@ jobs:
       # try is bounded at 5 minutes; three tries turn manual whole-job rerun
       # roulette into an automatic in-step retry, while a REAL test failure
       # still fails fast three times and blocks the PR.
+      # --foreground: without it, coreutils timeout setpgid-isolates melos
+      # into its own process group, and the outer melos then exits 1 even
+      # after every test passed and the inner run printed SUCCESS (observed
+      # on run 29162293700: 47 tests pass, inner SUCCESS, outer summary
+      # never printed, exit 1 at 53s with the 300s timer nowhere near
+      # firing). --foreground keeps the child in the step shell's group --
+      # the exact topology every non-wrapped run used. Trade-off: on a
+      # timeout, TERM/KILL reach only melos itself, so a wedged dart/browser
+      # child may linger -- acceptable, the retry spawns fresh processes and
+      # the job teardown reaps orphans.
       - name: "[Verify step] Test Dart packages [Chrome, PR scope]"
         if: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 18
         run: |
           for attempt in 1 2 3; do
-            if timeout -k 10 300 melos run test:web:pr:chrome; then exit 0; fi
-            echo "chrome PR-scope attempt $attempt did not finish cleanly; retrying"
+            rc=0
+            timeout --foreground -k 10 300 melos run test:web:pr:chrome || rc=$?
+            if [ "$rc" -eq 0 ]; then exit 0; fi
+            echo "chrome PR-scope attempt $attempt exited rc=$rc; retrying"
           done
           exit 1
       - name: "[Verify step] Test Dart packages [Firefox, PR scope]"
@@ -106,8 +118,10 @@ jobs:
         timeout-minutes: 18
         run: |
           for attempt in 1 2 3; do
-            if timeout -k 10 300 melos run test:web:pr:firefox; then exit 0; fi
-            echo "firefox PR-scope attempt $attempt did not finish cleanly; retrying"
+            rc=0
+            timeout --foreground -k 10 300 melos run test:web:pr:firefox || rc=$?
+            if [ "$rc" -eq 0 ]; then exit 0; fi
+            echo "firefox PR-scope attempt $attempt exited rc=$rc; retrying"
           done
           exit 1
       - name: "[Verify step] Test Dart packages [Chrome]"
