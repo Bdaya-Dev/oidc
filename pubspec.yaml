@@ -138,6 +138,11 @@ melos:
         WITH_WASM: false
     test:web:pr:single:
       name: PR-scoped Dart Web tests in a browser
+      # NOTE: CI does NOT invoke this script -- the workflow's PR-scope
+      # browser steps run the same dart test command directly (see
+      # .github/workflows/tests.yaml, which explains why the melos layers
+      # had to go there). Keep the command below in sync with those steps.
+      # This script remains the local/one-shot way to run the PR scope.
       # Per-PR browser testing runs ONLY the packages whose lib code is
       # genuinely platform-divergent (js-interop / web-conditional imports).
       # Everything else is platform-neutral pure Dart: its browser runs

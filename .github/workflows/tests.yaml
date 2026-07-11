@@ -92,36 +92,45 @@ jobs:
       # try is bounded at 5 minutes; three tries turn manual whole-job rerun
       # roulette into an automatic in-step retry, while a REAL test failure
       # still fails fast three times and blocks the PR.
-      # --foreground: without it, coreutils timeout setpgid-isolates melos
-      # into its own process group, and the outer melos then exits 1 even
-      # after every test passed and the inner run printed SUCCESS (observed
-      # on run 29162293700: 47 tests pass, inner SUCCESS, outer summary
-      # never printed, exit 1 at 53s with the 300s timer nowhere near
-      # firing). --foreground keeps the child in the step shell's group --
-      # the exact topology every non-wrapped run used. Trade-off: on a
-      # timeout, TERM/KILL reach only melos itself, so a wedged dart/browser
-      # child may linger -- acceptable, the retry spawns fresh processes and
-      # the job teardown reaps orphans.
+      # These steps run dart test DIRECTLY, not via melos run test:web:pr:*.
+      # In two consecutive runs (29162293700, 29162532019) the OUTERMOST
+      # melos layer exited 1 AFTER every test passed and the inner layer
+      # printed SUCCESS, failing the step post-success on both matrix legs
+      # (with and without timeout's process-group isolation), and the shell
+      # died without reaching its next statement. dart test's own exit code
+      # is the ground truth the melos layers were relaying anyway; the
+      # command below must stay in sync with test:web:pr:single in the root
+      # pubspec.yaml (used for local runs). set +e so a failed try or a
+      # failed echo write can never errexit the loop; each try is bounded at
+      # 5 minutes (honest runs are 20-90s) and retried up to 3 times -- the
+      # #372 hang wedges a try at random, while a REAL test failure fails
+      # all three tries fast and blocks the PR.
       - name: "[Verify step] Test Dart packages [Chrome, PR scope]"
         if: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 18
+        working-directory: packages/oidc_web_core
         run: |
+          set +e
           for attempt in 1 2 3; do
-            rc=0
-            timeout --foreground -k 10 300 melos run test:web:pr:chrome || rc=$?
+            timeout --foreground -k 10 300 dart test --suite-load-timeout 4m --concurrency=1 --platform chrome --chain-stack-traces
+            rc=$?
             if [ "$rc" -eq 0 ]; then exit 0; fi
-            echo "chrome PR-scope attempt $attempt exited rc=$rc; retrying"
+            echo "chrome PR-scope attempt $attempt exited rc=$rc; retrying" || true
           done
           exit 1
       - name: "[Verify step] Test Dart packages [Firefox, PR scope]"
         if: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 18
+        working-directory: packages/oidc_web_core
+        env:
+          MOZ_HEADLESS: "1"
         run: |
+          set +e
           for attempt in 1 2 3; do
-            rc=0
-            timeout --foreground -k 10 300 melos run test:web:pr:firefox || rc=$?
+            timeout --foreground -k 10 300 dart test --suite-load-timeout 4m --concurrency=1 --platform firefox --chain-stack-traces
+            rc=$?
             if [ "$rc" -eq 0 ]; then exit 0; fi
-            echo "firefox PR-scope attempt $attempt exited rc=$rc; retrying"
+            echo "firefox PR-scope attempt $attempt exited rc=$rc; retrying" || true
           done
           exit 1
       - name: "[Verify step] Test Dart packages [Chrome]"
