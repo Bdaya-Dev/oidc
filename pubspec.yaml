@@ -127,7 +127,12 @@ melos:
       name: Dart Web tests in a browser
       env:
         WITH_WASM: false
-      # We have to use --timeout 60m alongside --ignore-timeouts
+      # --timeout 60m: jose_plus's crypto tests are legitimately slow under
+      # dart2js. Deliberately NO --ignore-timeouts: it also disables
+      # package:test's browser-load timeout, which turned a wedged Firefox
+      # launch on CI into a silent 4.5h hang that only GitHub's 6h job limit
+      # ended (run 29118828702; the last two suites never printed a line).
+      # Without it, a wedged load fails loudly in minutes and can be rerun.
       exec: |
         # set -e: without it this script's exit status is that of its LAST
         # statement -- the WITH_WASM if-block, which is 0 whenever WITH_WASM
@@ -135,11 +140,11 @@ melos:
         # CI step stayed green (issue #353: 27 web test failures hidden).
         set -e
         if [ "$TARGET_DART_SDK" = "min" ]; then
-          dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --chain-stack-traces
+          dart test --timeout 60m --platform ${TEST_PLATFORM} --chain-stack-traces
         else
-          dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+          dart test --timeout 60m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
           if [ "$WITH_WASM" = "true" ]; then
-            dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
+            dart test --timeout 60m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
           fi
         fi
       packageFilters:
@@ -202,6 +207,7 @@ melos:
     test:coverage:
       name: Run all tests and combine coverage
       run: |
+        set -e
         melos run test
         melos run coverage:format
 
