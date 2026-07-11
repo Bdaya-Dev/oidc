@@ -123,11 +123,73 @@ melos:
         TEST_PLATFORM: firefox
         MOZ_HEADLESS: "1"
         WITH_WASM: false
+    test:web:pr:chrome:
+      name: PR-scoped Dart Web tests in chrome
+      run: melos run test:web:pr:single
+      env:
+        TEST_PLATFORM: chrome
+        WITH_WASM: false
+    test:web:pr:firefox:
+      name: PR-scoped Dart Web tests in firefox
+      run: melos run test:web:pr:single
+      env:
+        TEST_PLATFORM: firefox
+        MOZ_HEADLESS: "1"
+        WITH_WASM: false
+    test:web:pr:single:
+      name: PR-scoped Dart Web tests in a browser
+      # Per-PR browser testing runs ONLY the packages whose lib code is
+      # genuinely platform-divergent (js-interop / web-conditional imports).
+      # Everything else is platform-neutral pure Dart: its browser runs
+      # duplicate the VM signal while paying one dart2js compile PER TEST
+      # FILE (~30-60s each on CI; oidc_core alone is 60+ files, so the old
+      # full sweep spent the better part of an hour per browser per matrix
+      # leg just compiling). The full sweep still runs on main pushes via
+      # test:web:chrome / test:web:firefox.
+      # --concurrency=1 and NO --coverage: three consecutive CI runs wedged
+      # AFTER every test passed -- the runner reached a fully successful end
+      # and never exited, idling from the last passing test until an outer
+      # timeout killed it (runs 29146393931/29148902320/29150605150, both
+      # browsers). The post-success phase is browser/suite teardown plus
+      # (Chrome-only) coverage collection; dart-lang/test#2294 documents a
+      # multi-suite post-success exit hang with --concurrency=1 as the
+      # workaround, and PR runs don't need browser coverage anyway (codecov
+      # gets it from the full sweep on main pushes).
+      # --suite-load-timeout 4m: suite loads default to NO timeout at all
+      # (test 1.31: suiteLoadTimeout falls back to Timeout.none), so a
+      # load-phase wedge would otherwise also hang forever; five ~10s suite
+      # loads make 4m generous. No --timeout override: tests are sub-second,
+      # so the 30s default bounds mid-test hangs. The workflow adds
+      # step-level timeout-minutes as the backstop for anything else.
+      exec: |
+        set -e
+        dart test --suite-load-timeout 4m --concurrency=1 --platform ${TEST_PLATFORM} --chain-stack-traces
+      packageFilters:
+        scope:
+          - oidc_web_core
     test:web:single:
       name: Dart Web tests in a browser
       env:
         WITH_WASM: false
-      # We have to use --timeout 60m alongside --ignore-timeouts
+      # --timeout 60m: jose_plus's crypto tests are legitimately slow under
+      # dart2js. --suite-load-timeout 2h: package:test 1.31 puts NO timeout
+      # on suite loads by default (suiteLoadTimeout falls back to
+      # Timeout.none), so a wedged browser suite load hangs silently until
+      # GitHub's 6h job limit (run 29118828702; the last two suites never
+      # printed a line). The bound must clear the worst honest wait: the
+      # load timer keeps running while suites queue behind jose's ~55min
+      # crypto executors, so a small bound false-fails healthy suites (a 4m
+      # bound failed 8 of them in run 29140552735). 2h turns a wedge into a
+      # loud, rerunnable failure instead of a 6h hang. Deliberately NO
+      # --ignore-timeouts: it disables all of these bounds.
+      # WEB_EXCLUDE_TAGS: passed through to `dart test --exclude-tags`.
+      # jose_plus tags its crypto-executor suites (keygen/sign/encrypt) as
+      # slow-web-crypto (see packages/jose_plus/dart_test.yaml) because they
+      # take ~55min per browser under dart2js's ~200x slower BigInt (#371);
+      # while they run, other suites' loads starve. CI sets this to
+      # slow-web-crypto for pull_request events only, so PR web runs skip
+      # them while VM runs (which always execute every tag) and main-branch
+      # pushes keep full web crypto signal.
       exec: |
         # set -e: without it this script's exit status is that of its LAST
         # statement -- the WITH_WASM if-block, which is 0 whenever WITH_WASM
@@ -135,11 +197,11 @@ melos:
         # CI step stayed green (issue #353: 27 web test failures hidden).
         set -e
         if [ "$TARGET_DART_SDK" = "min" ]; then
-          dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --chain-stack-traces
+          dart test --timeout 60m --platform ${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
         else
-          dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+          dart test --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           if [ "$WITH_WASM" = "true" ]; then
-            dart test --timeout 60m --ignore-timeouts --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
+            dart test --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           fi
         fi
       packageFilters:
@@ -202,6 +264,7 @@ melos:
     test:coverage:
       name: Run all tests and combine coverage
       run: |
+        set -e
         melos run test
         melos run coverage:format
 
@@ -230,7 +293,12 @@ melos:
 
     coverage:format:package:
       name: Format coverage for each package
-      exec: dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+      # --check-ignore: honor // coverage:ignore-file / ignore-start markers in
+      # pure-Dart packages, matching what flutter test does natively for the
+      # Flutter packages (evidence: ignore-marked platform.dart never appears
+      # in their lcov). Without it the two halves of the repo obey different
+      # ignore semantics.
+      exec: dart pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib --check-ignore
       packageFilters:
         # Dart-only. `dart test --coverage=<dir>` writes VM hitmap JSON that
         # still needs format_coverage to become lcov; `flutter test --coverage`
@@ -250,7 +318,7 @@ melos:
         dart pub global activate remove_from_coverage
         melos run coverage:format
         dart pub global run combine_coverage --repo-path=$pwd
-        dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$'
+        dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$' -r 'oidc_cli/lib/src/version\.dart$'
 
     oidc:activate:
       name: Activate OIDC CLI locally

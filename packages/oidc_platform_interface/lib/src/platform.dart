@@ -1,4 +1,3 @@
-// coverage:ignore-file
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/src/native_events.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';

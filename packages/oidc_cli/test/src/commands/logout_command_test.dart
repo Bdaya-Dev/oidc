@@ -134,5 +134,56 @@ void main() {
         expect(infoMessages, contains('Logged out successfully.'));
       },
     );
+
+    test(
+      'still reports success (after warning) when remote revocation fails',
+      () async {
+        late final TestOidcServer server;
+        server = await TestOidcServer.start(
+          advertiseRevocationEndpoint: true,
+          onToken: (form, callCount) =>
+              server.tokenResponseJson(sub: 'user-1', expiresIn: 3600),
+        );
+
+        final loginResult = await runner.run([
+          '--store',
+          storePath,
+          'login',
+          'password',
+          '--username',
+          'alice',
+          '--password',
+          'secret',
+          '--issuer',
+          server.issuer.toString(),
+          '--client-id',
+          'my-client',
+        ]);
+        expect(loginResult, ExitCode.success.code);
+        infoMessages.clear();
+
+        final warnMessages = <String>[];
+        when(() => logger.warn(any())).thenAnswer((invocation) {
+          final message = invocation.positionalArguments.first;
+          if (message is String) warnMessages.add(message);
+        });
+
+        // Take the provider offline so revoking the tokens against the
+        // (now advertised) revocation_endpoint fails with a connection
+        // error.
+        await server.close();
+
+        final result = await runner.run(['--store', storePath, 'logout']);
+
+        expect(result, ExitCode.success.code);
+        expect(infoMessages, contains('Logged out successfully.'));
+        expect(
+          warnMessages.any(
+            (m) => m.startsWith('Failed to perform remote logout/revocation: '),
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 }

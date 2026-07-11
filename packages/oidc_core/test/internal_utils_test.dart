@@ -239,5 +239,58 @@ void main() {
         isNull,
       );
     });
+
+    test(
+      'strips a query and fragment from the well-known URL '
+      '(doc contract: "and clearing query/fragment")',
+      () {
+        final issuer = OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(
+          Uri.parse(
+            'https://op.example.com/.well-known/openid-configuration'
+            '?x=1#y',
+          ),
+        );
+        expect(issuer, isNotNull);
+        expect(issuer!.hasQuery, isFalse);
+        expect(issuer.hasFragment, isFalse);
+        expect(issuer, Uri.parse('https://op.example.com'));
+        // Also assert byte-identical serialization: no leftover `?`/`#`
+        // (a naive `Uri.replace(query: '')` fix would leave a dangling `?`).
+        expect(issuer.toString(), 'https://op.example.com');
+      },
+    );
+
+    test(
+      'recovers a tenant issuer from an Entra-style `?appid=` well-known URL '
+      'with the query cleared',
+      () {
+        final issuer = OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(
+          Uri.parse(
+            'https://login.microsoftonline.com/common/v2.0'
+            '/.well-known/openid-configuration'
+            '?appid=6731de76-14a6-49ae-97bc-6eba6914391e',
+          ),
+        );
+        expect(
+          issuer,
+          Uri.parse('https://login.microsoftonline.com/common/v2.0'),
+        );
+        expect(issuer!.hasQuery, isFalse);
+      },
+    );
+
+    test('preserves userInfo and a non-default port', () {
+      final issuer = OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(
+        Uri.parse(
+          'https://user:pass@op.example.com:8443/realm'
+          '/.well-known/openid-configuration?x=1',
+        ),
+      );
+      expect(
+        issuer,
+        Uri.parse('https://user:pass@op.example.com:8443/realm'),
+      );
+      expect(issuer!.hasQuery, isFalse);
+    });
   });
 }

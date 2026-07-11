@@ -2,3 +2,11 @@ coverage:
   status:
     patch: false
     project: false
+
+# Reporting-side noise exclusion. Generated code and the example app are not
+# library surface; version.dart is generated (header: "Generated code. Do not
+# modify.") but does not match the *.g.dart convention.
+ignore:
+  - "**/*.g.dart"
+  - "**/example/**"
+  - "packages/oidc_cli/lib/src/version.dart"

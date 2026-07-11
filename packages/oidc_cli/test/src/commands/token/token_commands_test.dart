@@ -270,5 +270,109 @@ void main() {
         expect(infoMessages, contains('refreshed-access-token'));
       });
     });
+
+    test(
+      'refresh: config present but never logged in -> no active session',
+      () async {
+        late final TestOidcServer server;
+        server = await TestOidcServer.start(
+          onToken: (form, callCount) => server.tokenResponseJson(sub: 'user-1'),
+        );
+        addTearDown(server.close);
+
+        final store = FileOidcStore.fromPath(storePath, logger: logger);
+        await store.setConfig({
+          'issuer': server.issuer.toString(),
+          'clientId': 'my-client',
+          'clientSecret': null,
+          'scopes': ['openid'],
+          'port': 3000,
+        });
+
+        final result = await runner.run([
+          '--store',
+          storePath,
+          'token',
+          'refresh',
+        ]);
+
+        expect(result, ExitCode.software.code);
+        expect(
+          errMessages,
+          contains('No active session. Please login first.'),
+        );
+      },
+    );
+
+    group('with a session that has no refresh_token', () {
+      late TestOidcServer server;
+
+      setUp(() async {
+        server = await TestOidcServer.start(
+          onToken: (form, callCount) => server.tokenResponseJson(
+            sub: 'user-1',
+            expiresIn: 10,
+            refreshToken: null,
+          ),
+        );
+
+        final loginResult = await runner.run([
+          '--store',
+          storePath,
+          'login',
+          'password',
+          '--username',
+          'alice',
+          '--password',
+          'secret',
+          '--issuer',
+          server.issuer.toString(),
+          '--client-id',
+          'my-client',
+          '--no-auto-refresh',
+        ]);
+        expect(loginResult, ExitCode.success.code);
+        infoMessages.clear();
+        errMessages.clear();
+      });
+
+      tearDown(() => server.close());
+
+      test(
+        'get: reports "No access token available." when auto-refresh '
+        'cannot find a refresh_token',
+        () async {
+          final result = await runner.run([
+            '--store',
+            storePath,
+            'token',
+            'get',
+          ]);
+
+          expect(result, ExitCode.software.code);
+          expect(
+            infoMessages,
+            contains('Token expired or expiring soon. Refreshing...'),
+          );
+          expect(errMessages, contains('No access token available.'));
+        },
+      );
+
+      test(
+        'refresh: reports "No access token available." when there is no '
+        'refresh_token to use',
+        () async {
+          final result = await runner.run([
+            '--store',
+            storePath,
+            'token',
+            'refresh',
+          ]);
+
+          expect(result, ExitCode.software.code);
+          expect(errMessages, contains('No access token available.'));
+        },
+      );
+    });
   });
 }

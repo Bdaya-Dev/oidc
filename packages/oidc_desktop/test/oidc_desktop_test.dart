@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/src/logger.dart';
 import 'package:oidc_core/oidc_core.dart';
@@ -371,5 +372,193 @@ void main() {
         expect(response!.code, 'auth-code-fallback');
       },
     );
+
+    group('launchAuthUrl fallback to package:url_launcher', () {
+      // `platformOpts.launchUrl` overrides the launch mechanism entirely
+      // (already covered above). When no override is configured, the mixin
+      // falls back to the real `canLaunchUrl`/`launchUrl` free functions,
+      // which delegate to `UrlLauncherPlatform.instance` (a method-channel
+      // implementation by default). We drive that fallback branch by
+      // mocking the platform's own method channel directly, without
+      // depending on `url_launcher_platform_interface`.
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+
+      setUp(() {
+        TestWidgetsFlutterBinding.ensureInitialized();
+        // `ensureInitialized` installs an `HttpOverrides` that fakes every
+        // `HttpClient` request (returning 400 without touching the
+        // network). We only need the binding for
+        // `TestDefaultBinaryMessengerBinding`, not for HTTP faking -- other
+        // tests in this file spin up a real loopback HttpServer/HttpClient
+        // pair and would hang/fail if that override stayed active.
+        HttpOverrides.global = null;
+      });
+
+      tearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      test(
+        'warns (but still attempts to launch) when canLaunchUrl reports '
+        'false, and returns false when the launch itself also fails',
+        () async {
+          final calledMethods = <String>[];
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(channel, (call) async {
+            calledMethods.add(call.method);
+            if (call.method == 'canLaunch') {
+              return false;
+            }
+            if (call.method == 'launch') {
+              return false;
+            }
+            return null;
+          });
+
+          final oidc = MockDesktopImpl();
+          final result = await oidc.launchAuthUrl(
+            Uri.parse('https://op.example.com/authorize'),
+            logRequestDesc: 'authorization',
+            platformOpts: oidc.getNativeOptions(
+              const OidcPlatformSpecificOptions(),
+            ),
+          );
+
+          expect(result, isFalse);
+          expect(calledMethods, containsAll(<String>['canLaunch', 'launch']));
+        },
+      );
+
+      test(
+        'returns true when canLaunchUrl and launchUrl both report success',
+        () async {
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(channel, (call) async {
+            if (call.method == 'canLaunch') {
+              return true;
+            }
+            if (call.method == 'launch') {
+              return true;
+            }
+            return null;
+          });
+
+          final oidc = MockDesktopImpl();
+          final result = await oidc.launchAuthUrl(
+            Uri.parse('https://op.example.com/authorize'),
+            logRequestDesc: 'authorization',
+            platformOpts: oidc.getNativeOptions(
+              const OidcPlatformSpecificOptions(),
+            ),
+          );
+
+          expect(result, isTrue);
+        },
+      );
+    });
+
+    group('getEndSessionResponse', () {
+      test(
+        'throws an OidcException when the discovery document has no '
+        'end_session_endpoint',
+        () async {
+          final oidc = MockDesktopImpl();
+          final metadata = OidcProviderMetadata.fromJson({
+            'issuer': 'https://op.example.com',
+          });
+          const request = OidcEndSessionRequest();
+
+          await expectLater(
+            oidc.getEndSessionResponse(
+              metadata,
+              request,
+              const OidcPlatformSpecificOptions(),
+              const {},
+            ),
+            throwsA(isA<OidcException>()),
+          );
+        },
+      );
+
+      test(
+        'returns null without starting a listener when the request has no '
+        'postLogoutRedirectUri',
+        () async {
+          var launchAttempted = false;
+          final oidc = MockDesktopImpl(
+            launchUrl: (uri) async {
+              launchAttempted = true;
+              return true;
+            },
+          );
+          final metadata = OidcProviderMetadata.fromJson({
+            'issuer': 'https://op.example.com',
+            'end_session_endpoint': 'https://op.example.com/end-session',
+          });
+          const request = OidcEndSessionRequest();
+
+          final response = await oidc.getEndSessionResponse(
+            metadata,
+            request,
+            const OidcPlatformSpecificOptions(),
+            const {},
+          );
+
+          expect(response, isNull);
+          expect(launchAttempted, isFalse);
+        },
+      );
+
+      test(
+        'completes the flow and parses the state query parameter from the '
+        'loopback redirect',
+        () async {
+          final oidc = MockDesktopImpl(
+            launchUrl: (uri) async {
+              final redirectUri =
+                  Uri.parse(uri.queryParameters['post_logout_redirect_uri']!);
+              final client = HttpClient();
+              try {
+                final callbackUri = redirectUri.replace(
+                  queryParameters: {
+                    ...redirectUri.queryParameters,
+                    'state': 'logout-state-1',
+                  },
+                );
+                final getRequest = await client.getUrl(callbackUri);
+                await (await getRequest.close()).drain<void>();
+              } finally {
+                client.close(force: true);
+              }
+              return true;
+            },
+          );
+
+          final metadata = OidcProviderMetadata.fromJson({
+            'issuer': 'https://op.example.com',
+            'end_session_endpoint': 'https://op.example.com/end-session',
+          });
+          final request = OidcEndSessionRequest(
+            postLogoutRedirectUri: Uri(
+              scheme: 'http',
+              host: '127.0.0.1',
+              port: 0,
+              path: '/post-logout',
+            ),
+          );
+
+          final response = await oidc.getEndSessionResponse(
+            metadata,
+            request,
+            const OidcPlatformSpecificOptions(),
+            const {},
+          );
+
+          expect(response, isNotNull);
+          expect(response!.state, 'logout-state-1');
+        },
+      );
+    });
   });
 }

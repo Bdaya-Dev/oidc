@@ -41,6 +41,13 @@ jobs:
     env:
       TEST_PRESET: all
       CHROME_FLAGS: --headless --no-sandbox --disable-dev-shm-usage --disable-gpu
+      # jose_plus's crypto-executor suites (keygen/sign/encrypt) take ~55min
+      # per browser under dart2js's ~200x slower BigInt (#371); while they
+      # run, other suites' loads starve. Exclude them (tagged slow-web-crypto,
+      # see packages/jose_plus/dart_test.yaml) from PR web runs only -- VM
+      # runs always execute every tag, and main-branch pushes keep full web
+      # crypto signal.
+      WEB_EXCLUDE_TAGS: ${{ github.event_name == 'pull_request' && 'slow-web-crypto' || '' }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -64,9 +71,36 @@ jobs:
       #     melos run pana
       - name: "[Verify step] Test Dart packages [VM]"
         run: melos run test:vm
+      # PRs: browser-test only the packages with genuinely platform-divergent
+      # lib code (js-interop) -- everything else duplicates VM signal at the
+      # cost of one dart2js compile per test file (the old full sweep spent
+      # most of an hour per browser per leg compiling). Pushes to main run
+      # the full browser sweep.
+      # timeout-minutes on the browser steps is the backstop of last resort:
+      # package:test's --timeout and --suite-load-timeout only bound test
+      # execution and suite loads, and a browser wedge can strike OUTSIDE
+      # both (run 29148902320: a Firefox step hung 57+ min with the 4m load
+      # bound active -- so the hang was in launch/shutdown/orchestration,
+      # which no dart-level timer covers). The runner kills the whole
+      # process tree, so the step fails loudly and is rerunnable instead of
+      # idling to GitHub's 6h job kill. PR-scope steps finish in under a
+      # minute (15m = wide margin); full sweeps run ~55-66min per browser
+      # (150m = wide margin).
+      - name: "[Verify step] Test Dart packages [Chrome, PR scope]"
+        if: ${{ github.event_name == 'pull_request' }}
+        timeout-minutes: 15
+        run: melos run test:web:pr:chrome
+      - name: "[Verify step] Test Dart packages [Firefox, PR scope]"
+        if: ${{ github.event_name == 'pull_request' }}
+        timeout-minutes: 15
+        run: melos run test:web:pr:firefox
       - name: "[Verify step] Test Dart packages [Chrome]"
+        if: ${{ github.event_name != 'pull_request' }}
+        timeout-minutes: 150
         run: melos run test:web:chrome
       - name: "[Verify step] Test Dart packages [Firefox]"
+        if: ${{ github.event_name != 'pull_request' }}
+        timeout-minutes: 150
         run: melos run test:web:firefox
       - name: Remove dart_test.yaml Files
         run: melos run remove_dart_test_yaml
@@ -217,7 +251,7 @@ jobs:
           patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
-            --coverage-package oidc \
+            --coverage-workspace \
             -d "$EMU_ID" \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
@@ -364,7 +398,7 @@ jobs:
           patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
-            --coverage-package oidc \
+            --coverage-workspace \
             -d "${SIMULATOR_UDID:?Simulator UDID was not exported}" \
             --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
             --verbose \
@@ -486,13 +520,13 @@ jobs:
           # Work around flaky desktop integration test runs when executing
           # multiple test entrypoints in a single `flutter test integration_test`.
           flutter test integration_test/app_test.dart \
-            --coverage --branch-coverage --coverage-package "oidc*" \
+            --coverage --branch-coverage --coverage-package "^(oidc|jose_plus|x509_plus|crypto_keys_plus)" \
             -d macos --coverage-path coverage/macos-app-coverage.info \
             --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} \
             -r expanded
 
           flutter test integration_test/offline_mode_test.dart \
-            --coverage --branch-coverage --coverage-package "oidc*" \
+            --coverage --branch-coverage --coverage-package "^(oidc|jose_plus|x509_plus|crypto_keys_plus)" \
             -d macos --coverage-path coverage/macos-offline-coverage.info \
             --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} \
             -r expanded
@@ -548,7 +582,7 @@ jobs:
           xvfb-run --auto-servernum patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
-            --coverage-package oidc \
+            --coverage-workspace \
             -d linux \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
@@ -597,7 +631,7 @@ jobs:
           patrol_plus.bat test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
-            --coverage-package oidc \
+            --coverage-workspace \
             -d windows \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
@@ -669,6 +703,16 @@ jobs:
           find . -type f -name "*-coverage.info"
           dart pub global activate combine_coverage
           dart pub global run combine_coverage --repo-path="$REPO_PATH"
+      - name: Strip generated files from combined coverage
+        # Parity with the unit pipeline's coverage:combine: without this the
+        # final-coverage artifact and the Codecov upload include *.g.dart and
+        # the generated oidc_cli version.dart from integration runs.
+        run: |
+          set -e
+          dart pub global activate remove_from_coverage
+          dart pub global run remove_from_coverage:remove_from_coverage \
+            -f coverage/lcov.info \
+            -r '\.g\.dart$' -r 'oidc_cli/lib/src/version\.dart$'
       # Upload
       - name: Upload the final coverage as an artifact
         uses: actions/upload-artifact@v7

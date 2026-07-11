@@ -286,6 +286,38 @@ void main() {
     });
   });
 
+  group('OidcWebStore other namespaces (request, discoveryDocument, '
+      'stateResponse) share the plain default* path with state', () {
+    test('getMany/removeMany round-trip through the shared default storage '
+        'path for the discoveryDocument namespace (regression guard: only '
+        'setMany was exercised for a non-session/secureTokens namespace '
+        'before)', () async {
+      const store = OidcWebStore(storagePrefix: 'other-namespaces');
+      await store.init();
+
+      await store.setMany(
+        OidcStoreNamespace.discoveryDocument,
+        values: {'doc': '{"issuer":"https://op.example.com"}'},
+      );
+
+      final result = await store.getMany(
+        OidcStoreNamespace.discoveryDocument,
+        keys: {'doc'},
+      );
+      expect(result['doc'], '{"issuer":"https://op.example.com"}');
+
+      await store.removeMany(
+        OidcStoreNamespace.discoveryDocument,
+        keys: {'doc'},
+      );
+      final afterRemove = await store.getMany(
+        OidcStoreNamespace.discoveryDocument,
+        keys: {'doc'},
+      );
+      expect(afterRemove.containsKey('doc'), isFalse);
+    });
+  });
+
   group('when WebCrypto/IndexedDB are unavailable', () {
     test('OidcWebStoreEncryption.preferred falls back to a warned plaintext '
         'write', () async {

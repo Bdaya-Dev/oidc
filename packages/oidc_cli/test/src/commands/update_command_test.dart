@@ -61,6 +61,12 @@ void main() {
       expect(command, isNotNull);
     });
 
+    test('can be instantiated with default logger and pubUpdater', () {
+      final command = UpdateCommand();
+      expect(command, isNotNull);
+      expect(command.name, 'update');
+    });
+
     test('handles pub latest version query errors', () async {
       when(
         () => pubUpdater.getLatestVersion(any()),

@@ -113,9 +113,15 @@ class LoginDeviceCommand extends OidcBaseCommand {
       // Token output is intentionally plain text for easy scripting.
       logger.info(token);
 
+      // coverage:ignore-start
+      // See `dart_pub.dart`: `addToDartPub` shells out to the real `dart`
+      // executable and would mutate the developer machine's actual pub
+      // credentials store, so unit tests deliberately never let a login
+      // succeed while `--add-to-dart-pub` is set.
       if (hostedUrl != null && hostedUrl.trim().isNotEmpty) {
         await addToDartPub(logger: logger, hostedUrl: hostedUrl, token: token);
       }
+      // coverage:ignore-end
 
       return ExitCode.success.code;
     } finally {

@@ -4,6 +4,25 @@ import 'package:oidc_android/oidc_android.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
 
+/// Injectable [OidcAndroidHostApi] stand-in that throws a raw
+/// [MissingPluginException] directly (bypassing the Pigeon channel), used to
+/// exercise `_guard`'s "no native plugin registered at all" branch. Pigeon's
+/// generated `send()` always resolves under `TestDefaultBinaryMessengerBinding`
+/// (an unregistered channel decodes to a `channel-error` `PlatformException`,
+/// covered separately), so a real `MissingPluginException` can only be
+/// produced this way in a unit test.
+class _MissingPluginHostApi extends OidcAndroidHostApi {
+  @override
+  Future<String?> authorize(
+    String url,
+    String? redirectUri,
+    String? callbackScheme,
+    Map<String, Object?> options,
+  ) {
+    throw MissingPluginException('no implementation found');
+  }
+}
+
 OidcAuthorizeRequest _authRequest() => OidcAuthorizeRequest(
       clientId: 'client-1',
       redirectUri: Uri.parse('com.example.app://callback'),
@@ -197,5 +216,61 @@ void main() {
 
     expect(resp, isNotNull);
     expect(resp!.state, 'logout-state');
+  });
+
+  test(
+      'wraps a raw MissingPluginException (no plugin registered) as '
+      'OidcException', () async {
+    await expectLater(
+      OidcAndroid(hostApi: _MissingPluginHostApi()).getAuthorizationResponse(
+        metadata,
+        _authRequest(),
+        const OidcPlatformSpecificOptions(),
+        const {},
+      ),
+      throwsA(
+        isA<OidcException>().having(
+          (e) => e.message,
+          'message',
+          contains('not available'),
+        ),
+      ),
+    );
+  });
+
+  group('nativeBrowserEvents', () {
+    const eventChannel = EventChannel(
+      'dev.flutter.pigeon.oidc_platform_interface.OidcNativeEventApi'
+      '.streamNativeEvents',
+    );
+
+    tearDown(() => messenger.setMockStreamHandler(eventChannel, null));
+
+    test(
+        'maps native event maps into typed OidcNativeBrowserEvents, dropping '
+        'unrecognized event types', () async {
+      messenger.setMockStreamHandler(
+        eventChannel,
+        MockStreamHandler.inline(
+          onListen: (arguments, events) {
+            events
+              ..success({
+                'type': 'cancelled',
+                'flowId': 'flow-1',
+              })
+              // Forward-compatibility: an unrecognized type must be
+              // dropped, not surfaced or thrown.
+              ..success({'type': 'some-future-event-type'})
+              ..endOfStream();
+          },
+        ),
+      );
+
+      final events = await OidcAndroid().nativeBrowserEvents().toList();
+
+      expect(events, hasLength(1));
+      final event = events.single as OidcBrowserFlowCancelledEvent;
+      expect(event.flowId, 'flow-1');
+    });
   });
 }

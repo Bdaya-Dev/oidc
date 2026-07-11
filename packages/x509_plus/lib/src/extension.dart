@@ -550,9 +550,15 @@ class NoticeReference {
   ///     organization     DisplayText,
   ///     noticeNumbers    SEQUENCE OF INTEGER }
   factory NoticeReference.fromAsn1(ASN1Sequence sequence) {
+    // `noticeNumbers` is a `SEQUENCE OF INTEGER`, so `toDart` returns a
+    // `List<dynamic>` whose elements are `BigInt`. Assigning that directly to
+    // `List<int>` throws a TypeError, making any UserNotice with a noticeRef
+    // unparseable. Convert each element to an `int` explicitly.
     return NoticeReference(
         organization: toDart(sequence.elements[0]),
-        noticeNumbers: toDart(sequence.elements[1]));
+        noticeNumbers: (toDart(sequence.elements[1]) as List)
+            .map((e) => (e as BigInt).toInt())
+            .toList());
   }
 
   @override

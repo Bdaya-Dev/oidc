@@ -103,6 +103,16 @@ class CliUserManager extends OidcUserManagerBase {
       actualRedirectUriCompleter: redirectUriCompleter,
       printFunction: (uri) async {
         cliLogger.info('Please open the following link: $uri');
+        // coverage:ignore-start
+        // Unconditionally launches the host OS's real default browser via a
+        // subprocess. Exercising this in a unit test would pop a real
+        // browser window as a side effect of running `dart test` (there is
+        // no injection seam for the OS-open call, unlike `oidc_desktop`'s
+        // `launchUrl` callback), so the whole login/logout suite
+        // deliberately never reaches this branch — see the note atop
+        // `login_interactive_command_test.dart` and
+        // `pub_proxy_command_test.dart` for the same convention applied to
+        // the analogous `dart pub token add` subprocess in `dart_pub.dart`.
         try {
           if (Platform.isWindows) {
             await Process.run('rundll32', [
@@ -117,6 +127,7 @@ class CliUserManager extends OidcUserManagerBase {
         } on Exception catch (_) {
           // ignore
         }
+        // coverage:ignore-end
       },
     );
 
@@ -161,6 +172,10 @@ class CliUserManager extends OidcUserManagerBase {
       actualRedirectUriCompleter: redirectUriCompleter,
       printFunction: (uri) async {
         logger.info('Please open the following link: $uri');
+        // coverage:ignore-start
+        // See the matching note in `getAuthorizationResponse` above: this
+        // unconditionally shells out to launch the host OS's real default
+        // browser, which unit tests deliberately never trigger.
         try {
           if (Platform.isWindows) {
             await Process.run('rundll32', [
@@ -175,6 +190,7 @@ class CliUserManager extends OidcUserManagerBase {
         } on Exception catch (_) {
           // ignore
         }
+        // coverage:ignore-end
       },
     );
 
