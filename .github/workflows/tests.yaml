@@ -76,17 +76,31 @@ jobs:
       # cost of one dart2js compile per test file (the old full sweep spent
       # most of an hour per browser per leg compiling). Pushes to main run
       # the full browser sweep.
+      # timeout-minutes on the browser steps is the backstop of last resort:
+      # package:test's --timeout and --suite-load-timeout only bound test
+      # execution and suite loads, and a browser wedge can strike OUTSIDE
+      # both (run 29148902320: a Firefox step hung 57+ min with the 4m load
+      # bound active -- so the hang was in launch/shutdown/orchestration,
+      # which no dart-level timer covers). The runner kills the whole
+      # process tree, so the step fails loudly and is rerunnable instead of
+      # idling to GitHub's 6h job kill. PR-scope steps finish in under a
+      # minute (15m = wide margin); full sweeps run ~55-66min per browser
+      # (150m = wide margin).
       - name: "[Verify step] Test Dart packages [Chrome, PR scope]"
         if: ${{ github.event_name == 'pull_request' }}
+        timeout-minutes: 15
         run: melos run test:web:pr:chrome
       - name: "[Verify step] Test Dart packages [Firefox, PR scope]"
         if: ${{ github.event_name == 'pull_request' }}
+        timeout-minutes: 15
         run: melos run test:web:pr:firefox
       - name: "[Verify step] Test Dart packages [Chrome]"
         if: ${{ github.event_name != 'pull_request' }}
+        timeout-minutes: 150
         run: melos run test:web:chrome
       - name: "[Verify step] Test Dart packages [Firefox]"
         if: ${{ github.event_name != 'pull_request' }}
+        timeout-minutes: 150
         run: melos run test:web:firefox
       - name: Remove dart_test.yaml Files
         run: melos run remove_dart_test_yaml

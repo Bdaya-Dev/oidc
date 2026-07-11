@@ -151,7 +151,7 @@ melos:
       # wedged browser suite load hangs the step until GitHub's 6h job kill
       # (observed on both Firefox and Chrome in run 29146393931 -- the
       # browser launches and even finishes one suite, then the next load
-      # stalls forever). oidc_web_core's three suites each load in ~10s, so
+      # stalls forever). oidc_web_core's five suites each load in ~10s, so
       # 4m is generous here; the full sweep needs a far larger bound because
       # its load timer keeps running while suites queue behind jose's slow
       # crypto executors. No --timeout override: these tests are sub-second,
