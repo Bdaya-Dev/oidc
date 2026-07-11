@@ -133,12 +133,14 @@ melos:
       # launch on CI into a silent 4.5h hang that only GitHub's 6h job limit
       # ended (run 29118828702; the last two suites never printed a line).
       # Without it, a wedged load fails loudly and can be rerun.
-      # --suite-load-timeout 4m: without an explicit bound the suite-load
-      # timeout scales up to the per-test cap (60m), so each wedged Firefox
-      # launch still burned up to an hour (observed: the ed7b535 run's
-      # Firefox step at 2h+ vs ~66min on green runs). 4m is ~5x the worst
-      # legitimate suite compile+load on green CI (~80 suites in 66min
-      # including test time) and turns a wedge into a fast, named failure.
+      # WEB_EXCLUDE_TAGS: passed through to `dart test --exclude-tags`.
+      # jose_plus tags its crypto-executor suites (keygen/sign/encrypt) as
+      # slow-web-crypto (see packages/jose_plus/dart_test.yaml) because they
+      # take ~55min per browser under dart2js's ~200x slower BigInt (#371);
+      # while they run, other suites' loads starve. CI sets this to
+      # slow-web-crypto for pull_request events only, so PR web runs skip
+      # them while VM runs (which always execute every tag) and main-branch
+      # pushes keep full web crypto signal.
       exec: |
         # set -e: without it this script's exit status is that of its LAST
         # statement -- the WITH_WASM if-block, which is 0 whenever WITH_WASM
@@ -146,11 +148,11 @@ melos:
         # CI step stayed green (issue #353: 27 web test failures hidden).
         set -e
         if [ "$TARGET_DART_SDK" = "min" ]; then
-          dart test --timeout 60m --suite-load-timeout 4m --platform ${TEST_PLATFORM} --chain-stack-traces
+          dart test --timeout 60m --platform ${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
         else
-          dart test --timeout 60m --suite-load-timeout 4m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+          dart test --timeout 60m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           if [ "$WITH_WASM" = "true" ]; then
-            dart test --timeout 60m --suite-load-timeout 4m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm
+            dart test --timeout 60m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           fi
         fi
       packageFilters:

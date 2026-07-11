@@ -1,3 +1,6 @@
+@Tags(['slow-web-crypto'])
+library;
+
 import 'dart:convert';
 
 import 'package:crypto_keys_plus/crypto_keys.dart';

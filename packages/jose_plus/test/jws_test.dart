@@ -1,3 +1,6 @@
+@Tags(['slow-web-crypto'])
+library;
+
 import 'dart:convert';
 
 import 'package:jose_plus/jose.dart';

@@ -41,6 +41,13 @@ jobs:
     env:
       TEST_PRESET: all
       CHROME_FLAGS: --headless --no-sandbox --disable-dev-shm-usage --disable-gpu
+      # jose_plus's crypto-executor suites (keygen/sign/encrypt) take ~55min
+      # per browser under dart2js's ~200x slower BigInt (#371); while they
+      # run, other suites' loads starve. Exclude them (tagged slow-web-crypto,
+      # see packages/jose_plus/dart_test.yaml) from PR web runs only -- VM
+      # runs always execute every tag, and main-branch pushes keep full web
+      # crypto signal.
+      WEB_EXCLUDE_TAGS: ${{ github.event_name == 'pull_request' && 'slow-web-crypto' || '' }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
