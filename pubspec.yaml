@@ -146,19 +146,24 @@ melos:
       # full sweep spent the better part of an hour per browser per matrix
       # leg just compiling). The full sweep still runs on main pushes via
       # test:web:chrome / test:web:firefox.
-      # --suite-load-timeout 4m: package:test 1.31 puts NO timeout on suite
-      # loads by default (suiteLoadTimeout falls back to Timeout.none), so a
-      # wedged browser suite load hangs the step until GitHub's 6h job kill
-      # (observed on both Firefox and Chrome in run 29146393931 -- the
-      # browser launches and even finishes one suite, then the next load
-      # stalls forever). oidc_web_core's five suites each load in ~10s, so
-      # 4m is generous here; the full sweep needs a far larger bound because
-      # its load timer keeps running while suites queue behind jose's slow
-      # crypto executors. No --timeout override: these tests are sub-second,
-      # so the 30s default also bounds a mid-test wedge.
+      # --concurrency=1 and NO --coverage: three consecutive CI runs wedged
+      # AFTER every test passed -- the runner reached a fully successful end
+      # and never exited, idling from the last passing test until an outer
+      # timeout killed it (runs 29146393931/29148902320/29150605150, both
+      # browsers). The post-success phase is browser/suite teardown plus
+      # (Chrome-only) coverage collection; dart-lang/test#2294 documents a
+      # multi-suite post-success exit hang with --concurrency=1 as the
+      # workaround, and PR runs don't need browser coverage anyway (codecov
+      # gets it from the full sweep on main pushes).
+      # --suite-load-timeout 4m: suite loads default to NO timeout at all
+      # (test 1.31: suiteLoadTimeout falls back to Timeout.none), so a
+      # load-phase wedge would otherwise also hang forever; five ~10s suite
+      # loads make 4m generous. No --timeout override: tests are sub-second,
+      # so the 30s default bounds mid-test hangs. The workflow adds
+      # step-level timeout-minutes as the backstop for anything else.
       exec: |
         set -e
-        dart test --suite-load-timeout 4m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+        dart test --suite-load-timeout 4m --concurrency=1 --platform ${TEST_PLATFORM} --chain-stack-traces
       packageFilters:
         scope:
           - oidc_web_core
