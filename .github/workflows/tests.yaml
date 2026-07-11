@@ -83,17 +83,33 @@ jobs:
       # bound active -- so the hang was in launch/shutdown/orchestration,
       # which no dart-level timer covers). The runner kills the whole
       # process tree, so the step fails loudly and is rerunnable instead of
-      # idling to GitHub's 6h job kill. PR-scope steps finish in under a
-      # minute (15m = wide margin); full sweeps run ~55-66min per browser
-      # (150m = wide margin).
+      # idling to GitHub's 6h job kill. Full sweeps run ~1h40m-2h for the
+      # first browser (which pays every dart2js compile) and ~15m for the
+      # second (compile cache hit), so 150m per step = wide margin.
+      # The PR-scope steps additionally retry in-step: the #372 hang strikes
+      # a browser step at random (roughly half of executions on bad days,
+      # both legs at once), while an honest PR-scope run takes 20-90s. Each
+      # try is bounded at 5 minutes; three tries turn manual whole-job rerun
+      # roulette into an automatic in-step retry, while a REAL test failure
+      # still fails fast three times and blocks the PR.
       - name: "[Verify step] Test Dart packages [Chrome, PR scope]"
         if: ${{ github.event_name == 'pull_request' }}
-        timeout-minutes: 15
-        run: melos run test:web:pr:chrome
+        timeout-minutes: 18
+        run: |
+          for attempt in 1 2 3; do
+            if timeout -k 10 300 melos run test:web:pr:chrome; then exit 0; fi
+            echo "chrome PR-scope attempt $attempt did not finish cleanly; retrying"
+          done
+          exit 1
       - name: "[Verify step] Test Dart packages [Firefox, PR scope]"
         if: ${{ github.event_name == 'pull_request' }}
-        timeout-minutes: 15
-        run: melos run test:web:pr:firefox
+        timeout-minutes: 18
+        run: |
+          for attempt in 1 2 3; do
+            if timeout -k 10 300 melos run test:web:pr:firefox; then exit 0; fi
+            echo "firefox PR-scope attempt $attempt did not finish cleanly; retrying"
+          done
+          exit 1
       - name: "[Verify step] Test Dart packages [Chrome]"
         if: ${{ github.event_name != 'pull_request' }}
         timeout-minutes: 150
