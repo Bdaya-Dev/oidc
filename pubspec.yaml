@@ -123,6 +123,35 @@ melos:
         TEST_PLATFORM: firefox
         MOZ_HEADLESS: "1"
         WITH_WASM: false
+    test:web:pr:chrome:
+      name: PR-scoped Dart Web tests in chrome
+      run: melos run test:web:pr:single
+      env:
+        TEST_PLATFORM: chrome
+        WITH_WASM: false
+    test:web:pr:firefox:
+      name: PR-scoped Dart Web tests in firefox
+      run: melos run test:web:pr:single
+      env:
+        TEST_PLATFORM: firefox
+        MOZ_HEADLESS: "1"
+        WITH_WASM: false
+    test:web:pr:single:
+      name: PR-scoped Dart Web tests in a browser
+      # Per-PR browser testing runs ONLY the packages whose lib code is
+      # genuinely platform-divergent (js-interop / web-conditional imports).
+      # Everything else is platform-neutral pure Dart: its browser runs
+      # duplicate the VM signal while paying one dart2js compile PER TEST
+      # FILE (~30-60s each on CI; oidc_core alone is 60+ files, so the old
+      # full sweep spent the better part of an hour per browser per matrix
+      # leg just compiling). The full sweep still runs on main pushes via
+      # test:web:chrome / test:web:firefox.
+      exec: |
+        set -e
+        dart test --timeout 60m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+      packageFilters:
+        scope:
+          - oidc_web_core
     test:web:single:
       name: Dart Web tests in a browser
       env:

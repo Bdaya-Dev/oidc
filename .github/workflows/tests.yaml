@@ -71,9 +71,22 @@ jobs:
       #     melos run pana
       - name: "[Verify step] Test Dart packages [VM]"
         run: melos run test:vm
+      # PRs: browser-test only the packages with genuinely platform-divergent
+      # lib code (js-interop) -- everything else duplicates VM signal at the
+      # cost of one dart2js compile per test file (the old full sweep spent
+      # most of an hour per browser per leg compiling). Pushes to main run
+      # the full browser sweep.
+      - name: "[Verify step] Test Dart packages [Chrome, PR scope]"
+        if: ${{ github.event_name == 'pull_request' }}
+        run: melos run test:web:pr:chrome
+      - name: "[Verify step] Test Dart packages [Firefox, PR scope]"
+        if: ${{ github.event_name == 'pull_request' }}
+        run: melos run test:web:pr:firefox
       - name: "[Verify step] Test Dart packages [Chrome]"
+        if: ${{ github.event_name != 'pull_request' }}
         run: melos run test:web:chrome
       - name: "[Verify step] Test Dart packages [Firefox]"
+        if: ${{ github.event_name != 'pull_request' }}
         run: melos run test:web:firefox
       - name: Remove dart_test.yaml Files
         run: melos run remove_dart_test_yaml
