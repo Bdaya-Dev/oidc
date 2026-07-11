@@ -146,9 +146,19 @@ melos:
       # full sweep spent the better part of an hour per browser per matrix
       # leg just compiling). The full sweep still runs on main pushes via
       # test:web:chrome / test:web:firefox.
+      # --suite-load-timeout 4m: package:test 1.31 puts NO timeout on suite
+      # loads by default (suiteLoadTimeout falls back to Timeout.none), so a
+      # wedged browser suite load hangs the step until GitHub's 6h job kill
+      # (observed on both Firefox and Chrome in run 29146393931 -- the
+      # browser launches and even finishes one suite, then the next load
+      # stalls forever). oidc_web_core's three suites each load in ~10s, so
+      # 4m is generous here; the full sweep needs a far larger bound because
+      # its load timer keeps running while suites queue behind jose's slow
+      # crypto executors. No --timeout override: these tests are sub-second,
+      # so the 30s default also bounds a mid-test wedge.
       exec: |
         set -e
-        dart test --timeout 60m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
+        dart test --suite-load-timeout 4m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces
       packageFilters:
         scope:
           - oidc_web_core
@@ -157,11 +167,16 @@ melos:
       env:
         WITH_WASM: false
       # --timeout 60m: jose_plus's crypto tests are legitimately slow under
-      # dart2js. Deliberately NO --ignore-timeouts: it also disables
-      # package:test's browser-load timeout, which turned a wedged Firefox
-      # launch on CI into a silent 4.5h hang that only GitHub's 6h job limit
-      # ended (run 29118828702; the last two suites never printed a line).
-      # Without it, a wedged load fails loudly and can be rerun.
+      # dart2js. --suite-load-timeout 2h: package:test 1.31 puts NO timeout
+      # on suite loads by default (suiteLoadTimeout falls back to
+      # Timeout.none), so a wedged browser suite load hangs silently until
+      # GitHub's 6h job limit (run 29118828702; the last two suites never
+      # printed a line). The bound must clear the worst honest wait: the
+      # load timer keeps running while suites queue behind jose's ~55min
+      # crypto executors, so a small bound false-fails healthy suites (a 4m
+      # bound failed 8 of them in run 29140552735). 2h turns a wedge into a
+      # loud, rerunnable failure instead of a 6h hang. Deliberately NO
+      # --ignore-timeouts: it disables all of these bounds.
       # WEB_EXCLUDE_TAGS: passed through to `dart test --exclude-tags`.
       # jose_plus tags its crypto-executor suites (keygen/sign/encrypt) as
       # slow-web-crypto (see packages/jose_plus/dart_test.yaml) because they
@@ -179,9 +194,9 @@ melos:
         if [ "$TARGET_DART_SDK" = "min" ]; then
           dart test --timeout 60m --platform ${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
         else
-          dart test --timeout 60m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
+          dart test --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           if [ "$WITH_WASM" = "true" ]; then
-            dart test --timeout 60m --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
+            dart test --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           fi
         fi
       packageFilters:
