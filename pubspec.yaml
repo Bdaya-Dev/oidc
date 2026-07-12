@@ -112,13 +112,22 @@ melos:
         melos run test:web:firefox
     test:web:chrome:
       name: Dart Web tests in chrome
-      run: melos run test:web:single
+      # test:web:single covers every web package except jose_plus; jose runs
+      # per-file via test:web:jose:single to avoid the #372 post-success exit
+      # hang. Both inherit TEST_PLATFORM from this script's env.
+      run: |
+        set -e
+        melos run test:web:single
+        melos run test:web:jose:single
       env:
         TEST_PLATFORM: chrome
         WITH_WASM: false
     test:web:firefox:
       name: Dart Web tests in firefox
-      run: melos run test:web:single
+      run: |
+        set -e
+        melos run test:web:single
+        melos run test:web:jose:single
       env:
         TEST_PLATFORM: firefox
         MOZ_HEADLESS: "1"
@@ -225,6 +234,39 @@ melos:
         flutter: false
         ignore:
           - oidc_cli
+          # jose_plus runs per-file via test:web:jose:single. Root-caused
+          # 2026-07-12 (#372): jose_plus's multi-suite Firefox `dart test`
+          # completes ALL suites, prints the passing summary, then never exits
+          # (post-success exit hang, dart-lang/test#2294 class), wedging the
+          # full sweep until the job timeout. It is jose-specific and multi-suite:
+          # every OTHER web package finishes multi-suite on Firefox, and 15/16
+          # jose suites exit cleanly when run alone (the 16th, jwa, is merely
+          # slow pure-Dart RSA keygen, not a hang). One suite per invocation
+          # sidesteps the multi-suite exit entirely. Chrome doesn't hit this, but
+          # jose runs per-file on both browsers for one clean, consistent path.
+          - jose_plus
+    test:web:jose:single:
+      name: jose_plus web tests, per-file (hang-safe)
+      env:
+        WITH_WASM: false
+      # See the jose_plus note under test:web:single's ignore list for the #372
+      # root cause. This runs each jose suite in its OWN `dart test` process so
+      # the multi-suite post-success exit hang cannot occur. Same flags as
+      # test:web:single (--timeout 60m for the slow crypto suites,
+      # --suite-load-timeout 2h, WEB_EXCLUDE_TAGS passthrough); min-SDK branch
+      # kept coverage/-timeout-free exactly as the sweep's min branch is.
+      exec: |
+        set -e
+        for f in test/*_test.dart; do
+          if [ "$TARGET_DART_SDK" = "min" ]; then
+            dart test "$f" --timeout 60m --platform ${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
+          else
+            dart test "$f" --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
+          fi
+        done
+      packageFilters:
+        scope:
+          - jose_plus
     test:web:coverage:webcore:
       name: Collect oidc_web_core browser coverage per-file (hang-safe)
       # #372: multi-suite browser coverage-gather in one `dart test` process
