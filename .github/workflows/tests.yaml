@@ -144,6 +144,10 @@ jobs:
             echo "firefox PR-scope attempt $attempt exited rc=$rc; retrying" || true
           done
           exit 1
+      # Full sweep = TEST SIGNAL only (both browsers, no --coverage): #372's
+      # hang needs coverage-gather across multiple suites in one process (see
+      # test:web:single). Without --coverage this sweep is hang-free; the 150m
+      # bound now only covers the honest ~1h40m-2h first-browser compile cost.
       - name: "[Verify step] Test Dart packages [Chrome]"
         if: ${{ github.event_name != 'pull_request' }}
         timeout-minutes: 150
@@ -152,6 +156,16 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         timeout-minutes: 150
         run: melos run test:web:firefox
+      # oidc_web_core is the only package whose browser coverage isn't a
+      # duplicate of its VM coverage, so it's the only one collected on the web
+      # side. Per-file (single-suite) collection is hang-safe where the
+      # multi-suite full sweep was not (#372). Stable + main only, since
+      # coverage is combined on the stable leg. 20m bounds a wedged load; the
+      # honest run is a handful of compiles.
+      - name: "[Coverage] oidc_web_core browser coverage (per-file, hang-safe)"
+        if: ${{ github.event_name != 'pull_request' && matrix.sdk == 'stable' }}
+        timeout-minutes: 20
+        run: melos run test:web:coverage:webcore
       - name: Remove dart_test.yaml Files
         run: melos run remove_dart_test_yaml
       - name: "[Verify step] Test Flutter packages"
@@ -191,6 +205,26 @@ jobs:
             exit 1
           fi
           echo "guard: all four Flutter packages present in the combined lcov"
+      - name: "[Coverage] Assert oidc_web_core browser coverage survived"
+        # main + stable only: oidc_web_core browser coverage comes from the
+        # per-file test:web:coverage:webcore step, which is itself main+stable
+        # (PRs collect no browser coverage). Regression guard for #372's fix:
+        # if that step silently stops producing hitmaps (a path change, or
+        # format_coverage ceasing to pick up coverage/chrome), oidc_web_core
+        # would vanish from the combined lcov with only a Codecov delta to
+        # show it. Same shell discipline as the Flutter guard above: a
+        # conditional exit 1 on the failure path only; success falls off the
+        # end (no trailing exit, no SIGPIPE-prone pipe).
+        if: ${{ github.event_name != 'pull_request' && matrix.sdk == 'stable' }}
+        run: |
+          n=$(grep -c "packages/oidc_web_core/lib/" coverage/lcov.info || true)
+          n=${n:-0}
+          echo "guard: packages/oidc_web_core/lib/ -> $n match(es)"
+          if [ "$n" -eq 0 ]; then
+            echo "::error::no browser coverage for oidc_web_core - the per-file step (test:web:coverage:webcore) is being discarded"
+            exit 1
+          fi
+          echo "guard: oidc_web_core browser coverage present in the combined lcov"
       - name: Upload Unit Test Coverage Report
         uses: actions/upload-artifact@v7
         if: ${{ matrix.sdk == 'stable' }}
