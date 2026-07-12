@@ -112,22 +112,17 @@ melos:
         melos run test:web:firefox
     test:web:chrome:
       name: Dart Web tests in chrome
-      # test:web:single covers every web package except jose_plus; jose runs
-      # per-file via test:web:jose:single to avoid the #372 post-success exit
-      # hang. Both inherit TEST_PLATFORM from this script's env.
-      run: |
-        set -e
-        melos run test:web:single
-        melos run test:web:jose:single
+      # test:web:single covers every web package EXCEPT jose_plus (and oidc_cli).
+      # jose_plus runs per-file directly in the workflow (a shell loop, not a
+      # melos exec -- melos interpolates $VAR in exec strings and clobbers the
+      # `$f` loop variable to empty). See .github/workflows/tests.yaml.
+      run: melos run test:web:single
       env:
         TEST_PLATFORM: chrome
         WITH_WASM: false
     test:web:firefox:
       name: Dart Web tests in firefox
-      run: |
-        set -e
-        melos run test:web:single
-        melos run test:web:jose:single
+      run: melos run test:web:single
       env:
         TEST_PLATFORM: firefox
         MOZ_HEADLESS: "1"
@@ -198,7 +193,8 @@ melos:
       # full sweep is TEST SIGNAL ONLY (all web packages, both browsers), and
       # oidc_web_core browser coverage -- the only web-divergent package, so the
       # only one whose browser coverage isn't a duplicate of its VM coverage --
-      # is collected per-file (single-suite) by test:web:coverage:webcore.
+      # is collected per-file (single-suite) by a workflow shell loop (see
+      # .github/workflows/tests.yaml).
       # --timeout 60m: jose_plus's crypto tests are legitimately slow under
       # dart2js. --suite-load-timeout 2h: package:test 1.31 puts NO timeout on
       # suite loads by default (suiteLoadTimeout falls back to Timeout.none), so
@@ -234,60 +230,18 @@ melos:
         flutter: false
         ignore:
           - oidc_cli
-          # jose_plus runs per-file via test:web:jose:single. Root-caused
-          # 2026-07-12 (#372): jose_plus's multi-suite Firefox `dart test`
-          # completes ALL suites, prints the passing summary, then never exits
-          # (post-success exit hang, dart-lang/test#2294 class), wedging the
-          # full sweep until the job timeout. It is jose-specific and multi-suite:
-          # every OTHER web package finishes multi-suite on Firefox, and 15/16
-          # jose suites exit cleanly when run alone (the 16th, jwa, is merely
-          # slow pure-Dart RSA keygen, not a hang). One suite per invocation
-          # sidesteps the multi-suite exit entirely. Chrome doesn't hit this, but
-          # jose runs per-file on both browsers for one clean, consistent path.
+          # jose_plus is browser-tested per-file directly in the workflow (see
+          # .github/workflows/tests.yaml), NOT here. Root-caused 2026-07-12
+          # (#372): jose_plus's multi-suite Firefox `dart test` completes ALL
+          # suites, prints the passing summary, then never exits (post-success
+          # exit hang, dart-lang/test#2294 class), wedging the full sweep until
+          # the job timeout. It is jose-specific and multi-suite: every OTHER web
+          # package finishes multi-suite on Firefox, and 15/16 jose suites exit
+          # cleanly run alone (the 16th, jwa, is merely slow pure-Dart RSA keygen,
+          # not a hang). One suite per process sidesteps it. The per-file loop
+          # lives in the workflow because melos exec interpolates $VAR and
+          # clobbers the shell loop variable `$f` to empty.
           - jose_plus
-    test:web:jose:single:
-      name: jose_plus web tests, per-file (hang-safe)
-      env:
-        WITH_WASM: false
-      # See the jose_plus note under test:web:single's ignore list for the #372
-      # root cause. This runs each jose suite in its OWN `dart test` process so
-      # the multi-suite post-success exit hang cannot occur. Same flags as
-      # test:web:single (--timeout 60m for the slow crypto suites,
-      # --suite-load-timeout 2h, WEB_EXCLUDE_TAGS passthrough); min-SDK branch
-      # kept coverage/-timeout-free exactly as the sweep's min branch is.
-      exec: |
-        set -e
-        for f in test/*_test.dart; do
-          if [ "$TARGET_DART_SDK" = "min" ]; then
-            dart test "$f" --timeout 60m --platform ${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
-          else
-            dart test "$f" --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
-          fi
-        done
-      packageFilters:
-        scope:
-          - jose_plus
-    test:web:coverage:webcore:
-      name: Collect oidc_web_core browser coverage per-file (hang-safe)
-      # #372: multi-suite browser coverage-gather in one `dart test` process
-      # wedges the CDP/V8 channel. Running ONE test file per invocation keeps
-      # every gather single-suite -- verified 1774/1774 clean vs 33-93% hang for
-      # the multi-suite form. oidc_web_core is the only package whose browser
-      # coverage isn't a duplicate of its VM coverage (only web-divergent lib
-      # code), so it's the only one collected here; chrome only, since line
-      # coverage is browser-agnostic. Each file's hitmap has a distinct name,
-      # so pointing them all at coverage/chrome accumulates them for the normal
-      # coverage:format:package step. --suite-load-timeout 4m bounds a wedged
-      # load; the workflow adds a step-level timeout as the outer backstop.
-      exec: |
-        set -e
-        rm -rf coverage/chrome
-        for f in test/*_test.dart; do
-          dart test "$f" --suite-load-timeout 4m --platform chrome --coverage=coverage/chrome --chain-stack-traces
-        done
-      packageFilters:
-        scope:
-          - oidc_web_core
     remove_dart_test_yaml:
       name: Remove dart_test.yaml
       run: find . -type f -name 'dart_test.yaml' -delete
