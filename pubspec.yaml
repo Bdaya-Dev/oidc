@@ -176,17 +176,28 @@ melos:
       name: Dart Web tests in a browser
       env:
         WITH_WASM: false
+      # NO --coverage. Root-caused 2026-07-12 (issue #372): collecting browser
+      # coverage across MULTIPLE suites in one `dart test` process wedges the
+      # Chrome DevTools/V8 channel. package:test enables detailed precise
+      # coverage once on a shared Chrome context (test 1.31 chrome.dart:190,
+      # Profiler.startPreciseCoverage detailed:true) and gathers per-suite; the
+      # accumulating state hangs a later suite's message dispatch. Measured on
+      # a clean worktree of main: multi-suite + --coverage hangs 33% (default
+      # concurrency) to 93% (--concurrency=1, WORSE -- so concurrency is not the
+      # trigger); multi-suite WITHOUT --coverage: 0/15; single-suite WITH
+      # --coverage: 0/15, then 1774/1774 clean under a sustained soak. So this
+      # full sweep is TEST SIGNAL ONLY (all web packages, both browsers), and
+      # oidc_web_core browser coverage -- the only web-divergent package, so the
+      # only one whose browser coverage isn't a duplicate of its VM coverage --
+      # is collected per-file (single-suite) by test:web:coverage:webcore.
       # --timeout 60m: jose_plus's crypto tests are legitimately slow under
-      # dart2js. --suite-load-timeout 2h: package:test 1.31 puts NO timeout
-      # on suite loads by default (suiteLoadTimeout falls back to
-      # Timeout.none), so a wedged browser suite load hangs silently until
-      # GitHub's 6h job limit (run 29118828702; the last two suites never
-      # printed a line). The bound must clear the worst honest wait: the
-      # load timer keeps running while suites queue behind jose's ~55min
-      # crypto executors, so a small bound false-fails healthy suites (a 4m
-      # bound failed 8 of them in run 29140552735). 2h turns a wedge into a
-      # loud, rerunnable failure instead of a 6h hang. Deliberately NO
-      # --ignore-timeouts: it disables all of these bounds.
+      # dart2js. --suite-load-timeout 2h: package:test 1.31 puts NO timeout on
+      # suite loads by default (suiteLoadTimeout falls back to Timeout.none), so
+      # a wedged browser suite load hangs silently until GitHub's 6h job limit
+      # (run 29118828702). The bound must clear the worst honest wait: the load
+      # timer keeps running while suites queue behind jose's ~55min crypto
+      # executors, so a small bound false-fails healthy suites (a 4m bound
+      # failed 8 of them in run 29140552735). Deliberately NO --ignore-timeouts.
       # WEB_EXCLUDE_TAGS: passed through to `dart test --exclude-tags`.
       # jose_plus tags its crypto-executor suites (keygen/sign/encrypt) as
       # slow-web-crypto (see packages/jose_plus/dart_test.yaml) because they
@@ -204,9 +215,9 @@ melos:
         if [ "$TARGET_DART_SDK" = "min" ]; then
           dart test --timeout 60m --platform ${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
         else
-          dart test --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
+          dart test --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           if [ "$WITH_WASM" = "true" ]; then
-            dart test --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --coverage=coverage/${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
+            dart test --timeout 60m --suite-load-timeout 2h --platform ${TEST_PLATFORM} --chain-stack-traces --compiler=dart2wasm ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           fi
         fi
       packageFilters:
@@ -214,6 +225,27 @@ melos:
         flutter: false
         ignore:
           - oidc_cli
+    test:web:coverage:webcore:
+      name: Collect oidc_web_core browser coverage per-file (hang-safe)
+      # #372: multi-suite browser coverage-gather in one `dart test` process
+      # wedges the CDP/V8 channel. Running ONE test file per invocation keeps
+      # every gather single-suite -- verified 1774/1774 clean vs 33-93% hang for
+      # the multi-suite form. oidc_web_core is the only package whose browser
+      # coverage isn't a duplicate of its VM coverage (only web-divergent lib
+      # code), so it's the only one collected here; chrome only, since line
+      # coverage is browser-agnostic. Each file's hitmap has a distinct name,
+      # so pointing them all at coverage/chrome accumulates them for the normal
+      # coverage:format:package step. --suite-load-timeout 4m bounds a wedged
+      # load; the workflow adds a step-level timeout as the outer backstop.
+      exec: |
+        set -e
+        rm -rf coverage/chrome
+        for f in test/*_test.dart; do
+          dart test "$f" --suite-load-timeout 4m --platform chrome --coverage=coverage/chrome --chain-stack-traces
+        done
+      packageFilters:
+        scope:
+          - oidc_web_core
     remove_dart_test_yaml:
       name: Remove dart_test.yaml
       run: find . -type f -name 'dart_test.yaml' -delete
