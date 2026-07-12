@@ -148,6 +148,8 @@ jobs:
       # hang needs coverage-gather across multiple suites in one process (see
       # test:web:single). Without --coverage this sweep is hang-free; the 150m
       # bound now only covers the honest ~1h40m-2h first-browser compile cost.
+      # test:web:single covers every web package EXCEPT jose_plus (and oidc_cli).
+      # jose runs per-file in the two steps below.
       - name: "[Verify step] Test Dart packages [Chrome]"
         if: ${{ github.event_name != 'pull_request' }}
         timeout-minutes: 150
@@ -156,16 +158,51 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         timeout-minutes: 150
         run: melos run test:web:firefox
+      # jose_plus per-file (#372): jose's multi-suite `dart test` completes all
+      # suites then never exits on Firefox (post-success exit hang,
+      # dart-lang/test#2294 class), wedging the full sweep. One suite per
+      # process sidesteps it; 15/16 jose suites exit clean alone. Run here as a
+      # workflow shell loop, NOT a melos exec script: melos interpolates $VAR in
+      # exec strings and clobbers the loop variable `$f` to empty (it ran
+      # `dart test ""`, run 29208042920). A plain workflow shell keeps `$f`. Both
+      # browsers for one consistent path. Flags match test:web:single.
+      - name: "[Verify step] Test jose_plus [Chrome, per-file]"
+        if: ${{ github.event_name != 'pull_request' }}
+        timeout-minutes: 60
+        working-directory: packages/jose_plus
+        run: |
+          set -e
+          for f in test/*_test.dart; do
+            dart test "$f" --timeout 60m --suite-load-timeout 2h --platform chrome --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
+          done
+      - name: "[Verify step] Test jose_plus [Firefox, per-file]"
+        if: ${{ github.event_name != 'pull_request' }}
+        timeout-minutes: 60
+        working-directory: packages/jose_plus
+        env:
+          MOZ_HEADLESS: "1"
+        run: |
+          set -e
+          for f in test/*_test.dart; do
+            dart test "$f" --timeout 60m --suite-load-timeout 2h --platform firefox --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
+          done
       # oidc_web_core is the only package whose browser coverage isn't a
       # duplicate of its VM coverage, so it's the only one collected on the web
       # side. Per-file (single-suite) collection is hang-safe where the
-      # multi-suite full sweep was not (#372). Stable + main only, since
-      # coverage is combined on the stable leg. 20m bounds a wedged load; the
-      # honest run is a handful of compiles.
+      # multi-suite full sweep was not (#372). Also a workflow shell loop, not a
+      # melos exec, for the same `$f`-interpolation reason as jose above. Stable +
+      # main only (coverage is combined on the stable leg). Hitmaps accumulate in
+      # coverage/chrome for coverage:format:package. 20m bounds a wedged load.
       - name: "[Coverage] oidc_web_core browser coverage (per-file, hang-safe)"
         if: ${{ github.event_name != 'pull_request' && matrix.sdk == 'stable' }}
         timeout-minutes: 20
-        run: melos run test:web:coverage:webcore
+        working-directory: packages/oidc_web_core
+        run: |
+          set -e
+          rm -rf coverage/chrome
+          for f in test/*_test.dart; do
+            dart test "$f" --suite-load-timeout 4m --platform chrome --coverage=coverage/chrome --chain-stack-traces
+          done
       - name: Remove dart_test.yaml Files
         run: melos run remove_dart_test_yaml
       - name: "[Verify step] Test Flutter packages"
@@ -207,7 +244,7 @@ jobs:
           echo "guard: all four Flutter packages present in the combined lcov"
       - name: "[Coverage] Assert oidc_web_core browser coverage survived"
         # main + stable only: oidc_web_core browser coverage comes from the
-        # per-file test:web:coverage:webcore step, which is itself main+stable
+        # per-file oidc_web_core coverage step, which is itself main+stable
         # (PRs collect no browser coverage). Regression guard for #372's fix:
         # if that step silently stops producing hitmaps (a path change, or
         # format_coverage ceasing to pick up coverage/chrome), oidc_web_core
@@ -221,7 +258,7 @@ jobs:
           n=${n:-0}
           echo "guard: packages/oidc_web_core/lib/ -> $n match(es)"
           if [ "$n" -eq 0 ]; then
-            echo "::error::no browser coverage for oidc_web_core - the per-file step (test:web:coverage:webcore) is being discarded"
+            echo "::error::no browser coverage for oidc_web_core - the per-file oidc_web_core coverage step is being discarded"
             exit 1
           fi
           echo "guard: oidc_web_core browser coverage present in the combined lcov"
