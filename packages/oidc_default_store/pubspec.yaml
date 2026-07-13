@@ -16,10 +16,16 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   logging: ^1.2.0
   oidc_core: ^1.0.0
-  shared_preferences: ^2.2.1
+  # >=2.3.0 is the first release that ships SharedPreferencesAsync /
+  # SharedPreferencesWithCache (the non-legacy APIs, see #301).
+  shared_preferences: ^2.3.0
   web: ^1.1.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
   mocktail: ^1.0.3
+  # Test-only: provides InMemorySharedPreferencesAsync +
+  # SharedPreferencesAsyncPlatform so the SharedPreferencesAsync backend can be
+  # exercised in-memory on the VM (see the async store tests).
+  shared_preferences_platform_interface: ^2.4.0
   very_good_analysis: ^10.0.0

@@ -5,12 +5,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   group('OidcDefaultStore', () {
     setUp(() {
+      // The default (non-injected) backend is now SharedPreferencesAsync, so
+      // register an in-memory async platform alongside the legacy mock.
       SharedPreferences.setMockInitialValues({});
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.empty();
     });
     test('can be instantiated', () {
       expect(OidcDefaultStore(), isNotNull);

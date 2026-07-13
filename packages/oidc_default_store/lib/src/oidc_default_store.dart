@@ -32,23 +32,49 @@ enum OidcDefaultStoreWebSessionManagementLocation {
 ///         - if [webSessionManagementLocation] is set to [OidcDefaultStoreWebSessionManagementLocation.sessionStorage]
 ///           we use [html.Window.sessionStorage].
 ///         - if it's set to [OidcDefaultStoreWebSessionManagementLocation.sessionStorage] we use [html.Window.localStorage].
-///     - we use [SharedPreferences] for other platforms
+///     - we use `shared_preferences` for other platforms
 /// - for the [OidcStoreNamespace.state] namespace
 ///     - we use `package:universal_html` + `localStorage` for web.
 ///       this is a MUST and other implementations can't change this behavior, for the `samePage` navigation mode to work.
-/// - [SharedPreferences] for all other operations.
+/// - `shared_preferences` for all other operations.
 ///
+/// The non-secure `shared_preferences` persistence uses the modern
+/// [SharedPreferencesAsync] API by default (see #301). You can inject your own
+/// instance via the `sharedPreferencesAsync` constructor parameter to share it
+/// with the rest of your app. The legacy synchronous [SharedPreferences] path
+/// is still supported through the deprecated `sharedPreferences` parameter for
+/// backward compatibility. On the default path, this store performs a one-time,
+/// best-effort migration of its own keys from the legacy store into
+/// [SharedPreferencesAsync] (see [OidcDefaultStore.new]).
 /// {@endtemplate}
 class OidcDefaultStore implements OidcStore {
   /// {@macro oidc_default_store}
+  ///
+  /// [sharedPreferencesAsync] lets you inject a [SharedPreferencesAsync]
+  /// instance so this store shares the same async preferences as the rest of
+  /// your app. When omitted (and no legacy [sharedPreferences] is provided),
+  /// [init] creates a default [SharedPreferencesAsync] and runs a one-time,
+  /// best-effort migration of this store's own keys from the legacy store (see
+  /// `_migrateLegacyPrefsToAsyncIfNeeded`).
+  ///
+  /// [sharedPreferences] is the deprecated synchronous backend; passing it keeps
+  /// the legacy behavior end-to-end (no migration, same data location).
   OidcDefaultStore({
     FlutterSecureStorage? secureStorageInstance,
+    @Deprecated(
+      'The synchronous SharedPreferences API is now legacy. Pass '
+      '`sharedPreferencesAsync` (a SharedPreferencesAsync instance) instead. '
+      'See https://pub.dev/packages/shared_preferences and issue #301.',
+    )
     SharedPreferences? sharedPreferences,
+    SharedPreferencesAsync? sharedPreferencesAsync,
     this.storagePrefix = 'oidc',
     this.webSessionManagementLocation =
         OidcDefaultStoreWebSessionManagementLocation.sessionStorage,
   })  : secureStorage = secureStorageInstance,
-        __sharedPreferences = sharedPreferences;
+        // ignore: deprecated_member_use_from_same_package
+        _legacySharedPreferences = sharedPreferences,
+        _injectedSharedPreferencesAsync = sharedPreferencesAsync;
 
   /// Recommended hardened [AndroidOptions] for storing OIDC tokens at rest.
   ///
@@ -142,8 +168,17 @@ class OidcDefaultStore implements OidcStore {
     );
   }
 
-  SharedPreferences? __sharedPreferences;
-  SharedPreferences get _sharedPreferences => __sharedPreferences!;
+  /// Legacy (synchronous) `shared_preferences` instance, if one was injected
+  /// through the deprecated `sharedPreferences` constructor parameter.
+  final SharedPreferences? _legacySharedPreferences;
+
+  /// A caller-supplied [SharedPreferencesAsync] instance, if one was injected
+  /// through the `sharedPreferencesAsync` constructor parameter.
+  final SharedPreferencesAsync? _injectedSharedPreferencesAsync;
+
+  /// The resolved non-secure persistence backend, populated by [init].
+  _OidcPrefsBackend? _backend;
+  _OidcPrefsBackend get _prefs => _backend!;
 
   /// prefix to put before the keys.
   ///
@@ -179,8 +214,89 @@ class OidcDefaultStore implements OidcStore {
   Future<void> init() async {
     await initMemoizer.runOnce(() async {
       html.initWeb();
-      __sharedPreferences ??= await SharedPreferences.getInstance();
+      _backend ??= await _resolveBackend();
     });
+  }
+
+  /// Resolves which non-secure persistence backend [OidcDefaultStore] uses.
+  ///
+  /// Precedence:
+  /// 1. An explicitly injected [SharedPreferencesAsync] (the caller owns its
+  ///    lifecycle and any data migration).
+  /// 2. The deprecated synchronous [SharedPreferences] (kept end-to-end so its
+  ///    data location never moves — full backward compatibility).
+  /// 3. The default: a fresh [SharedPreferencesAsync], after a one-time
+  ///    best-effort migration of this store's keys from the legacy store.
+  Future<_OidcPrefsBackend> _resolveBackend() async {
+    if (_injectedSharedPreferencesAsync case final injected?) {
+      return _OidcAsyncPrefsBackend(injected);
+    }
+    if (_legacySharedPreferences case final legacy?) {
+      return _OidcLegacyPrefsBackend(legacy);
+    }
+    final async = SharedPreferencesAsync();
+    // On web the `shared_preferences` backend is never exercised (session/state
+    // go through window.localStorage), and there the async API shares the same
+    // localStorage as the legacy one, so there is nothing to migrate.
+    if (!testIsWeb) {
+      await _migrateLegacyPrefsToAsyncIfNeeded(async);
+    }
+    return _OidcAsyncPrefsBackend(async);
+  }
+
+  /// One-time, best-effort copy of this store's own keys from the legacy
+  /// synchronous `shared_preferences` store into [async].
+  ///
+  /// The two APIs do not always share the same platform storage: on Android the
+  /// legacy API is backed by `SharedPreferences` while [SharedPreferencesAsync]
+  /// defaults to DataStore Preferences, so data written before this package
+  /// adopted the async API would otherwise appear lost after an upgrade. (On
+  /// iOS/macOS/web/Windows/Linux both APIs share one store, so this is a no-op
+  /// copy.) See the `shared_preferences` README section "SharedPreferences vs
+  /// SharedPreferencesAsync vs SharedPreferencesWithCache" and issue #301.
+  ///
+  /// Only keys under [storagePrefix] are migrated (never the whole app store),
+  /// the copy runs once (guarded by a marker written into [async]), and existing
+  /// async values are never overwritten.
+  Future<void> _migrateLegacyPrefsToAsyncIfNeeded(
+    SharedPreferencesAsync async,
+  ) async {
+    final prefix = storagePrefix;
+    // Without a prefix we cannot scope the migration to this package's keys, so
+    // we skip it rather than copying the entire (potentially large) app store.
+    if (prefix == null || prefix.isEmpty) {
+      return;
+    }
+    final migrationMarkerKey = '$prefix.__oidc_async_migration_done';
+    try {
+      if (await async.getBool(migrationMarkerKey) ?? false) {
+        return;
+      }
+      final legacy = await SharedPreferences.getInstance();
+      final ownedKeys =
+          legacy.getKeys().where((key) => key.startsWith('$prefix.'));
+      for (final key in ownedKeys) {
+        final value = legacy.get(key);
+        if (value is String) {
+          if (await async.getString(key) == null) {
+            await async.setString(key, value);
+          }
+        } else if (value is List) {
+          if (await async.getStringList(key) == null) {
+            await async.setStringList(key, value.cast<String>());
+          }
+        }
+      }
+      await async.setBool(migrationMarkerKey, true);
+    } catch (e) {
+      // coverage:ignore-start
+      _logger.warning(
+        'OidcDefaultStore: failed to migrate legacy shared_preferences data to '
+        'SharedPreferencesAsync; existing values under "$prefix" may need to be '
+        're-established. Error: $e',
+      );
+      // coverage:ignore-end
+    }
   }
 
   Future<void> _registerKeyForNamespace(
@@ -222,8 +338,8 @@ class OidcDefaultStore implements OidcStore {
           '[]';
       return (jsonDecode(keysRaw) as List).cast<String>().toSet();
     } else {
-      return _sharedPreferences
-              .getStringList(_getNamespaceKeys(namespace, managerId))
+      return (await _prefs
+                  .getStringList(_getNamespaceKeys(namespace, managerId)))
               ?.toSet() ??
           {};
     }
@@ -240,7 +356,7 @@ class OidcDefaultStore implements OidcStore {
         jsonEncode(keys),
       );
     } else {
-      await _sharedPreferences.setStringList(
+      await _prefs.setStringList(
         _getNamespaceKeys(namespace, managerId),
         keys,
       );
@@ -263,14 +379,15 @@ class OidcDefaultStore implements OidcStore {
           )
           .purify();
     } else {
-      return keys
-          .map(
-            (key) => MapEntry(
-              key,
-              _sharedPreferences.getString(_getKey(namespace, key, managerId)),
-            ),
-          )
-          .purify();
+      final entries = await Future.wait(
+        keys.map(
+          (key) async => MapEntry(
+            key,
+            await _prefs.getString(_getKey(namespace, key, managerId)),
+          ),
+        ),
+      );
+      return entries.purify();
     }
   }
 
@@ -287,7 +404,7 @@ class OidcDefaultStore implements OidcStore {
     } else {
       await Future.wait(
         values.entries.map(
-          (entry) => _sharedPreferences.setString(
+          (entry) => _prefs.setString(
             _getKey(namespace, entry.key, managerId),
             entry.value,
           ),
@@ -308,8 +425,7 @@ class OidcDefaultStore implements OidcStore {
     } else {
       await Future.wait(
         keys.map(
-          (key) =>
-              _sharedPreferences.remove(_getKey(namespace, key, managerId)),
+          (key) => _prefs.remove(_getKey(namespace, key, managerId)),
         ),
       );
     }
@@ -480,4 +596,67 @@ extension on Iterable<MapEntry<String, String?>> {
     return Map.fromEntries(where((element) => element.value != null))
         .cast<String, String>();
   }
+}
+
+/// Minimal async persistence surface shared by the legacy [SharedPreferences]
+/// and the modern [SharedPreferencesAsync] backends, so the rest of
+/// [OidcDefaultStore] can stay backend-agnostic (see issue #301).
+abstract class _OidcPrefsBackend {
+  Future<List<String>?> getStringList(String key);
+  Future<void> setStringList(String key, List<String> value);
+  Future<String?> getString(String key);
+  Future<void> setString(String key, String value);
+  Future<void> remove(String key);
+}
+
+/// Adapts the deprecated synchronous [SharedPreferences] to
+/// [_OidcPrefsBackend]. Kept for backward compatibility with the deprecated
+/// `sharedPreferences` constructor parameter.
+class _OidcLegacyPrefsBackend implements _OidcPrefsBackend {
+  _OidcLegacyPrefsBackend(this._prefs);
+
+  final SharedPreferences _prefs;
+
+  @override
+  Future<List<String>?> getStringList(String key) async =>
+      _prefs.getStringList(key);
+
+  @override
+  Future<void> setStringList(String key, List<String> value) =>
+      _prefs.setStringList(key, value);
+
+  @override
+  Future<String?> getString(String key) async => _prefs.getString(key);
+
+  @override
+  Future<void> setString(String key, String value) =>
+      _prefs.setString(key, value);
+
+  @override
+  Future<void> remove(String key) => _prefs.remove(key);
+}
+
+/// Adapts [SharedPreferencesAsync] (the default, non-legacy backend) to
+/// [_OidcPrefsBackend].
+class _OidcAsyncPrefsBackend implements _OidcPrefsBackend {
+  _OidcAsyncPrefsBackend(this._prefs);
+
+  final SharedPreferencesAsync _prefs;
+
+  @override
+  Future<List<String>?> getStringList(String key) => _prefs.getStringList(key);
+
+  @override
+  Future<void> setStringList(String key, List<String> value) =>
+      _prefs.setStringList(key, value);
+
+  @override
+  Future<String?> getString(String key) => _prefs.getString(key);
+
+  @override
+  Future<void> setString(String key, String value) =>
+      _prefs.setString(key, value);
+
+  @override
+  Future<void> remove(String key) => _prefs.remove(key);
 }
