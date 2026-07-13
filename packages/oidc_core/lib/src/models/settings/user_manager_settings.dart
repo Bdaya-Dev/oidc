@@ -61,12 +61,30 @@ enum OidcInitMode {
   /// This makes cold-start `init()` fast and offline-friendly at the cost of a
   /// brief window where the surfaced user has not yet been re-verified against
   /// the network.
+  ///
+  /// **Note — [OidcUserManagerBase.userChanges] emits TWICE on a cold start:**
+  /// once for the locally-restored (unverified) user, then again for the
+  /// background-rebuilt user once revalidation completes. The second object is
+  /// distinct even when its claims are unchanged — its id_token is now VERIFIED
+  /// (`parsedIdToken.isVerified == true`) and/or its token was refreshed — so
+  /// this second emission is intentional and must not be deduplicated: it is how
+  /// the verified/refreshed state is surfaced. Listeners that need a single
+  /// settled value should key off `parsedIdToken.isVerified` (or use
+  /// [blockingValidate]).
   cacheFirst,
 
   /// The pre-existing semantics (opt-in escape hatch): `init()` blocks until
   /// the discovery document is fetched/validated and the cached token is fully
   /// re-verified (and refreshed/userinfo-fetched) before completing. Choose
   /// this when callers must not observe an unverified user after `init()`.
+  ///
+  /// **Not a byte-for-byte replica of the pre-1.0 `init()` network behavior.**
+  /// The discovery document is now served from the shared TTL cache
+  /// (see [OidcUserManagerSettings.discoveryDocumentMaxAge], default 1 day), so
+  /// a cached `.well-known` document within that window is NOT re-fetched — the
+  /// old code fetched it on every `init()`. To reproduce the exact previous
+  /// network behavior (a discovery fetch on every `init()`), also set
+  /// `discoveryDocumentMaxAge: Duration.zero`.
   blockingValidate,
 }
 
@@ -430,6 +448,12 @@ class OidcUserManagerSettings {
   /// revalidate in the background. Set to [OidcInitMode.blockingValidate] to
   /// keep the previous behavior (block on the network until the cached token is
   /// fully re-verified before `init()` completes).
+  ///
+  /// [OidcInitMode.blockingValidate] is close to but NOT a byte-for-byte replica
+  /// of the pre-1.0 `init()`: the discovery document is now served from the
+  /// [discoveryDocumentMaxAge] TTL cache, so a `.well-known` fetch within that
+  /// window is skipped. Combine it with `discoveryDocumentMaxAge: Duration.zero`
+  /// to also restore the previous fetch-on-every-`init()` network behavior.
   final OidcInitMode initMode;
 
   /// An optional base discovery document whose members are merged UNDER the

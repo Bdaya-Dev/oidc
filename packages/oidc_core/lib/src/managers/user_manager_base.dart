@@ -137,6 +137,21 @@ abstract class OidcUserManagerBase {
   Future<({OidcUser? user, OidcTokenRefreshFailureKind? failureKind})>?
   _autoRefreshInFlight;
 
+  /// #201: while a cache-first background revalidation owns the refresh of the
+  /// just-restored (possibly already-expired) cached token, the expiry-driven
+  /// auto-refresh ([handleTokenExpiring] / [handleTokenExpired]) is suppressed.
+  ///
+  /// On a cache-first cold start the restored expired user is surfaced through
+  /// [userChanges], which arms the token-events timers; those fire immediately
+  /// for an expired token and would kick off `_autoRefresh` — a SECOND
+  /// `/token` exchange racing the background revalidation's own
+  /// `startupLoad` refresh. Two concurrent refresh-token exchanges can trip an
+  /// OP's RFC 9700 refresh-rotation reuse detection and revoke the whole token
+  /// family (a real logout on an ordinary reopen). This flag lets the single
+  /// background pass own that first refresh; it is cleared once the pass
+  /// settles, after which normal on-expiry auto-refresh resumes.
+  bool _cacheFirstRevalidationInFlight = false;
+
   /// Returns true if the manager is currently in offline mode.
   bool get isInOfflineMode => offlineModeStartedAt != null;
 
@@ -1682,6 +1697,13 @@ abstract class OidcUserManagerBase {
     if (refreshToken == null) {
       return;
     }
+    // #201: during a cache-first cold start the background revalidation owns the
+    // first refresh of the just-restored expired token (source `startupLoad`).
+    // Skipping here keeps that refresh a SINGLE `/token` exchange instead of
+    // racing a second one (see [_cacheFirstRevalidationInFlight]).
+    if (_cacheFirstRevalidationInFlight) {
+      return;
+    }
     // #154: share the refresh with [handleTokenExpired] through the in-flight
     // latch so a resume that fires both timers exchanges the refresh token
     // exactly once. All success bookkeeping, failure signalling, and offline
@@ -1939,6 +1961,16 @@ abstract class OidcUserManagerBase {
       //                         network must not nuke a possibly-valid session.
       // A token with NO refresh token is unrecoverable, so forget immediately as
       // before.
+      //
+      // #201: on a cache-first cold start the background revalidation owns the
+      // keep/discard decision for the just-restored expired token — it runs the
+      // full [loadCachedTokens] pass (refresh-if-possible, then the
+      // shouldRemoveInvalidToken / offline policy) and reconciles the surfaced
+      // user afterwards. Defer to it here so this handler neither races a second
+      // refresh nor forgets a user the background pass may still keep.
+      if (_cacheFirstRevalidationInFlight) {
+        return;
+      }
       final refreshToken = event.refreshToken;
       if (refreshToken == null) {
         unawaited(forgetUser());
@@ -3263,9 +3295,14 @@ abstract class OidcUserManagerBase {
   ///   by a pure local deserialize (no network) and `init()` completes
   ///   immediately, then the user is revalidated in the background. When there
   ///   is no cached user / cached discovery document, this transparently falls
-  ///   back to the blocking network path below.
+  ///   back to the blocking network path below. Note this surfaces the user
+  ///   through [userChanges] TWICE on a cold start (restored-then-revalidated) —
+  ///   see [OidcInitMode.cacheFirst] for why the second emission is intentional.
   /// - [OidcInitMode.blockingValidate]: the previous semantics — block until
   ///   the discovery document is fetched and the cached token fully re-verified.
+  ///   Not a byte-for-byte replica of the pre-1.0 network behavior unless
+  ///   combined with `discoveryDocumentMaxAge: Duration.zero` (the discovery
+  ///   document is otherwise served from its TTL cache).
   Future<void> init() {
     return initMemoizer.runOnce(() async {
       await store.init();
@@ -3329,6 +3366,12 @@ abstract class OidcUserManagerBase {
       }
       return false;
     }
+    // #201: arm the gate BEFORE returning (so it is set before `init()` attaches
+    // the lifecycle listeners and the restored-user replay arms the expiry
+    // timers). The background pass owns the first refresh; the expiry-driven
+    // auto-refresh stays suppressed until [_scheduleBackgroundRevalidation]
+    // clears the gate.
+    _cacheFirstRevalidationInFlight = true;
     unawaited(_scheduleBackgroundRevalidation(restored));
     return true;
   }
@@ -3398,17 +3441,31 @@ abstract class OidcUserManagerBase {
     try {
       await _refreshDiscoveryInBackgroundIfStale();
       await loadCachedTokens(forceRebuild: true);
-      // If loadCachedTokens discarded the tokens as invalid without replacing
-      // the surfaced user, reconcile by forgetting the stale restored user.
-      if (identical(currentUser, restoredUser)) {
-        final raw = await store.get(
-          OidcStoreNamespace.secureTokens,
-          key: OidcConstants_Store.currentToken,
-          managerId: id,
-        );
-        if (raw == null) {
-          await forgetUser();
-        }
+      // Reconcile the optimistically-surfaced restore with the authoritative
+      // [loadCachedTokens] outcome so cache-first converges on exactly what
+      // blockingValidate would have surfaced.
+      //
+      // [loadCachedTokens] REPLACES the surfaced user (a freshly-rebuilt object,
+      // `ignoreCurrentUser: true`) on every path where it accepts a token —
+      // refresh success, an explicit `isLoadedTokenAcceptable == true`, or a
+      // clean validation. So if `currentUser` is STILL the exact restored object
+      // afterwards, the pass rejected/discarded that token (policy or
+      // validation) and surfaced no replacement — blockingValidate would show no
+      // user here.
+      //
+      // #201/#205: retract it IN-MEMORY regardless of whether the on-disk copy
+      // was removed. The on-disk retention is a SEPARATE decision owned by
+      // `shouldRemoveInvalidToken` / `supportOfflineAuth`; a policy that KEEPS a
+      // rejected token on disk (reject-but-keep) must not leave that rejected
+      // user logged in — matching blockingValidate, which keeps the disk tokens
+      // yet surfaces no user under identical settings.
+      if (!_isDisposed && identical(currentUser, restoredUser)) {
+        emitEvent(OidcPreLogoutEvent.now(currentUser: restoredUser));
+        // Surface null WITHOUT clearing the store: `forgetUser()` would delete
+        // the secureTokens namespace and defeat a reject-but-keep policy. The
+        // null userChange also unloads the token-events timers (via the
+        // userSubject listener), retiring the stale expired token's timers.
+        userSubject.add(null);
       }
     } on Object catch (e, st) {
       logger.warning(
@@ -3416,6 +3473,13 @@ abstract class OidcUserManagerBase {
         e,
         st,
       );
+    } finally {
+      // Re-arm normal on-expiry auto-refresh now that the background pass has
+      // settled. On success the winning token already re-armed the timers; on
+      // rejection the retraction above unloaded them. Either way subsequent real
+      // expiries must go through [handleTokenExpiring] / [handleTokenExpired]
+      // again.
+      _cacheFirstRevalidationInFlight = false;
     }
   }
 

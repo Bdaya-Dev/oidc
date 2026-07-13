@@ -590,6 +590,96 @@ void main() {
     );
 
     test(
+      't7b (#201): the SAME startup cached-load refresh failure under the '
+      'DEFAULT cacheFirst mode ALSO emits EXACTLY ONE failure event '
+      '(source=startupLoad) — the restored-user expiry timers do NOT race a '
+      'second refresh, and the terminal failure forgets the user',
+      () async {
+        final store = OidcMemoryStore();
+
+        // Seed an expired-but-refreshable user (same shape as t7).
+        final seeder = _TestManager(
+          discoveryDocument: _metadataNoGrantTypes(),
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'client-1',
+          ),
+          store: store,
+          httpClient: MockClient((req) async => http.Response('{}', 404)),
+          settings: OidcUserManagerSettings(
+            redirectUri: Uri.parse('com.example.app://cb'),
+          ),
+        );
+        await seeder.init();
+        await seeder.saveUserTest(
+          await OidcUser.fromIdToken(
+            token: OidcToken(
+              creationTime: clock.now().subtract(const Duration(hours: 2)),
+              idToken: _signIdToken({
+                'exp':
+                    clock
+                        .now()
+                        .subtract(const Duration(hours: 1))
+                        .millisecondsSinceEpoch ~/
+                    1000,
+              }),
+              accessToken: 'at-old',
+              refreshToken: 'rt-old',
+              tokenType: 'Bearer',
+              expiresIn: const Duration(hours: 1),
+            ),
+          ),
+        );
+        await seeder.dispose();
+
+        // A fresh manager over the SAME store; /token rejects the refresh with
+        // invalid_grant. NO initMode override => the new default (cacheFirst):
+        // the expired cached user is surfaced first, arming the expiry timers,
+        // WHILE the background revalidation refreshes. Both must resolve to a
+        // SINGLE refresh + SINGLE failure event (#201 BLOCKER 1 — the previous
+        // masking that pinned t7 to blockingValidate is undone here).
+        final manager = _TestManager(
+          discoveryDocument: _metadataNoGrantTypes(),
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'client-1',
+          ),
+          store: store,
+          httpClient: MockClient((req) async {
+            if (req.url.path.endsWith('/jwks')) return _jwks();
+            if (req.url.path.endsWith('/token')) return _invalidGrant();
+            return http.Response('{}', 404);
+          }),
+          settings: OidcUserManagerSettings(
+            redirectUri: Uri.parse('com.example.app://cb'),
+          ),
+        );
+        addTearDown(manager.dispose);
+        final events = <OidcEvent>[];
+        final sub = manager.events().listen(events.add);
+
+        await manager.init();
+        await pumpEventQueue();
+
+        final failures = events
+            .whereType<OidcTokenRefreshFailedEvent>()
+            .toList();
+        expect(
+          failures,
+          hasLength(1),
+          reason:
+              'the DEFAULT (cacheFirst) mode must emit exactly ONE failure '
+              'event — the restored-user expiry timers must not race the '
+              'background refresh into a second /token exchange',
+        );
+        expect(failures.single.source, OidcTokenRefreshSource.startupLoad);
+        expect(failures.single.kind, OidcTokenRefreshFailureKind.terminal);
+        expect(failures.single.oauthErrorCode, 'invalid_grant');
+        // Terminal failure => the optimistically-restored user is retracted.
+        expect(manager.currentUser, isNull);
+        await sub.cancel();
+      },
+    );
+
+    test(
       't8 (#154): resume race — an expired refreshable token whose refresh '
       'SUCCEEDS retains and REPLACES the user, emits no null userChange, and '
       'refreshes exactly once (no double refresh)',

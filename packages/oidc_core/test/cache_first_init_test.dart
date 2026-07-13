@@ -107,6 +107,7 @@ class _Manager extends OidcUserManagerBase {
 http.Client _client(
   List<String> log, {
   bool failDiscovery = false,
+  bool failTokenInvalidGrant = false,
   Map<String, dynamic>? metadata,
 }) => MockClient((req) async {
   log.add(req.url.path);
@@ -129,6 +130,17 @@ http.Client _client(
     );
   }
   if (path.endsWith('/token')) {
+    if (failTokenInvalidGrant) {
+      // RFC 6749 §5.2 terminal error: a revoked/rotated refresh token.
+      return http.Response(
+        jsonEncode({
+          'error': 'invalid_grant',
+          'error_description': 'refresh token revoked',
+        }),
+        400,
+        headers: const {'content-type': 'application/json'},
+      );
+    }
     return http.Response(
       jsonEncode({
         'access_token': 'at-refreshed',
@@ -287,6 +299,109 @@ void main() {
         await manager.dispose();
       },
     );
+
+    // #201 BLOCKER 1: on a cache-first cold start with an EXPIRED-but-refreshable
+    // cached token, the restored expired user arms the expiry timers (path A)
+    // while the background revalidation also refreshes (path B, source
+    // startupLoad). Both must NOT hit `/token` — two concurrent refresh-token
+    // exchanges can trip an OP's RFC 9700 rotation-reuse detection and revoke the
+    // family. The expiry-driven auto-refresh is suppressed until the background
+    // pass settles, so the DEFAULT mode performs EXACTLY ONE refresh.
+    test(
+      'cacheFirst DEFAULT cold start (expired+refreshable): refresh SUCCESS '
+      'does exactly ONE /token call, replaces the user (verified), no failure '
+      'event',
+      () async {
+        final net = <String>[];
+        final store = await _seededStore(
+          discoveryMetadata: jsonEncode(_metadataJson()),
+          discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
+          // Expired access token (created 2h ago, 1h lifetime) + expired
+          // id_token + a refresh token: BOTH the expiry timers and the
+          // background pass want to refresh.
+          tokenJson: _tokenJson(
+            idToken: _signIdToken(expiresIn: const Duration(hours: -1)),
+            accessToken: 'at-expired',
+            refreshToken: 'rt-cached',
+            creationTime: clock
+                .now()
+                .subtract(const Duration(hours: 2))
+                .toUtc(),
+          ),
+        );
+        final manager = _lazyManager(store: store, client: _client(net));
+        final failures = <OidcTokenRefreshFailedEvent>[];
+        final sub = manager.events().listen((e) {
+          if (e is OidcTokenRefreshFailedEvent) failures.add(e);
+        });
+
+        await manager.init();
+        // Drive both the (gated) expiry timers and the background revalidation.
+        await pumpEventQueue();
+
+        // Exactly ONE token exchange across BOTH paths.
+        expect(net.where((p) => p.endsWith('/token')).length, 1);
+        // The background refresh replaced the restored user with a verified one.
+        expect(manager.currentUser, isNotNull);
+        expect(manager.currentUser!.parsedIdToken.isVerified, isTrue);
+        expect(manager.currentUser!.token.accessToken, 'at-refreshed');
+        // A successful refresh emits NO failure event.
+        expect(failures, isEmpty);
+        await sub.cancel();
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'cacheFirst DEFAULT cold start (expired+refreshable): refresh TERMINAL '
+      'failure emits EXACTLY ONE failure event (source=startupLoad) and forgets '
+      'the user',
+      () async {
+        final net = <String>[];
+        final store = await _seededStore(
+          discoveryMetadata: jsonEncode(_metadataJson()),
+          discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
+          tokenJson: _tokenJson(
+            idToken: _signIdToken(expiresIn: const Duration(hours: -1)),
+            accessToken: 'at-expired',
+            refreshToken: 'rt-cached',
+            creationTime: clock
+                .now()
+                .subtract(const Duration(hours: 2))
+                .toUtc(),
+          ),
+        );
+        final manager = _lazyManager(
+          store: store,
+          client: _client(net, failTokenInvalidGrant: true),
+        );
+        final failures = <OidcTokenRefreshFailedEvent>[];
+        final offlineEntered = <OidcOfflineModeEnteredEvent>[];
+        final sub = manager.events().listen((e) {
+          if (e is OidcTokenRefreshFailedEvent) failures.add(e);
+          if (e is OidcOfflineModeEnteredEvent) offlineEntered.add(e);
+        });
+
+        await manager.init();
+        await pumpEventQueue();
+
+        // Exactly ONE token exchange (the background-owned refresh); the
+        // expiry-driven path did not race a second one.
+        expect(net.where((p) => p.endsWith('/token')).length, 1);
+        // Exactly ONE failure event, honestly sourced to the background refresh.
+        expect(failures, hasLength(1));
+        expect(failures.single.source, OidcTokenRefreshSource.startupLoad);
+        expect(failures.single.kind, OidcTokenRefreshFailureKind.terminal);
+        expect(failures.single.oauthErrorCode, 'invalid_grant');
+        // Offline handling ran at most once (a terminal failure at the default
+        // supportOfflineAuth=false enters no offline mode).
+        expect(offlineEntered, isEmpty);
+        // The stale restored user is retracted (terminal failure => forgotten).
+        expect(manager.currentUser, isNull);
+        await sub.cancel();
+        await manager.dispose();
+      },
+    );
   });
 
   group('blockingValidate init (escape hatch)', () {
@@ -410,145 +525,168 @@ void main() {
     });
   });
 
-  group('loaded-token validity callbacks (#205)', () {
-    OidcUserManagerSettings settings({
-      OidcIsLoadedTokenAcceptableCallback? isAcceptable,
-      OidcShouldRemoveInvalidTokenCallback? shouldRemove,
-    }) => OidcUserManagerSettings(
-      redirectUri: Uri.parse('app://cb'),
-      initMode: OidcInitMode.blockingValidate,
-      userInfoSettings: const OidcUserInfoSettings(sendUserInfoRequest: false),
-      isLoadedTokenAcceptable: isAcceptable,
-      shouldRemoveInvalidToken: shouldRemove,
-    );
+  // #205 validity-callback matrix, run under BOTH init modes. The cacheFirst
+  // DEFAULT must converge on exactly what blockingValidate surfaces: a
+  // policy-REJECTED loaded token must never leave the optimistically-restored
+  // user logged in, even when the removal policy KEEPS the token on disk
+  // (reject-but-keep). Previously cacheFirst only retracted the surfaced user
+  // when the on-disk token had been removed, leaking a rejected user under a
+  // keep policy (BLOCKER 2).
+  for (final mode in OidcInitMode.values) {
+    group('loaded-token validity callbacks (#205) [$mode]', () {
+      OidcUserManagerSettings settings({
+        OidcIsLoadedTokenAcceptableCallback? isAcceptable,
+        OidcShouldRemoveInvalidTokenCallback? shouldRemove,
+      }) => OidcUserManagerSettings(
+        redirectUri: Uri.parse('app://cb'),
+        initMode: mode,
+        userInfoSettings: const OidcUserInfoSettings(
+          sendUserInfoRequest: false,
+        ),
+        isLoadedTokenAcceptable: isAcceptable,
+        shouldRemoveInvalidToken: shouldRemove,
+      );
 
-    test(
-      'isLoadedTokenAcceptable=true accepts an expired token without '
-      'refreshing',
-      () async {
-        final net = <String>[];
-        // Expired id_token WITH a refresh token: default policy would refresh.
-        final store = await _seededStore(
-          discoveryMetadata: jsonEncode(_metadataJson()),
-          discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
-          tokenJson: _tokenJson(
-            idToken: _signIdToken(expiresIn: const Duration(hours: -1)),
-            refreshToken: 'rt-cached',
-          ),
-        );
-        List<Exception>? seenErrors;
-        final manager = _lazyManager(
-          store: store,
-          client: _client(net),
-          settings: settings(
-            isAcceptable: (user, errors) {
-              seenErrors = errors;
-              return true;
-            },
-          ),
-        );
+      test(
+        'isLoadedTokenAcceptable=true accepts an expired token without '
+        'refreshing',
+        () async {
+          final net = <String>[];
+          // Expired id_token WITH a refresh token, but a still-valid access
+          // token lifetime (so the expiry timers do not themselves fire): the
+          // default policy would refresh on the expired id_token.
+          final store = await _seededStore(
+            discoveryMetadata: jsonEncode(_metadataJson()),
+            discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
+            tokenJson: _tokenJson(
+              idToken: _signIdToken(expiresIn: const Duration(hours: -1)),
+              refreshToken: 'rt-cached',
+            ),
+          );
+          List<Exception>? seenErrors;
+          final manager = _lazyManager(
+            store: store,
+            client: _client(net),
+            settings: settings(
+              isAcceptable: (user, errors) {
+                seenErrors = errors;
+                return true;
+              },
+            ),
+          );
 
-        await manager.init();
+          await manager.init();
+          // Under cacheFirst the callback runs in the background pass, so drain
+          // it before asserting; harmless (no pending work) under blocking.
+          await pumpEventQueue();
 
-        expect(manager.currentUser, isNotNull);
-        // The callback saw the expiry error...
-        expect(seenErrors, isNotNull);
-        expect(seenErrors, isNotEmpty);
-        // ...and accepting short-circuited the refresh (no /token call).
-        expect(net.where((p) => p.endsWith('/token')), isEmpty);
-        await manager.dispose();
-      },
-    );
+          expect(manager.currentUser, isNotNull);
+          // The callback saw the expiry error...
+          expect(seenErrors, isNotNull);
+          expect(seenErrors, isNotEmpty);
+          // ...and accepting short-circuited the refresh (no /token call).
+          expect(net.where((p) => p.endsWith('/token')), isEmpty);
+          await manager.dispose();
+        },
+      );
 
-    test(
-      'isLoadedTokenAcceptable=false discards and (by default) removes the '
-      'tokens',
-      () async {
-        final net = <String>[];
-        final store = await _seededStore(
-          discoveryMetadata: jsonEncode(_metadataJson()),
-          discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
-          tokenJson: _tokenJson(),
-        );
-        final manager = _lazyManager(
-          store: store,
-          client: _client(net),
-          settings: settings(isAcceptable: (user, errors) => false),
-        );
+      test(
+        'isLoadedTokenAcceptable=false discards and (by default) removes the '
+        'tokens',
+        () async {
+          final net = <String>[];
+          final store = await _seededStore(
+            discoveryMetadata: jsonEncode(_metadataJson()),
+            discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
+            tokenJson: _tokenJson(),
+          );
+          final manager = _lazyManager(
+            store: store,
+            client: _client(net),
+            settings: settings(isAcceptable: (user, errors) => false),
+          );
 
-        await manager.init();
+          await manager.init();
+          await pumpEventQueue();
 
-        expect(manager.currentUser, isNull);
-        final remaining = await store.get(
-          OidcStoreNamespace.secureTokens,
-          key: OidcConstants_Store.currentToken,
-        );
-        expect(remaining, isNull);
-        await manager.dispose();
-      },
-    );
+          expect(manager.currentUser, isNull);
+          final remaining = await store.get(
+            OidcStoreNamespace.secureTokens,
+            key: OidcConstants_Store.currentToken,
+          );
+          expect(remaining, isNull);
+          await manager.dispose();
+        },
+      );
 
-    test(
-      'shouldRemoveInvalidToken=false keeps the discarded tokens',
-      () async {
-        final net = <String>[];
-        final store = await _seededStore(
-          discoveryMetadata: jsonEncode(_metadataJson()),
-          discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
-          tokenJson: _tokenJson(),
-        );
-        final manager = _lazyManager(
-          store: store,
-          client: _client(net),
-          settings: settings(
-            isAcceptable: (user, errors) => false,
-            shouldRemove: (user, errors) => false,
-          ),
-        );
+      test(
+        'shouldRemoveInvalidToken=false keeps the discarded tokens '
+        '(reject-but-keep) yet surfaces NO user',
+        () async {
+          final net = <String>[];
+          final store = await _seededStore(
+            discoveryMetadata: jsonEncode(_metadataJson()),
+            discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
+            tokenJson: _tokenJson(),
+          );
+          final manager = _lazyManager(
+            store: store,
+            client: _client(net),
+            settings: settings(
+              isAcceptable: (user, errors) => false,
+              shouldRemove: (user, errors) => false,
+            ),
+          );
 
-        await manager.init();
+          await manager.init();
+          await pumpEventQueue();
 
-        expect(manager.currentUser, isNull);
-        // The developer kept the tokens despite the rejection.
-        final remaining = await store.get(
-          OidcStoreNamespace.secureTokens,
-          key: OidcConstants_Store.currentToken,
-        );
-        expect(remaining, isNotNull);
-        await manager.dispose();
-      },
-    );
+          // Reject-but-keep: no user in EITHER mode (BLOCKER 2 — cacheFirst must
+          // not leak the rejected restored user just because the token stayed on
+          // disk).
+          expect(manager.currentUser, isNull);
+          // The developer kept the tokens despite the rejection.
+          final remaining = await store.get(
+            OidcStoreNamespace.secureTokens,
+            key: OidcConstants_Store.currentToken,
+          );
+          expect(remaining, isNotNull);
+          await manager.dispose();
+        },
+      );
 
-    test(
-      'null callbacks preserve the default behavior (invalid token removed)',
-      () async {
-        final net = <String>[];
-        // A wrong-issuer id_token fails validation; default policy removes it.
-        final store = await _seededStore(
-          discoveryMetadata: jsonEncode(_metadataJson()),
-          discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
-          tokenJson: _tokenJson(
-            idToken: _signIdToken(issuer: 'https://evil.example.com'),
-          ),
-        );
-        final manager = _lazyManager(
-          store: store,
-          client: _client(net),
-          settings: settings(),
-        );
+      test(
+        'null callbacks preserve the default behavior (invalid token removed)',
+        () async {
+          final net = <String>[];
+          // A wrong-issuer id_token fails validation; default policy removes it.
+          final store = await _seededStore(
+            discoveryMetadata: jsonEncode(_metadataJson()),
+            discoveryTimestampMs: clock.now().millisecondsSinceEpoch,
+            tokenJson: _tokenJson(
+              idToken: _signIdToken(issuer: 'https://evil.example.com'),
+            ),
+          );
+          final manager = _lazyManager(
+            store: store,
+            client: _client(net),
+            settings: settings(),
+          );
 
-        await manager.init();
+          await manager.init();
+          await pumpEventQueue();
 
-        expect(manager.currentUser, isNull);
-        final remaining = await store.get(
-          OidcStoreNamespace.secureTokens,
-          key: OidcConstants_Store.currentToken,
-        );
-        expect(remaining, isNull);
-        await manager.dispose();
-      },
-    );
-  });
+          expect(manager.currentUser, isNull);
+          final remaining = await store.get(
+            OidcStoreNamespace.secureTokens,
+            key: OidcConstants_Store.currentToken,
+          );
+          expect(remaining, isNull);
+          await manager.dispose();
+        },
+      );
+    });
+  }
 
   group('metadataSeed merge order', () {
     test(
@@ -585,6 +723,47 @@ void main() {
           manager.discoveryDocument.tokenEndpoint.toString(),
           '$_issuer/token',
         );
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'the seed is in-memory only: the PERSISTED discovery copy contains none '
+      'of the seed values',
+      () async {
+        final net = <String>[];
+        final store = await _seededStore();
+        final seed = OidcProviderMetadata.fromJson({
+          'issuer': 'https://seed.example.com',
+          'end_session_endpoint': '$_issuer/logout',
+        });
+        final manager = _lazyManager(
+          store: store,
+          client: _client(net, metadata: _metadataJson()),
+          settings: OidcUserManagerSettings(
+            redirectUri: Uri.parse('app://cb'),
+            initMode: OidcInitMode.blockingValidate,
+            metadataSeed: seed,
+          ),
+        );
+
+        await manager.init();
+
+        // The on-disk discovery document is the FETCHED document verbatim — the
+        // seed is merged only into the in-memory `discoveryDocument` getter, so
+        // a later run that skips the seed (or changes it) never inherits stale
+        // seed values off disk.
+        final persistedRaw = await store.get(
+          OidcStoreNamespace.discoveryDocument,
+          key: _wellKnown.toString(),
+        );
+        expect(persistedRaw, isNotNull);
+        final persisted = jsonDecode(persistedRaw!) as Map<String, dynamic>;
+        // Seed-only member is NOT persisted...
+        expect(persisted.containsKey('end_session_endpoint'), isFalse);
+        // ...and the persisted issuer is the FETCHED one, not the seed's.
+        expect(persisted['issuer'], _issuer);
+        expect(persisted['issuer'], isNot('https://seed.example.com'));
         await manager.dispose();
       },
     );
