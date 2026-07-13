@@ -1,6 +1,6 @@
 name: crypto_keys_plus
 description: A library for doing cryptographic signing/verifying and encrypting/decrypting.
-version: 0.5.0
+version: 1.0.0
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/crypto_keys_plus
 homepage: https://bdaya-dev.github.io/oidc/
 funding:
