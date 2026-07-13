@@ -4,11 +4,17 @@ library;
 // `oidc_web.dart` (the real `OidcWeb` plugin class, the KNOWN gap this test
 // closes) imports `oidc_web_core`, which unconditionally depends on
 // `package:web` (`dart:js_interop`) -- so this suite only compiles for a
-// browser compile target and must be run with `flutter test -d chrome`
-// (equivalent to `dart test -p chrome` for a pure-Dart package). This
-// package's other "test" file is only a placeholder pointing at
-// `integration_test`, so `oidc_web.dart` was never loaded by any unit test
-// before this file.
+// browser compile target and must be run with `flutter test --platform
+// chrome` (NOT `flutter test -d chrome`: `-d`/`--device-id` is ignored by
+// `flutter test`, which still runs on the VM ("tester") harness regardless
+// of the device given, so this suite would stay silently excluded -- 0
+// tests loaded, no failure. `--platform chrome` is deprecated/hidden but is
+// the only invocation that threads a browser Runtime through suite-load
+// filtering; see pubspec.yaml's test:oidc_web:chrome script for the full
+// story). This package's other "test" file is only a placeholder pointing
+// at `integration_test`, so before this file, `oidc_web.dart` was never
+// loaded by any unit test; CI now wires this suite in via
+// test:oidc_web:chrome (#370).
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';

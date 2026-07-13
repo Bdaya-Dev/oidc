@@ -203,6 +203,19 @@ jobs:
           for f in test/*_test.dart; do
             dart test "$f" --suite-load-timeout 4m --platform chrome --coverage=coverage/chrome --chain-stack-traces
           done
+      # oidc_web (#370): the only Flutter *plugin* package with browser-only
+      # lib code. Must run on BOTH pull_request and push -- unlike the
+      # Dart-package browser sweeps above, this isn't split into a
+      # PR-scoped subset vs a main-only full sweep: oidc_web has exactly one
+      # browser-tagged suite file today (test/library_surface_test.dart,
+      # @TestOn('chrome'), 3 trivial tests), so a single invocation covers
+      # both scopes -- no per-file loop needed. See pubspec.yaml's
+      # test:oidc_web:chrome script for why plain `flutter test` and
+      # `flutter test -d chrome` both silently skip this suite, and why the
+      # deprecated `--platform chrome` flag is used anyway.
+      - name: "[Verify step] Test oidc_web [Chrome]"
+        timeout-minutes: 10
+        run: melos run test:oidc_web:chrome
       - name: Remove dart_test.yaml Files
         run: melos run remove_dart_test_yaml
       - name: "[Verify step] Test Flutter packages"
