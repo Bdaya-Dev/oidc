@@ -226,4 +226,94 @@ void main() {
       },
     );
   });
+
+  group('OidcClientRegistrationRequest OIDC-Reg-1.0 typed metadata', () {
+    test('serializes the OpenID Connect DCR §2 fields with correct types', () {
+      final body = OidcClientRegistrationRequest(
+        defaultMaxAge: const Duration(seconds: 3600),
+        requireAuthTime: true,
+        defaultAcrValues: const ['urn:mace:incommon:iap:silver', 'phr'],
+        initiateLoginUri: Uri.parse('https://app.example.com/initiate'),
+        requestUris: [
+          Uri.parse('https://app.example.com/request/1'),
+          Uri.parse('https://app.example.com/request/2'),
+        ],
+      ).toMap();
+
+      // default_max_age is a Number of seconds.
+      expect(body['default_max_age'], 3600);
+      // require_auth_time is a Boolean.
+      expect(body['require_auth_time'], true);
+      // default_acr_values is a JSON array of strings (NOT space-joined).
+      expect(body['default_acr_values'], [
+        'urn:mace:incommon:iap:silver',
+        'phr',
+      ]);
+      // initiate_login_uri is a URI string.
+      expect(body['initiate_login_uri'], 'https://app.example.com/initiate');
+      // request_uris is a JSON array of URI strings.
+      expect(body['request_uris'], [
+        'https://app.example.com/request/1',
+        'https://app.example.com/request/2',
+      ]);
+    });
+
+    test('omits the typed metadata fields entirely when unset', () {
+      final body = OidcClientRegistrationRequest(clientName: 'x').toMap();
+      expect(body.containsKey('default_max_age'), isFalse);
+      expect(body.containsKey('require_auth_time'), isFalse);
+      expect(body.containsKey('default_acr_values'), isFalse);
+      expect(body.containsKey('initiate_login_uri'), isFalse);
+      expect(body.containsKey('request_uris'), isFalse);
+    });
+  });
+
+  group('OidcClientRegistrationResponse.toUpdateRequest (RFC 7592 §2.2)', () {
+    test('echoes full metadata and drops server-managed fields', () {
+      final resp = OidcClientRegistrationResponse.fromJson({
+        'client_id': 'generated-id',
+        'client_secret': 's3cr3t',
+        'client_id_issued_at': 1672531200,
+        'client_secret_expires_at': 0,
+        'registration_access_token': 'rat-1',
+        'registration_client_uri':
+            'https://op.example.com/register/generated-id',
+        'redirect_uris': ['com.example.app://cb'],
+        'grant_types': ['authorization_code'],
+        'token_endpoint_auth_method': 'client_secret_basic',
+        'client_name': 'Example App',
+        'scope': 'openid profile',
+      });
+
+      final body = resp.toUpdateRequest().toMap();
+
+      // client_id (required) and client_secret (must match) are retained.
+      expect(body['client_id'], 'generated-id');
+      expect(body['client_secret'], 's3cr3t');
+      // Full metadata is echoed back.
+      expect(body['redirect_uris'], ['com.example.app://cb']);
+      expect(body['grant_types'], ['authorization_code']);
+      expect(body['token_endpoint_auth_method'], 'client_secret_basic');
+      expect(body['client_name'], 'Example App');
+      expect(body['scope'], 'openid profile');
+      // Server-managed fields MUST NOT be sent back.
+      expect(body.containsKey('registration_access_token'), isFalse);
+      expect(body.containsKey('registration_client_uri'), isFalse);
+      expect(body.containsKey('client_id_issued_at'), isFalse);
+      expect(body.containsKey('client_secret_expires_at'), isFalse);
+    });
+
+    test('rotation: a new secret/registration token in the update response '
+        'supersedes the old one', () {
+      // Simulate the PUT response rotating both credentials.
+      final updated = OidcClientRegistrationResponse.fromJson({
+        'client_id': 'generated-id',
+        'client_secret': 'rotated-secret',
+        'registration_access_token': 'rotated-rat',
+        'client_name': 'Example App v2',
+      });
+      expect(updated.clientSecret, 'rotated-secret');
+      expect(updated.registrationAccessToken, 'rotated-rat');
+    });
+  });
 }
