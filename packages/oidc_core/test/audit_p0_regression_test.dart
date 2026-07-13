@@ -25,8 +25,17 @@ class _TestManager extends OidcUserManagerBase {
 
   void seed(OidcUser user) => userSubject.add(user);
 
-  /// Test hook to drive the protected auto-refresh-on-expiry path.
+  /// Test hook to persist a user through the manager's save path (used to seed
+  /// a store for a later [loadCachedTokens] on a fresh manager instance).
+  Future<void> saveUserTest(OidcUser user) => saveUser(user);
+
+  /// Test hook to drive the protected auto-refresh-on-expiry (`expiring`) path.
   Future<void> expire(OidcToken token) => handleTokenExpiring(token);
+
+  /// Test hook to drive the protected token-`expired` path. On a real resume
+  /// the `expired` timer fires before the zero-delay `expiring` timer, so tests
+  /// call this before [expire] to reproduce the resume race deterministically.
+  void expireHard(OidcToken token) => handleTokenExpired(token);
 
   /// Test hook to drive the protected front-channel-logout path. Calling the
   /// `@protected` member from inside this subclass avoids the
@@ -445,8 +454,9 @@ void main() {
     );
 
     test(
-      't6 (#154): a transient failure on an expiring refreshable token never '
-      'forgets the user (user retained); the failure event is emitted',
+      't6: a transient failure on the auto-refresh (expiring) path never '
+      'forgets the user (user retained); the failure event is emitted. This '
+      'pins the expiring-path retention — the #154 resume forget-race is t8-t10.',
       () async {
         final client = MockClient((req) async {
           if (req.url.path.endsWith('/jwks')) return _jwks();
@@ -484,6 +494,277 @@ void main() {
         );
         await sub.cancel();
         await userSub.cancel();
+      },
+    );
+
+    test(
+      't7 (#120): a startup cached-load refresh failure emits EXACTLY ONE '
+      'failure event with source=startupLoad — the startup catch no longer '
+      'also re-emits a manual-sourced event (the reviewer double-signal probe)',
+      () async {
+        final store = OidcMemoryStore();
+
+        // Persist an expired-but-refreshable user into the store via a first
+        // manager (saveUser bypasses validation, so the expired token sticks).
+        final seeder = _TestManager(
+          discoveryDocument: _metadataNoGrantTypes(),
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'client-1',
+          ),
+          store: store,
+          httpClient: MockClient((req) async => http.Response('{}', 404)),
+          settings: OidcUserManagerSettings(
+            redirectUri: Uri.parse('com.example.app://cb'),
+          ),
+        );
+        await seeder.init();
+        await seeder.saveUserTest(
+          await OidcUser.fromIdToken(
+            token: OidcToken(
+              creationTime: clock.now().subtract(const Duration(hours: 2)),
+              idToken: _signIdToken({
+                'exp':
+                    clock
+                        .now()
+                        .subtract(const Duration(hours: 1))
+                        .millisecondsSinceEpoch ~/
+                    1000,
+              }),
+              accessToken: 'at-old',
+              refreshToken: 'rt-old',
+              tokenType: 'Bearer',
+              expiresIn: const Duration(hours: 1),
+            ),
+          ),
+        );
+        await seeder.dispose();
+
+        // A fresh manager over the SAME store; /token rejects the startup
+        // refresh with invalid_grant. Subscribe to events() BEFORE init so the
+        // single startup-load failure is captured.
+        final manager = _TestManager(
+          discoveryDocument: _metadataNoGrantTypes(),
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'client-1',
+          ),
+          store: store,
+          httpClient: MockClient((req) async {
+            if (req.url.path.endsWith('/jwks')) return _jwks();
+            if (req.url.path.endsWith('/token')) return _invalidGrant();
+            return http.Response('{}', 404);
+          }),
+          settings: OidcUserManagerSettings(
+            redirectUri: Uri.parse('com.example.app://cb'),
+          ),
+        );
+        addTearDown(manager.dispose);
+        final events = <OidcEvent>[];
+        final sub = manager.events().listen(events.add);
+
+        await manager.init();
+        await pumpEventQueue();
+
+        final failures = events
+            .whereType<OidcTokenRefreshFailedEvent>()
+            .toList();
+        expect(
+          failures,
+          hasLength(1),
+          reason:
+              'exactly ONE failure event per startup refresh failure — the '
+              'startup cached-load catch must not re-emit a second '
+              '(manual-sourced) event',
+        );
+        expect(failures.single.source, OidcTokenRefreshSource.startupLoad);
+        expect(failures.single.kind, OidcTokenRefreshFailureKind.terminal);
+        expect(failures.single.oauthErrorCode, 'invalid_grant');
+        await sub.cancel();
+      },
+    );
+
+    test(
+      't8 (#154): resume race — an expired refreshable token whose refresh '
+      'SUCCEEDS retains and REPLACES the user, emits no null userChange, and '
+      'refreshes exactly once (no double refresh)',
+      () {
+        fakeAsync(
+          (async) {
+            final tokenCalls = <http.Request>[];
+            final client = MockClient((req) async {
+              if (req.url.path.endsWith('/jwks')) return _jwks();
+              if (req.url.path.endsWith('/token')) {
+                tokenCalls.add(req);
+                return _tokenOk();
+              }
+              return http.Response('{}', 404);
+            });
+            _TestManager? built;
+            unawaited(_buildManager(client).then((m) => built = m));
+            async.flushMicrotasks();
+            final manager = built!;
+
+            final userChanges = <OidcUser?>[];
+            final userSub = manager.userChanges().listen(userChanges.add);
+            async.flushMicrotasks();
+
+            final expired = _expiredRefreshableToken();
+            // Resume: the `expired` timer fires before the zero-delay
+            // `expiring` timer, so drive handleTokenExpired first.
+            manager.expireHard(expired);
+            unawaited(manager.expire(expired));
+            async
+              ..flushMicrotasks()
+              ..elapse(const Duration(seconds: 1))
+              ..flushMicrotasks();
+
+            expect(
+              tokenCalls,
+              hasLength(1),
+              reason:
+                  'both handlers must share ONE in-flight refresh — no double '
+                  'refresh on resume',
+            );
+            expect(
+              manager.currentUser,
+              isNotNull,
+              reason: 'a successful resume refresh retains the user',
+            );
+            expect(
+              manager.currentUser?.token.accessToken,
+              'new-access',
+              reason: 'the user is REPLACED with the refreshed token',
+            );
+            expect(
+              userChanges,
+              isNot(contains(null)),
+              reason:
+                  'no forgetUser (null userChange) on a successful resume '
+                  'refresh',
+            );
+
+            unawaited(userSub.cancel());
+            unawaited(manager.dispose());
+            async.flushMicrotasks();
+          },
+          initialTime: DateTime.utc(2024),
+        );
+      },
+    );
+
+    test(
+      't9 (#154): resume race — an expired refreshable token whose refresh '
+      'fails with invalid_grant emits exactly ONE terminal failure event, '
+      'FOLLOWED by the null userChange (forgetUser ran, in that order)',
+      () {
+        fakeAsync(
+          (async) {
+            final client = MockClient((req) async {
+              if (req.url.path.endsWith('/jwks')) return _jwks();
+              if (req.url.path.endsWith('/token')) return _invalidGrant();
+              return http.Response('{}', 404);
+            });
+            _TestManager? built;
+            unawaited(_buildManager(client).then((m) => built = m));
+            async.flushMicrotasks();
+            final manager = built!;
+
+            // A single ordered timeline across BOTH streams, so we can assert
+            // the failure event precedes the null userChange.
+            final timeline = <String>[];
+            final eventSub = manager.events().listen((e) {
+              if (e is OidcTokenRefreshFailedEvent) timeline.add('failure');
+            });
+            final userSub = manager.userChanges().listen((u) {
+              if (u == null) timeline.add('user:null');
+            });
+            async.flushMicrotasks();
+
+            final expired = _expiredRefreshableToken();
+            manager.expireHard(expired);
+            unawaited(manager.expire(expired));
+            async
+              ..flushMicrotasks()
+              ..elapse(const Duration(seconds: 1))
+              ..flushMicrotasks();
+
+            expect(
+              timeline.where((e) => e == 'failure').length,
+              1,
+              reason: 'exactly one failure event on the resume race',
+            );
+            expect(
+              manager.currentUser,
+              isNull,
+              reason:
+                  'a terminal (invalid_grant) failure on an EXPIRED token '
+                  'forgets the genuinely-dead session',
+            );
+            expect(
+              timeline,
+              containsAllInOrder(['failure', 'user:null']),
+              reason:
+                  'the failure event must be emitted BEFORE the null '
+                  'userChange (#154 ordering)',
+            );
+
+            unawaited(eventSub.cancel());
+            unawaited(userSub.cancel());
+            unawaited(manager.dispose());
+            async.flushMicrotasks();
+          },
+          initialTime: DateTime.utc(2024),
+        );
+      },
+    );
+
+    test(
+      't10 (#154): an expired token with NO refresh token forgets the user '
+      'immediately (unchanged legacy behavior) and attempts no refresh',
+      () {
+        fakeAsync(
+          (async) {
+            final tokenCalls = <http.Request>[];
+            final client = MockClient((req) async {
+              if (req.url.path.endsWith('/jwks')) return _jwks();
+              if (req.url.path.endsWith('/token')) {
+                tokenCalls.add(req);
+                return _tokenOk();
+              }
+              return http.Response('{}', 404);
+            });
+            _TestManager? built;
+            unawaited(_buildManager(client).then((m) => built = m));
+            async.flushMicrotasks();
+            final manager = built!;
+
+            final userChanges = <OidcUser?>[];
+            final userSub = manager.userChanges().listen(userChanges.add);
+            async.flushMicrotasks();
+
+            manager.expireHard(_expiredTokenNoRefresh());
+            async
+              ..flushMicrotasks()
+              ..elapse(const Duration(seconds: 1))
+              ..flushMicrotasks();
+
+            expect(
+              tokenCalls,
+              isEmpty,
+              reason: 'no refresh token → no token-endpoint call',
+            );
+            expect(
+              manager.currentUser,
+              isNull,
+              reason: 'no refresh token → forget immediately as before',
+            );
+            expect(userChanges, contains(null));
+
+            unawaited(userSub.cancel());
+            unawaited(manager.dispose());
+            async.flushMicrotasks();
+          },
+          initialTime: DateTime.utc(2024),
+        );
       },
     );
   });
@@ -526,6 +807,27 @@ OidcToken _refreshableToken() => OidcToken(
   refreshToken: 'refresh-token-1',
   tokenType: 'Bearer',
   expiresIn: const Duration(seconds: 60),
+);
+
+/// An already-expired token that still carries a refresh token — the #154
+/// resume scenario (both the `expiring` and `expired` timers overdue).
+OidcToken _expiredRefreshableToken() => OidcToken(
+  creationTime: clock.now().subtract(const Duration(hours: 2)),
+  idToken: _signIdToken(),
+  accessToken: 'access-token-1',
+  refreshToken: 'refresh-token-1',
+  tokenType: 'Bearer',
+  expiresIn: const Duration(hours: 1),
+);
+
+/// An already-expired token with NO refresh token — an unrecoverable session
+/// that must still be forgotten immediately on expiry.
+OidcToken _expiredTokenNoRefresh() => OidcToken(
+  creationTime: clock.now().subtract(const Duration(hours: 2)),
+  idToken: _signIdToken(),
+  accessToken: 'access-token-1',
+  tokenType: 'Bearer',
+  expiresIn: const Duration(hours: 1),
 );
 
 /// A user whose token carries a 60s lifetime, so the token-events timer arms.

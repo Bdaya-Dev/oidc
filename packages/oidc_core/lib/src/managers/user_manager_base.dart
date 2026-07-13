@@ -97,6 +97,16 @@ abstract class OidcUserManagerBase {
   /// Counter for consecutive refresh failures
   int consecutiveRefreshFailures = 0;
 
+  /// #154: the in-flight automatic (on-expiry) refresh, shared between
+  /// [handleTokenExpiring] and [handleTokenExpired]. On resume both the
+  /// `expiring` and `expired` timers can be overdue and fire together; latching
+  /// both handlers onto this single future guarantees the refresh token is
+  /// exchanged exactly once (no double refresh) and lets the expired handler
+  /// defer its forget decision to the refresh outcome instead of racing it.
+  /// `null` when no auto-refresh is currently running.
+  Future<({OidcUser? user, OidcTokenRefreshFailureKind? failureKind})>?
+  _autoRefreshInFlight;
+
   /// Returns true if the manager is currently in offline mode.
   bool get isInOfflineMode => offlineModeStartedAt != null;
 
@@ -1463,6 +1473,7 @@ abstract class OidcUserManagerBase {
     OidcProviderMetadata? discoveryDocumentOverride,
     Map<String, dynamic>? extraBodyFields,
     OidcUser? currentUserOverride,
+    OidcTokenRefreshSource source = OidcTokenRefreshSource.manual,
   }) async {
     ensureInit();
     final discoveryDocument =
@@ -1533,15 +1544,18 @@ abstract class OidcUserManagerBase {
       );
     } on Object catch (e, st) {
       // #120: signal the failure to background observers of events() before any
-      // offline handling or rethrow. The manual path schedules no retry, so
-      // willRetry is always false here. This is the intentional double-signal:
+      // offline handling or rethrow. Neither caller-initiated path that reaches
+      // here schedules a retry — a manual refreshToken() call nor the startup
+      // cached-load refresh — so willRetry is always false. [source] identifies
+      // which one it was (manual by default, startupLoad when loadCachedTokens
+      // drives it). For the manual path this is the intentional double-signal:
       // observers get the event while the awaiting caller still gets the throw
       // below (MSAL pattern).
       eventsController.add(
         OidcTokenRefreshFailedEvent.fromError(
           error: e,
           stackTrace: st,
-          source: OidcTokenRefreshSource.manual,
+          source: source,
           willRetry: false,
         ),
       );
@@ -1595,6 +1609,36 @@ abstract class OidcUserManagerBase {
     if (refreshToken == null) {
       return;
     }
+    // #154: share the refresh with [handleTokenExpired] through the in-flight
+    // latch so a resume that fires both timers exchanges the refresh token
+    // exactly once. All success bookkeeping, failure signalling, and offline
+    // handling happen inside [_performAutoRefresh].
+    await _autoRefresh(event);
+  }
+
+  /// Returns the in-flight automatic refresh for [event], starting one if none
+  /// is running. Concurrent callers ([handleTokenExpiring] and
+  /// [handleTokenExpired] on resume) share the SAME future, so the refresh
+  /// token is exchanged only once. The latch clears itself on completion so a
+  /// later expiry can refresh again.
+  Future<({OidcUser? user, OidcTokenRefreshFailureKind? failureKind})>
+  _autoRefresh(OidcToken event) {
+    return _autoRefreshInFlight ??= _performAutoRefresh(event).whenComplete(() {
+      _autoRefreshInFlight = null;
+    });
+  }
+
+  /// Performs one automatic (on-expiry) refresh of [event]'s refresh token and
+  /// classifies the outcome.
+  ///
+  /// On success the replaced user is saved (which re-arms the token timers via
+  /// [userChanges]) and returned with a `null` `failureKind`. On failure the
+  /// single `OidcTokenRefreshFailedEvent` (source `autoExpiry`) is emitted,
+  /// offline handling runs, and the failure `OidcTokenRefreshFailureKind` is
+  /// returned with a `null` user so [handleTokenExpired] can decide whether to
+  /// forget the session.
+  Future<({OidcUser? user, OidcTokenRefreshFailureKind? failureKind})>
+  _performAutoRefresh(OidcToken event) async {
     OidcUser? newUser;
     //try getting a new token.
     try {
@@ -1611,7 +1655,7 @@ abstract class OidcUserManagerBase {
           // the body even when `credentials` already authenticates via the
           // Basic header (see OidcEndpoints.token).
           request: OidcTokenRequest.refreshToken(
-            refreshToken: refreshToken,
+            refreshToken: event.refreshToken!,
             clientId: clientCredentials.clientId,
             extra: settings.extraTokenParameters,
             scope: settings.scope,
@@ -1644,6 +1688,8 @@ abstract class OidcUserManagerBase {
 
       // Successful refresh - update last server contact and exit offline mode
       recordSuccessfulServerContact(newToken: newUser?.token);
+      logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
+      return (user: newUser, failureKind: null);
     } on Object catch (e, st) {
       // #120: a transient failure that offline handling will absorb schedules a
       // retry; a terminal failure (e.g. invalid_grant) or a disabled offline
@@ -1656,14 +1702,13 @@ abstract class OidcUserManagerBase {
             error: e,
             supportOfflineAuth: settings.supportOfflineAuth,
           );
-      eventsController.add(
-        OidcTokenRefreshFailedEvent.fromError(
-          error: e,
-          stackTrace: st,
-          source: OidcTokenRefreshSource.autoExpiry,
-          willRetry: willRetry,
-        ),
+      final failedEvent = OidcTokenRefreshFailedEvent.fromError(
+        error: e,
+        stackTrace: st,
+        source: OidcTokenRefreshSource.autoExpiry,
+        willRetry: willRetry,
       );
+      eventsController.add(failedEvent);
 
       final handledOffline = handleOfflineEligibleFailure(
         error: e,
@@ -1679,17 +1724,18 @@ abstract class OidcUserManagerBase {
       );
 
       if (!handledOffline) {
-        // Non-network error or offline auth not supported - unload event manager
+        // Non-network error or offline auth not supported - unload event
+        // manager. The user is RETAINED here (this is the non-offline / terminal
+        // auto-expiry retention that [handleTokenExpired] mirrors for transient
+        // failures): the expiring path never forgets on its own.
         logger.warning(
           'Token refresh failed, unloading token events manager',
           e,
         );
         tokenEvents.unload();
-      } else {
-        return;
       }
+      return (user: null, failureKind: failedEvent.kind);
     }
-    logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
   }
 
   /// Calculates retry delay using the configured callback
@@ -1774,7 +1820,40 @@ abstract class OidcUserManagerBase {
     );
 
     if (!settings.supportOfflineAuth) {
-      unawaited(forgetUser());
+      // #154: do NOT forget a still-refreshable session on expiry. On resume
+      // both the `expiring` and `expired` timers can be overdue; the old code
+      // called `forgetUser()` here unconditionally, which raced — and usually
+      // beat — the async refresh kicked off by [handleTokenExpiring], clearing a
+      // user whose refresh token was still valid (the real #154 bug, present at
+      // the DEFAULT supportOfflineAuth=false). Instead, when the expired token
+      // still carries a refresh token, defer the forget decision to the refresh
+      // outcome — latching onto the in-flight refresh, or starting one here when
+      // the expired timer fired first:
+      //   * refresh SUCCESS  -> keep the replaced user (no forget).
+      //   * TERMINAL failure -> forget (a genuinely dead session, e.g.
+      //                         invalid_grant); [_performAutoRefresh] emits the
+      //                         failure event BEFORE this null userChange, so
+      //                         observers see the failure before the logout.
+      //   * TRANSIENT failure -> RETAIN the user. This mirrors the non-offline
+      //                         auto-expiry retention (the expiring path keeps
+      //                         the user and only unloads the timers on a
+      //                         transient / offline-disabled failure); a dead
+      //                         network must not nuke a possibly-valid session.
+      // A token with NO refresh token is unrecoverable, so forget immediately as
+      // before.
+      final refreshToken = event.refreshToken;
+      if (refreshToken == null) {
+        unawaited(forgetUser());
+        return;
+      }
+      unawaited(
+        _autoRefresh(event).then((result) async {
+          if (result.user == null &&
+              result.failureKind == OidcTokenRefreshFailureKind.terminal) {
+            await forgetUser();
+          }
+        }),
+      );
     } else {
       // Only emit warning if we're actually in offline mode
       // (not just because offline auth is enabled)
@@ -2571,46 +2650,32 @@ abstract class OidcUserManagerBase {
 
         if (token.refreshToken != null &&
             (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
-          try {
-            final refreshedUser = await _refreshToken(
-              overrideRefreshToken: token.refreshToken,
-              currentUserOverride: loadedUser,
-            );
-            if (refreshedUser != null) {
-              loadedUser = refreshedUser;
-            }
-          } catch (e, st) {
-            // #120: surface the startup-load refresh failure before offline
-            // handling / rethrow.
-            eventsController.add(
-              OidcTokenRefreshFailedEvent.fromError(
-                error: e,
-                stackTrace: st,
-                source: OidcTokenRefreshSource.startupLoad,
-                willRetry: false,
-              ),
-            );
-
-            // An app might go offline during token refresh, so we consult the
-            // supportOfflineAuth setting to check whether this is an issue or
-            // not.
-            final handledOffline = handleOfflineEligibleFailure(
-              error: e,
-              fallbackToken: token,
-              emitRepeatFailureWarning: true,
-            );
-
-            if (!handledOffline) {
-              rethrow;
-            }
+          // #120: _refreshToken owns the failure signalling and offline
+          // handling for this path now. Passing source: startupLoad makes the
+          // single OidcTokenRefreshFailedEvent it emits carry the correct
+          // source, and its internal handleOfflineEligibleFailure is the single
+          // offline-handling pass. A failure that offline mode absorbs returns
+          // the cached [loadedUser] (so we continue with cached state); a
+          // terminal / offline-disabled failure rethrows to the outer catch
+          // below, which clears the invalid tokens when offline auth is off.
+          // This removes the previous double-signal (two events + two
+          // offline-handling passes) per startup refresh failure.
+          final refreshedUser = await _refreshToken(
+            overrideRefreshToken: token.refreshToken,
+            currentUserOverride: loadedUser,
+            source: OidcTokenRefreshSource.startupLoad,
+          );
+          if (refreshedUser != null) {
+            loadedUser = refreshedUser;
           }
         }
-        if (loadedUser != null) {
-          loadedUser = await validateAndSaveUser(
-            user: loadedUser,
-            metadata: metadata,
-          );
-        }
+        // [loadedUser] is provably non-null here (we are inside the
+        // `loadedUser != null` guard above and only ever reassign it to a
+        // non-null refreshed user), so it is passed directly to validation.
+        loadedUser = await validateAndSaveUser(
+          user: loadedUser,
+          metadata: metadata,
+        );
       }
 
       if (loadedUser == null) {
