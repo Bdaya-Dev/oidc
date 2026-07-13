@@ -189,6 +189,56 @@ void main() {
         expect(actualRedirectUri.port, freePort);
       },
     );
+
+    test(
+      'throws a timeout OidcException when an abandoned flow never delivers a '
+      'redirect within flowTimeoutSeconds',
+      () async {
+        final manager = buildLazyManager();
+        final actualRedirectUriCompleter = Completer<Uri>();
+
+        // The same finite timeout is set on every desktop-OS native-options
+        // field so `_resolveFlowTimeoutSeconds` picks it up regardless of the
+        // host OS running the suite.
+        const options = OidcPlatformSpecificOptions(
+          windows: OidcPlatformSpecificOptions_Native(flowTimeoutSeconds: 1),
+          linux: OidcPlatformSpecificOptions_Native(flowTimeoutSeconds: 1),
+          macos: OidcNativeOptionsApple(flowTimeoutSeconds: 1),
+        );
+
+        await expectLater(
+          manager.startListenerAndGetUri(
+            originalRedirectUri: Uri(
+              scheme: 'http',
+              host: '127.0.0.1',
+              port: 0,
+              path: '/callback',
+            ),
+            redirectUriKey: 'redirect_uri',
+            endpoint: Uri.parse('https://op.example.com/authorize'),
+            requestParameters: const {},
+            logRequestDesc: 'authorization',
+            actualRedirectUriCompleter: actualRedirectUriCompleter,
+            options: options,
+            // Simulate an abandoned flow: the link is "opened" but the user
+            // never completes it, so the listener never receives a GET and the
+            // wait must terminate via the timeout instead of hanging forever.
+            printFunction: (uri) async {},
+          ),
+          throwsA(
+            isA<OidcException>().having(
+              (e) => e.message,
+              'message',
+              contains('timed out'),
+            ),
+          ),
+        );
+
+        // The redirect URI was still resolved before the wait began, proving
+        // the timeout fired on the listener wait (not on server startup).
+        expect(await actualRedirectUriCompleter.future, isNotNull);
+      },
+    );
   });
 
   group('getAuthorizationResponse', () {
