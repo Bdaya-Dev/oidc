@@ -104,6 +104,19 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
     key: state,
   );
 
+  /// Gets the PKCE `code_verifier` for an in-flight authorization [state] from
+  /// the [OidcStoreNamespace.secureTokens] namespace.
+  ///
+  /// Returns null when absent — e.g. for a flow that was started by a version
+  /// which still embedded the `code_verifier` inside the (plaintext)
+  /// [OidcStoreNamespace.state] payload. Callers must fall back to that
+  /// embedded value for one release; see [OidcStoreExt.setStateCodeVerifier]
+  /// for the rationale and the compatibility window.
+  Future<String?> getStateCodeVerifier(String state) => get(
+    OidcStoreNamespace.secureTokens,
+    key: _stateCodeVerifierKey(state),
+  );
+
   /// Gets the stateData (value) of a [state] (key).
   Future<String?> getStateResponseData(String state) => get(
     OidcStoreNamespace.stateResponse,
@@ -205,6 +218,34 @@ extension OidcStoreExt on OidcStore {
           value: stateData,
         );
 
+  /// Persists the PKCE `code_verifier` for an in-flight authorization [state]
+  /// in the [OidcStoreNamespace.secureTokens] namespace, keyed by the state id.
+  ///
+  /// The `code_verifier` is secret-grade: an attacker who captures it together
+  /// with the authorization `code` can complete the token exchange (RFC 7636
+  /// §1). Persisting it in `secureTokens` (encrypted at rest on web via
+  /// `OidcWebStore`, secure-storage-backed on mobile/desktop via
+  /// `OidcDefaultStore`) instead of the plaintext [OidcStoreNamespace.state]
+  /// payload closes that at-rest exposure on every platform — the same posture
+  /// the nonce already gets via [setCurrentNonce].
+  ///
+  /// if [codeVerifier] (value) is null, the entry is removed; call this after a
+  /// flow completes (or when clearing a stale state) so the secret does not
+  /// outlive the short-lived flow.
+  Future<void> setStateCodeVerifier({
+    required String state,
+    required String? codeVerifier,
+  }) => codeVerifier == null
+      ? remove(
+          OidcStoreNamespace.secureTokens,
+          key: _stateCodeVerifierKey(state),
+        )
+      : set(
+          OidcStoreNamespace.secureTokens,
+          key: _stateCodeVerifierKey(state),
+          value: codeVerifier,
+        );
+
   /// Sets the [stateData] (value) of a [state] (key).
   ///
   /// if [stateData] (value) is null, the [state] (key) will be removed.
@@ -242,3 +283,12 @@ extension OidcStoreExt on OidcStore {
           value: value,
         );
 }
+
+/// The [OidcStoreNamespace.secureTokens] key under which the PKCE
+/// `code_verifier` for an in-flight authorization [state] is persisted.
+///
+/// The state id (a UUID) namespaces the entry so concurrent authorization
+/// flows never collide, and the `code_verifier.` prefix keeps it distinct from
+/// the token/nonce entries that share the namespace.
+String _stateCodeVerifierKey(String state) =>
+    '${OidcConstants_AuthParameters.codeVerifier}.$state';

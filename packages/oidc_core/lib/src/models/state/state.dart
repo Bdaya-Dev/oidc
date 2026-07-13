@@ -101,6 +101,10 @@ class OidcState {
         //no need to await
         unawaited(store.remove(OidcStoreNamespace.state, key: key));
         unawaited(store.remove(OidcStoreNamespace.stateResponse, key: key));
+        // #324 item 20: also drop the secureTokens `code_verifier` keyed by
+        // this stale state, so an abandoned flow doesn't leave the secret
+        // behind.
+        unawaited(store.setStateCodeVerifier(state: key, codeVerifier: null));
       }
     }
   }
