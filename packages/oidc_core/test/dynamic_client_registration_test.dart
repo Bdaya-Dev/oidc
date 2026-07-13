@@ -115,5 +115,115 @@ void main() {
       expect(captured!.method, 'DELETE');
       expect(captured!.headers['authorization'], 'Bearer rat-1');
     });
+
+    test(
+      'deleteClientConfiguration accepts 200 leniently as success',
+      () async {
+        final client = MockClient((req) async {
+          return http.Response('', 200);
+        });
+        await OidcEndpoints.deleteClientConfiguration(
+          registrationClientUri: Uri.parse(
+            'https://op.example.com/register/generated-id',
+          ),
+          registrationAccessToken: 'rat-1',
+          client: client,
+        );
+      },
+    );
+
+    test(
+      'deleteClientConfiguration throws on a 302 redirect '
+      '(not a defined success status per RFC 7592 2.3)',
+      () async {
+        final client = MockClient((req) async {
+          return http.Response(
+            '',
+            302,
+            headers: const {'location': 'https://op.example.com/login'},
+          );
+        });
+        await expectLater(
+          OidcEndpoints.deleteClientConfiguration(
+            registrationClientUri: Uri.parse(
+              'https://op.example.com/register/generated-id',
+            ),
+            registrationAccessToken: 'rat-1',
+            client: client,
+          ),
+          throwsA(isA<OidcException>()),
+        );
+      },
+    );
+
+    test(
+      'deleteClientConfiguration surfaces a 401 RFC 6749-shaped error body '
+      'as a typed OidcException',
+      () async {
+        final client = MockClient((req) async {
+          return http.Response(
+            jsonEncode({
+              'error': 'invalid_token',
+              'error_description': 'The access token expired',
+            }),
+            401,
+            headers: const {'content-type': 'application/json'},
+          );
+        });
+        try {
+          await OidcEndpoints.deleteClientConfiguration(
+            registrationClientUri: Uri.parse(
+              'https://op.example.com/register/generated-id',
+            ),
+            registrationAccessToken: 'rat-1',
+            client: client,
+          );
+          fail('should have thrown');
+        } on OidcException catch (e) {
+          expect(e.errorResponse, isNotNull);
+          expect(e.errorResponse!.error, 'invalid_token');
+          expect(
+            e.errorResponse!.errorDescription,
+            'The access token expired',
+          );
+          expect(e.rawResponse?.statusCode, 401);
+        }
+      },
+    );
+
+    test(
+      'deleteClientConfiguration surfaces a 405 error body as a typed '
+      'OidcException',
+      () async {
+        final client = MockClient((req) async {
+          return http.Response(
+            jsonEncode({
+              'error': 'invalid_request',
+              'error_description': 'DELETE is not supported',
+            }),
+            405,
+            headers: const {'content-type': 'application/json'},
+          );
+        });
+        try {
+          await OidcEndpoints.deleteClientConfiguration(
+            registrationClientUri: Uri.parse(
+              'https://op.example.com/register/generated-id',
+            ),
+            registrationAccessToken: 'rat-1',
+            client: client,
+          );
+          fail('should have thrown');
+        } on OidcException catch (e) {
+          expect(e.errorResponse, isNotNull);
+          expect(e.errorResponse!.error, 'invalid_request');
+          expect(
+            e.errorResponse!.errorDescription,
+            'DELETE is not supported',
+          );
+          expect(e.rawResponse?.statusCode, 405);
+        }
+      },
+    );
   });
 }
