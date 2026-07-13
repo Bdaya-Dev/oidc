@@ -1954,6 +1954,24 @@ abstract class OidcUserManagerBase {
     }
   }
 
+  /// Resolves the issuer an id_token's `iss` claim is validated against
+  /// (OpenID Connect Core §3.1.3.7 step 2: the `iss` claim MUST exactly match
+  /// the OP's Issuer Identifier).
+  ///
+  /// When [OidcUserManagerSettings.expectedIssuer] is set it is authoritative
+  /// and **overrides** the discovery document's [OidcProviderMetadata.issuer];
+  /// when null (the default) the advertised `metadata.issuer` is used unchanged,
+  /// so the out-of-the-box behavior is identical.
+  ///
+  /// This lets Microsoft Entra ID multi-tenant (`common`/`organizations`) RPs —
+  /// whose discovery `issuer` is a non-substituted template
+  /// (`https://login.microsoftonline.com/{tenantid}/v2.0`) that can never equal
+  /// the concrete per-tenant `iss` a real id_token carries — pin the concrete
+  /// tenant issuer instead of failing the exact-match check.
+  @protected
+  Uri? resolveExpectedIssuer(OidcProviderMetadata metadata) =>
+      settings.expectedIssuer ?? metadata.issuer;
+
   List<Exception> validateUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
@@ -1974,7 +1992,7 @@ abstract class OidcUserManagerBase {
       errors.addAll(
         claims.validate(
           clientId: clientCredentials.clientId,
-          issuer: metadata.issuer,
+          issuer: resolveExpectedIssuer(metadata),
           expiryTolerance: settings.expiryTolerance,
         ),
       );
@@ -2159,8 +2177,13 @@ abstract class OidcUserManagerBase {
                 settings.userInfoSettings.getAccessTokenForDistributedSource,
             keyStore: keyStore,
             // OIDC Core 5.3.2/5.3.4: validate iss/aud/exp on a signed
-            // (verified) UserInfo JWT.
-            expectedIssuer: metadata.issuer,
+            // (verified) UserInfo JWT. The UserInfo `iss` MUST match the
+            // id_token `iss`, which for a multi-tenant OP is the concrete
+            // per-tenant issuer — so resolve it through the same
+            // `resolveExpectedIssuer` pin used for the id_token `iss` check
+            // (§3.1.3.7), NOT the advertised (possibly template) metadata
+            // issuer.
+            expectedIssuer: resolveExpectedIssuer(metadata),
             clientId: clientCredentials.clientId,
             validateSignedResponseClaims:
                 settings.userInfoSettings.validateSignedResponseClaims,
