@@ -103,6 +103,86 @@ class OidcClientAuthentication {
        _signingAlgorithm = algorithm,
        _assertionLifetime = assertionLifetime;
 
+  /// Derives a ready-to-use client authentication from a Dynamic Client
+  /// Registration response (RFC 7591 §3.2.1 / RFC 7592).
+  ///
+  /// The method is taken from [preferredMethod] when supplied, otherwise from
+  /// the response's `token_endpoint_auth_method`, otherwise it defaults to
+  /// `client_secret_basic` (RFC 7591 §2). The response's `client_secret` (when
+  /// present) supplies the credential:
+  ///
+  /// - `none` → [OidcClientAuthentication.none].
+  /// - `client_secret_basic` → [OidcClientAuthentication.clientSecretBasic].
+  /// - `client_secret_post` → [OidcClientAuthentication.clientSecretPost].
+  /// - `client_secret_jwt` → [OidcClientAuthentication.clientSecretJwtGenerated]
+  ///   (assertions are minted per request from the issued secret).
+  ///
+  /// Throws an [OidcException] when the response carries no `client_id`, when a
+  /// secret-based method is selected but no `client_secret` was issued, when
+  /// the method is `private_key_jwt` (whose signing key is held by the client
+  /// out of band and is never part of a registration response — construct
+  /// [OidcClientAuthentication.privateKeyJwtGenerated] directly with that key),
+  /// or when the method is otherwise unsupported/unknown.
+  factory OidcClientAuthentication.fromRegistrationResponse(
+    OidcClientRegistrationResponse response, {
+    String? preferredMethod,
+  }) {
+    final clientId = response.clientId;
+    if (clientId == null) {
+      throw const OidcException(
+        'Cannot derive client authentication: the registration response has '
+        'no client_id.',
+      );
+    }
+    final method =
+        preferredMethod ??
+        response.tokenEndpointAuthMethod ??
+        OidcConstants_ClientAuthenticationMethods.clientSecretBasic;
+    final secret = response.clientSecret;
+
+    String requireSecret() {
+      if (secret == null) {
+        throw OidcException(
+          'The registration response selected token_endpoint_auth_method '
+          '"$method" but did not issue a client_secret.',
+        );
+      }
+      return secret;
+    }
+
+    switch (method) {
+      case OidcConstants_ClientAuthenticationMethods.none:
+        return OidcClientAuthentication.none(clientId: clientId);
+      case OidcConstants_ClientAuthenticationMethods.clientSecretBasic:
+        return OidcClientAuthentication.clientSecretBasic(
+          clientId: clientId,
+          clientSecret: requireSecret(),
+        );
+      case OidcConstants_ClientAuthenticationMethods.clientSecretPost:
+        return OidcClientAuthentication.clientSecretPost(
+          clientId: clientId,
+          clientSecret: requireSecret(),
+        );
+      case OidcConstants_ClientAuthenticationMethods.clientSecretJwt:
+        return OidcClientAuthentication.clientSecretJwtGenerated(
+          clientId: clientId,
+          clientSecret: requireSecret(),
+        );
+      case OidcConstants_ClientAuthenticationMethods.privateKeyJwt:
+        throw const OidcException(
+          'token_endpoint_auth_method "private_key_jwt" cannot be derived from '
+          'a registration response: the signing key is held by the client and '
+          'is never returned by the server. Construct '
+          'OidcClientAuthentication.privateKeyJwtGenerated directly with your '
+          'private key.',
+        );
+      default:
+        throw OidcException(
+          'Unsupported token_endpoint_auth_method "$method".',
+        );
+    }
+  }
+
   @JsonKey(includeToJson: false)
   final String location;
   @JsonKey(name: OidcConstants_AuthParameters.clientId)

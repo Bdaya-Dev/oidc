@@ -75,6 +75,41 @@ class OidcClientRegistrationResponse extends JsonBasedResponse {
   /// Registered human-readable client name.
   String? get clientName => src['client_name'] as String?;
 
+  /// Server-managed members that a client MUST NOT send back in an RFC 7592
+  /// §2.2 update request.
+  static const _updateExcludedKeys = {
+    'registration_access_token',
+    'registration_client_uri',
+    'client_id_issued_at',
+    'client_secret_expires_at',
+  };
+
+  /// Builds the full-metadata body for an RFC 7592 §2.2 client update (PUT to
+  /// [registrationClientUri]).
+  ///
+  /// Per RFC 7592 §2.2 the update MUST carry the complete set of client
+  /// metadata as returned by the server — values replace, not augment, the
+  /// prior registration — so this echoes every member of [src] except the
+  /// server-managed fields (`registration_access_token`,
+  /// `registration_client_uri`, `client_id_issued_at`,
+  /// `client_secret_expires_at`). `client_id`, and `client_secret` when it was
+  /// issued, are retained (the spec requires `client_id`, and a returned
+  /// `client_secret` MUST match the currently-issued secret).
+  ///
+  /// Note on rotation: the update *response* MAY return a new `client_secret`
+  /// and/or a new `registration_access_token` (RFC 7592 §2.2 / §3). Those
+  /// rotated credentials supersede the previous ones — read them from the
+  /// returned [OidcClientRegistrationResponse] (via [clientSecret] /
+  /// [registrationAccessToken]) and use them for subsequent requests; the old
+  /// values may no longer be valid.
+  OidcClientRegistrationRequest toUpdateRequest() {
+    final extra = <String, dynamic>{
+      for (final entry in src.entries)
+        if (!_updateExcludedKeys.contains(entry.key)) entry.key: entry.value,
+    };
+    return OidcClientRegistrationRequest(extra: extra);
+  }
+
   List<String>? _stringList(String key) {
     final value = src[key];
     return value is List ? value.map((e) => e.toString()).toList() : null;

@@ -34,6 +34,11 @@ class OidcClientRegistrationRequest extends JsonBasedRequest {
     this.subjectType,
     this.tokenEndpointAuthMethod,
     this.idTokenSignedResponseAlg,
+    this.defaultMaxAge,
+    this.requireAuthTime,
+    this.defaultAcrValues,
+    this.initiateLoginUri,
+    this.requestUris,
     this.scope,
     this.softwareId,
     this.softwareVersion,
@@ -104,6 +109,34 @@ class OidcClientRegistrationRequest extends JsonBasedRequest {
   /// JWS `alg` the client requires for its id_tokens.
   @JsonKey(name: 'id_token_signed_response_alg')
   String? idTokenSignedResponseAlg;
+
+  /// Default Maximum Authentication Age (OpenID Connect Dynamic Client
+  /// Registration 1.0 §2): if the End-User was authenticated longer ago than
+  /// this, they MUST be actively re-authenticated. Serialized as a number of
+  /// seconds.
+  @JsonKey(name: 'default_max_age')
+  Duration? defaultMaxAge;
+
+  /// Whether the `auth_time` claim in the id_token is REQUIRED (OpenID Connect
+  /// Dynamic Client Registration 1.0 §2).
+  @JsonKey(name: 'require_auth_time')
+  bool? requireAuthTime;
+
+  /// Default `acr` values the OP is requested to use for this client (OpenID
+  /// Connect Dynamic Client Registration 1.0 §2), as a JSON array of strings.
+  @JsonKey(name: 'default_acr_values')
+  List<String>? defaultAcrValues;
+
+  /// URI (https) a third party can use to initiate a login for this client
+  /// (OpenID Connect Dynamic Client Registration 1.0 §2).
+  @JsonKey(name: 'initiate_login_uri')
+  Uri? initiateLoginUri;
+
+  /// `request_uri` values pre-registered by the client for use at the OP
+  /// (OpenID Connect Dynamic Client Registration 1.0 §2). These URIs MUST use
+  /// the https scheme.
+  @JsonKey(name: 'request_uris')
+  List<Uri>? requestUris;
 
   /// Space-separated list of scope values the client may request.
   @JsonKey(
