@@ -6,6 +6,8 @@ import 'package:oidc_core/oidc_core.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
 import 'package:oidc_default_store/src/html_stub.dart' as html_stub;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +15,8 @@ void main() {
   group('OidcDefaultStore web branches (testIsWeb = true)', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.empty();
     });
 
     for (final webSessionManagementLocation
@@ -81,6 +85,8 @@ void main() {
       () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.empty();
       FlutterSecureStorage.setMockInitialValues({});
     });
 
@@ -157,6 +163,8 @@ void main() {
   group('OidcDefaultStore namespace/managerId isolation', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
+      SharedPreferencesAsyncPlatform.instance =
+          InMemorySharedPreferencesAsync.empty();
     });
 
     testWidgets(
