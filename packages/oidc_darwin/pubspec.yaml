@@ -1,6 +1,6 @@
 name: oidc_darwin
 description: iOS and macOS implementation of the oidc plugin
-version: 1.0.0
+version: 1.0.1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_darwin
 homepage: https://bdaya-dev.github.io/oidc/
 topics: ["oidc", "openidconnect", "oauth", "authentication"]
@@ -28,8 +28,8 @@ flutter:
 dependencies:
   flutter:
     sdk: flutter
-  oidc_core: ^1.0.0
-  oidc_platform_interface: ^1.0.0
+  oidc_core: ^1.1.0
+  oidc_platform_interface: ^1.0.1
 
 dev_dependencies:
   flutter_test:
