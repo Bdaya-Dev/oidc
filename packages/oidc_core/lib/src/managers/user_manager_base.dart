@@ -2321,12 +2321,21 @@ abstract class OidcUserManagerBase {
       error is JoseException && error.message.startsWith('JWT expired');
 
   /// This function validates that a user claims
+  ///
+  /// When [reactToUserInfoUnauthorized] is `true`, a UserInfo `401` (RFC 6750
+  /// §3) triggers the #302 recovery reaction: one refresh-token grant + a single
+  /// UserInfo retry when a refresh token is available, and — failing that — an
+  /// [OidcUserInfoFailedEvent] on [events]. It is enabled only when validating
+  /// an already-established session (e.g. resuming a cached user), never during
+  /// initial login or immediately after a refresh (where the access token is
+  /// freshly issued and a re-refresh would be pointless / could loop).
   @protected
   Future<OidcUser?> validateAndSaveUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
     String? authorizationCode,
     Duration? maxAge,
+    bool reactToUserInfoUnauthorized = false,
   }) async {
     var actualUser = user;
     final errors = validateUser(
@@ -2415,6 +2424,54 @@ abstract class OidcUserManagerBase {
                 error: e,
               );
             }
+          }
+
+          // #302: a UserInfo `401` while re-validating an established session
+          // means the resource server rejected the access token (revoked or
+          // expired) per RFC 6750 §3. The OAuth error rides the
+          // `WWW-Authenticate` header, not a JSON body, so it slips past the
+          // offline categorization above (which classifies it `unknown`). React
+          // only when the caller opted in — a session resume, not an initial
+          // login or a just-refreshed token.
+          final isUnauthorized =
+              e is OidcException && e.rawResponse?.statusCode == 401;
+          if (reactToUserInfoUnauthorized && isUnauthorized) {
+            // A revoked access token paired with a still-valid refresh token is
+            // recoverable without re-authentication: attempt exactly ONE
+            // refresh (reusing the #120 machinery, which also emits
+            // OidcTokenRefreshFailedEvent on failure). That refresh's own
+            // validate-and-save performs the single UserInfo retry with the
+            // fresh access token (this method is re-entered with
+            // reactToUserInfoUnauthorized defaulting to false, so it cannot
+            // loop).
+            if (actualUser.token.refreshToken != null) {
+              OidcUser? recovered;
+              try {
+                recovered = await _refreshToken(
+                  currentUserOverride: actualUser,
+                );
+              } on Object {
+                // The refresh failed; #120 already surfaced the terminal
+                // OidcTokenRefreshFailedEvent. Fall through to emit the
+                // UserInfo failure and retain the cached user.
+                recovered = null;
+              }
+              if (recovered != null) {
+                // The refresh succeeded and its validate-and-save already
+                // retried UserInfo, persisted and published the refreshed user.
+                // Nothing failed to surface, so emit no failure event.
+                return recovered;
+              }
+            }
+
+            // No refresh token, or the refresh did not recover the session:
+            // surface the rejection (with any RFC 9470 step-up hints from the
+            // `WWW-Authenticate` header) so the app can decide to sign out or
+            // step up. Consistent with the #120 terminal-retention default, the
+            // cached user is NOT forgotten here.
+            emitEvent(
+              OidcUserInfoFailedEvent.fromError(error: e, stackTrace: st),
+            );
           }
         }
       }
@@ -2778,6 +2835,10 @@ abstract class OidcUserManagerBase {
         loadedUser = await validateAndSaveUser(
           user: loadedUser,
           metadata: metadata,
+          // #302: this validates a resumed (already-established) session, so a
+          // UserInfo 401 from a revoked access token should trigger the
+          // recover-via-refresh + typed-event reaction.
+          reactToUserInfoUnauthorized: true,
         );
       }
 
