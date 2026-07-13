@@ -1,3 +1,16 @@
+## 0.6.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**(oidc_web_core): stop the samePage end-session test from navigating the suite away ([#382](https://github.com/Bdaya-Dev/oidc/issues/382)). ([d1cd114e](https://github.com/Bdaya-Dev/oidc/commit/d1cd114e4ec505a5ace75fd28512ff16ff1f474e))
+ - **FIX**: resolve all four library bugs; drive honest unit coverage to ~95% ([#368](https://github.com/Bdaya-Dev/oidc/issues/368)). ([c86bee17](https://github.com/Bdaya-Dev/oidc/commit/c86bee17189a0a70fee947c685e91a55062b1d35))
+ - **FIX**(oidc_web_core): secureTokens silently persisted as plaintext on Firefox ([#360](https://github.com/Bdaya-Dev/oidc/issues/360)). ([656025d8](https://github.com/Bdaya-Dev/oidc/commit/656025d8175c1c4e27c827622e0433be336dd245))
+ - **FIX**(oidc_core): close 7 P0 spec-audit findings ([#324](https://github.com/Bdaya-Dev/oidc/issues/324)). ([60907e96](https://github.com/Bdaya-Dev/oidc/commit/60907e96f33dce8bf961b26ed43cec20f56e595e))
+ - **FIX**(oidc_web_core): avoid COOP closed-window false positives. ([5b24209b](https://github.com/Bdaya-Dev/oidc/commit/5b24209bafc99d21f3d6f85e320e0a110feebe43))
+ - **FIX**(oidc_web_core): detect closed auth window ([#303](https://github.com/Bdaya-Dev/oidc/issues/303)). ([36f7a340](https://github.com/Bdaya-Dev/oidc/commit/36f7a34010fe1e8d62834592cd1084f4c4e5e0e9))
+ - **FEAT**(oidc_web_core): encrypt secureTokens at rest (AES-GCM via WebCrypto) ([#324](https://github.com/Bdaya-Dev/oidc/issues/324) item 15). ([cf504300](https://github.com/Bdaya-Dev/oidc/commit/cf504300b1922a7f68a82c39ab8dfb42aafe487d))
+ - **BREAKING** **REFACTOR**: remove rxdart; adopt bdaya_shared_value ^5.0.0. ([0d65d7fd](https://github.com/Bdaya-Dev/oidc/commit/0d65d7fde062e2db7ffbdd31a47735c59954045a))
+
 ## 0.5.0
 
 - **FEAT**: encrypt the `secureTokens` namespace (access/refresh/id tokens,
