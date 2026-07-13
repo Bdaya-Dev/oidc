@@ -25,6 +25,10 @@ void main() {
   );
   final settings = OidcUserManagerSettings(
     redirectUri: Uri.parse('http://example.com/redirect.html'),
+    // These tests pin the pre-existing blocking init semantics (the cached
+    // token is validated/refreshed before init() completes). The new default,
+    // OidcInitMode.cacheFirst, defers that to a background pass.
+    initMode: OidcInitMode.blockingValidate,
   );
   // Signature verification is always-strict now; every manager below is
   // constructed with a keyStore holding the mock id_tokens' HS256 signing
@@ -379,6 +383,7 @@ void main() {
               final eventSettings = OidcUserManagerSettings(
                 redirectUri: settings.redirectUri,
                 refreshBefore: (_) => const Duration(milliseconds: 700),
+                initMode: OidcInitMode.blockingValidate,
               );
               manager = OidcUserManager(
                 id: managerId,

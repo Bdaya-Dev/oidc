@@ -555,6 +555,13 @@ void main() {
           }),
           settings: OidcUserManagerSettings(
             redirectUri: Uri.parse('com.example.app://cb'),
+            // #201 rebase: the new default (OidcInitMode.cacheFirst) surfaces
+            // the expired cached user first, so the expiry listener AND the
+            // background revalidation each attempt a refresh — two failure
+            // events. This probe targets the blocking startup cached-load
+            // catch specifically (that it does not itself re-emit), so it pins
+            // the pre-existing blocking semantics it was written against.
+            initMode: OidcInitMode.blockingValidate,
           ),
         );
         addTearDown(manager.dispose);
