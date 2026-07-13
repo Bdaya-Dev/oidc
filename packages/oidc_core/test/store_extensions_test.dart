@@ -26,6 +26,52 @@ void main() {
     });
   });
 
+  group('state code_verifier helpers (secureTokens namespace)', () {
+    test(
+      'setStateCodeVerifier then getStateCodeVerifier round-trips',
+      () async {
+        await store.setStateCodeVerifier(
+          state: 'state-1',
+          codeVerifier: 'the-verifier',
+        );
+        expect(await store.getStateCodeVerifier('state-1'), 'the-verifier');
+      },
+    );
+
+    test('setStateCodeVerifier(null) removes the stored verifier', () async {
+      await store.setStateCodeVerifier(
+        state: 'state-1',
+        codeVerifier: 'the-verifier',
+      );
+      await store.setStateCodeVerifier(state: 'state-1', codeVerifier: null);
+      expect(await store.getStateCodeVerifier('state-1'), isNull);
+    });
+
+    test('an absent verifier reads as null', () async {
+      expect(await store.getStateCodeVerifier('nope'), isNull);
+    });
+
+    test('is keyed per state id (concurrent flows do not collide)', () async {
+      await store.setStateCodeVerifier(state: 's1', codeVerifier: 'v1');
+      await store.setStateCodeVerifier(state: 's2', codeVerifier: 'v2');
+      expect(await store.getStateCodeVerifier('s1'), 'v1');
+      expect(await store.getStateCodeVerifier('s2'), 'v2');
+    });
+
+    test('lives in secureTokens, not the plaintext state namespace', () async {
+      await store.setStateCodeVerifier(
+        state: 'state-1',
+        codeVerifier: 'the-verifier',
+      );
+      // The state namespace (plaintext on every backend) must not hold it.
+      expect(await store.getStateData('state-1'), isNull);
+      expect(
+        await store.getMany(OidcStoreNamespace.state, keys: {'state-1'}),
+        isEmpty,
+      );
+    });
+  });
+
   group('front-channel logout request helpers (request namespace)', () {
     test('set then get round-trips the request', () async {
       await store.setCurrentFrontChannelLogoutRequest('sid=abc');

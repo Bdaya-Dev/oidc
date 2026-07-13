@@ -1184,6 +1184,16 @@ abstract class OidcUserManagerBase {
         );
       }
 
+      // #324 item 20: the PKCE `code_verifier` now lives in the `secureTokens`
+      // namespace (encrypted / secure-storage-backed) keyed by the state id,
+      // not in the plaintext `state` payload. Fall back to the value embedded
+      // in the payload for a flow that was started by a version which still
+      // wrote it there — a one-release compatibility window so in-flight logins
+      // survive an app upgrade.
+      final storedCodeVerifier = await store.getStateCodeVerifier(
+        receivedStateKey,
+      );
+
       //request the token.
       final tokenResp = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
@@ -1193,7 +1203,10 @@ abstract class OidcUserManagerBase {
           headers: stateData.extraTokenHeaders,
           request: OidcTokenRequest.authorizationCode(
             redirectUri: response.redirectUri ?? stateData.redirectUri,
-            codeVerifier: response.codeVerifier ?? stateData.codeVerifier,
+            codeVerifier:
+                response.codeVerifier ??
+                storedCodeVerifier ??
+                stateData.codeVerifier,
             extra: stateData.extraTokenParams,
             clientId: clientCredentials.clientId,
             code: code,
@@ -1234,6 +1247,12 @@ abstract class OidcUserManagerBase {
         stateData: null,
       );
       await store.setStateData(state: receivedStateKey, stateData: null);
+      // #324 item 20: drop the secureTokens `code_verifier` for this state too,
+      // so the secret does not outlive the flow that consumed it.
+      await store.setStateCodeVerifier(
+        state: receivedStateKey,
+        codeVerifier: null,
+      );
     }
   }
 

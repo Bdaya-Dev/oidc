@@ -190,6 +190,20 @@ class OidcEndpoints {
     );
     //store the state
     if (store != null) {
+      // #324 item 20: the PKCE `code_verifier` is secret-grade — whoever holds
+      // it together with the authorization `code` can complete the token
+      // exchange (RFC 7636 §1) — so it must not sit in the plaintext `state`
+      // namespace. Persist it in the `secureTokens` namespace (encrypted at
+      // rest on web, secure-storage-backed on mobile/desktop) keyed by the
+      // state id, and strip it from the state payload before persisting.
+      // `handleSuccessfulAuthResponse` reads it back from there, falling back
+      // to the in-payload value for one release so any flow already in flight
+      // across an app upgrade still completes.
+      await store.setStateCodeVerifier(
+        state: stateData.id,
+        codeVerifier: codeVerifier,
+      );
+      stateData.codeVerifier = null;
       await store.setStateData(
         state: stateData.id,
         stateData: stateData.toStorageString(),

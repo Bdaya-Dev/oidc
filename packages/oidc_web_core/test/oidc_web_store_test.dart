@@ -69,6 +69,32 @@ void main() {
       },
     );
 
+    test(
+      'a state code_verifier (audit #324 item 20) is persisted as ciphertext',
+      () async {
+        const store = OidcWebStore(storagePrefix: 'cv');
+        await store.init();
+        const verifier = 'super-secret-code-verifier';
+
+        await store.setStateCodeVerifier(
+          state: 'state-1',
+          codeVerifier: verifier,
+        );
+
+        // setStateCodeVerifier routes through the secureTokens namespace, so
+        // the raw localStorage value is an encrypted envelope, not plaintext.
+        final raw = web.window.localStorage.getItem(
+          'cv.secureTokens.code_verifier.state-1',
+        );
+        expect(raw, isNotNull);
+        expect(raw, startsWith(oidcWebCryptoEnvelopePrefixV1));
+        expect(raw, isNot(contains(verifier)));
+
+        // ...and it decrypts back to the original on the read path.
+        expect(await store.getStateCodeVerifier('state-1'), verifier);
+      },
+    );
+
     test('uses a fresh random IV per write', () async {
       const store = OidcWebStore(storagePrefix: 'ivunique');
       await store.init();
