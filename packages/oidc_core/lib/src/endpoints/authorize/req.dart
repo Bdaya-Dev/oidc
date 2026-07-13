@@ -36,6 +36,7 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
     this.acrValues,
     this.requestUri,
     this.resource,
+    this.dpopJkt,
     this.request,
   });
 
@@ -297,6 +298,18 @@ class OidcAuthorizeRequest extends JsonBasedRequest {
   /// per value (and likewise in the PAR request body).
   @JsonKey(name: OidcConstants_AuthParameters.resource)
   List<Uri>? resource;
+
+  /// RFC 9449 §10: the JWK SHA-256 Thumbprint (`jkt`, per RFC 7638) of the DPoP
+  /// proof key, sent to bind the issued authorization code to that key when
+  /// Pushed Authorization Requests are NOT used.
+  ///
+  /// On the PAR path the identical binding is carried on the (back-channel) PAR
+  /// request body instead (RFC 9126), so this member is only populated for a
+  /// direct authorization request. When set, it is emitted on the front-channel
+  /// authorization URL (and, when a JWT-Secured Authorization Request is used,
+  /// inside the signed [request] object). Leave null when DPoP is disabled.
+  @JsonKey(name: OidcConstants_AuthParameters.dpopJkt)
+  String? dpopJkt;
 
   /// A JWT-Secured Authorization Request object (RFC 9101) carrying the
   /// authorization parameters by value.

@@ -128,11 +128,18 @@ class OidcEndpoints {
   /// information about the flow parameters for later validation.
   ///
   /// If the [store] parameter is passed, it persists the generated nonce/state.
+  ///
+  /// [dpopJkt] is the RFC 7638 thumbprint of the DPoP proof key. When non-null
+  /// it is emitted as the `dpop_jkt` authorization-request parameter (RFC 9449
+  /// §10) to bind the authorization code to the DPoP key; pass it only for the
+  /// direct (non-PAR) path, since the PAR path binds via the pushed request
+  /// body instead.
   static Future<OidcSimpleAuthorizationRequestContainer>
   prepareAuthorizationCodeFlowRequest({
     required OidcProviderMetadata metadata,
     required OidcSimpleAuthorizationCodeFlowRequest input,
     OidcStore? store,
+    String? dpopJkt,
   }) async {
     // OAuth 2.1 / RFC 9700 (Security BCP): ALWAYS use PKCE, defaulting to S256,
     // even when the OP's metadata omits `code_challenge_methods_supported` — a
@@ -219,6 +226,10 @@ class OidcEndpoints {
       prompt: input.prompt,
       uiLocales: input.uiLocales,
       resource: input.resource,
+      // RFC 9449 §10: set before the JAR request object is built below so the
+      // binding is also carried inside a signed request object (RFC 9101) when
+      // one is used. Null (DPoP off / PAR path) omits it entirely.
+      dpopJkt: dpopJkt,
     );
 
     final requestObjectSettings = input.requestObjectSettings;

@@ -25,16 +25,32 @@ class _CodeFlowManager extends OidcUserManagerBase {
   @override
   bool get isWeb => false;
 
+  /// The last [OidcAuthorizeRequest] handed to [getAuthorizationResponse] — the
+  /// exact request the front channel would serialize, so tests can inspect the
+  /// generated authorization URL.
+  OidcAuthorizeRequest? capturedAuthRequest;
+
+  /// The metadata that accompanied [capturedAuthRequest].
+  OidcProviderMetadata? capturedAuthMetadata;
+
+  /// Exposes the session DPoP key thumbprint (the `dpop_jkt` / `cnf.jkt`
+  /// source) for assertions; `dpopManager` is `@protected`, so surface it here.
+  String? get dpopThumbprint => dpopManager?.thumbprint;
+
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
     Map<String, dynamic> preparationResult,
-  ) async => OidcAuthorizeResponse.fromJson({
-    'code': 'auth-code-1',
-    'state': request.state,
-  });
+  ) async {
+    capturedAuthRequest = request;
+    capturedAuthMetadata = metadata;
+    return OidcAuthorizeResponse.fromJson({
+      'code': 'auth-code-1',
+      'state': request.state,
+    });
+  }
 
   @override
   Future<OidcEndSessionResponse?> getEndSessionResponse(
@@ -276,6 +292,75 @@ void main() {
       final body = Uri.splitQueryString(parPost!.body);
       expect(body['dpop_jkt'], isNotNull);
       expect(body['dpop_jkt'], isNotEmpty);
+      // The binding lives ONLY on the PAR body: the front-channel request must
+      // not also carry it (the code is never double-bound), and after PAR the
+      // authorization URL is just `client_id` + `request_uri` (RFC 9126 §4).
+      final request = manager.capturedAuthRequest!;
+      expect(request.dpopJkt, isNull);
+      final uri = request.generateUri(
+        manager.capturedAuthMetadata!.authorizationEndpoint!,
+      );
+      expect(uri.queryParameters.containsKey('dpop_jkt'), isFalse);
+      expect(uri.queryParameters['request_uri'], 'urn:par:1');
+    },
+  );
+
+  test(
+    'binds the auth code via dpop_jkt on the direct authorization request when '
+    'DPoP is on and PAR is off (RFC 9449 §10)',
+    () async {
+      final posts = <http.Request>[];
+      final manager = await build(posts, dpop: const OidcDPoPSettings());
+      await login(manager);
+
+      final request = manager.capturedAuthRequest;
+      expect(request, isNotNull, reason: 'authorization request must be built');
+      final uri = request!.generateUri(
+        manager.capturedAuthMetadata!.authorizationEndpoint!,
+      );
+      final jkt = uri.queryParameters['dpop_jkt'];
+      expect(jkt, isNotNull);
+      expect(jkt, isNotEmpty);
+      // Derived from the SAME session key used for the token proof / PAR binding.
+      expect(jkt, manager.dpopThumbprint);
+    },
+  );
+
+  test(
+    'sends no dpop_jkt on the authorization request when DPoP is disabled',
+    () async {
+      final posts = <http.Request>[];
+      final manager = await build(posts, dpop: null);
+      await login(manager);
+
+      final request = manager.capturedAuthRequest;
+      expect(request, isNotNull);
+      expect(request!.dpopJkt, isNull);
+      final uri = request.generateUri(
+        manager.capturedAuthMetadata!.authorizationEndpoint!,
+      );
+      expect(uri.queryParameters.containsKey('dpop_jkt'), isFalse);
+    },
+  );
+
+  test(
+    'omits dpop_jkt on the authorization request when bindAuthorizationCode is '
+    'false',
+    () async {
+      final posts = <http.Request>[];
+      final manager = await build(
+        posts,
+        dpop: const OidcDPoPSettings(bindAuthorizationCode: false),
+      );
+      await login(manager);
+
+      final request = manager.capturedAuthRequest;
+      expect(request, isNotNull);
+      expect(request!.dpopJkt, isNull);
+      final uri = request.generateUri(
+        manager.capturedAuthMetadata!.authorizationEndpoint!,
+      );
+      expect(uri.queryParameters.containsKey('dpop_jkt'), isFalse);
     },
   );
 }
