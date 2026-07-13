@@ -2160,8 +2160,13 @@ abstract class OidcUserManagerBase {
                 settings.userInfoSettings.getAccessTokenForDistributedSource,
             keyStore: keyStore,
             // OIDC Core 5.3.2/5.3.4: validate iss/aud/exp on a signed
-            // (verified) UserInfo JWT.
-            expectedIssuer: metadata.issuer,
+            // (verified) UserInfo JWT. The UserInfo `iss` MUST match the
+            // id_token `iss`, which for a multi-tenant OP is the concrete
+            // per-tenant issuer — so resolve it through the same
+            // `resolveExpectedIssuer` pin used for the id_token `iss` check
+            // (§3.1.3.7), NOT the advertised (possibly template) metadata
+            // issuer.
+            expectedIssuer: resolveExpectedIssuer(metadata),
             clientId: clientCredentials.clientId,
             validateSignedResponseClaims:
                 settings.userInfoSettings.validateSignedResponseClaims,
