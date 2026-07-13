@@ -114,8 +114,10 @@ melos:
       name: Dart Web tests in chrome
       # test:web:single covers every web package EXCEPT jose_plus (and oidc_cli).
       # jose_plus runs per-file directly in the workflow (a shell loop, not a
-      # melos exec -- melos interpolates $VAR in exec strings and clobbers the
-      # `$f` loop variable to empty). See .github/workflows/tests.yaml.
+      # melos exec -- melos wraps exec scripts in double quotes and runs them
+      # through `sh -c 'eval "$MELOS_SCRIPT"'`, so the outer shell expands
+      # script-internal variables like the `$f` loop variable to empty one
+      # layer too early). See .github/workflows/tests.yaml.
       run: melos run test:web:single
       env:
         TEST_PLATFORM: chrome
