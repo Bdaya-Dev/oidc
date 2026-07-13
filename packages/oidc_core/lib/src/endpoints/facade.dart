@@ -26,23 +26,38 @@ class OidcEndpoints {
     return mapper(body);
   }
 
+  /// Decodes a response's JSON body, throwing a typed
+  /// [OidcException.serverError] (with a parsed [OidcErrorResponse]) when the
+  /// body carries an RFC 6749 `error` field. Does not consider the HTTP
+  /// status code; callers apply their own success/failure status semantics.
+  static Map<String, dynamic> _decodeJsonBodyOrThrowTypedError({
+    required http.Request request,
+    required http.Response response,
+  }) {
+    final rawBody = utf8.decode(response.bodyBytes).trim();
+    final body = rawBody.isNotEmpty
+        ? jsonDecode(rawBody) as Map<String, dynamic>
+        : <String, dynamic>{};
+    if (body.containsKey(OidcConstants_AuthParameters.error)) {
+      final resp = OidcErrorResponse.fromJson(body);
+      throw OidcException.serverError(
+        errorResponse: resp,
+        rawRequest: request,
+        rawResponse: response,
+      );
+    }
+    return body;
+  }
+
   static Map<String, dynamic> _handleResponseRaw({
     required http.Request request,
     required http.Response response,
   }) {
     try {
-      final rawBody = utf8.decode(response.bodyBytes).trim();
-      final body = rawBody.isNotEmpty
-          ? jsonDecode(rawBody) as Map<String, dynamic>
-          : <String, dynamic>{};
-      if (body.containsKey(OidcConstants_AuthParameters.error)) {
-        final resp = OidcErrorResponse.fromJson(body);
-        throw OidcException.serverError(
-          errorResponse: resp,
-          rawRequest: request,
-          rawResponse: response,
-        );
-      }
+      final body = _decodeJsonBodyOrThrowTypedError(
+        request: request,
+        response: response,
+      );
       if (!(response.statusCode >= 200 && response.statusCode < 400)) {
         throw OidcException(
           'Failed to handle the response from endpoint (status code ${response.statusCode}): ${request.url}',
@@ -1457,7 +1472,14 @@ class OidcEndpoints {
   }
 
   /// Deletes (deprovisions) a client (RFC 7592 §2.3) at its
-  /// [registrationClientUri]. A successful deletion returns HTTP 204.
+  /// [registrationClientUri]. Per the spec, a successful deletion returns
+  /// HTTP 204 (No Content); HTTP 200 is also accepted leniently, since some
+  /// authorization servers respond with it instead. Any other status
+  /// (including 3xx redirects, which RFC 7592 does not define as success
+  /// here) is an error and is routed through the same typed error parsing
+  /// used by [registerClient], [readClientConfiguration], and
+  /// [updateClientConfiguration], so an RFC 6749-shaped error body surfaces
+  /// as a typed [OidcException.serverError].
   static Future<void> deleteClientConfiguration({
     required Uri registrationClientUri,
     required String registrationAccessToken,
@@ -1476,13 +1498,30 @@ class OidcEndpoints {
       client: client,
       request: req,
     );
-    if (!(resp.statusCode >= 200 && resp.statusCode < 400)) {
+    try {
+      _decodeJsonBodyOrThrowTypedError(
+        request: req,
+        response: resp,
+      );
+    } on OidcException {
+      rethrow;
+    } catch (e, st) {
       throw OidcException(
-        'Failed to delete client configuration '
-        '(status ${resp.statusCode}): ${req.url}',
+        'Failed to handle the response from endpoint: ${req.url}',
+        internalException: e,
+        internalStackTrace: st,
         rawRequest: req,
         rawResponse: resp,
       );
     }
+    if (resp.statusCode == 204 || resp.statusCode == 200) {
+      return;
+    }
+    throw OidcException(
+      'Failed to delete client configuration '
+      '(status ${resp.statusCode}): ${req.url}',
+      rawRequest: req,
+      rawResponse: resp,
+    );
   }
 }
