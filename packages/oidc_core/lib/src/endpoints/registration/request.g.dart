@@ -37,6 +37,13 @@ Map<String, dynamic> _$OidcClientRegistrationRequestToJson(
   'software_id': ?instance.softwareId,
   'software_version': ?instance.softwareVersion,
   'software_statement': ?instance.softwareStatement,
+  'tls_client_auth_subject_dn': ?instance.tlsClientAuthSubjectDn,
+  'tls_client_auth_san_dns': ?instance.tlsClientAuthSanDns,
+  'tls_client_auth_san_uri': ?instance.tlsClientAuthSanUri,
+  'tls_client_auth_san_ip': ?instance.tlsClientAuthSanIp,
+  'tls_client_auth_san_email': ?instance.tlsClientAuthSanEmail,
+  'tls_client_certificate_bound_access_tokens':
+      ?instance.tlsClientCertificateBoundAccessTokens,
 };
 
 Json? _$JsonConverterToJson<Json, Value>(

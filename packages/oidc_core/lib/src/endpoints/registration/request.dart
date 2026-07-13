@@ -43,6 +43,12 @@ class OidcClientRegistrationRequest extends JsonBasedRequest {
     this.softwareId,
     this.softwareVersion,
     this.softwareStatement,
+    this.tlsClientAuthSubjectDn,
+    this.tlsClientAuthSanDns,
+    this.tlsClientAuthSanUri,
+    this.tlsClientAuthSanIp,
+    this.tlsClientAuthSanEmail,
+    this.tlsClientCertificateBoundAccessTokens,
     super.extra,
   });
 
@@ -156,6 +162,37 @@ class OidcClientRegistrationRequest extends JsonBasedRequest {
   /// A signed software statement JWT asserting client metadata.
   @JsonKey(name: 'software_statement')
   String? softwareStatement;
+
+  /// RFC 8705 §2.1.2: expected subject distinguished name (RFC 4514 string) of
+  /// the client certificate, for the `tls_client_auth` PKI method.
+  @JsonKey(name: 'tls_client_auth_subject_dn')
+  String? tlsClientAuthSubjectDn;
+
+  /// RFC 8705 §2.1.2: expected `dNSName` SAN entry of the client certificate,
+  /// for the `tls_client_auth` PKI method.
+  @JsonKey(name: 'tls_client_auth_san_dns')
+  String? tlsClientAuthSanDns;
+
+  /// RFC 8705 §2.1.2: expected `uniformResourceIdentifier` SAN entry of the
+  /// client certificate, for the `tls_client_auth` PKI method.
+  @JsonKey(name: 'tls_client_auth_san_uri')
+  String? tlsClientAuthSanUri;
+
+  /// RFC 8705 §2.1.2: expected `iPAddress` SAN entry (dotted-decimal IPv4 or
+  /// colon-delimited hexadecimal IPv6) of the client certificate, for the
+  /// `tls_client_auth` PKI method.
+  @JsonKey(name: 'tls_client_auth_san_ip')
+  String? tlsClientAuthSanIp;
+
+  /// RFC 8705 §2.1.2: expected `rfc822Name` SAN entry of the client
+  /// certificate, for the `tls_client_auth` PKI method.
+  @JsonKey(name: 'tls_client_auth_san_email')
+  String? tlsClientAuthSanEmail;
+
+  /// RFC 8705 §3.4: the client's intention to use mutual-TLS client
+  /// certificate-bound access tokens.
+  @JsonKey(name: 'tls_client_certificate_bound_access_tokens')
+  bool? tlsClientCertificateBoundAccessTokens;
 
   @override
   Map<String, dynamic> toMap() => {
