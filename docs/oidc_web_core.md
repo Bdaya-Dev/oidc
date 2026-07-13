@@ -50,7 +50,26 @@ Note how `frontChannelLogoutUri` needs `requestType=front-channel-logout` for th
 
 you will have to register these urls with the openid provider first, depending on your configuration.
 
-also the html page is completely customizable, but it's preferred to leave the javascript part as is, since it's well-integrated with the plugin.
+also the html page is completely customizable, but it's preferred to leave the javascript part as is, since it's well-integrated with the plugin. All user-visible copy lives in a single `messages` object near the top of the script and is safe to translate.
+
+#### How the page talks to the app
+
+The page and the app exchange messages over a `BroadcastChannel`:
+
+- on load, the page posts the incoming redirect to the app as a small JSON envelope: `{"v":2,"type":"redirect","uri":"<full redirect url>"}`;
+- once the app has processed it (the token exchange finished — or failed), the app posts an acknowledgement back: `{"v":2,"type":"ack","status":"ok"|"error","message":"<short message>"}`.
+
+The page only shows a **success** state after an `ok` ack — so it no longer claims "Operation Successful" when the app-side exchange actually failed. It shows an **error** state on an `error` ack, or when the provider returned an error directly in the redirect (`error`/`error_description`/`error_uri`, per [RFC 6749 §4.1.2.1](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1)). If no ack arrives within ~10s (e.g. an older app version that never acks), or the browser refuses to close a tab the script didn't open (email-link tabs), it falls back to a neutral "you can now close this tab" state.
+
+The app still accepts the older bare-URL message, so an outdated copy of the page keeps working after you upgrade the package. The reverse does not hold: this v2 page needs the matching (v2-aware) package version.
+
+#### Upgrading
+
+`redirect.html` is copied into your own project, not shipped by the package, so `dart pub upgrade` never updates it. When you upgrade `oidc_web_core`, **re-copy the page** from the example so the app and the page stay on the same wire version.
+
+#### Troubleshooting
+
+- **The page never loads (blank tab, or your host/proxy's `502`/`504`).** None of the javascript above can run if the `redirect_uri` doesn't actually serve this page. Make sure your host or reverse proxy serves `redirect.html` at the exact `redirect_uri` path in every environment. While that tab is broken the app receives nothing, so the pending login stays unresolved — return to the app to cancel it (or let it time out) and retry once the page is served correctly.
 
 ## Usage
 

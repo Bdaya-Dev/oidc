@@ -1,5 +1,6 @@
 //cspell: disable
 import 'dart:async';
+import 'dart:convert';
 import 'dart:js_interop';
 
 import 'package:collection/collection.dart';
@@ -15,6 +16,70 @@ class OidcWebCore {
   const OidcWebCore();
 
   static const _windowCloseCheckInterval = Duration(milliseconds: 250);
+
+  /// Version of the structured redirect wire protocol understood by this
+  /// consumer and emitted by the bundled `redirect.html` template.
+  ///
+  /// See `docs/oidc_web_core.md` ("How the page talks to the app") for the full
+  /// message shapes.
+  static const _redirectWireVersion = 2;
+
+  /// Extracts the response URI from a message posted on the redirect
+  /// [BroadcastChannel].
+  ///
+  /// Accepts both wire formats, so an existing (older) copy of `redirect.html`
+  /// keeps working after the package is upgraded:
+  ///  * the structured v2 envelope emitted by the current template —
+  ///    `{"v":2,"type":"redirect","uri":"<full redirect url>"}`, and
+  ///  * a bare redirect URL string emitted by older copied templates.
+  ///
+  /// Returns `null` for anything else — including the app's own `ack` envelope
+  /// (see [_postRedirectAck]) echoed back on the channel — so the caller
+  /// ignores it.
+  static String? _extractRedirectUri(String raw) {
+    Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      // Not JSON -> a legacy plain redirect URL string.
+      return raw;
+    }
+    if (decoded is Map &&
+        decoded['v'] == _redirectWireVersion &&
+        decoded['type'] == 'redirect') {
+      final uri = decoded['uri'];
+      return uri is String ? uri : null;
+    }
+    // Valid JSON, but not a v2 redirect envelope (e.g. an `ack`).
+    return null;
+  }
+
+  /// Posts the app-side acknowledgement of a processed redirect back on the
+  /// redirect [BroadcastChannel], so the `redirect.html` template can render a
+  /// truthful terminal state (success vs. failure) instead of the hardcoded
+  /// "Operation Successful" it used to show (#116).
+  ///
+  /// Emits `{"v":2,"type":"ack","status":"ok"|"error","message":<string?>}`.
+  /// A fresh channel is opened for the post because the receiving channel used
+  /// during the flow is already torn down by the time processing finishes.
+  static void _postRedirectAck(
+    String broadcastChannel, {
+    required bool ok,
+    String? message,
+  }) {
+    final channel = BroadcastChannel(broadcastChannel);
+    try {
+      final payload = <String, Object?>{
+        'v': _redirectWireVersion,
+        'type': 'ack',
+        'status': ok ? 'ok' : 'error',
+        if (message != null) 'message': message,
+      };
+      channel.postMessage(jsonEncode(payload).toJS);
+    } finally {
+      channel.close();
+    }
+  }
 
   String _calculatePopupOptions(OidcPlatformSpecificOptions_Web options) {
     final h = options.popupHeight;
@@ -74,7 +139,11 @@ class OidcWebCore {
       if (!data.isA<JSString>()) {
         return;
       }
-      final parsed = Uri.tryParse((data! as JSString).toDart);
+      final uriString = _extractRedirectUri((data! as JSString).toDart);
+      if (uriString == null) {
+        return;
+      }
+      final parsed = Uri.tryParse(uriString);
       if (parsed == null) {
         return;
       }
@@ -225,10 +294,27 @@ class OidcWebCore {
     if (respUri == null) {
       return null;
     }
-    return OidcEndpoints.parseAuthorizeResponse(
-      responseUri: respUri,
-      responseMode: request.responseMode,
-    );
+    try {
+      final response = await OidcEndpoints.parseAuthorizeResponse(
+        responseUri: respUri,
+        responseMode: request.responseMode,
+      );
+      // Structured wire v2 (#116): acknowledge that the app accepted the
+      // response, so `redirect.html` renders success only after the app-side
+      // processing actually succeeded — not unconditionally.
+      _postRedirectAck(options.broadcastChannel, ok: true);
+      return response;
+    } on Object {
+      // The response was delivered but couldn't be processed — an OP error
+      // redirect (RFC 6749 §4.1.2.1), a JARM/`iss` failure, etc. Tell the page
+      // to render an error state instead of success, then surface the failure.
+      _postRedirectAck(
+        options.broadcastChannel,
+        ok: false,
+        message: 'Sign-in could not be completed.',
+      );
+      rethrow;
+    }
   }
 
   /// Returns the end session response for an RP initiated logout request.
@@ -255,6 +341,9 @@ class OidcWebCore {
     if (respUri == null) {
       return null;
     }
+    // Structured wire v2: acknowledge the processed logout redirect so the page
+    // can render a truthful terminal state.
+    _postRedirectAck(options.broadcastChannel, ok: true);
     return OidcEndSessionResponse.fromJson(respUri.queryParameters);
   }
 
