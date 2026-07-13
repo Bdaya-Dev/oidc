@@ -396,7 +396,13 @@ void main() {
               final events = <OidcEvent>[];
               final sub = manager.events().listen(events.add);
 
-              await Future<void>.delayed(const Duration(milliseconds: 450));
+              // #123: the effective expiring lead is clamped to at most HALF
+              // the token lifetime. With a 1s token and a 700ms configured
+              // lead, the lead clamps to 500ms, so the expiring event (and the
+              // auto-refresh it drives) fires ~500ms after load rather than at
+              // 1000 - 700 = 300ms. Wait past the clamped instant (but before
+              // the original 1000ms expiry) so the single refresh is observed.
+              await Future<void>.delayed(const Duration(milliseconds: 700));
 
               expect(refreshRequestCount, equals(1));
               expect(events.whereType<OidcTokenExpiringEvent>(), hasLength(1));
