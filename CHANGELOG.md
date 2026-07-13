@@ -11,6 +11,79 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 Packages with breaking changes:
 
+ - [`oidc` - `v2.0.0`](#oidc---v200)
+ - [`oidc_core` - `v2.0.0`](#oidc_core---v200)
+
+Packages with other changes:
+
+ - [`oidc_cli` - `v1.0.1`](#oidc_cli---v101)
+ - [`oidc_darwin` - `v1.1.0`](#oidc_darwin---v110)
+ - [`oidc_default_store` - `v1.1.0`](#oidc_default_store---v110)
+ - [`oidc_web_core` - `v1.1.0`](#oidc_web_core---v110)
+ - [`oidc_android` - `v1.0.1`](#oidc_android---v101)
+ - [`oidc_desktop` - `v1.0.1`](#oidc_desktop---v101)
+ - [`oidc_linux` - `v1.0.1`](#oidc_linux---v101)
+ - [`oidc_platform_interface` - `v1.0.1`](#oidc_platform_interface---v101)
+ - [`oidc_web` - `v1.0.1`](#oidc_web---v101)
+ - [`oidc_windows` - `v1.0.1`](#oidc_windows---v101)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_android` - `v1.0.1`
+ - `oidc_desktop` - `v1.0.1`
+ - `oidc_linux` - `v1.0.1`
+ - `oidc_platform_interface` - `v1.0.1`
+ - `oidc_web` - `v1.0.1`
+ - `oidc_windows` - `v1.0.1`
+
+---
+
+#### `oidc` - `v2.0.0`
+
+ - **FEAT**(oidc_web_core): status-driven redirect.html + app-ack wire ([#116](https://github.com/Bdaya-Dev/oidc/issues/116), [#227](https://github.com/Bdaya-Dev/oidc/issues/227), [#256](https://github.com/Bdaya-Dev/oidc/issues/256)) ([#397](https://github.com/Bdaya-Dev/oidc/issues/397)). ([3ea11929](https://github.com/Bdaya-Dev/oidc/commit/3ea119290f1007d62b9ecb8ffcaeb3a771f7df9f))
+ - **FEAT**(oidc_core): emit OidcTokenRefreshFailedEvent on refresh failures; clamp the expiring-refire loop ([#392](https://github.com/Bdaya-Dev/oidc/issues/392)). ([0b581dff](https://github.com/Bdaya-Dev/oidc/commit/0b581dffcc9761d9ee112aa0df6856a610c10ac5))
+ - **BREAKING** **FEAT**(oidc_core): cache-first init as the new default, discovery TTL cache, loaded-token validity controls ([#399](https://github.com/Bdaya-Dev/oidc/issues/399)). ([de3e2287](https://github.com/Bdaya-Dev/oidc/commit/de3e2287ec0649562e3df426f42a628168417378))
+
+#### `oidc_core` - `v2.0.0`
+
+ - **FIX**(oidc_core): protect the PKCE code_verifier at rest ([#324](https://github.com/Bdaya-Dev/oidc/issues/324) item 20) ([#402](https://github.com/Bdaya-Dev/oidc/issues/402)). ([32f4cbb3](https://github.com/Bdaya-Dev/oidc/commit/32f4cbb341e154d12ae687c6b2a8b23565779a20))
+ - **FIX**(oidc_core): route deleteClientConfiguration through typed error parsing ([#400](https://github.com/Bdaya-Dev/oidc/issues/400)). ([bd250ff5](https://github.com/Bdaya-Dev/oidc/commit/bd250ff58c3cd13a5bee5b2377edaf017b60c04a))
+ - **FIX**(oidc_core): honor expectedIssuer in validateUser (Entra multi-tenant) ([#389](https://github.com/Bdaya-Dev/oidc/issues/389)). ([4abc4e74](https://github.com/Bdaya-Dev/oidc/commit/4abc4e74282968cdf51ccccedfe99bff8f678e86))
+ - **FIX**(oidc_core): send dpop_jkt on the direct authorization request ([#324](https://github.com/Bdaya-Dev/oidc/issues/324)) ([#391](https://github.com/Bdaya-Dev/oidc/issues/391)). ([c5e7420a](https://github.com/Bdaya-Dev/oidc/commit/c5e7420a1db47bd00217e5f9426666cc965c8b4f))
+ - **FEAT**(oidc_core): DCR integration helpers ([#385](https://github.com/Bdaya-Dev/oidc/issues/385)) ([#413](https://github.com/Bdaya-Dev/oidc/issues/413)). ([c07e881a](https://github.com/Bdaya-Dev/oidc/commit/c07e881a01a069a927e0cfab2c3ce70c4f0ebd42))
+ - **FEAT**(oidc_core): react to a UserInfo 401 during session resume ([#302](https://github.com/Bdaya-Dev/oidc/issues/302)) ([#403](https://github.com/Bdaya-Dev/oidc/issues/403)). ([933e0ed7](https://github.com/Bdaya-Dev/oidc/commit/933e0ed7fd67d341cbf8a5ef43f23ba6de1c206b))
+ - **FEAT**(oidc_darwin): add macOS loopback system-browser navigation mode ([#124](https://github.com/Bdaya-Dev/oidc/issues/124)) ([#398](https://github.com/Bdaya-Dev/oidc/issues/398)). ([a8d758f7](https://github.com/Bdaya-Dev/oidc/commit/a8d758f74fd86b93e74fabe6c561235ca4ee3343))
+ - **FEAT**(oidc_core): emit OidcTokenRefreshFailedEvent on refresh failures; clamp the expiring-refire loop ([#392](https://github.com/Bdaya-Dev/oidc/issues/392)). ([0b581dff](https://github.com/Bdaya-Dev/oidc/commit/0b581dffcc9761d9ee112aa0df6856a610c10ac5))
+ - **BREAKING** **FEAT**(oidc_core): cache-first init as the new default, discovery TTL cache, loaded-token validity controls ([#399](https://github.com/Bdaya-Dev/oidc/issues/399)). ([de3e2287](https://github.com/Bdaya-Dev/oidc/commit/de3e2287ec0649562e3df426f42a628168417378))
+
+#### `oidc_cli` - `v1.0.1`
+
+ - **FIX**(oidc_cli): bound the interactive loopback wait with flowTimeoutSeconds ([#369](https://github.com/Bdaya-Dev/oidc/issues/369)) ([#388](https://github.com/Bdaya-Dev/oidc/issues/388)). ([5e9cf93a](https://github.com/Bdaya-Dev/oidc/commit/5e9cf93a5062cd875096ff232eb64c4d3a42ac05))
+
+#### `oidc_darwin` - `v1.1.0`
+
+ - **FEAT**(oidc_darwin): add macOS loopback system-browser navigation mode ([#124](https://github.com/Bdaya-Dev/oidc/issues/124)) ([#398](https://github.com/Bdaya-Dev/oidc/issues/398)). ([a8d758f7](https://github.com/Bdaya-Dev/oidc/commit/a8d758f74fd86b93e74fabe6c561235ca4ee3343))
+
+#### `oidc_default_store` - `v1.1.0`
+
+ - **FEAT**(oidc_default_store): support the new SharedPreferencesAsync API ([#301](https://github.com/Bdaya-Dev/oidc/issues/301)) ([#390](https://github.com/Bdaya-Dev/oidc/issues/390)). ([0045f623](https://github.com/Bdaya-Dev/oidc/commit/0045f6231cd5e5267520c69342f89e420241fffe))
+
+#### `oidc_web_core` - `v1.1.0`
+
+ - **FIX**(oidc_core): protect the PKCE code_verifier at rest ([#324](https://github.com/Bdaya-Dev/oidc/issues/324) item 20) ([#402](https://github.com/Bdaya-Dev/oidc/issues/402)). ([32f4cbb3](https://github.com/Bdaya-Dev/oidc/commit/32f4cbb341e154d12ae687c6b2a8b23565779a20))
+ - **FEAT**(oidc_web_core): status-driven redirect.html + app-ack wire ([#116](https://github.com/Bdaya-Dev/oidc/issues/116), [#227](https://github.com/Bdaya-Dev/oidc/issues/227), [#256](https://github.com/Bdaya-Dev/oidc/issues/256)) ([#397](https://github.com/Bdaya-Dev/oidc/issues/397)). ([3ea11929](https://github.com/Bdaya-Dev/oidc/commit/3ea119290f1007d62b9ecb8ffcaeb3a771f7df9f))
+
+
+## 2026-07-13
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
  - [`crypto_keys_plus` - `v1.0.0`](#crypto_keys_plus---v100)
  - [`x509_plus` - `v1.0.0`](#x509_plus---v100)
  - [`jose_plus` - `v1.0.0`](#jose_plus---v100)
