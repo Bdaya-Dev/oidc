@@ -239,6 +239,15 @@ OidcNativeOptionsApple _$OidcNativeOptionsAppleFromJson(
   rawSessionOptions:
       json['rawSessionOptions'] as Map<String, dynamic>? ?? const {},
   flowTimeoutSeconds: (json['flowTimeoutSeconds'] as num?)?.toInt(),
+  navigationMode:
+      $enumDecodeNullable(
+        _$OidcAppleNavigationModeEnumMap,
+        json['navigationMode'],
+      ) ??
+      OidcAppleNavigationMode.asWebAuthenticationSession,
+  successfulPageResponse: json['successfulPageResponse'] as String?,
+  methodMismatchResponse: json['methodMismatchResponse'] as String?,
+  notFoundResponse: json['notFoundResponse'] as String?,
 );
 
 Map<String, dynamic> _$OidcNativeOptionsAppleToJson(
@@ -250,12 +259,22 @@ Map<String, dynamic> _$OidcNativeOptionsAppleToJson(
   'callbackMode': _$OidcAppleCallbackModeEnumMap[instance.callbackMode]!,
   'rawSessionOptions': instance.rawSessionOptions,
   'flowTimeoutSeconds': instance.flowTimeoutSeconds,
+  'navigationMode': _$OidcAppleNavigationModeEnumMap[instance.navigationMode]!,
+  'successfulPageResponse': instance.successfulPageResponse,
+  'methodMismatchResponse': instance.methodMismatchResponse,
+  'notFoundResponse': instance.notFoundResponse,
 };
 
 const _$OidcAppleCallbackModeEnumMap = {
   OidcAppleCallbackMode.auto: 'auto',
   OidcAppleCallbackMode.customScheme: 'customScheme',
   OidcAppleCallbackMode.https: 'https',
+};
+
+const _$OidcAppleNavigationModeEnumMap = {
+  OidcAppleNavigationMode.asWebAuthenticationSession:
+      'asWebAuthenticationSession',
+  OidcAppleNavigationMode.loopbackSystemBrowser: 'loopbackSystemBrowser',
 };
 
 OidcPlatformSpecificOptions_Native _$OidcPlatformSpecificOptions_NativeFromJson(

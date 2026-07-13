@@ -29,7 +29,9 @@ dependencies:
   flutter:
     sdk: flutter
   oidc_core: ^1.0.0
+  oidc_loopback_listener: ^1.0.0
   oidc_platform_interface: ^1.0.0
+  url_launcher: ^6.1.14
 
 dev_dependencies:
   flutter_test:

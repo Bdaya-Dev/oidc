@@ -351,6 +351,31 @@ enum OidcAppleCallbackMode {
   https,
 }
 
+/// Selects how the macOS authorization / end-session flow reaches the OpenID
+/// Provider.
+///
+/// iOS ignores this setting — [asWebAuthenticationSession] is the only
+/// mechanism iOS supports (there is no iOS equivalent of opening the default
+/// system browser and binding a loopback listener).
+@JsonEnum()
+enum OidcAppleNavigationMode {
+  /// Default. Preserves the current behavior: the flow runs inside an in-app
+  /// [`ASWebAuthenticationSession`](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession),
+  /// and the native side captures the redirect via the session callback.
+  asWebAuthenticationSession,
+
+  /// **macOS only.** Runs the flow WITHOUT `ASWebAuthenticationSession`:
+  /// opens the authorization URL in the user's default system browser
+  /// (`url_launcher`) and captures the redirect on an
+  /// [RFC 8252 §7.3](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3)
+  /// loopback interface (`http://127.0.0.1:{port}`). A `redirect_uri` with
+  /// port `0` binds an ephemeral port that is written back into the
+  /// `redirect_uri` before launch, exactly like `oidc_desktop`.
+  ///
+  /// Ignored on iOS (falls back to [asWebAuthenticationSession]).
+  loopbackSystemBrowser,
+}
+
 /// iOS / macOS options for the first-party `ASWebAuthenticationSession` flow.
 @JsonSerializable()
 class OidcNativeOptionsApple implements OidcPlatformOptionsMarker {
@@ -361,6 +386,11 @@ class OidcNativeOptionsApple implements OidcPlatformOptionsMarker {
     this.callbackMode = OidcAppleCallbackMode.auto,
     this.rawSessionOptions = const {},
     this.flowTimeoutSeconds,
+    this.navigationMode = OidcAppleNavigationMode.asWebAuthenticationSession,
+    this.successfulPageResponse,
+    this.methodMismatchResponse,
+    this.notFoundResponse,
+    this.launchUrl,
   });
 
   /// Whether to use an ephemeral session (no shared cookies/cache).
@@ -388,8 +418,48 @@ class OidcNativeOptionsApple implements OidcPlatformOptionsMarker {
   /// flow and — on the iOS-26 / Xcode-26 simulator — the redirect may never
   /// auto-arrive), otherwise `loginAuthorizationCodeFlow()` hangs indefinitely.
   /// Mirrors [OidcNativeOptionsAndroid.flowTimeoutSeconds]; honored natively in
-  /// `oidc_darwin`'s `OidcPlugin.scheduleFlowTimeout`.
+  /// `oidc_darwin`'s `OidcPlugin.scheduleFlowTimeout`. On macOS with
+  /// [navigationMode] set to [OidcAppleNavigationMode.loopbackSystemBrowser],
+  /// it instead bounds the wait on the loopback listener (Dart-side).
   final int? flowTimeoutSeconds;
+
+  /// How the macOS flow reaches the OpenID Provider.
+  ///
+  /// Defaults to [OidcAppleNavigationMode.asWebAuthenticationSession] (current
+  /// behavior). Set to [OidcAppleNavigationMode.loopbackSystemBrowser] to run
+  /// the macOS flow in the default system browser with an RFC 8252 §7.3
+  /// loopback redirect. Ignored on iOS.
+  final OidcAppleNavigationMode navigationMode;
+
+  /// The HTML body returned to the browser when the loopback listener matches
+  /// the redirect (only used when [navigationMode] is
+  /// [OidcAppleNavigationMode.loopbackSystemBrowser]).
+  ///
+  /// Mirrors [OidcPlatformSpecificOptions_Native.successfulPageResponse].
+  final String? successfulPageResponse;
+
+  /// The HTML body returned to the browser when a method other than `GET` is
+  /// requested on the loopback listener (only used when [navigationMode] is
+  /// [OidcAppleNavigationMode.loopbackSystemBrowser]).
+  ///
+  /// Mirrors [OidcPlatformSpecificOptions_Native.methodMismatchResponse].
+  final String? methodMismatchResponse;
+
+  /// The HTML body returned to the browser when a request hits a path other
+  /// than the redirect path on the loopback listener (only used when
+  /// [navigationMode] is [OidcAppleNavigationMode.loopbackSystemBrowser]).
+  ///
+  /// Mirrors [OidcPlatformSpecificOptions_Native.notFoundResponse].
+  final String? notFoundResponse;
+
+  /// Test seam: overrides the browser-launch mechanism for the
+  /// [OidcAppleNavigationMode.loopbackSystemBrowser] flow. When null (default),
+  /// `oidc_darwin` falls back to `package:url_launcher`.
+  ///
+  /// Mirrors [OidcPlatformSpecificOptions_Native.launchUrl]; excluded from JSON
+  /// since it is a Dart-only callback that never crosses the native boundary.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  final Future<bool> Function(Uri url)? launchUrl;
 
   Map<String, dynamic> toJson() => _$OidcNativeOptionsAppleToJson(this);
 

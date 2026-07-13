@@ -225,6 +225,34 @@ void main() {
     expect(received![3], true);
   });
 
+  test('iOS ignores navigationMode=loopbackSystemBrowser and still uses the '
+      'native ASWebAuthenticationSession (Pigeon) path', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    var pigeonCalled = false;
+    mockHostApi('authorizeApple', (args) async {
+      pigeonCalled = true;
+      return 'com.example.app://callback?code=c&state=state-1';
+    });
+
+    final resp = await OidcDarwin().getAuthorizationResponse(
+      metadata,
+      _authRequest(),
+      const OidcPlatformSpecificOptions(
+        ios: OidcNativeOptionsApple(
+          navigationMode: OidcAppleNavigationMode.loopbackSystemBrowser,
+        ),
+      ),
+      const {},
+    );
+
+    // The loopback path never calls the Pigeon host API; asserting it WAS
+    // called proves iOS fell through to ASWebAuthenticationSession.
+    expect(pigeonCalled, isTrue);
+    expect(resp, isNotNull);
+    expect(resp!.code, 'c');
+  });
+
   test('getAuthorizationResponse returns null on USER_CANCELLED', () async {
     mockHostApi('authorizeApple', (args) async {
       throw PlatformException(code: 'USER_CANCELLED', message: 'cancelled');
