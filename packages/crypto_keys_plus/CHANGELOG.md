@@ -1,3 +1,12 @@
+## 1.0.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**: resolve all four library bugs; drive honest unit coverage to ~95% ([#368](https://github.com/Bdaya-Dev/oidc/issues/368)). ([c86bee17](https://github.com/Bdaya-Dev/oidc/commit/c86bee17189a0a70fee947c685e91a55062b1d35))
+ - **FIX**(crypto_keys_plus): resolve pub.dev publish dry-run warnings. ([5bee9a89](https://github.com/Bdaya-Dev/oidc/commit/5bee9a8954e4fc5412f20db826aa7fe053eebabb))
+ - **FEAT**(crypto): RSASSA-PSS (PS256/384/512) + EdDSA/Ed25519. ([6c5c6741](https://github.com/Bdaya-Dev/oidc/commit/6c5c674149fe0504207c95aefbda7fedfca72ae9))
+ - **BREAKING** **FEAT**: consolidate jose_plus, crypto_keys_plus, x509_plus into the workspace. ([3fffc6cd](https://github.com/Bdaya-Dev/oidc/commit/3fffc6cd51f2abb0ead643acc2ec4d5741fac8e5))
+
 ## 0.5.0
   -   **UPGRADE**: migrated to pointycastle 4.0.0.
 
