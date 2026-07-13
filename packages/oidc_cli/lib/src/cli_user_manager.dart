@@ -36,6 +36,12 @@ class CliUserManager extends OidcUserManagerBase {
 
   /// starts a listener and gets a response Uri.
   /// The user needs to click on the printed link to complete the login.
+  ///
+  /// When [options] carries a positive `flowTimeoutSeconds` for the current
+  /// desktop OS, the loopback wait is bounded: an abandoned browser flow
+  /// (the user closes the tab, or none opens) surfaces an [OidcException]
+  /// instead of hanging the CLI forever and leaking the bound loopback socket.
+  /// `null`/non-positive means unbounded, matching `oidc_desktop`'s default.
   Future<Uri?> startListenerAndGetUri({
     required Uri originalRedirectUri,
     required String redirectUriKey,
@@ -44,15 +50,22 @@ class CliUserManager extends OidcUserManagerBase {
     required String logRequestDesc,
     required Completer<Uri> actualRedirectUriCompleter,
     required Future<void> Function(Uri) printFunction,
+    OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
   }) async {
     final listener = OidcLoopbackListener(
       path: originalRedirectUri.path,
       port: originalRedirectUri.port,
     );
     final serverCompleter = Completer<HttpServer>();
+    // Mirror `oidc_desktop.startListenerAndGetUri`: an opt-in, per-OS flow
+    // timeout bounds the wait so the listener force-closes its socket and
+    // throws a `TimeoutException` if no redirect arrives in time.
+    final ts = _resolveFlowTimeoutSeconds(options);
+    final timeout = (ts != null && ts > 0) ? Duration(seconds: ts) : null;
     //don't await the responseUriFuture until we launch the url.
     final responseUriFuture = listener.listenForSingleResponse(
       serverCompleter: serverCompleter,
+      timeout: timeout,
     );
     // wait until the server starts listening and we get a port.
     final server = await serverCompleter.future;
@@ -73,11 +86,43 @@ class CliUserManager extends OidcUserManagerBase {
     await printFunction(uri);
 
     // wait for a response from the server listener.
-    final responseUri = await responseUriFuture;
+    final Uri? responseUri;
+    try {
+      responseUri = await responseUriFuture;
+    } on TimeoutException catch (e, st) {
+      final message =
+          'The $logRequestDesc flow timed out after $ts seconds without '
+          'receiving a redirect on the loopback listener.';
+      cliLogger.warn(message);
+      throw OidcException(
+        message,
+        internalException: e,
+        internalStackTrace: st,
+      );
+    }
     if (responseUri == null) {
       return null;
     }
     return responseUri;
+  }
+
+  /// Resolves the loopback flow timeout (in seconds) from the platform-specific
+  /// [options], reading the native-options object for the current desktop OS.
+  ///
+  /// Mirrors `oidc_desktop`'s `getNativeOptions` convention, which selects
+  /// `options.windows` / `options.linux` per platform package; a single CLI
+  /// binary can run on any desktop OS, so it selects the field matching
+  /// [Platform.operatingSystem] instead. Returns `null` (unbounded wait) unless
+  /// the caller opted in with a positive value for that OS.
+  int? _resolveFlowTimeoutSeconds(OidcPlatformSpecificOptions options) {
+    if (Platform.isMacOS) {
+      return options.macos.flowTimeoutSeconds;
+    }
+    if (Platform.isWindows) {
+      return options.windows.flowTimeoutSeconds;
+    }
+    // Linux and any other POSIX host a Dart CLI may run on.
+    return options.linux.flowTimeoutSeconds;
   }
 
   @override
@@ -101,6 +146,7 @@ class CliUserManager extends OidcUserManagerBase {
       logRequestDesc: 'authorization',
       requestParameters: request.toMap(),
       actualRedirectUriCompleter: redirectUriCompleter,
+      options: options,
       printFunction: (uri) async {
         cliLogger.info('Please open the following link: $uri');
         // coverage:ignore-start
@@ -170,6 +216,7 @@ class CliUserManager extends OidcUserManagerBase {
       logRequestDesc: 'end session',
       requestParameters: request.toMap(),
       actualRedirectUriCompleter: redirectUriCompleter,
+      options: options,
       printFunction: (uri) async {
         logger.info('Please open the following link: $uri');
         // coverage:ignore-start
