@@ -122,13 +122,35 @@ void main() {
         'given an end_session_endpoint, samePage navigation returns null '
         '(the response only ever arrives via the redirected page)', () async {
       final manager = _buildManager(withEndSessionEndpoint: true);
+      // `samePage` mode performs a REAL `window.location.assign()` before
+      // returning null. With a cross-origin endpoint the navigation commits
+      // an error page a beat later and destroys this suite's browser context
+      // mid-run — a silent hang with no failure and no timeout, because the
+      // in-browser timers die with the context (CI run 29209713144 froze on
+      // both matrix legs this way). So: point the endpoint at THIS page, and
+      // pre-align the document URL via history.replaceState (which does not
+      // navigate) to the exact URL the library will assign — the assign then
+      // differs only in fragment and stays a same-document navigation.
+      const request = OidcEndSessionRequest(clientId: 'client-1');
+      final endpoint = Uri.parse(
+        web.window.location.href,
+      ).replace(fragment: 'end-session');
+      final target = request.generateUri(endpoint);
+      final originalHref = web.window.location.href;
+      web.window.history.replaceState(
+        null,
+        '',
+        target.replace(fragment: 'pre-aligned').toString(),
+      );
+      addTearDown(
+        () => web.window.history.replaceState(null, '', originalHref),
+      );
       final metadata = OidcProviderMetadata.fromJson({
         'issuer': 'https://op.example.com',
         'authorization_endpoint': 'https://op.example.com/authorize',
         'token_endpoint': 'https://op.example.com/token',
-        'end_session_endpoint': 'https://op.example.com/endsession',
+        'end_session_endpoint': endpoint.toString(),
       });
-      const request = OidcEndSessionRequest(clientId: 'client-1');
 
       final result = await manager.getEndSessionResponse(
         metadata,
