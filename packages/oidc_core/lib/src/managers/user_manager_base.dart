@@ -231,6 +231,20 @@ abstract class OidcUserManagerBase {
         discoveryDocumentOverride ?? this.discoveryDocument;
     options = getPlatformOptions(options);
     final prep = prepareForRedirectFlow(options);
+    // RFC 9126 Pushed Authorization Requests: decide up front whether this flow
+    // pushes, because that selects where the DPoP authorization-code binding
+    // (`dpop_jkt`, RFC 9449 §10) is emitted — on the direct authorization
+    // request (below, via `prepareAuthorizationCodeFlowRequest`) or on the
+    // back-channel PAR request body. The two are mutually exclusive so the code
+    // is never double-bound.
+    final shouldPushAuthorizationRequest =
+        switch (settings.pushedAuthorizationRequestsMode) {
+          OidcPushedAuthorizationRequestsMode.never => false,
+          OidcPushedAuthorizationRequestsMode.always => true,
+          OidcPushedAuthorizationRequestsMode.auto =>
+            discoveryDocument.requirePushedAuthorizationRequestsOrDefault,
+        };
+    final dpop = dpopManager;
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
@@ -271,19 +285,23 @@ abstract class OidcUserManagerBase {
           input: simpleReq,
           metadata: discoveryDocument,
           store: store,
+          // RFC 9449 §10: when DPoP is enabled and this flow does NOT use PAR,
+          // bind the authorization code to the DPoP key by carrying its
+          // thumbprint as `dpop_jkt` on the (direct) authorization request. The
+          // PAR path binds via the pushed request body below instead, so exactly
+          // one of the two branches emits it.
+          dpopJkt:
+              !shouldPushAuthorizationRequest &&
+                  dpop != null &&
+                  dpop.settings.bindAuthorizationCode
+              ? dpop.thumbprint
+              : null,
         );
     // RFC 9126 Pushed Authorization Requests: when enabled, POST the prepared
     // request to the PAR endpoint (back channel, authenticated) and continue
     // the front channel by reference (`request_uri`). state/nonce/PKCE were
     // already persisted by prepareAuthorizationCodeFlowRequest above, so local
     // validation is unchanged (RFC 9126 §6).
-    final shouldPushAuthorizationRequest =
-        switch (settings.pushedAuthorizationRequestsMode) {
-          OidcPushedAuthorizationRequestsMode.never => false,
-          OidcPushedAuthorizationRequestsMode.always => true,
-          OidcPushedAuthorizationRequestsMode.auto =>
-            discoveryDocument.requirePushedAuthorizationRequestsOrDefault,
-        };
     if (shouldPushAuthorizationRequest) {
       final parEndpoint = discoveryDocument.pushedAuthorizationRequestEndpoint;
       if (parEndpoint == null) {
@@ -293,7 +311,6 @@ abstract class OidcUserManagerBase {
           '`pushed_authorization_request_endpoint`.',
         );
       }
-      final dpop = dpopManager;
       final parResponse = await OidcEndpoints.pushAuthorizationRequest(
         pushedAuthorizationRequestEndpoint: parEndpoint,
         request: requestContainer.request,
