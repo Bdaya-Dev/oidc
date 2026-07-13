@@ -255,6 +255,46 @@ melos:
         dirExists: test
         ignore:
           - "*example*"
+    test:oidc_web:chrome:
+      name: oidc_web browser-platform suite (Chrome)
+      # #370: lib/oidc_web.dart (the real OidcWeb plugin class) imports
+      # oidc_web_core -> package:web (dart:js_interop), so it only compiles
+      # for a browser target. Plain `flutter test` (test:flutter above) runs
+      # on the VM ("tester") platform by default, so
+      # test/library_surface_test.dart's `@TestOn('chrome')` suite is
+      # silently skipped there (0 tests loaded, no failure) and
+      # oidc_web.dart has never appeared in any CI unit report.
+      # `flutter test -d chrome` does NOT fix this -- verified empirically:
+      # `-d`/`--device-id` is ignored by `flutter test`, which still spawns
+      # the native `flutter_tester` process (confirmed via `-v`: it launches
+      # `flutter_tester.exe`, never a browser) regardless of the device
+      # given, so the chrome-tagged file stays excluded exactly as before.
+      # `--platform chrome` is the only invocation that actually threads a
+      # browser Runtime through suite-load filtering (flutter_tools'
+      # FlutterWebPlatform registers `SuitePlatform(Runtime.chrome)`) --
+      # confirmed locally: with this flag, library_surface_test.dart reaches
+      # "loading ...", which it never does under `-d chrome`. `flutter test
+      # --help -v` marks the flag "(deprecated) ... intended for testing the
+      # Flutter framework itself and may be removed at any time", but there
+      # is no non-deprecated alternative today.
+      # On a Windows dev machine this flag can hang after launching Chrome --
+      # a long-standing, Windows-only flutter_tools bug (flutter/flutter
+      # #162798, #44583, #118778; reproducible with a bare `flutter create`
+      # app, no project code involved). This job runs on ubuntu-latest, not
+      # the affected platform.
+      # flutter_tools' web test Chrome launcher (web/chrome.dart) adds its
+      # own `--no-sandbox --headless` flags automatically, so (unlike the
+      # `dart test --platform chrome` steps elsewhere in this workflow) no
+      # CHROME_FLAGS wiring is needed here.
+      # One suite file today (library_surface_test.dart); the package's
+      # other test file (oidc_web_test.dart) has no @TestOn restriction and
+      # loads fine alongside it under Runtime.chrome, so a single
+      # non-per-file invocation covers the package -- no jose_plus/
+      # oidc_web_core-style per-file loop needed.
+      exec: flutter test --platform chrome
+      packageFilters:
+        scope:
+          - oidc_web
     integration_test:android:
       name: Flutter Android Integration tests
       exec: flutter test integration_test --coverage --coverage-package oidc* --branch-coverage -d android --coverage-path coverage/android-coverage.info --dart-define=CI=true
