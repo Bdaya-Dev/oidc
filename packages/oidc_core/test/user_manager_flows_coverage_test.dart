@@ -135,6 +135,9 @@ Future<_FlowManager> _build({
         settings ??
         OidcUserManagerSettings(
           redirectUri: Uri.parse('com.example.app://cb'),
+          // These coverage tests pin the pre-existing blocking init semantics
+          // (cache validated/refreshed before init() completes).
+          initMode: OidcInitMode.blockingValidate,
           userInfoSettings: const OidcUserInfoSettings(
             sendUserInfoRequest: false,
           ),

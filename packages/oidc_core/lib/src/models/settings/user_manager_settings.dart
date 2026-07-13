@@ -8,6 +8,86 @@ Duration? defaultRefreshBefore(OidcToken token) {
   return const Duration(minutes: 1);
 }
 
+/// The callback used by [OidcUserManagerSettings.isLoadedTokenAcceptable] to
+/// decide, when tokens are restored from the [OidcStore] during `init()`,
+/// whether the loaded token should be treated as acceptable despite (or in the
+/// absence of) validation errors.
+///
+/// [validationErrors] is the exact list produced by the manager's internal
+/// `validateUser` for the loaded id_token (empty when the token validated
+/// cleanly).
+///
+/// Return:
+/// - `true`  → accept the loaded token as-is and surface the user immediately,
+///   skipping the refresh / userinfo round-trips.
+/// - `false` → reject the loaded token (proceed to the discard branch, see
+///   [OidcShouldRemoveInvalidTokenCallback]).
+/// - `null`  → apply the default policy (the current, unchanged behavior:
+///   refresh when expired, then re-validate).
+typedef OidcIsLoadedTokenAcceptableCallback =
+    bool? Function(OidcUser user, List<Exception> validationErrors);
+
+/// The callback used by [OidcUserManagerSettings.shouldRemoveInvalidToken] to
+/// decide whether a loaded-but-invalid token is removed from the [OidcStore].
+///
+/// Invoked in the discard branch of cached-token loading with the loaded
+/// [user] and its [validationErrors].
+///
+/// Return:
+/// - `true`  → remove the cached tokens from the store.
+/// - `false` → keep the cached tokens (e.g. for a bespoke offline policy).
+/// - `null`  → apply the default policy, which removes the tokens unless
+///   [OidcUserManagerSettings.supportOfflineAuth] is enabled.
+typedef OidcShouldRemoveInvalidTokenCallback =
+    bool? Function(OidcUser user, List<Exception> validationErrors);
+
+/// Controls how [OidcUserManagerBase.init] restores a previously-cached user.
+///
+/// **This changes the DEFAULT `init()` semantics** (see [OidcInitMode.cacheFirst]
+/// vs [OidcInitMode.blockingValidate]).
+enum OidcInitMode {
+  /// **The new default.** `init()` restores the cached user by a PURE local
+  /// deserialize (no network) and completes immediately, then revalidates in
+  /// the background — refreshing the discovery document if it is stale
+  /// (see [OidcUserManagerSettings.discoveryDocumentMaxAge]), refreshing the
+  /// token if it is expired, and calling the userinfo endpoint when enabled.
+  ///
+  /// Background outcomes are surfaced through the existing channels:
+  /// [OidcUserManagerBase.userChanges] emits when the user object changes and
+  /// [OidcUserManagerBase.events] emits on failures. When there is no cached
+  /// user (or no locally-cached discovery document), `init()` transparently
+  /// falls back to the [blockingValidate] network path.
+  ///
+  /// This makes cold-start `init()` fast and offline-friendly at the cost of a
+  /// brief window where the surfaced user has not yet been re-verified against
+  /// the network.
+  ///
+  /// **Note — [OidcUserManagerBase.userChanges] emits TWICE on a cold start:**
+  /// once for the locally-restored (unverified) user, then again for the
+  /// background-rebuilt user once revalidation completes. The second object is
+  /// distinct even when its claims are unchanged — its id_token is now VERIFIED
+  /// (`parsedIdToken.isVerified == true`) and/or its token was refreshed — so
+  /// this second emission is intentional and must not be deduplicated: it is how
+  /// the verified/refreshed state is surfaced. Listeners that need a single
+  /// settled value should key off `parsedIdToken.isVerified` (or use
+  /// [blockingValidate]).
+  cacheFirst,
+
+  /// The pre-existing semantics (opt-in escape hatch): `init()` blocks until
+  /// the discovery document is fetched/validated and the cached token is fully
+  /// re-verified (and refreshed/userinfo-fetched) before completing. Choose
+  /// this when callers must not observe an unverified user after `init()`.
+  ///
+  /// **Not a byte-for-byte replica of the pre-1.0 `init()` network behavior.**
+  /// The discovery document is now served from the shared TTL cache
+  /// (see [OidcUserManagerSettings.discoveryDocumentMaxAge], default 1 day), so
+  /// a cached `.well-known` document within that window is NOT re-fetched — the
+  /// old code fetched it on every `init()`. To reproduce the exact previous
+  /// network behavior (a discovery fetch on every `init()`), also set
+  /// `discoveryDocumentMaxAge: Duration.zero`.
+  blockingValidate,
+}
+
 /// The callback used to determine the retry delay for offline mode refresh attempts.
 typedef OidcOfflineRefreshRetryDelayCallback =
     Duration Function(
@@ -65,6 +145,11 @@ class OidcUserManagerSettings {
     this.extraAuthenticationParameters,
     this.expiryTolerance = const Duration(minutes: 1),
     this.jwksCacheMaxAge = const Duration(days: 1),
+    this.discoveryDocumentMaxAge = const Duration(days: 1),
+    this.initMode = OidcInitMode.cacheFirst,
+    this.metadataSeed,
+    this.isLoadedTokenAcceptable,
+    this.shouldRemoveInvalidToken,
     this.extraTokenParameters,
     this.postLogoutRedirectUri,
     this.options,
@@ -335,6 +420,66 @@ class OidcUserManagerSettings {
   /// (Rotation of Asymmetric Signing Keys), an RP must obtain rotated keys and
   /// must not pin a stale/retired key set indefinitely.
   final Duration jwksCacheMaxAge;
+
+  /// How long a persisted discovery document may be served from the
+  /// [OidcStore] before it is treated as stale and re-fetched from the network.
+  ///
+  /// The document is persisted alongside a sidecar epoch-millis fetched-at
+  /// timestamp (mirroring [OidcJwksStoreLoader]'s `::oidc_jwks_fetched_at`
+  /// pattern, under the `::oidc_discovery_fetched_at` key). Within this window
+  /// the manager skips the network `.well-known` fetch and uses the cached
+  /// document; beyond it the document is refreshed (in the background under
+  /// [OidcInitMode.cacheFirst], blocking under [OidcInitMode.blockingValidate]).
+  /// If the refresh fails (e.g. offline), the stale cached document is still
+  /// served (mirroring the JWKS loader's offline-fallback behavior).
+  ///
+  /// [Duration.zero]/negative disables the TTL cache — every `init()` re-fetches
+  /// the document (the cached copy remains only as an offline fallback).
+  ///
+  /// Defaults to `const Duration(days: 1)`, matching [jwksCacheMaxAge] and the
+  /// ~24h OP-metadata TTL used by MSAL. (oidc-client-ts caches OP metadata
+  /// only in-memory for the session; this persists it across restarts.)
+  final Duration discoveryDocumentMaxAge;
+
+  /// Controls how [OidcUserManagerBase.init] restores a cached user.
+  ///
+  /// Defaults to [OidcInitMode.cacheFirst] — **this changes the default
+  /// `init()` semantics** to restore the cached user locally (no network) and
+  /// revalidate in the background. Set to [OidcInitMode.blockingValidate] to
+  /// keep the previous behavior (block on the network until the cached token is
+  /// fully re-verified before `init()` completes).
+  ///
+  /// [OidcInitMode.blockingValidate] is close to but NOT a byte-for-byte replica
+  /// of the pre-1.0 `init()`: the discovery document is now served from the
+  /// [discoveryDocumentMaxAge] TTL cache, so a `.well-known` fetch within that
+  /// window is skipped. Combine it with `discoveryDocumentMaxAge: Duration.zero`
+  /// to also restore the previous fetch-on-every-`init()` network behavior.
+  final OidcInitMode initMode;
+
+  /// An optional base discovery document whose members are merged UNDER the
+  /// fetched (or cached) document — the fetched/cached values override the seed
+  /// (matching oidc-client-ts `metadataSeed` semantics).
+  ///
+  /// Use this to supply endpoints an OP omits from its `.well-known` document,
+  /// or to prime the manager before the first network fetch. The seed does not
+  /// affect the eagerly-supplied [OidcUserManagerBase] (non-`.lazy`) constructor
+  /// path, which is a full override and stays untouched. The seed is applied
+  /// in-memory on every load and is never persisted.
+  final OidcProviderMetadata? metadataSeed;
+
+  /// Optional developer control over whether a token restored from the store
+  /// during `init()` is accepted despite (or in the absence of) validation
+  /// errors. See [OidcIsLoadedTokenAcceptableCallback].
+  ///
+  /// Defaults to `null` — the current behavior is preserved exactly.
+  final OidcIsLoadedTokenAcceptableCallback? isLoadedTokenAcceptable;
+
+  /// Optional developer control over whether a loaded-but-invalid token is
+  /// removed from the store. See [OidcShouldRemoveInvalidTokenCallback].
+  ///
+  /// Defaults to `null` — the current behavior is preserved exactly (removed
+  /// unless [supportOfflineAuth] is enabled).
+  final OidcShouldRemoveInvalidTokenCallback? shouldRemoveInvalidToken;
 
   /// Settings related to the session management spec.
   final OidcSessionManagementSettings sessionManagementSettings;

@@ -137,6 +137,21 @@ abstract class OidcUserManagerBase {
   Future<({OidcUser? user, OidcTokenRefreshFailureKind? failureKind})>?
   _autoRefreshInFlight;
 
+  /// #201: while a cache-first background revalidation owns the refresh of the
+  /// just-restored (possibly already-expired) cached token, the expiry-driven
+  /// auto-refresh ([handleTokenExpiring] / [handleTokenExpired]) is suppressed.
+  ///
+  /// On a cache-first cold start the restored expired user is surfaced through
+  /// [userChanges], which arms the token-events timers; those fire immediately
+  /// for an expired token and would kick off `_autoRefresh` — a SECOND
+  /// `/token` exchange racing the background revalidation's own
+  /// `startupLoad` refresh. Two concurrent refresh-token exchanges can trip an
+  /// OP's RFC 9700 refresh-rotation reuse detection and revoke the whole token
+  /// family (a real logout on an ordinary reopen). This flag lets the single
+  /// background pass own that first refresh; it is cleared once the pass
+  /// settles, after which normal on-expiry auto-refresh resumes.
+  bool _cacheFirstRevalidationInFlight = false;
+
   /// Returns true if the manager is currently in offline mode.
   bool get isInOfflineMode => offlineModeStartedAt != null;
 
@@ -1291,8 +1306,15 @@ abstract class OidcUserManagerBase {
     bool validateAndSave = true,
     String? authorizationCode,
     Duration? maxAge,
+    // When true, the user is (re)built from scratch via [OidcUser.fromIdToken]
+    // (verifying the id_token signature) instead of replacing the token on the
+    // existing [currentUser]. Used by cache-first background revalidation, whose
+    // locally-restored user was deserialized WITHOUT verification.
+    bool ignoreCurrentUser = false,
   }) async {
-    final currentUser = currentUserOverride ?? this.currentUser;
+    final currentUser = ignoreCurrentUser
+        ? null
+        : (currentUserOverride ?? this.currentUser);
     OidcUser? newUser;
     final idTokenOverride = await settings.getIdToken?.call(token);
     if (currentUser == null) {
@@ -1675,6 +1697,13 @@ abstract class OidcUserManagerBase {
     if (refreshToken == null) {
       return;
     }
+    // #201: during a cache-first cold start the background revalidation owns the
+    // first refresh of the just-restored expired token (source `startupLoad`).
+    // Skipping here keeps that refresh a SINGLE `/token` exchange instead of
+    // racing a second one (see [_cacheFirstRevalidationInFlight]).
+    if (_cacheFirstRevalidationInFlight) {
+      return;
+    }
     // #154: share the refresh with [handleTokenExpired] through the in-flight
     // latch so a resume that fires both timers exchanges the refresh token
     // exactly once. All success bookkeeping, failure signalling, and offline
@@ -1932,6 +1961,16 @@ abstract class OidcUserManagerBase {
       //                         network must not nuke a possibly-valid session.
       // A token with NO refresh token is unrecoverable, so forget immediately as
       // before.
+      //
+      // #201: on a cache-first cold start the background revalidation owns the
+      // keep/discard decision for the just-restored expired token — it runs the
+      // full [loadCachedTokens] pass (refresh-if-possible, then the
+      // shouldRemoveInvalidToken / offline policy) and reconciles the surfaced
+      // user afterwards. Defer to it here so this handler neither races a second
+      // refresh nor forgets a user the background pass may still keep.
+      if (_cacheFirstRevalidationInFlight) {
+        return;
+      }
       final refreshToken = event.refreshToken;
       if (refreshToken == null) {
         unawaited(forgetUser());
@@ -2593,60 +2632,144 @@ abstract class OidcUserManagerBase {
   /// The discovery document Uri containing openid configuration.
   final Uri? discoveryDocumentUri;
 
-  /// First gets the cached discoveryDocument if any
-  /// (based on discoveryDocumentUri).
-  ///
-  /// Then tries to get it from the network.
-  @protected
-  Future<void> ensureDiscoveryDocument() async {
-    final uri = discoveryDocumentUri;
+  /// Sidecar key suffix that holds the epoch-millis fetched-at timestamp next
+  /// to a persisted discovery document. Mirrors [OidcJwksStoreLoader]'s
+  /// `::oidc_jwks_fetched_at` pattern; cannot collide with a real discovery URL
+  /// key.
+  static const discoveryFetchedAtSuffix = '::oidc_discovery_fetched_at';
 
-    if (currentDiscoveryDocument != null) {
-      // An eagerly-supplied discoveryDocument (eager constructor, where
-      // discoveryDocumentUri is null) is still validated against
-      // `settings.expectedIssuer`.
-      _validateDiscoveryIssuer();
-      return;
+  /// Merges [OidcUserManagerSettings.metadataSeed] UNDER [doc] (doc members
+  /// override the seed),
+  /// matching oidc-client-ts `metadataSeed` semantics. No-op when no seed is set
+  /// or when using an eagerly-supplied document (that path is a full override).
+  OidcProviderMetadata _applyMetadataSeed(OidcProviderMetadata doc) {
+    final seed = settings.metadataSeed;
+    // The eager (non-`.lazy`) constructor path is a full override; the seed only
+    // augments a fetched/cached document (discoveryDocumentUri != null).
+    if (seed == null || discoveryDocumentUri == null) {
+      return doc;
     }
+    return OidcProviderMetadata.fromJson({...seed.src, ...doc.src});
+  }
 
-    if (uri == null) {
-      logAndThrow(
-        'Impossible case of no discoveryDocument and no discoveryDocumentUri',
+  /// Parses a persisted discovery document [OidcProviderMetadata] from [raw],
+  /// removing the stored key on a parse failure. Returns `null` when [raw] is
+  /// null or unparseable.
+  Future<OidcProviderMetadata?> _parseCachedDiscovery(
+    String key,
+    String? raw,
+  ) async {
+    if (raw == null) {
+      return null;
+    }
+    try {
+      return OidcProviderMetadata.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
       );
+    } on Object catch (e, st) {
+      logger.warning(
+        "Found a cached discovery document at key: $key, but couldn't parse it.\n"
+        'Removing the bad key now.\n'
+        'cached document: $raw',
+        e,
+        st,
+      );
+      await store
+          .remove(OidcStoreNamespace.discoveryDocument, key: key)
+          .onError((error, stackTrace) => null);
+      return null;
+    }
+  }
+
+  /// Loads the discovery document from the [OidcStore] only (no network),
+  /// applying [OidcUserManagerSettings.metadataSeed] and issuer validation.
+  /// Returns `true` when a usable document is available (either eagerly-supplied
+  /// or cached), `false` otherwise. Used by the [OidcInitMode.cacheFirst] path.
+  Future<bool> _loadDiscoveryFromCacheOnly() async {
+    if (currentDiscoveryDocument != null) {
+      // Eagerly-supplied document.
+      _validateDiscoveryIssuer();
+      return true;
+    }
+    final uri = discoveryDocumentUri;
+    if (uri == null) {
+      return false;
     }
     final key = uri.toString();
-    final cachedDocument = await store.get(
+    final cached = await _parseCachedDiscovery(
+      key,
+      await store.get(
+        OidcStoreNamespace.discoveryDocument,
+        key: key,
+        managerId: id,
+      ),
+    );
+    if (cached == null) {
+      return false;
+    }
+    currentDiscoveryDocument = _applyMetadataSeed(cached);
+    _validateDiscoveryIssuer();
+    return true;
+  }
+
+  /// Returns `true` when the persisted discovery document is older than
+  /// [OidcUserManagerSettings.discoveryDocumentMaxAge] (or its age is unknown).
+  /// Eagerly-supplied documents (no [discoveryDocumentUri]) are never stale.
+  Future<bool> _isDiscoveryStale() async {
+    final uri = discoveryDocumentUri;
+    if (uri == null) {
+      return false;
+    }
+    final maxAge = settings.discoveryDocumentMaxAge;
+    if (maxAge <= Duration.zero) {
+      return true;
+    }
+    final sidecar = await store.get(
       OidcStoreNamespace.discoveryDocument,
-      key: key,
+      key: '$uri$discoveryFetchedAtSuffix',
       managerId: id,
     );
-    if (cachedDocument != null) {
-      try {
-        ///try loading the document
-        currentDiscoveryDocument = OidcProviderMetadata.fromJson(
-          jsonDecode(cachedDocument) as Map<String, dynamic>,
-        );
-      } on Object catch (e, st) {
-        //swallow error.
-        //remove the cached document.
-        logger.warning(
-          "Found a cached discovery document at key: $key, but couldn't parse it.\n"
-          'Removing the bad key now.\n'
-          'cached document: $cachedDocument',
-          e,
-          st,
-        );
-        await store
-            .remove(OidcStoreNamespace.discoveryDocument, key: key)
-            .onError((error, stackTrace) => null);
-      }
+    final ms = sidecar == null ? null : int.tryParse(sidecar);
+    if (ms == null) {
+      return true;
     }
+    final fetchedAt = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+    return clock.now().toUtc().difference(fetchedAt) > maxAge;
+  }
 
+  /// Background (cache-first) discovery refresh: re-fetches from the network
+  /// only when the persisted document is stale, keeping the cached document as
+  /// an offline fallback on failure.
+  Future<void> _refreshDiscoveryInBackgroundIfStale() async {
+    final uri = discoveryDocumentUri;
+    if (uri == null) {
+      return;
+    }
+    if (!await _isDiscoveryStale()) {
+      return;
+    }
+    await _fetchAndApplyDiscovery(uri);
+    // A refreshed document may advertise a new jwks_uri.
+    setupKeyStore();
+  }
+
+  /// Fetches the discovery document from the network for [uri], verifies signed
+  /// metadata (when enabled), validates the issuer, persists the document with a
+  /// fresh fetched-at timestamp, and applies
+  /// [OidcUserManagerSettings.metadataSeed] in memory.
+  ///
+  /// On a network failure the previously-loaded [currentDiscoveryDocument]
+  /// (cache) is kept as an offline fallback when present; only when there is no
+  /// fallback does this throw.
+  Future<void> _fetchAndApplyDiscovery(Uri uri) async {
+    final key = uri.toString();
+    var fetched = false;
     try {
       currentDiscoveryDocument = await OidcEndpoints.getProviderMetadata(
         uri,
         client: httpClient,
       );
+      fetched = true;
     } catch (e, st) {
       //maybe there is no internet.
       if (currentDiscoveryDocument == null) {
@@ -2659,6 +2782,13 @@ abstract class OidcUserManagerBase {
           },
         );
       }
+      // Keep the cached document as an offline fallback (do NOT re-persist or
+      // refresh its timestamp — it stays as stale as it really is). Still
+      // issuer-validate it: a poisoned cache must never be trusted, even offline
+      // (mirrors the pre-refactor validate-before-use behavior).
+      _validateDiscoveryIssuer();
+      currentDiscoveryDocument = _applyMetadataSeed(currentDiscoveryDocument!);
+      return;
     }
 
     // RFC 8414 §2.1/§3.2: when enabled, verify the document's `signed_metadata`
@@ -2698,16 +2828,87 @@ abstract class OidcUserManagerBase {
       }
     }
 
-    // Validate the final document (cache- or network-sourced) BEFORE persisting,
-    // so a mismatched/poisoned document is never written to the store.
+    // Validate the final document (network-sourced) BEFORE persisting, so a
+    // mismatched/poisoned document is never written to the store.
     _validateDiscoveryIssuer();
 
-    await store.set(
+    // Persist the raw fetched document + a fresh fetched-at timestamp together
+    // (mirrors OidcJwksStoreLoader). Only reached on a successful fetch, so the
+    // TTL timestamp never advances while serving a stale offline copy.
+    if (fetched) {
+      await store.setMany(
+        OidcStoreNamespace.discoveryDocument,
+        values: {
+          key: jsonEncode(currentDiscoveryDocument!.src),
+          '$key$discoveryFetchedAtSuffix': clock
+              .now()
+              .toUtc()
+              .millisecondsSinceEpoch
+              .toString(),
+        },
+        managerId: id,
+      );
+    }
+
+    // Apply the seed in memory AFTER persistence so the seed is never baked
+    // into the cache (fetched/cached values still override it).
+    currentDiscoveryDocument = _applyMetadataSeed(currentDiscoveryDocument!);
+  }
+
+  /// First gets the cached discoveryDocument if any
+  /// (based on discoveryDocumentUri).
+  ///
+  /// Then tries to get it from the network, unless a cached document exists and
+  /// is still within [OidcUserManagerSettings.discoveryDocumentMaxAge] (in which
+  /// case the network fetch is skipped).
+  @protected
+  Future<void> ensureDiscoveryDocument() async {
+    final uri = discoveryDocumentUri;
+
+    if (currentDiscoveryDocument != null) {
+      // An eagerly-supplied discoveryDocument (eager constructor, where
+      // discoveryDocumentUri is null) is still validated against
+      // `settings.expectedIssuer`.
+      _validateDiscoveryIssuer();
+      return;
+    }
+
+    if (uri == null) {
+      logAndThrow(
+        'Impossible case of no discoveryDocument and no discoveryDocumentUri',
+      );
+    }
+    final key = uri.toString();
+    final cachedValues = await store.getMany(
       OidcStoreNamespace.discoveryDocument,
-      key: key,
-      value: jsonEncode(discoveryDocument.src),
+      keys: {key, '$key$discoveryFetchedAtSuffix'},
       managerId: id,
     );
+    final cachedMetadata = await _parseCachedDiscovery(
+      key,
+      cachedValues[key],
+    );
+    // Keep the cached document as the offline fallback for the network fetch.
+    currentDiscoveryDocument = cachedMetadata;
+
+    // TTL cache: within `discoveryDocumentMaxAge`, skip the network fetch and
+    // use the cached document (matching the JWKS loader's timestamp scheme).
+    if (cachedMetadata != null &&
+        settings.discoveryDocumentMaxAge > Duration.zero) {
+      final tsRaw = cachedValues['$key$discoveryFetchedAtSuffix'];
+      final ms = tsRaw == null ? null : int.tryParse(tsRaw);
+      if (ms != null) {
+        final fetchedAt = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+        final age = clock.now().toUtc().difference(fetchedAt);
+        if (age <= settings.discoveryDocumentMaxAge) {
+          currentDiscoveryDocument = _applyMetadataSeed(cachedMetadata);
+          _validateDiscoveryIssuer();
+          return;
+        }
+      }
+    }
+
+    await _fetchAndApplyDiscovery(uri);
   }
 
   /// OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3: the discovery document's `issuer`
@@ -2779,8 +2980,13 @@ abstract class OidcUserManagerBase {
   }
 
   /// Loads and verifies the tokens.
+  ///
+  /// When [forceRebuild] is `true`, the user is rebuilt from scratch (verifying
+  /// the id_token signature) rather than replacing the token on the current
+  /// user — used by cache-first background revalidation, whose surfaced user was
+  /// restored locally without verification.
   @protected
-  Future<void> loadCachedTokens() async {
+  Future<void> loadCachedTokens({bool forceRebuild = false}) async {
     final usedKeys = <String>{
       OidcConstants_Store.currentToken,
       OidcConstants_Store.currentUserAttributes,
@@ -2799,6 +3005,11 @@ abstract class OidcUserManagerBase {
       return;
     }
 
+    // Captured (when available) so the discard branch can consult
+    // [OidcUserManagerSettings.shouldRemoveInvalidToken] with the same user +
+    // validation errors that were evaluated.
+    OidcUser? policyUser;
+    var policyErrors = const <Exception>[];
     try {
       final decodedAttributes = rawAttributes == null
           ? null
@@ -2817,48 +3028,71 @@ abstract class OidcUserManagerBase {
         userInfo: decodedUserInfo,
         metadata: metadata,
         validateAndSave: false,
+        ignoreCurrentUser: forceRebuild,
       );
       if (loadedUser != null) {
         final validationErrors = validateUser(
           user: loadedUser,
           metadata: metadata,
         );
-        final idTokenNeedsRefresh = validationErrors
-            .whereType<JoseException>()
-            .any((element) => element.message.startsWith('JWT expired'));
+        policyUser = loadedUser;
+        policyErrors = validationErrors;
 
-        if (token.refreshToken != null &&
-            (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
-          // #120: _refreshToken owns the failure signalling and offline
-          // handling for this path now. Passing source: startupLoad makes the
-          // single OidcTokenRefreshFailedEvent it emits carry the correct
-          // source, and its internal handleOfflineEligibleFailure is the single
-          // offline-handling pass. A failure that offline mode absorbs returns
-          // the cached [loadedUser] (so we continue with cached state); a
-          // terminal / offline-disabled failure rethrows to the outer catch
-          // below, which clears the invalid tokens when offline auth is off.
-          // This removes the previous double-signal (two events + two
-          // offline-handling passes) per startup refresh failure.
-          final refreshedUser = await _refreshToken(
-            overrideRefreshToken: token.refreshToken,
-            currentUserOverride: loadedUser,
-            source: OidcTokenRefreshSource.startupLoad,
-          );
-          if (refreshedUser != null) {
-            loadedUser = refreshedUser;
-          }
-        }
-        // [loadedUser] is provably non-null here (we are inside the
-        // `loadedUser != null` guard above and only ever reassign it to a
-        // non-null refreshed user), so it is passed directly to validation.
-        loadedUser = await validateAndSaveUser(
-          user: loadedUser,
-          metadata: metadata,
-          // #302: this validates a resumed (already-established) session, so a
-          // UserInfo 401 from a revoked access token should trigger the
-          // recover-via-refresh + typed-event reaction.
-          reactToUserInfoUnauthorized: true,
+        // Developer control (#205): let callers override whether the loaded
+        // token is acceptable, evaluated with the validation error list BEFORE
+        // the default refresh / discard policy. `null` keeps current behavior.
+        final acceptable = settings.isLoadedTokenAcceptable?.call(
+          loadedUser,
+          validationErrors,
         );
+        if (acceptable == true) {
+          // Explicitly accepted: surface the loaded user as-is, skipping the
+          // refresh / userinfo round-trips.
+          await saveUser(loadedUser);
+          userSubject.add(loadedUser);
+          return;
+        }
+        if (acceptable == false) {
+          // Explicitly rejected: fall through to the discard branch.
+          loadedUser = null;
+        } else {
+          final idTokenNeedsRefresh = validationErrors
+              .whereType<JoseException>()
+              .any((element) => element.message.startsWith('JWT expired'));
+
+          if (token.refreshToken != null &&
+              (idTokenNeedsRefresh || token.isAccessTokenExpired())) {
+            // #120: _refreshToken owns the failure signalling and offline
+            // handling for this path now. Passing source: startupLoad makes the
+            // single OidcTokenRefreshFailedEvent it emits carry the correct
+            // source, and its internal handleOfflineEligibleFailure is the
+            // single offline-handling pass. A failure that offline mode absorbs
+            // returns the cached [loadedUser] (so we continue with cached
+            // state); a terminal / offline-disabled failure rethrows to the
+            // outer catch below, which then consults shouldRemoveInvalidToken
+            // (#205). This removes the previous double-signal (two events + two
+            // offline-handling passes) per startup refresh failure.
+            final refreshedUser = await _refreshToken(
+              overrideRefreshToken: token.refreshToken,
+              currentUserOverride: loadedUser,
+              source: OidcTokenRefreshSource.startupLoad,
+            );
+            if (refreshedUser != null) {
+              loadedUser = refreshedUser;
+            }
+          }
+          // [loadedUser] is provably non-null here (this branch is only entered
+          // with a non-null user and only ever reassigns it to a non-null
+          // refreshed user), so it is passed directly to validation.
+          loadedUser = await validateAndSaveUser(
+            user: loadedUser,
+            metadata: metadata,
+            // #302: this validates a resumed (already-established) session, so a
+            // UserInfo 401 from a revoked access token should trigger the
+            // recover-via-refresh + typed-event reaction.
+            reactToUserInfoUnauthorized: true,
+          );
+        }
       }
 
       if (loadedUser == null) {
@@ -2867,7 +3101,17 @@ abstract class OidcUserManagerBase {
         );
       }
     } on Object catch (_) {
-      if (!settings.supportOfflineAuth) {
+      // Developer control (#205): let callers override the keep/discard
+      // decision. `null` (default) removes the tokens unless offline auth is
+      // enabled — the current behavior, preserved exactly.
+      final shouldRemove = policyUser == null
+          ? !settings.supportOfflineAuth
+          : (settings.shouldRemoveInvalidToken?.call(
+                  policyUser,
+                  policyErrors,
+                ) ??
+                !settings.supportOfflineAuth);
+      if (shouldRemove) {
         // remove invalid tokens, so that they don't get used again.
         await store.removeMany(
           OidcStoreNamespace.secureTokens,
@@ -2988,33 +3232,89 @@ abstract class OidcUserManagerBase {
     );
   }
 
+  /// Registers the id_token verification keys with [keyStore] from the current
+  /// [discoveryDocument]'s `jwks_uri` and (for HS* id_tokens) the client secret.
+  @protected
+  void setupKeyStore() {
+    final jwksUri = currentDiscoveryDocument?.jwksUri;
+    if (jwksUri != null) {
+      keyStore.addKeySetUrl(jwksUri);
+    }
+    final clientSecret = clientCredentials.clientSecret;
+    if (clientSecret != null) {
+      // RFC 7518 §3.2 / OIDC Core §16.19: HS256/384/512 id_tokens are
+      // MAC-signed with the client_secret octets as the key. Register it as an
+      // `oct` key so symmetric id_token signatures can be verified. Without
+      // this, HS*-signed id_tokens were unverifiable. The extra key is inert
+      // for RS*/ES* tokens (those still verify via the jwks_uri keys above).
+      keyStore.addKey(
+        JsonWebKey.fromJson({
+          'kty': 'oct',
+          'k': base64Url.encode(utf8.encode(clientSecret)).replaceAll('=', ''),
+          'use': 'sig',
+        }),
+      );
+    }
+  }
+
+  /// Attaches the manager's lifecycle stream subscriptions (front-channel
+  /// logout, token-refresh scheduling, session monitoring, token-expiry, and
+  /// native browser events). Shared by both `init()` code paths.
+  @protected
+  void attachLifecycleListeners() {
+    final frontChannelLogoutUri = settings.frontChannelLogoutUri;
+    if (frontChannelLogoutUri != null) {
+      toDispose.add(
+        listenToFrontChannelLogoutRequests(
+          frontChannelLogoutUri,
+          settings.frontChannelRequestListeningOptions,
+        ).listen(handleFrontChannelLogoutRequest),
+      );
+    }
+
+    //start listening to token events, if the user enabled them.
+
+    toDispose
+      ..add(
+        userSubject.listen(
+          (value) => listenToTokenRefreshIfSupported(tokenEvents, value),
+        ),
+      )
+      ..add(userSubject.listen(listenToUserSessionIfSupported))
+      ..add(tokenEvents.expiring.listen(handleTokenExpiring))
+      ..add(tokenEvents.expired.listen(handleTokenExpired))
+      // Surface native browser-layer observability through events().
+      ..add(listenToNativeBrowserEvents().listen(emitEvent));
+  }
+
   /// Initializes the user manager, this also gets the [discoveryDocument] if it
   /// wasn't provided.
+  ///
+  /// The restore behavior depends on [OidcUserManagerSettings.initMode]:
+  /// - [OidcInitMode.cacheFirst] (the **default**): a cached user is restored
+  ///   by a pure local deserialize (no network) and `init()` completes
+  ///   immediately, then the user is revalidated in the background. When there
+  ///   is no cached user / cached discovery document, this transparently falls
+  ///   back to the blocking network path below. Note this surfaces the user
+  ///   through [userChanges] TWICE on a cold start (restored-then-revalidated) —
+  ///   see [OidcInitMode.cacheFirst] for why the second emission is intentional.
+  /// - [OidcInitMode.blockingValidate]: the previous semantics — block until
+  ///   the discovery document is fetched and the cached token fully re-verified.
+  ///   Not a byte-for-byte replica of the pre-1.0 network behavior unless
+  ///   combined with `discoveryDocumentMaxAge: Duration.zero` (the discovery
+  ///   document is otherwise served from its TTL cache).
   Future<void> init() {
     return initMemoizer.runOnce(() async {
       await store.init();
+      if (settings.initMode == OidcInitMode.cacheFirst &&
+          await _tryCacheFirstInit()) {
+        attachLifecycleListeners();
+        return;
+      }
+      // Blocking / network path (the [OidcInitMode.blockingValidate] semantics,
+      // also the fallback when cache-first has nothing to restore).
       await ensureDiscoveryDocument();
-      final jwksUri = discoveryDocument.jwksUri;
-      if (jwksUri != null) {
-        keyStore.addKeySetUrl(jwksUri);
-      }
-      final clientSecret = clientCredentials.clientSecret;
-      if (clientSecret != null) {
-        // RFC 7518 §3.2 / OIDC Core §16.19: HS256/384/512 id_tokens are
-        // MAC-signed with the client_secret octets as the key. Register it as an
-        // `oct` key so symmetric id_token signatures can be verified. Without
-        // this, HS*-signed id_tokens were unverifiable. The extra key is inert
-        // for RS*/ES* tokens (those still verify via the jwks_uri keys above).
-        keyStore.addKey(
-          JsonWebKey.fromJson({
-            'kty': 'oct',
-            'k': base64Url
-                .encode(utf8.encode(clientSecret))
-                .replaceAll('=', ''),
-            'use': 'sig',
-          }),
-        );
-      }
+      setupKeyStore();
       await clearUnusedStates();
       if (!await loadLogoutRequests()) {
         //no logout requests.
@@ -3023,30 +3323,164 @@ abstract class OidcUserManagerBase {
           await loadCachedTokens();
         }
       }
-      final frontChannelLogoutUri = settings.frontChannelLogoutUri;
-      if (frontChannelLogoutUri != null) {
-        toDispose.add(
-          listenToFrontChannelLogoutRequests(
-            frontChannelLogoutUri,
-            settings.frontChannelRequestListeningOptions,
-          ).listen(handleFrontChannelLogoutRequest),
-        );
-      }
-
-      //start listening to token events, if the user enabled them.
-
-      toDispose
-        ..add(
-          userSubject.listen(
-            (value) => listenToTokenRefreshIfSupported(tokenEvents, value),
-          ),
-        )
-        ..add(userSubject.listen(listenToUserSessionIfSupported))
-        ..add(tokenEvents.expiring.listen(handleTokenExpiring))
-        ..add(tokenEvents.expired.listen(handleTokenExpired))
-        // Surface native browser-layer observability through events().
-        ..add(listenToNativeBrowserEvents().listen(emitEvent));
+      attachLifecycleListeners();
     });
+  }
+
+  /// Attempts the [OidcInitMode.cacheFirst] restore: deserialize the cached user
+  /// purely from the [OidcStore] (no network) and schedule background
+  /// revalidation. Returns `false` (leaving state untouched for the blocking
+  /// path) when there is nothing to restore locally, a redirect/logout result
+  /// is pending, or the local restore fails.
+  Future<bool> _tryCacheFirstInit() async {
+    // No cached token → nothing to restore; use the network path.
+    final rawToken = await store.get(
+      OidcStoreNamespace.secureTokens,
+      key: OidcConstants_Store.currentToken,
+      managerId: id,
+    );
+    if (rawToken == null) {
+      return false;
+    }
+    // A pending redirect result or front-channel logout is the interactive
+    // path (it needs the network); defer to the blocking path.
+    if ((await store.getStatesWithResponses()).isNotEmpty) {
+      return false;
+    }
+    if (await store.getCurrentFrontChannelLogoutRequest() != null) {
+      return false;
+    }
+    // Need a locally-available discovery document (no network) to build the
+    // user; otherwise fall back to the network path.
+    if (!await _loadDiscoveryFromCacheOnly()) {
+      return false;
+    }
+    setupKeyStore();
+    await clearUnusedStates();
+    final restored = await _restoreCachedUserLocally();
+    if (restored == null) {
+      // Couldn't restore locally; reset the (cache-only) discovery document so
+      // the network path re-fetches it. Keep an eagerly-supplied document.
+      if (discoveryDocumentUri != null) {
+        currentDiscoveryDocument = null;
+      }
+      return false;
+    }
+    // #201: arm the gate BEFORE returning (so it is set before `init()` attaches
+    // the lifecycle listeners and the restored-user replay arms the expiry
+    // timers). The background pass owns the first refresh; the expiry-driven
+    // auto-refresh stays suppressed until [_scheduleBackgroundRevalidation]
+    // clears the gate.
+    _cacheFirstRevalidationInFlight = true;
+    unawaited(_scheduleBackgroundRevalidation(restored));
+    return true;
+  }
+
+  /// Deserializes and surfaces the cached user WITHOUT any network access
+  /// (no signature verification, no refresh, no userinfo). Returns the restored
+  /// user, or `null` when there is no usable cached token.
+  Future<OidcUser?> _restoreCachedUserLocally() async {
+    final tokens = await store.getMany(
+      OidcStoreNamespace.secureTokens,
+      keys: {
+        OidcConstants_Store.currentToken,
+        OidcConstants_Store.currentUserAttributes,
+        OidcConstants_Store.currentUserInfo,
+      },
+      managerId: id,
+    );
+    final rawToken = tokens[OidcConstants_Store.currentToken];
+    if (rawToken == null) {
+      return null;
+    }
+    try {
+      final rawUserInfo = tokens[OidcConstants_Store.currentUserInfo];
+      final rawAttributes = tokens[OidcConstants_Store.currentUserAttributes];
+      final decodedAttributes = rawAttributes == null
+          ? null
+          : jsonDecode(rawAttributes) as Map<String, dynamic>;
+      final decodedUserInfo = rawUserInfo == null
+          ? null
+          : jsonDecode(rawUserInfo) as Map<String, dynamic>;
+      final token = OidcToken.fromJson(
+        jsonDecode(rawToken) as Map<String, dynamic>,
+      );
+      // Pure-local restore: pass `keystore: null` so `OidcUser.fromIdToken`
+      // parses the id_token unverified (`JsonWebToken.unverified`) instead of
+      // fetching the JWKS. The token was already verified when it was saved;
+      // the scheduled background revalidation re-verifies it against the network.
+      final user = await OidcUser.fromIdToken(
+        token: token,
+        attributes: decodedAttributes,
+        userInfo: decodedUserInfo,
+      );
+      userSubject.add(user);
+      return user;
+    } on Object catch (e, st) {
+      logger.warning(
+        'cache-first init: failed to restore the cached user locally; '
+        'falling back to the network path.',
+        e,
+        st,
+      );
+      return null;
+    }
+  }
+
+  /// Runs the cache-first background revalidation after `init()` has completed.
+  ///
+  /// Refreshes the discovery document if it is stale, then re-runs the full
+  /// [loadCachedTokens] validation (re-verify, refresh-if-expired, userinfo,
+  /// save) so the outcome is surfaced through [userChanges]/[events]. If the
+  /// token is discarded as invalid (and offline auth is not keeping it), the
+  /// stale restored user is forgotten.
+  Future<void> _scheduleBackgroundRevalidation(OidcUser restoredUser) async {
+    // Wait until init() has fully returned (didInit == true) before touching
+    // init-guarded getters.
+    await initFuture;
+    try {
+      await _refreshDiscoveryInBackgroundIfStale();
+      await loadCachedTokens(forceRebuild: true);
+      // Reconcile the optimistically-surfaced restore with the authoritative
+      // [loadCachedTokens] outcome so cache-first converges on exactly what
+      // blockingValidate would have surfaced.
+      //
+      // [loadCachedTokens] REPLACES the surfaced user (a freshly-rebuilt object,
+      // `ignoreCurrentUser: true`) on every path where it accepts a token —
+      // refresh success, an explicit `isLoadedTokenAcceptable == true`, or a
+      // clean validation. So if `currentUser` is STILL the exact restored object
+      // afterwards, the pass rejected/discarded that token (policy or
+      // validation) and surfaced no replacement — blockingValidate would show no
+      // user here.
+      //
+      // #201/#205: retract it IN-MEMORY regardless of whether the on-disk copy
+      // was removed. The on-disk retention is a SEPARATE decision owned by
+      // `shouldRemoveInvalidToken` / `supportOfflineAuth`; a policy that KEEPS a
+      // rejected token on disk (reject-but-keep) must not leave that rejected
+      // user logged in — matching blockingValidate, which keeps the disk tokens
+      // yet surfaces no user under identical settings.
+      if (!_isDisposed && identical(currentUser, restoredUser)) {
+        emitEvent(OidcPreLogoutEvent.now(currentUser: restoredUser));
+        // Surface null WITHOUT clearing the store: `forgetUser()` would delete
+        // the secureTokens namespace and defeat a reject-but-keep policy. The
+        // null userChange also unloads the token-events timers (via the
+        // userSubject listener), retiring the stale expired token's timers.
+        userSubject.add(null);
+      }
+    } on Object catch (e, st) {
+      logger.warning(
+        'cache-first init: background revalidation failed.',
+        e,
+        st,
+      );
+    } finally {
+      // Re-arm normal on-expiry auto-refresh now that the background pass has
+      // settled. On success the winning token already re-armed the timers; on
+      // rejection the retraction above unloaded them. Either way subsequent real
+      // expiries must go through [handleTokenExpiring] / [handleTokenExpired]
+      // again.
+      _cacheFirstRevalidationInFlight = false;
+    }
   }
 
   /// Disposes the resources used by this class.
