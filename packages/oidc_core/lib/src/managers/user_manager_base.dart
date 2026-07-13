@@ -86,6 +86,36 @@ abstract class OidcUserManagerBase {
   @protected
   final eventsController = StreamController<OidcEvent>.broadcast();
 
+  /// Whether [dispose] has been called on this manager.
+  ///
+  /// Async work started before disposal — most notably an in-flight automatic
+  /// refresh whose (possibly delayed) token response only lands after
+  /// [dispose] — checks this so its completion becomes a COMPLETE no-op: no
+  /// event, no user mutation, no `forgetUser`. Without it a refresh that
+  /// outlives the manager threw `Bad state: Cannot add new events after
+  /// calling close` from [eventsController] and mutated a torn-down manager.
+  bool _isDisposed = false;
+
+  /// Whether [dispose] has been called on this manager.
+  bool get isDisposed => _isDisposed;
+
+  /// Emits [event] on [eventsController], tolerating a closed controller.
+  ///
+  /// Mirrors [OidcValueStream.add]'s documented close-tolerance: an emit that
+  /// races [dispose] (e.g. from an async refresh that outlived the manager) is
+  /// ignored rather than throwing `Bad state: Cannot add new events after
+  /// calling close`. All event emissions on this class route through here.
+  @protected
+  void emitEvent(OidcEvent event) {
+    if (eventsController.isClosed) {
+      logger.finest(
+        'Ignoring ${event.runtimeType} emitted after the manager was disposed.',
+      );
+      return;
+    }
+    eventsController.add(event);
+  }
+
   /// Tracks when offline mode was entered, null if not in offline mode
   DateTime? offlineModeStartedAt;
 
@@ -669,7 +699,7 @@ abstract class OidcUserManagerBase {
     );
     final currentUser = this.currentUser;
     if (currentUser != null) {
-      eventsController.add(
+      emitEvent(
         OidcPreLogoutEvent.now(currentUser: currentUser),
       );
       userSubject.add(null);
@@ -1551,7 +1581,7 @@ abstract class OidcUserManagerBase {
       // drives it). For the manual path this is the intentional double-signal:
       // observers get the event while the awaiting caller still gets the throw
       // below (MSAL pattern).
-      eventsController.add(
+      emitEvent(
         OidcTokenRefreshFailedEvent.fromError(
           error: e,
           stackTrace: st,
@@ -1595,7 +1625,7 @@ abstract class OidcUserManagerBase {
 
   @protected
   Future<void> handleTokenExpiring(OidcToken event) async {
-    eventsController.add(
+    emitEvent(
       OidcTokenExpiringEvent.now(currentToken: event),
     );
     // Automatic refresh-on-expiry is gated on POSSESSION of a refresh_token, not
@@ -1674,6 +1704,19 @@ abstract class OidcUserManagerBase {
           );
         },
       );
+      // Post-dispose safety: if the manager was torn down while this
+      // (possibly delayed) refresh was in flight, the outcome must be a
+      // COMPLETE no-op — no user save/mutation via [createUserFromToken], no
+      // `recordSuccessfulServerContact`, no event. Returning the neutral
+      // `(null, null)` also leaves [handleTokenExpired]'s forget decision a
+      // no-op (it only forgets on a `terminal` failureKind).
+      if (_isDisposed) {
+        logger.finest(
+          'Auto-refresh succeeded after the manager was disposed; '
+          'ignoring the new token.',
+        );
+        return (user: null, failureKind: null);
+      }
       newUser = await createUserFromToken(
         token: OidcToken.fromResponse(
           tokenResponse,
@@ -1691,6 +1734,18 @@ abstract class OidcUserManagerBase {
       logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
       return (user: newUser, failureKind: null);
     } on Object catch (e, st) {
+      // Post-dispose safety: a refresh that FAILS after the manager was torn
+      // down must also be a COMPLETE no-op — no failure event, no offline
+      // handling, no retry timer. Swallow it with a trace log.
+      if (_isDisposed) {
+        logger.finest(
+          'Auto-refresh failed after the manager was disposed; '
+          'ignoring the failure.',
+          e,
+          st,
+        );
+        return (user: null, failureKind: null);
+      }
       // #120: a transient failure that offline handling will absorb schedules a
       // retry; a terminal failure (e.g. invalid_grant) or a disabled offline
       // path does not. Compute this up front so the failure event carries an
@@ -1708,7 +1763,7 @@ abstract class OidcUserManagerBase {
         source: OidcTokenRefreshSource.autoExpiry,
         willRetry: willRetry,
       );
-      eventsController.add(failedEvent);
+      emitEvent(failedEvent);
 
       final handledOffline = handleOfflineEligibleFailure(
         error: e,
@@ -1753,7 +1808,7 @@ abstract class OidcUserManagerBase {
   }) {
     if (offlineModeStartedAt == null) {
       offlineModeStartedAt = clock.now();
-      eventsController.add(
+      emitEvent(
         OidcOfflineModeEnteredEvent.now(
           reason: reason,
           currentToken: currentToken,
@@ -1774,7 +1829,7 @@ abstract class OidcUserManagerBase {
     if (offlineModeStartedAt != null) {
       offlineModeStartedAt = null;
       consecutiveRefreshFailures = 0;
-      eventsController.add(
+      emitEvent(
         OidcOfflineModeExitedEvent.now(
           networkRestored: networkRestored,
           newToken: newToken,
@@ -1792,7 +1847,7 @@ abstract class OidcUserManagerBase {
     required String message,
     Duration? tokenExpiredSince,
   }) {
-    eventsController.add(
+    emitEvent(
       OidcOfflineAuthWarningEvent.now(
         warningType: warningType,
         message: message,
@@ -1815,7 +1870,7 @@ abstract class OidcUserManagerBase {
 
   @protected
   void handleTokenExpired(OidcToken event) {
-    eventsController.add(
+    emitEvent(
       OidcTokenExpiredEvent.now(currentToken: event),
     );
 
@@ -1848,6 +1903,14 @@ abstract class OidcUserManagerBase {
       }
       unawaited(
         _autoRefresh(event).then((result) async {
+          // Post-dispose safety: never forget (a user mutation + store write)
+          // once the manager is torn down. [_performAutoRefresh] already
+          // returns the neutral `(null, null)` when disposed, so `failureKind`
+          // is never `terminal` here; this is a defensive second gate against
+          // a dispose that races the completion.
+          if (_isDisposed) {
+            return;
+          }
           if (result.user == null &&
               result.failureKind == OidcTokenRefreshFailureKind.terminal) {
             await forgetUser();
@@ -2862,12 +2925,35 @@ abstract class OidcUserManagerBase {
         ..add(tokenEvents.expiring.listen(handleTokenExpiring))
         ..add(tokenEvents.expired.listen(handleTokenExpired))
         // Surface native browser-layer observability through events().
-        ..add(listenToNativeBrowserEvents().listen(eventsController.add));
+        ..add(listenToNativeBrowserEvents().listen(emitEvent));
     });
   }
 
   /// Disposes the resources used by this class.
   Future<void> dispose() async {
+    // Flip the disposed flag BEFORE tearing anything down so an in-flight
+    // auto-refresh whose response lands mid-dispose observes it and no-ops
+    // (see [isDisposed] / [_performAutoRefresh]).
+    _isDisposed = true;
+    // The shared in-flight auto-refresh already swallows its own outcome once
+    // disposed, but latch onto it here too so its settling can never surface an
+    // unhandled error into the zone after teardown. Mirrors how the other
+    // in-flight subscriptions below are cancelled rather than left dangling.
+    final inFlightRefresh = _autoRefreshInFlight;
+    if (inFlightRefresh != null) {
+      unawaited(
+        inFlightRefresh.then(
+          (_) {},
+          onError: (Object e, StackTrace st) {
+            logger.finest(
+              'In-flight auto-refresh settled after dispose; swallowed.',
+              e,
+              st,
+            );
+          },
+        ),
+      );
+    }
     await sessionSub?.cancel();
     await tokenEvents.dispose();
     await userSubject.close();
