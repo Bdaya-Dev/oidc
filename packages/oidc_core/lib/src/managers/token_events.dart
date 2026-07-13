@@ -42,28 +42,40 @@ class OidcTokenEventsManager {
         'expiringNotificationTime is null, expiring notifications are disabled.',
       );
     } else {
-      if (expiresInFromNow < expiringNotificationTime) {
-        //going to expire.
-        logger.finest(
-          'loaded token was already expiring, raised expiring event.',
-        );
+      // #123: clamp the effective notification lead to at most HALF the token's
+      // total lifetime. A configured lead that is larger than (or close to) the
+      // token lifetime would otherwise place the expiring instant at or before
+      // "now" for a freshly-issued token, firing 'expiring' immediately →
+      // refresh → new (equally short) token → immediate re-fire = a tight
+      // infinite refresh loop. Clamping to half-life guarantees the timer is
+      // strictly in the future for a live token, bounding refreshes to at most
+      // once per half-life. The synchronous fire path is removed entirely: the
+      // event is always delivered from a timer, never during load().
+      final totalLifetime = token.expiresIn;
+      var effectiveNotificationTime = expiringNotificationTime;
+      if (totalLifetime != null) {
+        final halfLifetime = totalLifetime ~/ 2;
+        if (halfLifetime < effectiveNotificationTime) {
+          effectiveNotificationTime = halfLifetime;
+        }
+      }
+      final timeUntilExpiring = expiresInFromNow - effectiveNotificationTime;
+      // Never fire synchronously during load. If the (clamped) instant is
+      // already in the past — e.g. a cached token loaded near expiry — schedule
+      // at zero delay so it is delivered on the next event-loop turn instead.
+      final expiringDelay = timeUntilExpiring.isNegative
+          ? Duration.zero
+          : timeUntilExpiring;
+      logger.finest(
+        'started a timer that will raise the expiring event '
+        'after: $expiringDelay',
+      );
+      _expiringTimer = Timer(expiringDelay, () {
+        logger.finest('raising expiring event.');
         if (!_expiringController.isClosed) {
           _expiringController.add(token);
         }
-      } else {
-        final timeUntilExpiring = expiresInFromNow - expiringNotificationTime;
-        logger.finest(
-          'started a timer that will raise the expiring event '
-          'after: $timeUntilExpiring',
-        );
-        //start a timer that will fire the expiring controller.
-        _expiringTimer = Timer(timeUntilExpiring, () {
-          logger.finest('raising expiring event.');
-          if (!_expiringController.isClosed) {
-            _expiringController.add(token);
-          }
-        });
-      }
+      });
     }
 
     if (expiresInFromNow.isNegative) {

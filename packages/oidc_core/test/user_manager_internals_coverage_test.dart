@@ -334,9 +334,23 @@ void main() {
 
   group('offline / expiry protected handlers', () {
     test(
-      'handleTokenExpired forgets the user without offline support',
+      'handleTokenExpired forgets the user on a TERMINAL refresh failure '
+      'without offline support (#154)',
       () async {
-        final client = MockClient((req) async => http.Response('{}', 404));
+        // #154: an expired token that still carries a refresh token is no
+        // longer forgotten unconditionally — the forget is deferred to the
+        // refresh outcome. A terminal failure (invalid_grant) is a genuinely
+        // dead session, so the user IS forgotten (after the failure event).
+        final client = MockClient((req) async {
+          if (req.url.path.endsWith('/token')) {
+            return http.Response(
+              jsonEncode({'error': 'invalid_grant'}),
+              400,
+              headers: const {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('{}', 404);
+        });
         final manager = _make(
           client: client,
           settings: OidcUserManagerSettings(
@@ -353,9 +367,13 @@ void main() {
         final sub = manager.events().listen(events.add);
 
         manager.handleTokenExpiredTest(user.token);
-        await Future<void>.delayed(Duration.zero);
+        await pumpEventQueue();
 
         expect(events.whereType<OidcTokenExpiredEvent>(), isNotEmpty);
+        expect(
+          events.whereType<OidcTokenRefreshFailedEvent>().single.kind,
+          OidcTokenRefreshFailureKind.terminal,
+        );
         expect(manager.currentUser, isNull);
         await sub.cancel();
         await manager.dispose();
