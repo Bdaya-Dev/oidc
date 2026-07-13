@@ -1,9 +1,12 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:clock/clock.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:jose_plus/jose.dart';
@@ -264,6 +267,298 @@ void main() {
       },
     );
   });
+
+  group('refresh failure events (#120 / #123 / #154)', () {
+    test(
+      't1: auto-refresh invalid_grant emits a TERMINAL failure event '
+      '(source=autoExpiry), KEEPS the user, and enters NO offline mode',
+      () async {
+        final client = MockClient((req) async {
+          if (req.url.path.endsWith('/jwks')) return _jwks();
+          if (req.url.path.endsWith('/token')) return _invalidGrant();
+          return http.Response('{}', 404);
+        });
+        final manager = await _buildManager(client);
+        addTearDown(manager.dispose);
+        final events = <OidcEvent>[];
+        final sub = manager.events().listen(events.add);
+
+        await manager.expire(_refreshableToken());
+        await pumpEventQueue();
+
+        final failure = events.whereType<OidcTokenRefreshFailedEvent>().single;
+        expect(failure.source, OidcTokenRefreshSource.autoExpiry);
+        expect(failure.kind, OidcTokenRefreshFailureKind.terminal);
+        expect(failure.oauthErrorCode, 'invalid_grant');
+        expect(failure.httpStatusCode, 400);
+        expect(failure.willRetry, isFalse);
+        expect(
+          manager.currentUser,
+          isNotNull,
+          reason:
+              'a terminal (invalid_grant) failure retains the user '
+              '(ecosystem-majority default); it does not forget it',
+        );
+        expect(
+          events.whereType<OidcOfflineModeEnteredEvent>(),
+          isEmpty,
+          reason: 'a terminal failure must not enter offline mode',
+        );
+        await sub.cancel();
+      },
+    );
+
+    test(
+      't2: auto-refresh network failure with supportOfflineAuth=true emits a '
+      'TRANSIENT failure event (willRetry) AND enters offline mode with '
+      'reason tokenRefreshFailed',
+      () async {
+        final client = MockClient((req) async {
+          if (req.url.path.endsWith('/jwks')) return _jwks();
+          if (req.url.path.endsWith('/token')) {
+            throw const SocketException('network down');
+          }
+          return http.Response('{}', 404);
+        });
+        final manager = await _buildManager(client, supportOfflineAuth: true);
+        addTearDown(manager.dispose);
+        final events = <OidcEvent>[];
+        final sub = manager.events().listen(events.add);
+
+        await manager.expire(_refreshableToken());
+        await pumpEventQueue();
+
+        final failure = events.whereType<OidcTokenRefreshFailedEvent>().single;
+        expect(failure.source, OidcTokenRefreshSource.autoExpiry);
+        expect(failure.kind, OidcTokenRefreshFailureKind.transient);
+        expect(failure.willRetry, isTrue);
+        final offline = events.whereType<OidcOfflineModeEnteredEvent>().single;
+        expect(offline.reason, OfflineModeReason.tokenRefreshFailed);
+        expect(manager.currentUser, isNotNull);
+        await sub.cancel();
+      },
+    );
+
+    test(
+      't3: auto-refresh network failure with supportOfflineAuth=false emits a '
+      'TRANSIENT failure event with willRetry=false and KEEPS the user',
+      () async {
+        final client = MockClient((req) async {
+          if (req.url.path.endsWith('/jwks')) return _jwks();
+          if (req.url.path.endsWith('/token')) {
+            throw const SocketException('network down');
+          }
+          return http.Response('{}', 404);
+        });
+        final manager = await _buildManager(client);
+        addTearDown(manager.dispose);
+        final events = <OidcEvent>[];
+        final sub = manager.events().listen(events.add);
+
+        await manager.expire(_refreshableToken());
+        await pumpEventQueue();
+
+        final failure = events.whereType<OidcTokenRefreshFailedEvent>().single;
+        expect(failure.source, OidcTokenRefreshSource.autoExpiry);
+        expect(failure.kind, OidcTokenRefreshFailureKind.transient);
+        expect(failure.willRetry, isFalse);
+        expect(events.whereType<OidcOfflineModeEnteredEvent>(), isEmpty);
+        expect(manager.currentUser, isNotNull);
+        await sub.cancel();
+      },
+    );
+
+    test(
+      't4: manual refreshToken() failure emits a failure event with '
+      'source=manual AND still throws the OidcException to the caller',
+      () async {
+        final client = MockClient((req) async {
+          if (req.url.path.endsWith('/jwks')) return _jwks();
+          if (req.url.path.endsWith('/token')) return _invalidGrant();
+          return http.Response('{}', 404);
+        });
+        final manager = await _buildManager(client);
+        addTearDown(manager.dispose);
+        final events = <OidcEvent>[];
+        final sub = manager.events().listen(events.add);
+
+        await expectLater(
+          manager.refreshToken(),
+          throwsA(isA<OidcException>()),
+        );
+        await pumpEventQueue();
+
+        final failure = events.whereType<OidcTokenRefreshFailedEvent>().single;
+        expect(failure.source, OidcTokenRefreshSource.manual);
+        expect(failure.oauthErrorCode, 'invalid_grant');
+        expect(failure.willRetry, isFalse);
+        await sub.cancel();
+      },
+    );
+
+    test(
+      't5 (#123): a refreshBefore lead GREATER than the token lifetime does '
+      'NOT cause a tight synchronous refresh loop (bounded to ~once/half-life)',
+      () {
+        fakeAsync(
+          (async) {
+            final tokenCalls = <http.Request>[];
+            final client = MockClient((req) async {
+              if (req.url.path.endsWith('/jwks')) return _jwks();
+              if (req.url.path.endsWith('/token')) {
+                tokenCalls.add(req);
+                // Every refresh returns an equally-short (60s) token.
+                return _tokenOk();
+              }
+              return http.Response('{}', 404);
+            });
+            // Lead (120s) is DOUBLE the 60s lifetime: without the half-life
+            // clamp this fired 'expiring' synchronously on every load → an
+            // unbounded tight refresh loop (issue #123).
+            unawaited(
+              _buildManager(
+                client,
+                refreshBefore: (_) => const Duration(seconds: 120),
+                seed: _shortUser,
+              ),
+            );
+            async
+              ..flushMicrotasks()
+              ..elapse(const Duration(minutes: 5));
+
+            expect(
+              tokenCalls,
+              isNotEmpty,
+              reason: 'a near-expiry token must still refresh',
+            );
+            expect(
+              tokenCalls.length,
+              lessThan(20),
+              reason:
+                  'the half-life clamp bounds refreshes to ~once per 30s '
+                  '(=10 over 5 min), not a tight synchronous loop',
+            );
+          },
+          initialTime: DateTime.utc(2024),
+        );
+      },
+    );
+
+    test(
+      't6 (#154): a transient failure on an expiring refreshable token never '
+      'forgets the user (user retained); the failure event is emitted',
+      () async {
+        final client = MockClient((req) async {
+          if (req.url.path.endsWith('/jwks')) return _jwks();
+          if (req.url.path.endsWith('/token')) {
+            throw const SocketException('network down');
+          }
+          return http.Response('{}', 404);
+        });
+        final manager = await _buildManager(client, supportOfflineAuth: true);
+        addTearDown(manager.dispose);
+
+        final events = <OidcEvent>[];
+        final sub = manager.events().listen(events.add);
+        final userChanges = <OidcUser?>[];
+        final userSub = manager.userChanges().listen(userChanges.add);
+
+        await manager.expire(_refreshableToken());
+        await pumpEventQueue();
+
+        expect(
+          manager.currentUser,
+          isNotNull,
+          reason: 'a transient (network) failure must NEVER forget the user',
+        );
+        expect(
+          userChanges,
+          isNot(contains(null)),
+          reason:
+              'forgetUser (a null user change) must not occur on a '
+              'transient failure',
+        );
+        expect(
+          events.whereType<OidcTokenRefreshFailedEvent>(),
+          isNotEmpty,
+        );
+        await sub.cancel();
+        await userSub.cancel();
+      },
+    );
+  });
 }
 
 Map<String, String> _qp(http.Request r) => Uri.splitQueryString(r.body);
+
+/// Builds a [_TestManager] with configurable offline support / refresh lead and
+/// a seeded user (defaults to [_user]).
+Future<_TestManager> _buildManager(
+  http.Client client, {
+  bool supportOfflineAuth = false,
+  OidcRefreshBeforeCallback? refreshBefore,
+  Future<OidcUser> Function()? seed,
+}) async {
+  final manager = _TestManager(
+    discoveryDocument: _metadataNoGrantTypes(),
+    clientCredentials: const OidcClientAuthentication.none(
+      clientId: 'client-1',
+    ),
+    store: OidcMemoryStore(),
+    httpClient: client,
+    settings: OidcUserManagerSettings(
+      redirectUri: Uri.parse('com.example.app://cb'),
+      supportOfflineAuth: supportOfflineAuth,
+      refreshBefore: refreshBefore ?? defaultRefreshBefore,
+    ),
+  );
+  await manager.init();
+  manager.seed(await (seed ?? _user)());
+  return manager;
+}
+
+/// A refreshable, short-lived token used to drive the auto-refresh-on-expiry
+/// path via [_TestManager.expire].
+OidcToken _refreshableToken() => OidcToken(
+  creationTime: clock.now(),
+  idToken: _signIdToken(),
+  accessToken: 'access-token-1',
+  refreshToken: 'refresh-token-1',
+  tokenType: 'Bearer',
+  expiresIn: const Duration(seconds: 60),
+);
+
+/// A user whose token carries a 60s lifetime, so the token-events timer arms.
+Future<OidcUser> _shortUser() => OidcUser.fromIdToken(
+  token: OidcToken(
+    creationTime: clock.now(),
+    idToken: _signIdToken(),
+    accessToken: 'access-token-1',
+    refreshToken: 'refresh-token-1',
+    tokenType: 'Bearer',
+    expiresIn: const Duration(seconds: 60),
+  ),
+);
+
+http.Response _jwks() => http.Response(
+  _jwksResponseBody(),
+  200,
+  headers: const {'content-type': 'application/json'},
+);
+
+http.Response _invalidGrant() => http.Response(
+  jsonEncode({
+    'error': 'invalid_grant',
+    'error_description': 'refresh token revoked',
+  }),
+  400,
+  headers: const {'content-type': 'application/json'},
+);
+
+http.Response _tokenOk() => http.Response(
+  '{"access_token":"new-access","token_type":"Bearer",'
+  '"expires_in":60,"refresh_token":"refresh-token-2",'
+  '"id_token":"${_signIdToken()}"}',
+  200,
+  headers: const {'content-type': 'application/json'},
+);

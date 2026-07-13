@@ -1392,7 +1392,6 @@ abstract class OidcUserManagerBase {
       return false;
     }
 
-    final errorType = OidcOfflineAuthErrorHandler.categorizeError(error);
     final canContinue = OidcOfflineAuthErrorHandler.shouldContinueInOfflineMode(
       error: error,
       supportOfflineAuth: settings.supportOfflineAuth,
@@ -1403,8 +1402,12 @@ abstract class OidcUserManagerBase {
 
     consecutiveRefreshFailures++;
 
+    // #120/#154: every caller of this method is a failed refresh path
+    // (auto-expiry, manual, or startup-load), so offline mode is being entered
+    // *because* a token refresh failed. Report that specific reason instead of
+    // the generic network/server reason.
     enterOfflineMode(
-      reason: OidcOfflineAuthErrorHandler.getOfflineModeReason(errorType),
+      reason: OfflineModeReason.tokenRefreshFailed,
       currentToken: fallbackToken,
       error: error,
     );
@@ -1528,7 +1531,21 @@ abstract class OidcUserManagerBase {
         metadata: discoveryDocument,
         currentUserOverride: existingUser,
       );
-    } on Object catch (e) {
+    } on Object catch (e, st) {
+      // #120: signal the failure to background observers of events() before any
+      // offline handling or rethrow. The manual path schedules no retry, so
+      // willRetry is always false here. This is the intentional double-signal:
+      // observers get the event while the awaiting caller still gets the throw
+      // below (MSAL pattern).
+      eventsController.add(
+        OidcTokenRefreshFailedEvent.fromError(
+          error: e,
+          stackTrace: st,
+          source: OidcTokenRefreshSource.manual,
+          willRetry: false,
+        ),
+      );
+
       // Handle errors based on offline auth settings
       final handledOffline = handleOfflineEligibleFailure(
         error: e,
@@ -1627,7 +1644,27 @@ abstract class OidcUserManagerBase {
 
       // Successful refresh - update last server contact and exit offline mode
       recordSuccessfulServerContact(newToken: newUser?.token);
-    } on Object catch (e) {
+    } on Object catch (e, st) {
+      // #120: a transient failure that offline handling will absorb schedules a
+      // retry; a terminal failure (e.g. invalid_grant) or a disabled offline
+      // path does not. Compute this up front so the failure event carries an
+      // accurate `willRetry`, and emit it BEFORE entering offline mode or
+      // tearing down the timers (#154 ordering).
+      final willRetry =
+          settings.supportOfflineAuth &&
+          OidcOfflineAuthErrorHandler.shouldContinueInOfflineMode(
+            error: e,
+            supportOfflineAuth: settings.supportOfflineAuth,
+          );
+      eventsController.add(
+        OidcTokenRefreshFailedEvent.fromError(
+          error: e,
+          stackTrace: st,
+          source: OidcTokenRefreshSource.autoExpiry,
+          willRetry: willRetry,
+        ),
+      );
+
       final handledOffline = handleOfflineEligibleFailure(
         error: e,
         fallbackToken: event,
@@ -2542,7 +2579,18 @@ abstract class OidcUserManagerBase {
             if (refreshedUser != null) {
               loadedUser = refreshedUser;
             }
-          } catch (e) {
+          } catch (e, st) {
+            // #120: surface the startup-load refresh failure before offline
+            // handling / rethrow.
+            eventsController.add(
+              OidcTokenRefreshFailedEvent.fromError(
+                error: e,
+                stackTrace: st,
+                source: OidcTokenRefreshSource.startupLoad,
+                willRetry: false,
+              ),
+            );
+
             // An app might go offline during token refresh, so we consult the
             // supportOfflineAuth setting to check whether this is an issue or
             // not.
