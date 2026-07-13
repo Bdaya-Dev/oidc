@@ -1,3 +1,16 @@
+## 2.0.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**(oidc_core): protect the PKCE code_verifier at rest ([#324](https://github.com/Bdaya-Dev/oidc/issues/324) item 20) ([#402](https://github.com/Bdaya-Dev/oidc/issues/402)). ([32f4cbb3](https://github.com/Bdaya-Dev/oidc/commit/32f4cbb341e154d12ae687c6b2a8b23565779a20))
+ - **FIX**(oidc_core): route deleteClientConfiguration through typed error parsing ([#400](https://github.com/Bdaya-Dev/oidc/issues/400)). ([bd250ff5](https://github.com/Bdaya-Dev/oidc/commit/bd250ff58c3cd13a5bee5b2377edaf017b60c04a))
+ - **FIX**(oidc_core): honor expectedIssuer in validateUser (Entra multi-tenant) ([#389](https://github.com/Bdaya-Dev/oidc/issues/389)). ([4abc4e74](https://github.com/Bdaya-Dev/oidc/commit/4abc4e74282968cdf51ccccedfe99bff8f678e86))
+ - **FIX**(oidc_core): send dpop_jkt on the direct authorization request ([#324](https://github.com/Bdaya-Dev/oidc/issues/324)) ([#391](https://github.com/Bdaya-Dev/oidc/issues/391)). ([c5e7420a](https://github.com/Bdaya-Dev/oidc/commit/c5e7420a1db47bd00217e5f9426666cc965c8b4f))
+ - **FEAT**(oidc_core): react to a UserInfo 401 during session resume ([#302](https://github.com/Bdaya-Dev/oidc/issues/302)) ([#403](https://github.com/Bdaya-Dev/oidc/issues/403)). ([933e0ed7](https://github.com/Bdaya-Dev/oidc/commit/933e0ed7fd67d341cbf8a5ef43f23ba6de1c206b))
+ - **FEAT**(oidc_darwin): add macOS loopback system-browser navigation mode ([#124](https://github.com/Bdaya-Dev/oidc/issues/124)) ([#398](https://github.com/Bdaya-Dev/oidc/issues/398)). ([a8d758f7](https://github.com/Bdaya-Dev/oidc/commit/a8d758f74fd86b93e74fabe6c561235ca4ee3343))
+ - **FEAT**(oidc_core): emit OidcTokenRefreshFailedEvent on refresh failures; clamp the expiring-refire loop ([#392](https://github.com/Bdaya-Dev/oidc/issues/392)). ([0b581dff](https://github.com/Bdaya-Dev/oidc/commit/0b581dffcc9761d9ee112aa0df6856a610c10ac5))
+ - **BREAKING** **FEAT**(oidc_core): cache-first init as the new default, discovery TTL cache, loaded-token validity controls ([#399](https://github.com/Bdaya-Dev/oidc/issues/399)). ([de3e2287](https://github.com/Bdaya-Dev/oidc/commit/de3e2287ec0649562e3df426f42a628168417378))
+
 ## 1.0.0
 
 > Note: This release has breaking changes.
