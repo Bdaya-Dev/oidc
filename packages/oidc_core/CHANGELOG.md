@@ -1,3 +1,8 @@
+## 1.0.1
+
+ - **FIX**(oidc_core): honor expectedIssuer in validateUser (Entra multi-tenant) ([#389](https://github.com/Bdaya-Dev/oidc/issues/389)). ([4abc4e74](https://github.com/Bdaya-Dev/oidc/commit/4abc4e74282968cdf51ccccedfe99bff8f678e86))
+ - **FIX**(oidc_core): send dpop_jkt on the direct authorization request ([#324](https://github.com/Bdaya-Dev/oidc/issues/324)) ([#391](https://github.com/Bdaya-Dev/oidc/issues/391)). ([c5e7420a](https://github.com/Bdaya-Dev/oidc/commit/c5e7420a1db47bd00217e5f9426666cc965c8b4f))
+
 ## 1.0.0
 
 > Note: This release has breaking changes.

@@ -21,8 +21,8 @@ dependencies:
   logging: ^1.2.0
   oidc:
     path: ../
-  oidc_core: ^1.0.0
-  oidc_default_store: ^1.0.0
+  oidc_core: ^1.0.1
+  oidc_default_store: ^1.1.0
 dev_dependencies:
   archive: ^4.0.7
   # integration_test + flutter_test back the macOS e2e job only
