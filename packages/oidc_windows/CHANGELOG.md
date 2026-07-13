@@ -1,3 +1,7 @@
+## 1.0.1
+
+ - Update a dependency to the latest release.
+
 ## 1.0.0
 
  - **FIX**: resolve all four library bugs; drive honest unit coverage to ~95% ([#368](https://github.com/Bdaya-Dev/oidc/issues/368)). ([c86bee17](https://github.com/Bdaya-Dev/oidc/commit/c86bee17189a0a70fee947c685e91a55062b1d35))
