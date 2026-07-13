@@ -1,3 +1,7 @@
+## 1.1.0
+
+ - **FEAT**(oidc_core): emit OidcTokenRefreshFailedEvent on refresh failures; clamp the expiring-refire loop ([#392](https://github.com/Bdaya-Dev/oidc/issues/392)). ([0b581dff](https://github.com/Bdaya-Dev/oidc/commit/0b581dffcc9761d9ee112aa0df6856a610c10ac5))
+
 ## 1.0.0
 
 > Note: This release has breaking changes.
