@@ -103,18 +103,21 @@ Future<OidcUser> _user(
   );
 }
 
-_ValidationManager _manager({List<String>? allowedAudiences}) =>
-    _ValidationManager(
-      discoveryDocument: _metadata,
-      clientCredentials: const OidcClientAuthentication.none(
-        clientId: 'client-1',
-      ),
-      store: OidcMemoryStore(),
-      settings: OidcUserManagerSettings(
-        redirectUri: Uri.parse('com.example.app://cb'),
-        allowedAudiences: allowedAudiences,
-      ),
-    );
+_ValidationManager _manager({
+  List<String>? allowedAudiences,
+  Uri? expectedIssuer,
+}) => _ValidationManager(
+  discoveryDocument: _metadata,
+  clientCredentials: const OidcClientAuthentication.none(
+    clientId: 'client-1',
+  ),
+  store: OidcMemoryStore(),
+  settings: OidcUserManagerSettings(
+    redirectUri: Uri.parse('com.example.app://cb'),
+    allowedAudiences: allowedAudiences,
+    expectedIssuer: expectedIssuer,
+  ),
+);
 
 void main() {
   group('oidcComputeTokenHash', () {
@@ -310,6 +313,52 @@ void main() {
         final errors = _manager().run(user, _metadata);
         expect(
           errors.any((e) => e.toString().contains('exp')),
+          isTrue,
+        );
+      },
+    );
+  });
+
+  group('validateUser issuer pinning (#168, Entra multi-tenant §3.1.3.7)', () {
+    // Microsoft Entra ID multi-tenant (`common`/`organizations`) advertises a
+    // non-substituted TEMPLATE issuer, while a real id_token carries the
+    // CONCRETE per-tenant issuer — the two can never be equal, so the
+    // spec-mandated exact `iss` match fails unless the RP pins the concrete one.
+    final templateMetadata = OidcProviderMetadata.fromJson({
+      'issuer': 'https://login.microsoftonline.com/{tenantid}/v2.0',
+      'authorization_endpoint': 'https://op.example.com/authorize',
+      'token_endpoint': 'https://op.example.com/token',
+    });
+    const concreteIssuer =
+        'https://login.microsoftonline.com/'
+        '11c43ee8-b9d3-4e51-b73f-bd9dda66e29c/v2.0';
+
+    Future<OidcUser> concreteTenantUser() =>
+        _user({..._baseClaims(), 'iss': concreteIssuer});
+
+    test(
+      'passes when expectedIssuer pins the concrete tenant issuer',
+      () async {
+        final user = await concreteTenantUser();
+        final errors = _manager(
+          expectedIssuer: Uri.parse(concreteIssuer),
+        ).run(user, templateMetadata);
+        // The concrete `iss` now matches the pinned expectedIssuer, so the
+        // otherwise-valid token produces no validation errors at all.
+        expect(errors, isEmpty);
+      },
+    );
+
+    test(
+      'fails with an issuer mismatch when expectedIssuer is unset '
+      '(regression pin: default behavior is unchanged)',
+      () async {
+        final user = await concreteTenantUser();
+        // No expectedIssuer -> the advertised template `metadata.issuer` is used
+        // exactly as before, and the concrete `iss` fails the exact-match check.
+        final errors = _manager().run(user, templateMetadata);
+        expect(
+          errors.any((e) => e.toString().contains('Issuer does not match')),
           isTrue,
         );
       },

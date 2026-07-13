@@ -175,6 +175,15 @@ class OidcUserManagerSettings {
   /// Optional explicit issuer to compare the discovery document's `issuer`
   /// against (authoritative when set).
   ///
+  /// When set it is ALSO the issuer an id_token's `iss` claim is validated
+  /// against (OpenID Connect Core §3.1.3.7 step 2), overriding the advertised
+  /// discovery `issuer`. This is the pin Microsoft Entra ID multi-tenant
+  /// (`common`/`organizations`) RPs need: the OP advertises a non-substituted
+  /// template issuer (`https://login.microsoftonline.com/{tenantid}/v2.0`) that
+  /// never equals the concrete per-tenant `iss` a real id_token carries, so
+  /// pinning the concrete tenant issuer here lets `validateUser` pass. When null
+  /// (the default) the advertised `metadata.issuer` is used unchanged.
+  ///
   /// When null (default) and a `discoveryDocumentUri` is present, the expected
   /// issuer is derived by stripping the trailing
   /// `.well-known/openid-configuration` segments from `discoveryDocumentUri`
