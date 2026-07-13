@@ -1,3 +1,8 @@
+## 1.1.0
+
+ - **FEAT**(oidc_web_core): status-driven redirect.html + app-ack wire ([#116](https://github.com/Bdaya-Dev/oidc/issues/116), [#227](https://github.com/Bdaya-Dev/oidc/issues/227), [#256](https://github.com/Bdaya-Dev/oidc/issues/256)) ([#397](https://github.com/Bdaya-Dev/oidc/issues/397)). ([3ea11929](https://github.com/Bdaya-Dev/oidc/commit/3ea119290f1007d62b9ecb8ffcaeb3a771f7df9f))
+ - **FEAT**(oidc_core): emit OidcTokenRefreshFailedEvent on refresh failures; clamp the expiring-refire loop ([#392](https://github.com/Bdaya-Dev/oidc/issues/392)). ([0b581dff](https://github.com/Bdaya-Dev/oidc/commit/0b581dffcc9761d9ee112aa0df6856a610c10ac5))
+
 ## 1.0.0
 
 > Note: This release has breaking changes.
