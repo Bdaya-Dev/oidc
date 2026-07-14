@@ -55,6 +55,16 @@ class OidcConstants_ClientAuthenticationMethods {
   static const clientSecretJwt = 'client_secret_jwt';
   static const privateKeyJwt = 'private_key_jwt';
   static const none = 'none';
+
+  /// RFC 8705 §2.1: mutual-TLS client authentication using the PKI method (the
+  /// client certificate is validated against a configured
+  /// subject/SAN and a trusted CA chain).
+  static const tlsClientAuth = 'tls_client_auth';
+
+  /// RFC 8705 §2.2: mutual-TLS client authentication using a self-signed
+  /// certificate (the client certificate is matched against a registered
+  /// public key, e.g. via `jwks`/`jwks_uri`).
+  static const selfSignedTlsClientAuth = 'self_signed_tls_client_auth';
 }
 
 class OidcConstants_ClientAssertionTypes {

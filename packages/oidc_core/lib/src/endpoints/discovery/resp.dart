@@ -467,4 +467,58 @@ class OidcProviderMetadata extends JsonBasedResponse {
   final bool? requirePushedAuthorizationRequests;
   bool get requirePushedAuthorizationRequestsOrDefault =>
       requirePushedAuthorizationRequests ?? false;
+
+  /// RFC 8705 §5 `mtls_endpoint_aliases`: the alternative endpoints a client
+  /// doing mutual TLS uses in preference to the conventional (top-level)
+  /// endpoints, or `null` when the server advertises none.
+  ///
+  /// Read lazily from [src] so it never affects the generated (de)serializer;
+  /// use [resolveEndpoint] to apply the RFC 8705 §5 alias-or-fallback rule.
+  OidcMtlsEndpointAliases? get mtlsEndpointAliases {
+    final raw = src[OidcConstants_ProviderMetadata.mtlsEndpointAliases];
+    if (raw is Map) {
+      return OidcMtlsEndpointAliases.fromJson(
+        Map<String, dynamic>.from(raw),
+      );
+    }
+    return null;
+  }
+
+  /// RFC 8705 §3.3: whether the authorization server supports mutual-TLS
+  /// client certificate-bound access tokens. `null` when unspecified.
+  ///
+  /// Read lazily from [src] so it never affects the generated (de)serializer.
+  bool? get tlsClientCertificateBoundAccessTokens {
+    final v =
+        src[OidcConstants_ProviderMetadata
+            .tlsClientCertificateBoundAccessTokens];
+    return v is bool ? v : null;
+  }
+
+  /// [tlsClientCertificateBoundAccessTokens] defaulting to `false` when absent,
+  /// per RFC 8705 §3.3 ("If omitted, the default value is false").
+  bool get tlsClientCertificateBoundAccessTokensOrDefault =>
+      tlsClientCertificateBoundAccessTokens ?? false;
+
+  /// Resolves the endpoint stored under [endpointName] (one of the
+  /// `OidcConstants_ProviderMetadata` endpoint keys), applying the RFC 8705 §5
+  /// mTLS alias rule.
+  ///
+  /// When [useMtlsAliases] is `true` and [mtlsEndpointAliases] contains an
+  /// alias for [endpointName], the alias is returned; otherwise the
+  /// conventional (top-level) endpoint is returned. Returns `null` when neither
+  /// is present or parseable. This is the single choke point through which mTLS
+  /// alias routing is applied.
+  Uri? resolveEndpoint(
+    String endpointName, {
+    bool useMtlsAliases = false,
+  }) {
+    if (useMtlsAliases) {
+      final alias = mtlsEndpointAliases?.getEndpoint(endpointName);
+      if (alias != null) {
+        return alias;
+      }
+    }
+    return OidcInternalUtilities.tryParseUri(src[endpointName]);
+  }
 }

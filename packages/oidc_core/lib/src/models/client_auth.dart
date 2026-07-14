@@ -64,6 +64,42 @@ class OidcClientAuthentication {
        _signingAlgorithm = null,
        _assertionLifetime = null;
 
+  /// Authenticates with mutual TLS using the PKI method (RFC 8705 §2.1).
+  ///
+  /// No secret or assertion is placed in the request; the client is
+  /// authenticated by the certificate presented on the TLS connection, so the
+  /// only body parameter emitted is `client_id` (RFC 8705 §2.1). Establishing
+  /// the certificate-bearing TLS transport is the responsibility of the native
+  /// HTTP layer and is out of scope for this (platform-agnostic) model.
+  const OidcClientAuthentication.tlsClientAuth({
+    required this.clientId,
+  }) : location = OidcConstants_ClientAuthenticationMethods.tlsClientAuth,
+       clientSecret = null,
+       clientAssertion = null,
+       clientAssertionType = null,
+       _signingKey = null,
+       _signingAlgorithm = null,
+       _assertionLifetime = null;
+
+  /// Authenticates with mutual TLS using a self-signed certificate
+  /// (RFC 8705 §2.2).
+  ///
+  /// As with [OidcClientAuthentication.tlsClientAuth], no secret or assertion
+  /// is sent; the client is authenticated by matching the presented
+  /// certificate against a registered public key, so the only body parameter
+  /// emitted is `client_id`. The certificate-bearing TLS transport is provided
+  /// by the native HTTP layer.
+  const OidcClientAuthentication.selfSignedTlsClientAuth({
+    required this.clientId,
+  }) : location =
+           OidcConstants_ClientAuthenticationMethods.selfSignedTlsClientAuth,
+       clientSecret = null,
+       clientAssertion = null,
+       clientAssertionType = null,
+       _signingKey = null,
+       _signingAlgorithm = null,
+       _assertionLifetime = null;
+
   /// Authenticates with a `private_key_jwt` (RFC 7523 / OIDC §9) client
   /// assertion that the library MINTS fresh per request, signed by [signingKey]
   /// with [algorithm] (e.g. `RS256`, `ES256`). The public key must be
