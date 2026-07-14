@@ -1,3 +1,7 @@
+## 1.1.0
+
+ - **FEAT**(oidc_default_store): support the new SharedPreferencesAsync API ([#301](https://github.com/Bdaya-Dev/oidc/issues/301)) ([#390](https://github.com/Bdaya-Dev/oidc/issues/390)). ([0045f623](https://github.com/Bdaya-Dev/oidc/commit/0045f6231cd5e5267520c69342f89e420241fffe))
+
 ## 1.0.0
 
  - **FIX**: resolve all four library bugs; drive honest unit coverage to ~95% ([#368](https://github.com/Bdaya-Dev/oidc/issues/368)). ([c86bee17](https://github.com/Bdaya-Dev/oidc/commit/c86bee17189a0a70fee947c685e91a55062b1d35))

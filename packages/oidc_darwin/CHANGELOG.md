@@ -1,3 +1,7 @@
+## 1.1.0
+
+ - **FEAT**(oidc_darwin): add macOS loopback system-browser navigation mode ([#124](https://github.com/Bdaya-Dev/oidc/issues/124)) ([#398](https://github.com/Bdaya-Dev/oidc/issues/398)). ([a8d758f7](https://github.com/Bdaya-Dev/oidc/commit/a8d758f74fd86b93e74fabe6c561235ca4ee3343))
+
 ## 1.0.0
 
 > Note: This release has breaking changes.
