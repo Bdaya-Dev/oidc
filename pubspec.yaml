@@ -61,7 +61,7 @@ melos:
     # `cmd.exe /C %MELOS_SCRIPT%` on Windows, and cmd truncates the command at
     # the first embedded newline -- a `|` block would silently run only
     # generate:dart and drop the `git add`, making the fix inert on Windows
-    # (verified empirically against melos 7.8.2). `&&` keeps it one line and
+    # (verified empirically against melos 7.8.0). `&&` keeps it one line and
     # cross-platform, and short-circuits the add if generation fails.
     version:
       hooks:
