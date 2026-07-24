@@ -565,11 +565,16 @@ jobs:
           # xdotool, installed above). A single invocation runs every
           # patrol_test/*_test.dart (conformance + e2e + offline) and collects
           # Dart coverage via the VM service.
+          # --verbose because patrol forwards NO test stdout to the job log by
+          # default: a failing test reports only "1 test(s) failed", with the
+          # reason, the module name, and even plain print() output all dropped.
+          # The ios job already runs verbose for the same reason.
           xvfb-run --auto-servernum patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-package oidc \
             -d linux \
+            --verbose \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
           cp coverage/patrol_lcov.info coverage/linux-coverage.info

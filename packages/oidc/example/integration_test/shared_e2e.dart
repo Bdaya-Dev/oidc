@@ -252,7 +252,9 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
     // print(), not logger: the Dart logger is captured into the certification
     // archive and does not reach CI stdout, so a logged-only diagnostic is
     // invisible in the job output exactly when it is needed.
-    print('[e2e] $moduleName -> authResult ${authResult == null ? 'NULL' : 'ok'}');
+    print(
+      '[e2e] $moduleName -> authResult ${authResult == null ? 'NULL' : 'ok'}',
+    );
     expect(
       authResult,
       isNotNull,
