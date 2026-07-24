@@ -238,7 +238,21 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
     // which is precisely how the Android Auth Tab regression shipped. A login
     // that cannot complete must fail the test.
     logger.info('Starting login authorization code flow...');
-    final authResult = await manager.loginAuthorizationCodeFlow();
+    final authResult = await () async {
+      try {
+        return await manager.loginAuthorizationCodeFlow();
+      } catch (e, stackTrace) {
+        logger.severe('Login flow threw for $moduleName', e, stackTrace);
+        // Surfaced as a named test failure rather than swallowed: the harness
+        // truncates a raw exception to "1 test(s) failed", which cannot tell
+        // you which module broke or how.
+        fail('loginAuthorizationCodeFlow() threw for $moduleName: $e');
+      }
+    }();
+    // print(), not logger: the Dart logger is captured into the certification
+    // archive and does not reach CI stdout, so a logged-only diagnostic is
+    // invisible in the job output exactly when it is needed.
+    print('[e2e] $moduleName -> authResult ${authResult == null ? 'NULL' : 'ok'}');
     expect(
       authResult,
       isNotNull,
@@ -248,9 +262,9 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
           'the browser has no Auth Tab support and the intent-filter fallback '
           'did not receive the redirect.',
     );
-    logger.info('Login successful: ${authResult!.token.toJson()}');
-
-    logger.info('Cleaning up manager for test instance: $testInstanceId');
+    logger
+      ..info('Login successful: ${authResult!.token.toJson()}')
+      ..info('Cleaning up manager for test instance: $testInstanceId');
     await sub.cancel();
     app_state.currentManagerRx.$ = app_state.managersRx.$.first;
     app_state.managersRx.update((managers) => managers..remove(manager));

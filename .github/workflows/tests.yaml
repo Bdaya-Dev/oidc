@@ -169,8 +169,14 @@ jobs:
       # OidcPlugin.kt was never executed by any test before #418. Runs on the
       # JVM, so it needs no emulator and fails fast, ahead of it.
       - name: "[Verify step] Native Android unit tests (oidc_android)"
-        working-directory: packages/oidc/example/android
-        run: ./gradlew :oidc_android:testDebugUnitTest -PoidcNativeTests
+        # gradlew / gradle-wrapper.jar are gitignored repo-wide (only
+        # gradle-wrapper.properties is tracked), so a fresh checkout has no
+        # wrapper to invoke. --config-only generates the android build files
+        # without building any artifact.
+        run: |
+          flutter build apk --config-only
+          cd android
+          ./gradlew :oidc_android:testDebugUnitTest -PoidcNativeTests
       - name: AVD cache
         uses: actions/cache@v5
         id: avd-cache
