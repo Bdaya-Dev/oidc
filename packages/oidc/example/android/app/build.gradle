@@ -42,8 +42,11 @@ android {
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // Auth Tab captures the redirect via the Activity Result API — no
-        // oidcRedirectScheme manifest placeholder needed.
+        // Scheme of this app's redirect_uri (see getPlatformRedirectUri() in
+        // integration_test/helpers.dart). Wires up the plugin's redirect
+        // receiver, which is the capture path on every browser that lacks Auth
+        // Tab support — i.e. anything but Chrome 137+.
+        manifestPlaceholders += ['oidcRedirectScheme': 'com.bdayadev.oidc.example']
     }
 
     buildTypes {

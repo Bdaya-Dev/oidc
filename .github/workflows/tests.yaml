@@ -121,6 +121,12 @@ jobs:
       matrix:
         api-level: [33]
         arch: [x86_64]
+        # The `default` (AOSP) image ships NO browser, so the authorization URL
+        # could never actually open and no redirect could ever come back -- the
+        # emulator was silently exercising a dead flow while reporting green
+        # (issue #418). A Play Store image provides a real Chrome, so the
+        # browser leg of the flow is genuinely covered.
+        target: [google_apis_playstore]
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -157,6 +163,14 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
       - name: Run flutter precache
         run: flutter precache -v
+      # Native (Kotlin/Robolectric) tests for the oidc_android plugin. These
+      # cover the redirect-capture path the Dart suite structurally cannot see:
+      # it mocks the Pigeon channel and hands back a canned redirect URI, so
+      # OidcPlugin.kt was never executed by any test before #418. Runs on the
+      # JVM, so it needs no emulator and fails fast, ahead of it.
+      - name: "[Verify step] Native Android unit tests (oidc_android)"
+        working-directory: packages/oidc/example/android
+        run: ./gradlew :oidc_android:testDebugUnitTest -PoidcNativeTests
       - name: AVD cache
         uses: actions/cache@v5
         id: avd-cache
@@ -164,8 +178,8 @@ jobs:
           path: |
             /mnt/.android/avd/*
             /mnt/.android/adb*
-          # include arch to avoid reusing old 32-bit images
-          key: avd-${{ matrix.api-level }}-${{ matrix.arch }}-novulkan
+          # include arch + target to avoid reusing old 32-bit / browserless images
+          key: avd-${{ matrix.api-level }}-${{ matrix.arch }}-${{ matrix.target }}-novulkan
 
       - name: create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -173,7 +187,7 @@ jobs:
         with:
           api-level: ${{ matrix.api-level }}
           arch: ${{ matrix.arch }}
-          # target: google_apis 
+          target: ${{ matrix.target }}
           force-avd-creation: true
           # For snapshot caching, do NOT use -no-snapshot.
           emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none
@@ -237,7 +251,7 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none
           disable-animations: true
           emulator-boot-timeout: 900
-          # target: google_apis 
+          target: ${{ matrix.target }}
           script: ./android_emulator_ci.sh
       - name: Find .info files and files in coverage folders
         run: |

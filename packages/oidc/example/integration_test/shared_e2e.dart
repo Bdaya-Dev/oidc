@@ -232,17 +232,23 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
       await sub.cancel();
       continue;
     }
-    try {
-      logger.info('Starting login authorization code flow...');
-      final authResult = await manager.loginAuthorizationCodeFlow();
-      if (authResult == null) {
-        logger.warning('Login failed, authResult is null');
-      } else {
-        logger.info('Login successful: ${authResult.token.toJson()}');
-      }
-    } catch (e, stackTrace) {
-      logger.severe('Error during login flow', e, stackTrace);
-    }
+    // The login result is ASSERTED, not merely logged. Until #418 this block
+    // swallowed both a null result and every exception, so the suite reported
+    // green whether or not the browser redirect could be captured at all —
+    // which is precisely how the Android Auth Tab regression shipped. A login
+    // that cannot complete must fail the test.
+    logger.info('Starting login authorization code flow...');
+    final authResult = await manager.loginAuthorizationCodeFlow();
+    expect(
+      authResult,
+      isNotNull,
+      reason:
+          'loginAuthorizationCodeFlow() returned null for $moduleName — the '
+          'redirect was never captured. On Android this is the #418 signature: '
+          'the browser has no Auth Tab support and the intent-filter fallback '
+          'did not receive the redirect.',
+    );
+    logger.info('Login successful: ${authResult!.token.toJson()}');
 
     logger.info('Cleaning up manager for test instance: $testInstanceId');
     await sub.cancel();
