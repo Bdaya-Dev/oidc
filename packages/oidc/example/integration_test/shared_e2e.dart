@@ -151,6 +151,14 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
 
   final archive = Archive();
 
+  // Counts modules whose login actually completed. Asserted after the loop:
+  // this plan mixes POSITIVE modules with NEGATIVE ones (oidcc-client-test-
+  // invalid-iss and friends), where the OP deliberately returns a bad response
+  // and a null result is the CORRECT outcome. So no single module can be
+  // required to succeed -- but if NOT ONE of them completes, the platform
+  // cannot capture a redirect at all, which is exactly the #418 signature.
+  var successfulLogins = 0;
+
   for (final testPlanModule
       in testPlanModules.whereType<Map<String, dynamic>>()) {
     final moduleName = testPlanModule['testModule'] as String;
@@ -232,40 +240,40 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
       await sub.cancel();
       continue;
     }
-    // The login result is ASSERTED, not merely logged. Until #418 this block
-    // swallowed both a null result and every exception, so the suite reported
-    // green whether or not the browser redirect could be captured at all —
-    // which is precisely how the Android Auth Tab regression shipped. A login
-    // that cannot complete must fail the test.
+    // A per-module result is RECORDED rather than discarded. Until #418 this
+    // block swallowed both a null result and every exception, so the suite
+    // reported green whether or not the browser could capture a redirect at
+    // all — which is how the Android Auth Tab regression shipped. It is not
+    // asserted here, because a negative module is MEANT to end with no user;
+    // the aggregate is asserted after the loop.
     logger.info('Starting login authorization code flow...');
     final authResult = await () async {
       try {
         return await manager.loginAuthorizationCodeFlow();
       } catch (e, stackTrace) {
+        // Expected for the negative modules (the OP returns a deliberately
+        // broken response and the client must reject it), so this is recorded,
+        // not fatal.
         logger.severe('Login flow threw for $moduleName', e, stackTrace);
-        // Surfaced as a named test failure rather than swallowed: the harness
-        // truncates a raw exception to "1 test(s) failed", which cannot tell
-        // you which module broke or how.
-        fail('loginAuthorizationCodeFlow() threw for $moduleName: $e');
+        return null;
       }
     }();
+    if (authResult != null) {
+      successfulLogins++;
+    }
     // print(), not logger: the Dart logger is captured into the certification
     // archive and does not reach CI stdout, so a logged-only diagnostic is
-    // invisible in the job output exactly when it is needed.
+    // invisible in the job output exactly when it is needed. patrol also drops
+    // test stdout unless --verbose.
     print(
       '[e2e] $moduleName -> authResult ${authResult == null ? 'NULL' : 'ok'}',
     );
-    expect(
-      authResult,
-      isNotNull,
-      reason:
-          'loginAuthorizationCodeFlow() returned null for $moduleName — the '
-          'redirect was never captured. On Android this is the #418 signature: '
-          'the browser has no Auth Tab support and the intent-filter fallback '
-          'did not receive the redirect.',
-    );
     logger
-      ..info('Login successful: ${authResult!.token.toJson()}')
+      ..info(
+        authResult == null
+            ? 'No user returned (expected for a negative module).'
+            : 'Login successful: ${authResult.token.toJson()}',
+      )
       ..info('Cleaning up manager for test instance: $testInstanceId');
     await sub.cancel();
     app_state.currentManagerRx.$ = app_state.managersRx.$.first;
@@ -276,6 +284,24 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
       archive.addFile(ArchiveFile.bytes('$moduleName.log', data));
     }
   }
+
+  // THE regression guard for #418. Individual modules may legitimately end
+  // with no user, but at least one must complete: a platform that cannot
+  // capture the browser redirect scores zero here. Before this, the loop
+  // discarded every result and the suite passed even when no login on the
+  // platform could possibly succeed.
+  print(
+    '[e2e] successful logins: $successfulLogins / ${testPlanModules.length}',
+  );
+  expect(
+    successfulLogins,
+    greaterThan(0),
+    reason:
+        'not one conformance module completed a login on ${getPlatformName()} '
+        '— the browser redirect is never reaching the app. On Android this is '
+        'the #418 signature: the browser has no Auth Tab support and the '
+        'OidcRedirectActivity intent-filter did not receive the redirect.',
+  );
 
   if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
     try {
