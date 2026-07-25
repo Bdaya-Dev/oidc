@@ -33,9 +33,13 @@ class _CodeFlowManager extends OidcUserManagerBase {
   /// The metadata that accompanied [capturedAuthRequest].
   OidcProviderMetadata? capturedAuthMetadata;
 
-  /// Exposes the session DPoP key thumbprint (the `dpop_jkt` / `cnf.jkt`
-  /// source) for assertions; `dpopManager` is `@protected`, so surface it here.
-  String? get dpopThumbprint => dpopManager?.thumbprint;
+  // PR #425 review (source-breaking-for-subclassers advisory): this class
+  // used to declare its own `dpopThumbprint` getter here to surface the
+  // `@protected` `dpopManager`'s thumbprint for test assertions. #422 added a
+  // PUBLIC `dpopThumbprint` getter to `OidcUserManagerBase` itself with the
+  // identical implementation, which turned this declaration into a silent,
+  // un-annotated override (`annotate_overrides` lint) — removed in favor of
+  // the inherited one; see [OidcUserManagerBase.dpopThumbprint].
 
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
