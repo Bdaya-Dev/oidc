@@ -276,7 +276,14 @@ abstract class OidcUserManagerBase {
   /// simply already-completed) — and safe to call after [dispose] (the
   /// revalidation future never throws; see [_scheduleBackgroundRevalidation]'s
   /// own all-swallowing `try`/`catch`, mirrored by [loadCachedTokens] and
-  /// [_refreshToken]).
+  /// [_refreshToken]). That guarantee depends on the `try` wrapping the
+  /// `await initFuture` at the very top of
+  /// [_scheduleBackgroundRevalidation] too, not just the revalidation logic
+  /// after it — `init()` itself can fail (e.g. a subclass's
+  /// [attachLifecycleListeners] override throwing synchronously), and a
+  /// failed `initFuture` must still hit that `catch`/`finally` like any other
+  /// error, or this future would stay permanently errored and every future
+  /// join would rethrow it forever.
   ///
   /// Reads [_cacheFirstRevalidationFuture] into a local variable synchronously
   /// (no `await` before the read) so a concurrent settle-and-clear by
@@ -3811,10 +3818,22 @@ abstract class OidcUserManagerBase {
   /// token is discarded as invalid (and offline auth is not keeping it), the
   /// stale restored user is forgotten.
   Future<void> _scheduleBackgroundRevalidation(OidcUser restoredUser) async {
-    // Wait until init() has fully returned (didInit == true) before touching
-    // init-guarded getters.
-    await initFuture;
     try {
+      // Wait until init() has fully returned (didInit == true) before
+      // touching init-guarded getters. Deliberately INSIDE this try: if
+      // `init()` itself fails (e.g. `attachLifecycleListeners()`, called
+      // AFTER this revalidation is armed — see `_tryCacheFirstInit` — throws
+      // synchronously), `initFuture` rethrows that same error here, and it
+      // must still hit the catch-all below so the `finally` always runs. An
+      // earlier revision awaited `initFuture` OUTSIDE this try: a failed
+      // `init()` then permanently skipped the `finally`, leaving
+      // `_cacheFirstRevalidationFuture` pointing at a forever-errored future
+      // that every later [_joinCacheFirstRevalidationIfInFlight] call
+      // (`getAccessToken`/`signInSilent`) re-awaited and rethrew, AND leaving
+      // `_cacheFirstRevalidationInFlight` stuck `true` forever, permanently
+      // suppressing the on-expiry auto-refresh gated on it in
+      // [handleTokenExpiring]/[handleTokenExpired].
+      await initFuture;
       await _refreshDiscoveryInBackgroundIfStale();
       await loadCachedTokens(forceRebuild: true);
       // Reconcile the optimistically-surfaced restore with the authoritative
