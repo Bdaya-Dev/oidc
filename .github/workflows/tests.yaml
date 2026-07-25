@@ -237,6 +237,20 @@ jobs:
 
           echo "Using device: $EMU_ID"
           flutter devices
+
+          # Does this image actually ship a browser? Issue #418 is about
+          # browsers WITHOUT Auth Tab support, so the conformance leg needs one
+          # present to mean anything. The first run on google_apis executed 4
+          # tests (up from 0) but completed 0 of 14 logins, and "no browser at
+          # all" and "browser present, redirect not captured" are different
+          # defects with different fixes. Settle it instead of guessing.
+          echo "--- browser packages on the emulator ---"
+          adb -s "$EMU_ID" shell pm list packages | grep -iE 'chrome|browser|webview|firefox' || echo "NO browser/chrome/webview package matched"
+          echo "--- what resolves an https VIEW intent ---"
+          adb -s "$EMU_ID" shell 'cmd package resolve-activity --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d https://example.com' || true
+          echo "--- what resolves our custom scheme ---"
+          adb -s "$EMU_ID" shell 'cmd package resolve-activity --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d com.bdayadev.oidc.example://oauth2redirect' || true
+          echo "--- end browser diagnostics ---"
           # Runs every patrol_test/*_test.dart (conformance + e2e + offline) on
           # the emulator and collects Dart coverage via the VM service.
           # --verbose: patrol forwards NO test stdout without it, so neither the
