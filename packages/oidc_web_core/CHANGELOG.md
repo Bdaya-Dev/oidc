@@ -1,3 +1,7 @@
+## 1.1.1
+
+ - Update a dependency to the latest release.
+
 ## 1.1.0
 
  - **FIX**(oidc_core): protect the PKCE code_verifier at rest ([#324](https://github.com/Bdaya-Dev/oidc/issues/324) item 20) ([#402](https://github.com/Bdaya-Dev/oidc/issues/402)). ([32f4cbb3](https://github.com/Bdaya-Dev/oidc/commit/32f4cbb341e154d12ae687c6b2a8b23565779a20))

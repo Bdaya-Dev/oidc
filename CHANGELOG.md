@@ -3,6 +3,59 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-07-25
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v3.0.0`](#oidc---v300)
+ - [`oidc_android` - `v2.0.0`](#oidc_android---v200)
+
+Packages with other changes:
+
+ - [`oidc_core` - `v2.1.0`](#oidc_core---v210)
+ - [`oidc_cli` - `v1.0.2`](#oidc_cli---v102)
+ - [`oidc_default_store` - `v1.1.1`](#oidc_default_store---v111)
+ - [`oidc_desktop` - `v1.0.2`](#oidc_desktop---v102)
+ - [`oidc_darwin` - `v1.1.1`](#oidc_darwin---v111)
+ - [`oidc_linux` - `v1.0.2`](#oidc_linux---v102)
+ - [`oidc_platform_interface` - `v1.0.2`](#oidc_platform_interface---v102)
+ - [`oidc_web` - `v1.0.2`](#oidc_web---v102)
+ - [`oidc_web_core` - `v1.1.1`](#oidc_web_core---v111)
+ - [`oidc_windows` - `v1.0.2`](#oidc_windows---v102)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_cli` - `v1.0.2`
+ - `oidc_default_store` - `v1.1.1`
+ - `oidc_desktop` - `v1.0.2`
+ - `oidc_darwin` - `v1.1.1`
+ - `oidc_linux` - `v1.0.2`
+ - `oidc_platform_interface` - `v1.0.2`
+ - `oidc_web` - `v1.0.2`
+ - `oidc_web_core` - `v1.1.1`
+ - `oidc_windows` - `v1.0.2`
+
+---
+
+#### `oidc` - `v3.0.0`
+
+ - **BREAKING** **FIX**(oidc_android): restore the redirect receiver as a fallback capture path ([#418](https://github.com/Bdaya-Dev/oidc/issues/418)) ([#419](https://github.com/Bdaya-Dev/oidc/issues/419)). ([8df8bc61](https://github.com/Bdaya-Dev/oidc/commit/8df8bc617fb91347eac9f32fcffb7ec88f95328a))
+
+#### `oidc_android` - `v2.0.0`
+
+ - **BREAKING** **FIX**(oidc_android): restore the redirect receiver as a fallback capture path ([#418](https://github.com/Bdaya-Dev/oidc/issues/418)) ([#419](https://github.com/Bdaya-Dev/oidc/issues/419)). ([8df8bc61](https://github.com/Bdaya-Dev/oidc/commit/8df8bc617fb91347eac9f32fcffb7ec88f95328a))
+
+#### `oidc_core` - `v2.1.0`
+
+ - **FEAT**(oidc_core): silent-acquisition API at the manager/app boundary ([#421](https://github.com/Bdaya-Dev/oidc/issues/421), [#422](https://github.com/Bdaya-Dev/oidc/issues/422), [#423](https://github.com/Bdaya-Dev/oidc/issues/423), [#424](https://github.com/Bdaya-Dev/oidc/issues/424)) ([#425](https://github.com/Bdaya-Dev/oidc/issues/425)). ([97ac60e6](https://github.com/Bdaya-Dev/oidc/commit/97ac60e697ef3f82dfec32e6d1a3b143440a61b9))
+
+
 ## 2026-07-14
 
 ### Changes
