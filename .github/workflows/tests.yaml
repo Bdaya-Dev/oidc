@@ -280,13 +280,25 @@ jobs:
           # manifest should register OidcRedirectActivity for its redirect scheme.
           # If this resolves, redirect capture is wired and any remaining failure is
           # browser/flow-side; if it does not, the manifest wiring is the defect.
-          echo "--- post-install: is our app installed? ---"
-          adb -s "$EMU_ID" shell pm list packages | grep -i 'com.bdayadev.oidc.example' || echo "app NOT installed"
-          echo "--- post-install: what resolves our custom scheme? ---"
-          adb -s "$EMU_ID" shell 'cmd package resolve-activity --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d com.bdayadev.oidc.example://oauth2redirect' || true
-          echo "--- post-install: the app's declared VIEW/BROWSABLE filters ---"
-          adb -s "$EMU_ID" shell 'dumpsys package com.bdayadev.oidc.example' | grep -A 4 -iE 'android.intent.action.VIEW' | head -40 || true
-          echo "--- end post-install diagnostics ---"
+          # Read the manifest out of the APK patrol actually built. This is
+          # install-INDEPENDENT, which matters twice over: patrol uninstalls the app
+          # when it finishes (its uninstall finalizers only started running once the
+          # pubspec key was corrected to patrol_plus:), so an adb probe after the run
+          # reports "app NOT installed" regardless; and a local APK can be stale
+          # while the merged manifest is correct, which cost me a wrong conclusion.
+          # The bytes that were installed are the only honest source.
+          echo "--- APK manifest: which scheme is OidcRedirectActivity registered for? ---"
+          APK="$(find build/app/outputs -name 'app-debug.apk' -print -quit 2>/dev/null || true)"
+          echo "apk: ${APK:-<none found>}"
+          if [ -n "$APK" ]; then
+            AAPT2="$(find "$ANDROID_SDK_ROOT/build-tools" "$ANDROID_HOME/build-tools" -name aapt2 -type f 2>/dev/null | sort | tail -1)"
+            echo "aapt2: ${AAPT2:-<none found>}"
+            if [ -n "$AAPT2" ]; then
+              "$AAPT2" dump xmltree --file AndroidManifest.xml "$APK" 2>/dev/null \
+                | grep -A 12 'OidcRedirectActivity' | head -20 || echo "OidcRedirectActivity NOT in the APK manifest"
+            fi
+          fi
+          echo "--- end post-run diagnostics ---"
 
           # RATCHET. Until now this job ran ZERO tests and reported success for
           # its entire life: the app had no androidTest source set, so
