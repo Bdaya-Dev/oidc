@@ -798,6 +798,43 @@ jobs:
           # ("0") is captured either way.
           remaining=$(grep -rhc '^SF:/Users/' packages/oidc/example/coverage --include='*.info' | awk '{s+=$1} END {print s+0}' || true)
           echo "macOS-absolute SF entries remaining after normalization: $remaining"
+      # Regression guard, the cheapest one available and the one that was missing.
+      #
+      # On main's LAST GREEN RUN the android job uploaded a coverage file of
+      # exactly 0 bytes -- 0 SF records, 0 covered lines -- because it executed
+      # zero tests. Nothing objected: `if-no-files-found: error` on the upload
+      # only asserts the file EXISTS (an empty file passes), codecov.yml disables
+      # every status (`patch: false`, `project: false`), and the existing
+      # "Assert Flutter package coverage survived" guard covers only unit_tests'
+      # four packages, never the integration coverages. A platform whose whole
+      # suite silently stops running is therefore invisible at every layer.
+      #
+      # An empty lcov is not a coverage regression to argue about -- it is proof
+      # the platform ran nothing. Fail loudly and name the platform.
+      - name: "[Coverage] Assert every integration coverage is non-empty"
+        run: |
+          missing=0
+          found=0
+          for f in packages/oidc/example/coverage/*-coverage.info; do
+            [ -e "$f" ] || continue
+            found=$((found + 1))
+            bytes=$(wc -c < "$f")
+            sf=$(grep -c '^SF:' "$f" || true)
+            sf=${sf:-0}
+            echo "guard: $(basename "$f") -> ${bytes} bytes, ${sf} SF record(s)"
+            if [ "$sf" -eq 0 ]; then
+              echo "::error::$(basename "$f") has ZERO source records - that platform executed no tests. A 0-byte lcov is how the Android job stayed green for its entire life while running nothing."
+              missing=1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no *-coverage.info found at all - every integration job failed to produce coverage"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "guard: all ${found} integration coverage file(s) carry real source records"
       - name: Combine Coverage Results
         env:
           REPO_PATH: ${{ github.workspace }}
