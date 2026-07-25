@@ -60,7 +60,7 @@ mode it replaces is a blank browser tab at runtime with no error at all.
 
 > A URI scheme cannot contain `_` ([RFC 3986](https://datatracker.ietf.org/doc/html/rfc3986#section-3.1)),
 > so if your `applicationId` has an underscore, replace it with a dot here.
-
+>
 > If you previously used `flutter_appauth`, **remove** the old
 > `appAuthRedirectScheme` placeholder and any redirect `<intent-filter>` you
 > hand-added to `MainActivity` — they are no longer used.

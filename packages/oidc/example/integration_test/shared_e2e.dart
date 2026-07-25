@@ -15,6 +15,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
+import 'package:oidc/oidc.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
 
 import 'conformance/api.dart';
@@ -59,6 +60,22 @@ void ensureLoggingConfigured() {
     print(buffer);
   });
   _loggingConfigured = true;
+}
+
+/// Describes a token by shape, never by value.
+///
+/// Every record reaches stdout via the root listener above and is archived with
+/// the conformance logs; both are public artifacts, so bearer material must not
+/// appear in either. The shape is what the assertion cares about anyway.
+String _describeToken(OidcToken token) {
+  final present = [
+    if (token.accessToken != null) 'access',
+    if (token.idToken != null) 'id',
+    if (token.refreshToken != null) 'refresh',
+  ];
+  return 'tokens=[${present.join(', ')}] type=${token.tokenType} '
+      'expiresIn=${token.expiresIn?.inSeconds}s '
+      'scope=${token.scope?.join(' ')}';
 }
 
 /// Smoke path used when no conformance token is supplied: just initialize the
@@ -264,7 +281,7 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
       ..info(
         authResult == null
             ? 'No user returned (expected for a negative module).'
-            : 'Login successful: ${authResult.token.toJson()}',
+            : 'Login successful: ${_describeToken(authResult.token)}',
       )
       ..info('Cleaning up manager for test instance: $testInstanceId');
     await sub.cancel();
@@ -288,7 +305,7 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
     reason:
         'no conformance module completed a login on ${getPlatformName()}, so '
         'the browser redirect is not reaching the app. On Android, check that '
-        'the OidcRedirectActivity intent-filter is registered for the app\'s '
+        "the OidcRedirectActivity intent-filter is registered for the app's "
         'redirect scheme.',
   );
 
