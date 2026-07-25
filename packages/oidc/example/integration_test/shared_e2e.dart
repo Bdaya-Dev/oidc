@@ -15,6 +15,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
+import 'package:oidc/oidc.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
 
 import 'conformance/api.dart';
@@ -59,6 +60,22 @@ void ensureLoggingConfigured() {
     print(buffer);
   });
   _loggingConfigured = true;
+}
+
+/// Describes a token by shape, never by value.
+///
+/// Every record reaches stdout via the root listener above and is archived with
+/// the conformance logs; both are public artifacts, so bearer material must not
+/// appear in either. The shape is what the assertion cares about anyway.
+String _describeToken(OidcToken token) {
+  final present = [
+    if (token.accessToken != null) 'access',
+    if (token.idToken != null) 'id',
+    if (token.refreshToken != null) 'refresh',
+  ];
+  return 'tokens=[${present.join(', ')}] type=${token.tokenType} '
+      'expiresIn=${token.expiresIn?.inSeconds}s '
+      'scope=${token.scope?.join(' ')}';
 }
 
 /// Smoke path used when no conformance token is supplied: just initialize the
@@ -151,6 +168,12 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
 
   final archive = Archive();
 
+  // The plan mixes positive modules with negative ones such as
+  // oidcc-client-test-invalid-iss, where the OP returns a deliberately broken
+  // response and a null result is the correct outcome. No single module can be
+  // required to succeed, so the aggregate is asserted after the loop instead.
+  var successfulLogins = 0;
+
   for (final testPlanModule
       in testPlanModules.whereType<Map<String, dynamic>>()) {
     final moduleName = testPlanModule['testModule'] as String;
@@ -232,19 +255,35 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
       await sub.cancel();
       continue;
     }
-    try {
-      logger.info('Starting login authorization code flow...');
-      final authResult = await manager.loginAuthorizationCodeFlow();
-      if (authResult == null) {
-        logger.warning('Login failed, authResult is null');
-      } else {
-        logger.info('Login successful: ${authResult.token.toJson()}');
+    // Recorded rather than discarded: swallowing the result here would let the
+    // suite pass whether or not the browser can capture a redirect at all. Not
+    // asserted per-module, since a negative module ends with no user by design.
+    logger.info('Starting login authorization code flow...');
+    final authResult = await () async {
+      try {
+        return await manager.loginAuthorizationCodeFlow();
+      } catch (e, stackTrace) {
+        // Expected for the negative modules, whose broken responses the client
+        // must reject, so record it rather than failing the run here.
+        logger.severe('Login flow threw for $moduleName', e, stackTrace);
+        return null;
       }
-    } catch (e, stackTrace) {
-      logger.severe('Error during login flow', e, stackTrace);
+    }();
+    if (authResult != null) {
+      successfulLogins++;
     }
-
-    logger.info('Cleaning up manager for test instance: $testInstanceId');
+    // print(), not logger: logger output goes into the certification archive
+    // rather than CI stdout. patrol also drops test stdout unless --verbose.
+    print(
+      '[e2e] $moduleName -> authResult ${authResult == null ? 'NULL' : 'ok'}',
+    );
+    logger
+      ..info(
+        authResult == null
+            ? 'No user returned (expected for a negative module).'
+            : 'Login successful: ${_describeToken(authResult.token)}',
+      )
+      ..info('Cleaning up manager for test instance: $testInstanceId');
     await sub.cancel();
     app_state.currentManagerRx.$ = app_state.managersRx.$.first;
     app_state.managersRx.update((managers) => managers..remove(manager));
@@ -254,6 +293,21 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
       archive.addFile(ArchiveFile.bytes('$moduleName.log', data));
     }
   }
+
+  // Individual modules may legitimately end with no user, but a platform that
+  // cannot capture the browser redirect at all scores zero here.
+  print(
+    '[e2e] successful logins: $successfulLogins / ${testPlanModules.length}',
+  );
+  expect(
+    successfulLogins,
+    greaterThan(0),
+    reason:
+        'no conformance module completed a login on ${getPlatformName()}, so '
+        'the browser redirect is not reaching the app. On Android, check that '
+        "the OidcRedirectActivity intent-filter is registered for the app's "
+        'redirect scheme.',
+  );
 
   if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
     try {

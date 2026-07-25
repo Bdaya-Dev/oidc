@@ -41,9 +41,21 @@ android {
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // Auth Tab captures the redirect via the Activity Result API — no
-        // oidcRedirectScheme manifest placeholder needed.
+        // MainActivityTest casts InstrumentationRegistry.getInstrumentation() to
+        // PatrolJUnitRunner; the stock runner would throw ClassCastException.
+        testInstrumentationRunner "pl.leancode.patrol.PatrolJUnitRunner"
+        testInstrumentationRunnerArguments clearPackageData: "true"
+        // Scheme of this app's redirect_uri, see getPlatformRedirectUri() in
+        // integration_test/helpers.dart. Supplies the plugin's redirect receiver,
+        // which is the capture path on browsers without Auth Tab support.
+        manifestPlaceholders += ['oidcRedirectScheme': 'com.bdayadev.oidc.example']
+    }
+
+    // PatrolJUnitRunner detects the discovery pass via the orchestrator's
+    // "listTestsForOrchestrator" argument. Without ANDROIDX_TEST_ORCHESTRATOR that
+    // argument is never set, so Dart test names never become JUnit parameters.
+    testOptions {
+        execution "ANDROIDX_TEST_ORCHESTRATOR"
     }
 
     buildTypes {
@@ -53,6 +65,12 @@ android {
             signingConfig signingConfigs.debug
         }
     }
+}
+
+dependencies {
+    // 1.5.1 or newer: 1.5.0 cannot handle whitespace in test names, and this
+    // suite uses names such as "OIDC Conformance Test".
+    androidTestUtil "androidx.test:orchestrator:1.5.1"
 }
 
 flutter {

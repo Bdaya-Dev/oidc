@@ -289,6 +289,11 @@ jobs:
       matrix:
         api-level: [33]
         arch: [x86_64]
+        # google_apis, not `default`: the AOSP image ships no browser, so the
+        # authorization URL cannot open. Not google_apis_playstore either; its
+        # locked-down adb does not accept the runner's key under this job's
+        # relocated ANDROID_SDK_HOME, and the AVD never finishes booting.
+        target: [google_apis]
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -325,6 +330,19 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
       - name: Run flutter precache
         run: flutter precache -v
+      # Native (Kotlin/Robolectric) tests for the oidc_android plugin, covering
+      # the redirect-capture path the Dart suite cannot reach: it mocks the
+      # Pigeon channel, so OidcPlugin.kt never executes there. JVM-only, so it
+      # needs no emulator and fails fast, ahead of one.
+      - name: "[Verify step] Native Android unit tests (oidc_android)"
+        # gradlew / gradle-wrapper.jar are gitignored repo-wide (only
+        # gradle-wrapper.properties is tracked), so a fresh checkout has no
+        # wrapper to invoke. --config-only generates the android build files
+        # without building any artifact.
+        run: |
+          flutter build apk --config-only
+          cd android
+          ./gradlew :oidc_android:testDebugUnitTest -PoidcNativeTests
       - name: AVD cache
         uses: actions/cache@v5
         id: avd-cache
@@ -332,8 +350,8 @@ jobs:
           path: |
             /mnt/.android/avd/*
             /mnt/.android/adb*
-          # include arch to avoid reusing old 32-bit images
-          key: avd-${{ matrix.api-level }}-${{ matrix.arch }}-novulkan
+          # include arch + target to avoid reusing old 32-bit / browserless images
+          key: avd-${{ matrix.api-level }}-${{ matrix.arch }}-${{ matrix.target }}-novulkan
 
       - name: create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
@@ -341,7 +359,7 @@ jobs:
         with:
           api-level: ${{ matrix.api-level }}
           arch: ${{ matrix.arch }}
-          # target: google_apis 
+          target: ${{ matrix.target }}
           force-avd-creation: true
           # For snapshot caching, do NOT use -no-snapshot.
           emulator-options: -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none
@@ -380,17 +398,98 @@ jobs:
 
           echo "Using device: $EMU_ID"
           flutter devices
+
+          # The conformance leg needs a browser that lacks Auth Tab support to
+          # be meaningful, so record what this image actually ships. "No browser"
+          # and "browser present but redirect not captured" are different defects
+          # with different fixes.
+          echo "--- browser packages on the emulator (pre-install) ---"
+          adb -s "$EMU_ID" shell pm list packages | grep -iE 'chrome|browser|webview|firefox' || echo "NO browser/chrome/webview package matched"
+          echo "--- what resolves an https VIEW intent ---"
+          adb -s "$EMU_ID" shell 'cmd package resolve-activity --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d https://example.com' || true
+          echo "--- end pre-install diagnostics ---"
+
+          # A first-run device shows Chrome's welcome/ToS gate, and a Custom Tab
+          # opened behind it never reaches the auth URL, so no redirect returns.
+          #
+          # /data/local/tmp, not /data/local: the latter is SELinux-blocked. The
+          # first token is a placeholder because Chrome parses the file as an argv
+          # line and discards element 0.
+          # Ref: chromium.org/developers/how-tos/run-chromium-with-flags
+          echo "--- suppressing Chrome first-run ---"
+          adb -s "$EMU_ID" root >/dev/null 2>&1 || true
+          adb -s "$EMU_ID" shell 'echo "_ --no-first-run --disable-fre --no-default-browser-check" > /data/local/tmp/chrome-command-line' || true
+          adb -s "$EMU_ID" shell 'am set-debug-app --persistent com.android.chrome' || true
+          adb -s "$EMU_ID" shell 'cat /data/local/tmp/chrome-command-line' || true
+          echo "--- end Chrome first-run suppression ---"
           # Runs every patrol_test/*_test.dart (conformance + e2e + offline) on
           # the emulator and collects Dart coverage via the VM service.
+          # --verbose: patrol forwards NO test stdout without it, so neither the
+          # test names nor the "Total: N" summary reach the job log.
+          # `set -eo pipefail` is set above, so tee preserves patrol's exit code.
+          # Capture the status rather than letting `set -e` abort here: the
+          # diagnostics below matter most when the run failed. Honoured at the end.
+          set +e
           patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-workspace \
             -d "$EMU_ID" \
+            --verbose \
             --dart-define=CI=true \
-            --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
+            --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN} \
+            2>&1 | tee patrol-android.log
+          PATROL_RC=${PIPESTATUS[0]}
+          set -e
+          echo "patrol exit status: $PATROL_RC"
+
+          # POST-INSTALL, which is the only point this means anything: patrol is what
+          # builds and installs the APK, so probing before it always reports "No
+          # activity found" whether or not the manifest is wired.
+          #
+          # Direct check that the merged manifest registered OidcRedirectActivity
+          # for the app's redirect scheme. If it resolves, capture is wired and a
+          # remaining failure is browser or flow side; if not, the wiring is.
+          # Read the manifest from the APK patrol built, not from the device:
+          # patrol uninstalls the app when it finishes, so an adb probe afterwards
+          # always reports it missing. This reads the bytes that were installed.
+          echo "--- APK manifest: which scheme is OidcRedirectActivity registered for? ---"
+          APK="$(find build/app/outputs -name 'app-debug.apk' -print -quit 2>/dev/null || true)"
+          echo "apk: ${APK:-<none found>}"
+          if [ -n "$APK" ]; then
+            AAPT2="$(find "$ANDROID_SDK_ROOT/build-tools" "$ANDROID_HOME/build-tools" -name aapt2 -type f 2>/dev/null | sort | tail -1)"
+            echo "aapt2: ${AAPT2:-<none found>}"
+            if [ -n "$AAPT2" ]; then
+              "$AAPT2" dump xmltree --file AndroidManifest.xml "$APK" 2>/dev/null \
+                | grep -A 12 'OidcRedirectActivity' | head -20 || echo "OidcRedirectActivity NOT in the APK manifest"
+            fi
+          fi
+          echo "--- end post-run diagnostics ---"
+
+          # patrol_cli_plus exits 0 on a run that executed nothing, because its
+          # android backend only inspects gradle's exit code. Until a release
+          # carries the upstream guard, assert the count here so a green job
+          # cannot mean "no tests ran".
+          TOTAL="$(grep -oE 'Total:[[:space:]]*[0-9]+' patrol-android.log | tail -1 | grep -oE '[0-9]+' || true)"
+          echo "Android patrol executed ${TOTAL:-<no Total line>} test(s)."
+          if [ -z "$TOTAL" ]; then
+            echo "::error::patrol printed no 'Total:' line - cannot prove any test ran."
+            exit 1
+          fi
+          if [ "$TOTAL" -lt 4 ]; then
+            echo "::error::patrol executed $TOTAL test(s), expected at least 4 (app_test + 3 offline_mode_test)."
+            exit 1
+          fi
           # patrol writes coverage/patrol_lcov.info; rename for the combine step.
           cp coverage/patrol_lcov.info coverage/android-coverage.info
+
+          # Deferred above so the diagnostics always run. The count ratchet is an
+          # additional gate, not a replacement: a run can execute every test and
+          # still fail one.
+          if [ "$PATROL_RC" -ne 0 ]; then
+            echo "::error::patrol reported failure (exit $PATROL_RC); see the test output above."
+            exit "$PATROL_RC"
+          fi
           EOF
           chmod +x android_emulator_ci.sh
       - name: Run Android Emulator and Integration Tests
@@ -405,7 +504,7 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -camera-back none
           disable-animations: true
           emulator-boot-timeout: 900
-          # target: google_apis 
+          target: ${{ matrix.target }}
           script: ./android_emulator_ci.sh
       - name: Find .info files and files in coverage folders
         run: |
@@ -713,11 +812,16 @@ jobs:
           # xdotool, installed above). A single invocation runs every
           # patrol_test/*_test.dart (conformance + e2e + offline) and collects
           # Dart coverage via the VM service.
+          # --verbose because patrol forwards NO test stdout to the job log by
+          # default: a failing test reports only "1 test(s) failed", with the
+          # reason, the module name, and even plain print() output all dropped.
+          # The ios job already runs verbose for the same reason.
           xvfb-run --auto-servernum patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-workspace \
             -d linux \
+            --verbose \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
           cp coverage/patrol_lcov.info coverage/linux-coverage.info
@@ -762,11 +866,15 @@ jobs:
           # honor PATHEXT, so bare `patrol_plus` is "command not found" (exit
           # 127) even with the pub-cache bin on PATH. Invoke the .bat by its
           # full name — git-bash resolves it on PATH and execs it via cmd.
+          # --verbose to match ios/web/linux: without it patrol drops all test
+          # stdout, so windows reports "Results: 4 passed" with no "[e2e]" line
+          # and its conformance login count is unobservable.
           patrol_plus.bat test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-workspace \
             -d windows \
+            --verbose \
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
           cp coverage/patrol_lcov.info coverage/windows-coverage.info
@@ -829,6 +937,37 @@ jobs:
           # ("0") is captured either way.
           remaining=$(grep -rhc '^SF:/Users/' packages/oidc/example/coverage --include='*.info' | awk '{s+=$1} END {print s+0}' || true)
           echo "macOS-absolute SF entries remaining after normalization: $remaining"
+      # A platform that stops running tests emits an empty lcov, and nothing else
+      # catches that: `if-no-files-found: error` only asserts the file exists, and
+      # codecov.yml disables every status (`patch: false`, `project: false`). The
+      # sibling guard below covers unit_tests' packages but not these.
+      #
+      # An empty lcov is not a coverage regression, it is proof the platform ran
+      # nothing, so fail and name it.
+      - name: "[Coverage] Assert every integration coverage is non-empty"
+        run: |
+          missing=0
+          found=0
+          for f in packages/oidc/example/coverage/*-coverage.info; do
+            [ -e "$f" ] || continue
+            found=$((found + 1))
+            bytes=$(wc -c < "$f")
+            sf=$(grep -c '^SF:' "$f" || true)
+            sf=${sf:-0}
+            echo "guard: $(basename "$f") -> ${bytes} bytes, ${sf} SF record(s)"
+            if [ "$sf" -eq 0 ]; then
+              echo "::error::$(basename "$f") has zero source records - that platform executed no tests."
+              missing=1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no *-coverage.info found at all - every integration job failed to produce coverage"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "guard: all ${found} integration coverage file(s) carry real source records"
       - name: Combine Coverage Results
         env:
           REPO_PATH: ${{ github.workspace }}

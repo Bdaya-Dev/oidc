@@ -50,22 +50,42 @@ android {
 
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
+        test.java.srcDirs += 'src/test/kotlin'
     }
 
+
     defaultConfig {
-        minSdkVersion 21
+        // androidx.browser:browser:1.10.0 declares minSdk 23; a lower value
+        // here fails the manifest merge in any consuming app.
+        minSdkVersion 23
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // Auth Tab captures the redirect via the Activity Result API — no
-        // oidcRedirectScheme manifest placeholder needed.
+        // No default for oidcRedirectScheme on purpose. A value declared here is
+        // substituted into this library's manifest before the app-level merge and
+        // would override the consuming app's own scheme. Leaving it unresolved
+        // lets the app's placeholder win, matching AppAuth-Android's contract for
+        // appAuthRedirectScheme. An app that omits it fails the merge with an
+        // error naming the placeholder, rather than failing silently at runtime.
+        //
+        // Building this module standalone has no app to supply the value, so its
+        // own unit tests pass one via -PoidcNativeTests. Consumers never set that
+        // flag, so it cannot reach a consuming app's merge.
+        //   ./gradlew :oidc_android:testDebugUnitTest -PoidcNativeTests
+        if (project.hasProperty('oidcNativeTests')) {
+            manifestPlaceholders = [oidcRedirectScheme: 'com.bdayadev.oidc.test']
+        }
     }
 
     dependencies {
-        // Chrome Custom Tabs for the system-browser authorization flow
-        // (replaces the AppAuth-Android dependency). Pure Kotlin/AAR, so it
-        // ships no .so and is inherently 16 KB page-size compliant.
+        // Custom Tabs / Auth Tab for the system-browser authorization flow.
+        // Pure Kotlin/AAR: ships no .so, so it is 16 KB page-size compliant.
         implementation 'androidx.browser:browser:1.10.0'
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
         testImplementation 'org.mockito:mockito-core:5.0.0'
+        // Robolectric runs the plugin against real android.net.Uri / Activity
+        // implementations on the JVM. The Dart tests mock the Pigeon channel, so
+        // they cannot exercise native redirect capture at all.
+        testImplementation 'org.robolectric:robolectric:4.15.1'
+        testImplementation 'androidx.test:core:1.7.0'
     }
 
     testOptions {

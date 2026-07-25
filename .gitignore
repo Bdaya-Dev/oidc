@@ -56,3 +56,5 @@ pubspec_overrides.yaml
 
 # Claude Code local state (agent worktrees, local settings — not source)
 .claude/
+# Session handoff artifacts (local deliverables, not repo content)
+session-artifacts/

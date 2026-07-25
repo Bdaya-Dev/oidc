@@ -18,9 +18,31 @@
             <action android:name="androidx.browser.customtabs.action.CustomTabsService" />
         </intent>
     </queries>
-    <!--
-      Auth Tab captures the redirect via the Activity Result API — no
-      intent-filter / redirect Activity needed. The consuming app no longer
-      needs the `oidcRedirectScheme` manifest placeholder.
-    -->
+    <application>
+        <!--
+          Plugin-owned redirect receiver: the capture path for browsers without
+          Auth Tab support, which treat the launch intent as a plain Custom Tab
+          and navigate to the redirect_uri instead of intercepting it.
+
+          The consuming app supplies the scheme through a manifest placeholder
+          in its app/build.gradle:
+
+              manifestPlaceholders += ['oidcRedirectScheme': 'com.example.app']
+
+          This library intentionally declares no default for that placeholder.
+          A default set here is substituted into the library manifest before the
+          app-level merge and would override the app's own scheme.
+        -->
+        <activity
+            android:name="com.bdayadev.oidc.OidcRedirectActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${oidcRedirectScheme}" />
+            </intent-filter>
+        </activity>
+    </application>
 </manifest>

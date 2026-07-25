@@ -28,11 +28,19 @@ we also rely on [![flutter_secure_storage][flutter_secure_storage_image]][flutte
 
 ## Android
 
-### Redirect handling (Chrome Custom Tabs)
+### Redirect handling (Auth Tab / Chrome Custom Tabs)
 
-`oidc_android` opens the system browser via Chrome Custom Tabs and ships its own
-transparent redirect receiver (`OidcRedirectActivity`), so you only declare the
-**scheme** of your `redirect_uri` with a single manifest placeholder.
+`oidc_android` opens the system browser via Auth Tab (falling back to Chrome
+Custom Tabs) and ships its own transparent redirect receiver
+(`OidcRedirectActivity`), so you only declare the **scheme** of your
+`redirect_uri` with a single manifest placeholder.
+
+Auth Tab returns the redirect through the Activity Result API, which needs both
+Chrome 137+ **and** a host activity that extends `ComponentActivity` — that is
+`FlutterFragmentActivity`, not the default `FlutterActivity`. Anything else —
+another browser, or the default host — degrades to a plain Custom Tab, and the
+redirect is caught by the receiver's intent-filter instead. The placeholder
+below is what wires that receiver up, so it is required for login to work.
 
 go to `android/app/build.gradle`, and add the following under `defaultConfig`:
 

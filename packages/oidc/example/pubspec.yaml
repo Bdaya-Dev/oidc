@@ -45,7 +45,10 @@ dev_dependencies:
 # Patrol CLI config (patrol_cli_plus is activated globally in CI, not depended
 # on here, so its deps don't enter the app's resolution). Tests live in the
 # default `patrol_test/` directory.
-patrol:
+# The key is `patrol_plus`, not `patrol`. patrol_cli_plus reads
+# `yaml['patrol_plus']` and falls back to its default config when absent, so the
+# legacy key silently discards this block along with the uninstall finalizers.
+patrol_plus:
   app_name: OIDC Example
   android:
     package_name: com.bdayadev.oidc.example
