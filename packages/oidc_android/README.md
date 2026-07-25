@@ -11,6 +11,15 @@ The Android implementation of `package:oidc`.
 This package is [endorsed][endorsed_link], which means you can simply use `package:oidc`
 normally. This package will be automatically included in your app when you do.
 
+## Requirements
+
+`minSdkVersion` **23 or higher**, set in `android/app/build.gradle`. This plugin
+depends on `androidx.browser:browser:1.10.0`, which declares `minSdk 23`; a
+lower value in your app fails the manifest merge at build time.
+
+> Upgrading from 1.0.1 or earlier? Its floor was 21, so raising this is the one
+> change that can break your build.
+
 ## Redirect handling (native setup)
 
 This implementation opens the system browser via **Auth Tab** (falling back to
