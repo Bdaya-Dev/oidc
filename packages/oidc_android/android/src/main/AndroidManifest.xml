@@ -20,25 +20,18 @@
     </queries>
     <application>
         <!--
-          Plugin-owned redirect receiver — the FALLBACK capture path.
+          Plugin-owned redirect receiver: the capture path for browsers without
+          Auth Tab support, which treat the launch intent as a plain Custom Tab
+          and navigate to the redirect_uri instead of intercepting it.
 
-          Auth Tab (Chrome 137+) returns the redirect through the Activity
-          Result API and never reaches this Activity. But AuthTabIntent does NO
-          capability detection: it deliberately carries a null EXTRA_SESSION so
-          browsers without Auth Tab support treat it as a plain Custom Tab.
-          That fallback preserves the UI, NOT the redirect capture — a Custom
-          Tab just navigates to the redirect_uri. Without this receiver the
-          navigation resolves to no app and the user sees a blank tab (#418).
-
-          The consuming app drives the scheme with a single manifest
-          placeholder in its app/build.gradle:
+          The consuming app supplies the scheme through a manifest placeholder
+          in its app/build.gradle:
 
               manifestPlaceholders += ['oidcRedirectScheme': 'com.example.app']
 
-          A safe default is provided in this library's build.gradle so apps that
-          pull oidc transitively but do not use the native redirect flow still
-          build. Apps doing mobile login MUST override it with their own
-          redirect_uri scheme.
+          This library intentionally declares no default for that placeholder.
+          A default set here is substituted into the library manifest before the
+          app-level merge and would override the app's own scheme.
         -->
         <activity
             android:name="com.bdayadev.oidc.OidcRedirectActivity"

@@ -45,12 +45,9 @@ dev_dependencies:
 # Patrol CLI config (patrol_cli_plus is activated globally in CI, not depended
 # on here, so its deps don't enter the app's resolution). Tests live in the
 # default `patrol_test/` directory.
-# Key MUST be `patrol_plus`, not `patrol`: the fork's reader does
-# `yaml['patrol_plus']` and SILENTLY returns the default config when it is
-# absent -- no warning, no error. Under the old `patrol:` key this whole block
-# was discarded, so PATROL_APP_PACKAGE_NAME was never set and the per-platform
-# uninstall finalizers were skipped. Upstream patrol's docs still show `patrol:`,
-# which is where the mistake came from.
+# The key is `patrol_plus`, not `patrol`. patrol_cli_plus reads
+# `yaml['patrol_plus']` and falls back to its default config when absent, so the
+# legacy key silently discards this block along with the uninstall finalizers.
 patrol_plus:
   app_name: OIDC Example
   android:

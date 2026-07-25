@@ -5,17 +5,12 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Structural guard on the library manifest.
+ * Structural guard on the library manifest: the redirect receiver and its
+ * intent-filter must stay declared, and the library must not declare a default
+ * for the scheme placeholder.
  *
- * Issue #418 was a wholesale deletion: the `OidcRedirectActivity` declaration
- * and its `<intent-filter>` were removed on the assumption that Auth Tab's
- * Custom Tabs fallback also carried redirect capture. It does not — it only
- * degrades the UI. Nothing in the suite noticed, because no test read the
- * manifest and no test exercised native capture.
- *
- * This asserts the receiver stays wired. It is deliberately a plain file
- * assertion rather than a Robolectric package-manager query so it fails loudly
- * and instantly on the exact edit that caused the regression.
+ * Deliberately plain file assertions rather than a Robolectric package-manager
+ * query, so a removal fails immediately and without an emulator.
  */
 class RedirectReceiverManifestTest {
 
@@ -29,9 +24,8 @@ class RedirectReceiverManifestTest {
     fun `the redirect receiver is declared and exported`() {
         assertTrue(
             manifest.contains("com.bdayadev.oidc.OidcRedirectActivity"),
-            "OidcRedirectActivity must stay declared — without it every browser " +
-                "that lacks Auth Tab support (Firefox, Samsung Internet, older " +
-                "Chrome) drops the redirect on the floor. See issue #418.",
+            "OidcRedirectActivity must stay declared; without it a browser that " +
+                "lacks Auth Tab support has nowhere to deliver the redirect",
         )
         assertTrue(
             manifest.contains("android:exported=\"true\""),
@@ -56,11 +50,9 @@ class RedirectReceiverManifestTest {
     }
 
     /**
-     * The `captureMode` strings the plugin emits are parsed by a `switch` in
-     * `oidc_platform_interface`'s `_captureMode()`; an unrecognised value maps
-     * silently to `OidcRedirectCaptureMode.unknown` rather than failing. Both
-     * sides must agree, and nothing else enforces it across the language
-     * boundary.
+     * `oidc_platform_interface`'s `_captureMode()` maps an unrecognised value to
+     * `OidcRedirectCaptureMode.unknown` rather than failing, so nothing else
+     * enforces agreement across the language boundary.
      */
     @Test
     fun `emitted captureMode values match the Dart OidcRedirectCaptureMode parser`() {
@@ -79,20 +71,16 @@ class RedirectReceiverManifestTest {
             assertTrue(
                 dartText.contains("'$mode' =>"),
                 "captureMode \"$mode\" is emitted by OidcPlugin.kt but is not a case in " +
-                    "_captureMode() in oidc_platform_interface — it would silently decode " +
+                    "_captureMode() in oidc_platform_interface, so it would decode " +
                     "as OidcRedirectCaptureMode.unknown",
             )
         }
     }
 
     /**
-     * A `manifestPlaceholders` entry declared in THIS library module is
-     * substituted into the library manifest before the app merge, which
-     * shadows the consuming app's own value. Verified by building the example:
-     * with a library default of `com.bdayadev.oidc.unset`, the merged app
-     * manifest registered `android:scheme="com.bdayadev.oidc.unset"` instead of
-     * the app's `com.bdayadev.oidc.example`, so the redirect still resolved to
-     * nothing — issue #418 would have survived the fix.
+     * A `manifestPlaceholders` entry declared in this library module is
+     * substituted into the library manifest before the app-level merge, so it
+     * overrides the consuming app's own value rather than acting as a fallback.
      */
     @Test
     fun `the library declares no default that would shadow the app's scheme`() {
@@ -108,10 +96,9 @@ class RedirectReceiverManifestTest {
         }
         assertTrue(
             offenders.isEmpty(),
-            "this library must NOT set an ungated oidcRedirectScheme placeholder default " +
-                "(build.gradle line(s) ${offenders.map { it + 1 }}): it is substituted into the " +
-                "library manifest before the app merge and silently overrides the consuming " +
-                "app's scheme, reintroducing #418",
+            "this library must not set an ungated oidcRedirectScheme default " +
+                "(build.gradle line(s) ${offenders.map { it + 1 }}): it is substituted before " +
+                "the app-level merge and overrides the consuming app's scheme",
         )
     }
 }

@@ -9,26 +9,20 @@ import org.junit.runners.Parameterized.Parameters;
 import pl.leancode.patrol.PatrolJUnitRunner;
 
 /**
- * Android instrumentation entrypoint for the Patrol suite.
+ * Android instrumentation entrypoint for the Patrol suite, and the counterpart
+ * of {@code ios/RunnerUITests/RunnerUITests.m}.
  *
- * <p>Without this class the app has no {@code androidTest} source set at all, so
- * {@code connectedDebugAndroidTest} enumerates zero JUnit classes, Patrol's
- * Dart-side {@code listDartTests()} RPC is never reached, and the CI job prints
- * {@code Total: 0} in ~7s while reporting success. That is exactly what the
- * Android job did for its entire life, which is why it could not catch the
- * issue-#418 Android redirect regression: it had never executed a single test.
- *
- * <p>iOS already had the analogue ({@code ios/RunnerUITests/RunnerUITests.m}) and
- * correctly reported 3-4 tests, which is what made the Android gap visible.
- *
- * <p>Patrol's CLI does NOT generate this file — it only references it in a
- * comment. It has to live in the repo.
+ * <p>Patrol's CLI does not generate this file, so it has to live in the repo.
+ * Without it the app has no {@code androidTest} source set,
+ * {@code connectedDebugAndroidTest} enumerates zero JUnit classes, and the Dart
+ * {@code listDartTests()} RPC is never reached: the run then reports success
+ * having executed nothing.
  *
  * <p>{@link FlutterFragmentActivity} is passed because this example declares no
- * custom MainActivity; {@code AndroidManifest.xml} launches the Flutter activity
- * directly. It is only the fallback anyway: {@code PatrolJUnitRunner.setUp} tries
- * {@code getLaunchIntentForPackage} first, and the manifest does declare a
- * LAUNCHER intent-filter, so the launcher path wins.
+ * custom MainActivity and the manifest launches the Flutter activity directly.
+ * It is only a fallback: {@code PatrolJUnitRunner.setUp} prefers
+ * {@code getLaunchIntentForPackage}, and the manifest declares a LAUNCHER
+ * intent-filter.
  */
 @RunWith(Parameterized.class)
 public class MainActivityTest {

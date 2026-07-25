@@ -19,15 +19,13 @@ import kotlin.test.assertTrue
 /**
  * Native redirect-capture tests for [OidcPlugin].
  *
- * These cover the path the Dart tests structurally cannot: `oidc_android`'s
- * Dart suite mocks the Pigeon channel and hands back a canned redirect URI, so
- * it asserts nothing about whether the native side can actually capture a
- * redirect. Issue #418 shipped because that was the only tier that existed.
+ * These cover what the Dart suite structurally cannot: it mocks the Pigeon
+ * channel and returns a canned redirect URI, so it asserts nothing about the
+ * native side's ability to capture one.
  *
- * The scenario under test is a browser WITHOUT Auth Tab support (Firefox,
- * Samsung Internet, older Chrome, AOSP images with no Chrome): `AuthTabIntent`
- * silently degrades to a plain Custom Tab, no Activity Result is ever
- * delivered, and the flow can only complete via [OidcRedirectActivity].
+ * The scenario here is a browser without Auth Tab support, where [AuthTabIntent]
+ * degrades to a plain Custom Tab, no Activity Result is delivered, and the flow
+ * can only complete through [OidcRedirectActivity].
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
@@ -36,7 +34,7 @@ class OidcPluginRedirectTest {
     private lateinit var plugin: OidcPlugin
     private lateinit var activity: Activity
 
-    /** Host that is NOT a ComponentActivity — the Custom Tab / fallback case. */
+    /** A non-ComponentActivity host, which is the Custom Tab path. */
     @Before
     fun setUp() {
         plugin = OidcPlugin()
@@ -95,7 +93,7 @@ class OidcPluginRedirectTest {
     fun `a host mismatch is rejected when the expected redirect declares one`() {
         val results = startAuthorize(redirectUri = "com.example.app://callback")
 
-        // Same scheme, different host — not this flow's redirect.
+        // Same scheme, different host, so not this flow's redirect.
         val consumed = OidcPlugin.handleRedirect(
             Uri.parse("com.example.app://somewhere-else?code=x"),
         )
@@ -110,9 +108,9 @@ class OidcPluginRedirectTest {
         val redirect = Uri.parse("com.example.app://callback?code=code-1&state=s")
 
         assertTrue(OidcPlugin.handleRedirect(redirect))
-        // A second delivery (onNewIntent re-entry, or the Custom Tab closing and
-        // reporting RESULT_CANCELED afterwards) must not resolve the callback
-        // again or overwrite the success with a cancellation.
+        // A second delivery, whether onNewIntent re-entry or the Custom Tab
+        // reporting RESULT_CANCELED as it closes, must not resolve the callback
+        // again or overwrite the success.
         assertFalse(OidcPlugin.handleRedirect(redirect))
 
         assertEquals(1, results.size)
@@ -150,9 +148,8 @@ class OidcPluginRedirectTest {
 
     @Test
     fun `a plain Activity host still opens a browser instead of failing`() {
-        // 2.0.0 hard-failed with NO_COMPONENT_ACTIVITY on a plain FlutterActivity
-        // because Auth Tab was the only capture path. With the intent-filter
-        // fallback restored, a plain Activity is a supported host again.
+        // A non-ComponentActivity host has no ActivityResultLauncher, so the
+        // plugin must open a Custom Tab rather than reject the flow.
         val results = startAuthorize()
 
         val launched = org.robolectric.Shadows.shadowOf(activity).nextStartedActivity

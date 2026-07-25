@@ -55,29 +55,20 @@ android {
 
 
     defaultConfig {
-        // androidx.browser:browser:1.10.0 declares minSdk 23; claiming 21 here
-        // is a manifest-merge failure waiting to happen in any consuming app
-        // that takes us at our word. 23 is the honest floor.
+        // androidx.browser:browser:1.10.0 declares minSdk 23; a lower value
+        // here fails the manifest merge in any consuming app.
         minSdkVersion 23
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // Deliberately NO default for oidcRedirectScheme. A placeholder value
-        // declared here is substituted into THIS library's manifest before the
-        // app merge, which SHADOWS the consuming app's own value — verified by
-        // building the example: with a default of 'com.bdayadev.oidc.unset' the
-        // merged app manifest registered `android:scheme="com.bdayadev.oidc.unset"`
-        // instead of the app's scheme, so the redirect resolved to nothing and
-        // issue #418 persisted despite a correctly-configured app.
+        // No default for oidcRedirectScheme on purpose. A value declared here is
+        // substituted into this library's manifest before the app-level merge and
+        // would override the consuming app's own scheme. Leaving it unresolved
+        // lets the app's placeholder win, matching AppAuth-Android's contract for
+        // appAuthRedirectScheme. An app that omits it fails the merge with an
+        // error naming the placeholder, rather than failing silently at runtime.
         //
-        // Leaving it unset keeps `${oidcRedirectScheme}` unresolved until the
-        // app merge, where the app's placeholder wins (the same contract
-        // AppAuth-Android uses for appAuthRedirectScheme). An app that forgets
-        // it fails the manifest merge with a build error naming the placeholder
-        // — far better than a silent blank browser tab at runtime.
-        //
-        // Building THIS module standalone for its own unit tests has no app to
-        // supply the value, so the merge would fail. The -PoidcNativeTests flag
-        // supplies a dummy one for that case only; it is never set when an app
-        // builds the plugin, so it cannot shadow a consumer's scheme.
+        // Building this module standalone has no app to supply the value, so its
+        // own unit tests pass one via -PoidcNativeTests. Consumers never set that
+        // flag, so it cannot reach a consuming app's merge.
         //   ./gradlew :oidc_android:testDebugUnitTest -PoidcNativeTests
         if (project.hasProperty('oidcNativeTests')) {
             manifestPlaceholders = [oidcRedirectScheme: 'com.bdayadev.oidc.test']
@@ -85,16 +76,14 @@ android {
     }
 
     dependencies {
-        // Chrome Custom Tabs for the system-browser authorization flow
-        // (replaces the AppAuth-Android dependency). Pure Kotlin/AAR, so it
-        // ships no .so and is inherently 16 KB page-size compliant.
+        // Custom Tabs / Auth Tab for the system-browser authorization flow.
+        // Pure Kotlin/AAR: ships no .so, so it is 16 KB page-size compliant.
         implementation 'androidx.browser:browser:1.10.0'
         testImplementation 'org.jetbrains.kotlin:kotlin-test'
         testImplementation 'org.mockito:mockito-core:5.0.0'
         // Robolectric runs the plugin against real android.net.Uri / Activity
-        // implementations on the JVM. Without it OidcPlugin.kt is unreachable
-        // from any test (the Dart tests mock the Pigeon channel, so they stub
-        // out native redirect capture entirely) — which is how #418 shipped.
+        // implementations on the JVM. The Dart tests mock the Pigeon channel, so
+        // they cannot exercise native redirect capture at all.
         testImplementation 'org.robolectric:robolectric:4.15.1'
         testImplementation 'androidx.test:core:1.7.0'
     }

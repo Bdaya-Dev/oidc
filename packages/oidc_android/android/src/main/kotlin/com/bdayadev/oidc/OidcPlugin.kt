@@ -17,33 +17,28 @@ import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
  * First-party Android implementation of the oidc browser primitive.
  *
  * Opens the authorization / end-session URL (already fully built by Dart
- * `oidc_core`, including PKCE/state/nonce) via [AuthTabIntent] and returns
- * the captured redirect URI string back to Dart, which parses it. No OIDC
- * logic lives here — this replaces the `flutter_appauth` dependency with a
- * thin, dependency-light native primitive.
+ * `oidc_core`, including PKCE/state/nonce) and returns the captured redirect
+ * URI string back to Dart, which parses it. No OIDC logic lives here.
  *
- * Redirect capture is DUAL-PATH, because [AuthTabIntent] performs no
- * capability detection whatsoever — `launch()` only stuffs extras onto an
- * Intent, and `Builder.build()` deliberately carries a null EXTRA_SESSION
- * "so that this is interpreted as a Custom Tab intent by browser
- * implementations that don't support Auth Tab":
+ * Redirect capture is dual-path because [AuthTabIntent] performs no capability
+ * detection: `launch()` only sets extras on an Intent, and `Builder.build()`
+ * attaches a null EXTRA_SESSION so browsers without Auth Tab support treat it
+ * as an ordinary Custom Tab.
  *
- *  1. **Auth Tab** (Chrome 137+) — preferred. The redirect comes back through
- *     the Activity Result API, which survives process death.
- *  2. **[OidcRedirectActivity]** — fallback. Every other browser (Firefox,
- *     Samsung Internet, older Chrome, AOSP images with no Chrome at all)
- *     degrades to a plain Custom Tab, which does NOT intercept the redirect;
- *     it merely navigates to it. The plugin-owned intent-filter catches that
- *     navigation. Without it the redirect resolves to no app and the user is
- *     left on a blank tab (issue #418).
+ *  1. Auth Tab (Chrome 137+): the redirect returns through the Activity Result
+ *     API, which survives process death. Preferred when available.
+ *  2. [OidcRedirectActivity]: every other browser degrades to a plain Custom
+ *     Tab, which navigates to the redirect rather than intercepting it. The
+ *     plugin-owned intent-filter catches that navigation. Without it the
+ *     redirect resolves to no app at all.
  *
- * Whichever path fires first wins; [finishPending] guarantees the Dart
- * callback is resolved exactly once.
+ * Whichever path fires first wins; [finishPending] resolves the Dart callback
+ * exactly once.
  *
  * Path 2 requires the consuming app to declare its redirect scheme via the
  * `oidcRedirectScheme` manifest placeholder. Path 1 additionally requires a
- * [ComponentActivity] host (e.g. `FlutterFragmentActivity`); on a plain
- * `FlutterActivity` the plugin launches a Custom Tab directly and relies on
+ * [ComponentActivity] host such as `FlutterFragmentActivity`; on a plain
+ * `FlutterActivity` the plugin opens a Custom Tab directly and relies on
  * path 2.
  *
  * The Dart<->native transport is the Pigeon-generated [OidcAndroidHostApi]
@@ -189,19 +184,17 @@ class OidcPlugin :
         expectedRedirect = redirectUri?.let(Uri::parse)
         redirectHandled = false
         flowId = (++flowCounter).toString()
-        // Arm the intent-filter fallback path before the browser opens.
+        // Must be set before the browser opens so OidcRedirectActivity can
+        // reach this instance.
         activeInstance = this
 
         val ephemeral = options["ephemeralBrowsing"] as? Boolean == true
         emit("opening")
 
-        // Prefer Auth Tab: on Chrome 137+ the redirect is captured via the
-        // Activity Result API, which survives process death. On every other
-        // browser the SAME intent silently degrades to a plain Custom Tab —
-        // which does NOT capture the redirect — so OidcRedirectActivity's
-        // intent-filter is the path that actually completes the flow there.
-        // A plain FlutterActivity has no ActivityResultLauncher at all; launch
-        // a Custom Tab directly and rely entirely on the fallback path.
+        // Auth Tab where the host supports it; the same intent degrades to a
+        // plain Custom Tab elsewhere, where OidcRedirectActivity completes the
+        // flow instead. A plain FlutterActivity has no ActivityResultLauncher,
+        // so open a Custom Tab directly and rely on the intent-filter.
         val launcher = authLauncher
         if (launcher != null) {
             launchAuthTab(launcher, url, ephemeral)
@@ -237,9 +230,9 @@ class OidcPlugin :
     }
 
     /**
-     * Launches a plain Custom Tab for hosts that are not a [ComponentActivity]
-     * and therefore have no [ActivityResultLauncher]. The redirect can only
-     * come back through [OidcRedirectActivity] here.
+     * Opens a plain Custom Tab for hosts that are not a [ComponentActivity] and
+     * therefore have no [ActivityResultLauncher]. The redirect can only return
+     * through [OidcRedirectActivity] on this path.
      */
     private fun launchCustomTab(host: Activity, url: String, ephemeral: Boolean) {
         CustomTabsIntent.Builder()
@@ -256,12 +249,11 @@ class OidcPlugin :
     }
 
     /**
-     * Called by [OidcRedirectActivity] with the redirect URI captured by the
-     * intent-filter. Returns true if the in-flight flow consumed it. Runs on
-     * the main thread.
+     * Delivers a redirect URI captured by the intent-filter. Returns true when
+     * the in-flight flow consumed it. Runs on the main thread.
      *
      * Only a redirect matching the flow's own `redirect_uri` is accepted, so an
-     * unrelated deep link into the app cannot resolve someone else's login.
+     * unrelated deep link cannot resolve an in-flight login.
      */
     private fun onRedirect(data: Uri): Boolean {
         if (pendingCallback == null || redirectHandled) return false
@@ -291,8 +283,8 @@ class OidcPlugin :
 
     /** Handles the Auth Tab [AuthTabIntent.AuthResult] on the main thread. */
     private fun handleAuthResult(authResult: AuthTabIntent.AuthResult) {
-        // The intent-filter path may have already resolved this flow (the tab
-        // then reports RESULT_CANCELED as it closes) — never override a win.
+        // The intent-filter path may have already resolved this flow; the tab
+        // then reports RESULT_CANCELED as it closes. Never override a success.
         if (pendingCallback == null || redirectHandled) return
         when (authResult.resultCode) {
             AuthTabIntent.RESULT_OK -> {

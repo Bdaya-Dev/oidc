@@ -121,16 +121,10 @@ jobs:
       matrix:
         api-level: [33]
         arch: [x86_64]
-        # The `default` (AOSP) image ships no browser, so the authorization URL
-        # could not open and no redirect could come back -- the emulator was
-        # exercising a dead flow (issue #418).
-        #
-        # NOT google_apis_playstore: that was tried first and never booted --
-        # 497 "adb: device unauthorized" lines and the AVD snapshot step timing
-        # out at 900s, where main's `default` image produced zero. Play Store
-        # images ship a locked-down adb that will not accept the runner's key
-        # under this job's relocated ANDROID_SDK_HOME. google_apis carries
-        # Google APIs and a browser without that restriction.
+        # google_apis, not `default`: the AOSP image ships no browser, so the
+        # authorization URL cannot open. Not google_apis_playstore either; its
+        # locked-down adb does not accept the runner's key under this job's
+        # relocated ANDROID_SDK_HOME, and the AVD never finishes booting.
         target: [google_apis]
     defaults:
       run:
@@ -168,11 +162,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
       - name: Run flutter precache
         run: flutter precache -v
-      # Native (Kotlin/Robolectric) tests for the oidc_android plugin. These
-      # cover the redirect-capture path the Dart suite structurally cannot see:
-      # it mocks the Pigeon channel and hands back a canned redirect URI, so
-      # OidcPlugin.kt was never executed by any test before #418. Runs on the
-      # JVM, so it needs no emulator and fails fast, ahead of it.
+      # Native (Kotlin/Robolectric) tests for the oidc_android plugin, covering
+      # the redirect-capture path the Dart suite cannot reach: it mocks the
+      # Pigeon channel, so OidcPlugin.kt never executes there. JVM-only, so it
+      # needs no emulator and fails fast, ahead of one.
       - name: "[Verify step] Native Android unit tests (oidc_android)"
         # gradlew / gradle-wrapper.jar are gitignored repo-wide (only
         # gradle-wrapper.properties is tracked), so a fresh checkout has no
@@ -238,32 +231,23 @@ jobs:
           echo "Using device: $EMU_ID"
           flutter devices
 
-          # Does this image actually ship a browser? Issue #418 is about
-          # browsers WITHOUT Auth Tab support, so the conformance leg needs one
-          # present to mean anything. The first run on google_apis executed 4
-          # tests (up from 0) but completed 0 of 14 logins, and "no browser at
-          # all" and "browser present, redirect not captured" are different
-          # defects with different fixes. Settle it instead of guessing.
+          # The conformance leg needs a browser that lacks Auth Tab support to
+          # be meaningful, so record what this image actually ships. "No browser"
+          # and "browser present but redirect not captured" are different defects
+          # with different fixes.
           echo "--- browser packages on the emulator (pre-install) ---"
           adb -s "$EMU_ID" shell pm list packages | grep -iE 'chrome|browser|webview|firefox' || echo "NO browser/chrome/webview package matched"
           echo "--- what resolves an https VIEW intent ---"
           adb -s "$EMU_ID" shell 'cmd package resolve-activity --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d https://example.com' || true
           echo "--- end pre-install diagnostics ---"
 
-          # HYPOTHESIS under test. Everything else is now proven: Chrome is present
-          # (com.android.chrome, and https resolves to its IntentDispatcher), the
-          # APK registers OidcRedirectActivity for com.bdayadev.oidc.example (aapt2
-          # dump of the built APK), and the conformance OP auto-approves without a
-          # human (linux/macos reach 6/14 with a loopback redirect). Yet Android
-          # completes 0/14 -- so the remaining suspect is Chrome never NAVIGATING:
-          # a first-run device shows the welcome/ToS gate, and a Custom Tab opened
-          # behind it never reaches the auth URL and never redirects back.
+          # A first-run device shows Chrome's welcome/ToS gate, and a Custom Tab
+          # opened behind it never reaches the auth URL, so no redirect returns.
           #
-          # /data/local/tmp, not /data/local -- the latter is SELinux-blocked. The
+          # /data/local/tmp, not /data/local: the latter is SELinux-blocked. The
           # first token is a placeholder because Chrome parses the file as an argv
           # line and discards element 0.
-          # Refs: chromium.org/developers/how-tos/run-chromium-with-flags,
-          #       chromium-dev "Skipping Welcome to Chrome".
+          # Ref: chromium.org/developers/how-tos/run-chromium-with-flags
           echo "--- suppressing Chrome first-run ---"
           adb -s "$EMU_ID" root >/dev/null 2>&1 || true
           adb -s "$EMU_ID" shell 'echo "_ --no-first-run --disable-fre --no-default-browser-check" > /data/local/tmp/chrome-command-line' || true
@@ -275,10 +259,8 @@ jobs:
           # --verbose: patrol forwards NO test stdout without it, so neither the
           # test names nor the "Total: N" summary reach the job log.
           # `set -eo pipefail` is set above, so tee preserves patrol's exit code.
-          # Capture patrol's status instead of letting `set -e` abort here: the
-          # post-install diagnostics below are most valuable precisely when the run
-          # FAILED, and an early exit would skip them. The status is honoured at the
-          # very end of this script.
+          # Capture the status rather than letting `set -e` abort here: the
+          # diagnostics below matter most when the run failed. Honoured at the end.
           set +e
           patrol_plus test \
             --coverage \
@@ -297,17 +279,12 @@ jobs:
           # builds and installs the APK, so probing before it always reports "No
           # activity found" whether or not the manifest is wired.
           #
-          # This is the direct on-device test of the #418 fix: the app's merged
-          # manifest should register OidcRedirectActivity for its redirect scheme.
-          # If this resolves, redirect capture is wired and any remaining failure is
-          # browser/flow-side; if it does not, the manifest wiring is the defect.
-          # Read the manifest out of the APK patrol actually built. This is
-          # install-INDEPENDENT, which matters twice over: patrol uninstalls the app
-          # when it finishes (its uninstall finalizers only started running once the
-          # pubspec key was corrected to patrol_plus:), so an adb probe after the run
-          # reports "app NOT installed" regardless; and a local APK can be stale
-          # while the merged manifest is correct, which cost me a wrong conclusion.
-          # The bytes that were installed are the only honest source.
+          # Direct check that the merged manifest registered OidcRedirectActivity
+          # for the app's redirect scheme. If it resolves, capture is wired and a
+          # remaining failure is browser or flow side; if not, the wiring is.
+          # Read the manifest from the APK patrol built, not from the device:
+          # patrol uninstalls the app when it finishes, so an adb probe afterwards
+          # always reports it missing. This reads the bytes that were installed.
           echo "--- APK manifest: which scheme is OidcRedirectActivity registered for? ---"
           APK="$(find build/app/outputs -name 'app-debug.apk' -print -quit 2>/dev/null || true)"
           echo "apk: ${APK:-<none found>}"
@@ -321,16 +298,10 @@ jobs:
           fi
           echo "--- end post-run diagnostics ---"
 
-          # RATCHET. Until now this job ran ZERO tests and reported success for
-          # its entire life: the app had no androidTest source set, so
-          # connectedDebugAndroidTest enumerated no JUnit classes and patrol
-          # printed "Total: 0" in 7s while exiting 0. A green Android job was
-          # therefore compatible with never having executed a single test, which
-          # is why it could not catch the #418 redirect regression.
-          #
-          # patrol_cli_plus exits 0 on an empty run (android_test_backend.dart
-          # only reads gradle's exit code), and fixing that upstream needs a
-          # publish. This is the local gate that does not wait for one.
+          # patrol_cli_plus exits 0 on a run that executed nothing, because its
+          # android backend only inspects gradle's exit code. Until a release
+          # carries the upstream guard, assert the count here so a green job
+          # cannot mean "no tests ran".
           TOTAL="$(grep -oE 'Total:[[:space:]]*[0-9]+' patrol-android.log | tail -1 | grep -oE '[0-9]+' || true)"
           echo "Android patrol executed ${TOTAL:-<no Total line>} test(s)."
           if [ -z "$TOTAL" ]; then
@@ -338,17 +309,17 @@ jobs:
             exit 1
           fi
           if [ "$TOTAL" -lt 4 ]; then
-            echo "::error::patrol executed $TOTAL test(s), expected at least 4 (app_test + 3 offline_mode_test). A green run that executed nothing is the #418 blind spot."
+            echo "::error::patrol executed $TOTAL test(s), expected at least 4 (app_test + 3 offline_mode_test)."
             exit 1
           fi
           # patrol writes coverage/patrol_lcov.info; rename for the combine step.
           cp coverage/patrol_lcov.info coverage/android-coverage.info
 
-          # Finally honour patrol's own status, deferred above so the post-install
-          # diagnostics always run. The ratchet above is an ADDITIONAL gate, not a
-          # replacement: a run can execute 4 tests and still fail one.
+          # Deferred above so the diagnostics always run. The count ratchet is an
+          # additional gate, not a replacement: a run can execute every test and
+          # still fail one.
           if [ "$PATROL_RC" -ne 0 ]; then
-            echo "::error::patrol reported failure (exit $PATROL_RC) — see the test output above."
+            echo "::error::patrol reported failure (exit $PATROL_RC); see the test output above."
             exit "$PATROL_RC"
           fi
           EOF
@@ -798,19 +769,13 @@ jobs:
           # ("0") is captured either way.
           remaining=$(grep -rhc '^SF:/Users/' packages/oidc/example/coverage --include='*.info' | awk '{s+=$1} END {print s+0}' || true)
           echo "macOS-absolute SF entries remaining after normalization: $remaining"
-      # Regression guard, the cheapest one available and the one that was missing.
+      # A platform that stops running tests emits an empty lcov, and nothing else
+      # catches that: `if-no-files-found: error` only asserts the file exists, and
+      # codecov.yml disables every status (`patch: false`, `project: false`). The
+      # sibling guard below covers unit_tests' packages but not these.
       #
-      # On main's LAST GREEN RUN the android job uploaded a coverage file of
-      # exactly 0 bytes -- 0 SF records, 0 covered lines -- because it executed
-      # zero tests. Nothing objected: `if-no-files-found: error` on the upload
-      # only asserts the file EXISTS (an empty file passes), codecov.yml disables
-      # every status (`patch: false`, `project: false`), and the existing
-      # "Assert Flutter package coverage survived" guard covers only unit_tests'
-      # four packages, never the integration coverages. A platform whose whole
-      # suite silently stops running is therefore invisible at every layer.
-      #
-      # An empty lcov is not a coverage regression to argue about -- it is proof
-      # the platform ran nothing. Fail loudly and name the platform.
+      # An empty lcov is not a coverage regression, it is proof the platform ran
+      # nothing, so fail and name it.
       - name: "[Coverage] Assert every integration coverage is non-empty"
         run: |
           missing=0
@@ -823,7 +788,7 @@ jobs:
             sf=${sf:-0}
             echo "guard: $(basename "$f") -> ${bytes} bytes, ${sf} SF record(s)"
             if [ "$sf" -eq 0 ]; then
-              echo "::error::$(basename "$f") has ZERO source records - that platform executed no tests. A 0-byte lcov is how the Android job stayed green for its entire life while running nothing."
+              echo "::error::$(basename "$f") has zero source records - that platform executed no tests."
               missing=1
             fi
           done
