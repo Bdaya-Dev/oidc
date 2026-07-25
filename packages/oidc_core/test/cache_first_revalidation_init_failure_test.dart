@@ -117,8 +117,7 @@ class _ThrowingAttachManager extends OidcUserManagerBase {
   Future<void> handleTokenExpiringForTest(OidcToken event) =>
       handleTokenExpiring(event);
 
-  void handleTokenExpiredForTest(OidcToken event) =>
-      handleTokenExpired(event);
+  void handleTokenExpiredForTest(OidcToken event) => handleTokenExpired(event);
 
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
