@@ -244,6 +244,64 @@ abstract class OidcUserManagerBase {
   /// settles, after which normal on-expiry auto-refresh resumes.
   bool _cacheFirstRevalidationInFlight = false;
 
+  /// The [_scheduleBackgroundRevalidation] future currently running, non-null
+  /// for exactly the same window as [_cacheFirstRevalidationInFlight] (both are
+  /// set together in [_tryCacheFirstInit] and cleared together in
+  /// [_scheduleBackgroundRevalidation]'s `finally`).
+  ///
+  /// #421/#422/#423: [handleTokenExpiring] / [handleTokenExpired] are gated on
+  /// the bool above, but [getAccessToken] and [signInSilent] are NOT — they
+  /// join the SAME shared [_autoRefreshInFlight] latch used by the expiry
+  /// timers and the plain manual refresh, which the background revalidation's
+  /// refresh (driven through [loadCachedTokens] -> the raw, un-coalesced
+  /// [_refreshToken]) never populates. So while a background revalidation is
+  /// running, [getAccessToken] / [signInSilent] would see no in-flight
+  /// [_autoRefreshInFlight] and start a SECOND, competing `/token` exchange
+  /// that presents the SAME refresh token the revalidation is already
+  /// exchanging — exactly the RFC 9700 §4.14.2 rotation-reuse hazard
+  /// [_cacheFirstRevalidationInFlight] exists to prevent for the timer paths.
+  /// [_joinCacheFirstRevalidationIfInFlight] closes that gap: those two entry
+  /// points await this future (joining the single in-flight revalidation and
+  /// reusing whatever it concludes — refreshed, retained, or forgotten user)
+  /// instead of starting their own exchange.
+  Future<void>? _cacheFirstRevalidationFuture;
+
+  /// Awaits an in-flight cache-first background revalidation
+  /// ([_tryCacheFirstInit] / [_scheduleBackgroundRevalidation]), if one is
+  /// currently running, so the caller joins its outcome instead of starting a
+  /// second, competing refresh-token exchange.
+  ///
+  /// A no-op when no revalidation is in flight — including when one has
+  /// already settled by the time this is called (the captured future is
+  /// simply already-completed) — and safe to call after [dispose] (the
+  /// revalidation future never throws; see [_scheduleBackgroundRevalidation]'s
+  /// own all-swallowing `try`/`catch`, mirrored by [loadCachedTokens] and
+  /// [_refreshToken]).
+  ///
+  /// Reads [_cacheFirstRevalidationFuture] into a local variable synchronously
+  /// (no `await` before the read) so a concurrent settle-and-clear by
+  /// [_scheduleBackgroundRevalidation]'s `finally` block can never race this
+  /// check: either this call observes the field before it is nulled (and
+  /// awaits the real future) or after (and no-ops), never a torn read.
+  ///
+  /// Returns `true` when an actual in-flight revalidation was joined (as
+  /// opposed to a no-op because none was running), so a caller can tell "a
+  /// renewal attempt equivalent to mine just happened" apart from "nothing
+  /// was in flight, proceed as usual".
+  ///
+  /// Private (not `@protected`): this is plumbing internal to
+  /// [getAccessToken] / [signInSilent], not something a platform subclass
+  /// needs to override or call — kept off the extendable surface deliberately
+  /// (see the source-breaking-for-subclassers advisory on #421-424).
+  Future<bool> _joinCacheFirstRevalidationIfInFlight() async {
+    final revalidation = _cacheFirstRevalidationFuture;
+    if (revalidation == null) {
+      return false;
+    }
+    await revalidation;
+    return true;
+  }
+
   /// Returns true if the manager is currently in offline mode.
   bool get isInOfflineMode => offlineModeStartedAt != null;
 
@@ -1670,6 +1728,13 @@ abstract class OidcUserManagerBase {
   /// keeps its unconditional, un-coalesced behaviour for callers that need a
   /// raw exchange (e.g. with an `overrideRefreshToken`).
   ///
+  /// This call also joins (rather than races) an in-flight
+  /// [OidcInitMode.cacheFirst] background revalidation — see
+  /// [_cacheFirstRevalidationFuture] — so calling this immediately after
+  /// `await manager.init()` returns (cacheFirst is the DEFAULT) never presents
+  /// the same refresh token a second time while the background pass is still
+  /// exchanging it.
+  ///
   /// ## Return value and errors
   ///
   /// * Returns `null` when there is no signed-in user — this is a state, not an
@@ -1683,8 +1748,18 @@ abstract class OidcUserManagerBase {
   ///   login.
   /// * Throws an [OidcException] whose [OidcException.kind] is
   ///   [OidcTokenRefreshFailureKind.transient] when the refresh failed for a
-  ///   recoverable reason (network / timeout / 5xx). Retrying later can succeed;
-  ///   the cached session is retained.
+  ///   recoverable reason (network / timeout / 5xx) **and offline mode did NOT
+  ///   absorb it** — i.e. [OidcUserManagerSettings.supportOfflineAuth] is
+  ///   `false`, or the specific error isn't offline-eligible. Retrying later
+  ///   can succeed; the cached session is retained.
+  /// * Returns the cached (now possibly stale) access token, WITHOUT throwing,
+  ///   when a recoverable failure occurs and offline mode DOES absorb it
+  ///   ([OidcUserManagerSettings.supportOfflineAuth] is `true` for an
+  ///   offline-eligible error): this mirrors the legacy [refreshToken]'s
+  ///   "keep the cached session" behavior, so a call made while offline gets a
+  ///   usable (if stale) token instead of an exception — otherwise every
+  ///   `getAccessToken`/[signInSilent] call while offline would throw, which
+  ///   would defeat the point of enabling offline auth support.
   ///
   /// [minValidity] is the freshness margin: a token expiring sooner than this is
   /// refreshed first. [forceRefresh] refreshes unconditionally, ignoring
@@ -1694,6 +1769,14 @@ abstract class OidcUserManagerBase {
     bool forceRefresh = false,
   }) async {
     ensureInit();
+    // Join (rather than race) an in-flight cache-first background
+    // revalidation — see [_cacheFirstRevalidationFuture] for why this call
+    // would otherwise start a SECOND `/token` exchange presenting the same
+    // refresh token the revalidation is already exchanging. After this
+    // completes, [currentUser] already reflects whatever the revalidation
+    // concluded (refreshed / retained / forgotten), so the freshness check
+    // below sees the post-revalidation state.
+    await _joinCacheFirstRevalidationIfInFlight();
     final user = currentUser;
     if (user == null) {
       // No session at all — a state the caller handles (e.g. show a login
@@ -1961,11 +2044,23 @@ abstract class OidcUserManagerBase {
   /// outcome.
   ///
   /// On success the replaced user is saved (which re-arms the token timers via
-  /// [userChanges]) and returned with a `null` `failureKind`. On failure the
-  /// single `OidcTokenRefreshFailedEvent` (labelled with [source]) is emitted,
-  /// offline handling runs, and the failure `OidcTokenRefreshFailureKind` is
-  /// returned with a `null` user so [handleTokenExpired] can decide whether to
-  /// forget the session and [getAccessToken] can decide what to throw.
+  /// [userChanges]) and returned with a `null` `failureKind`.
+  ///
+  /// On failure the single `OidcTokenRefreshFailedEvent` (labelled with
+  /// [source]) is emitted, then offline handling runs:
+  /// * When [handleOfflineEligibleFailure] ABSORBS the failure (a recoverable
+  ///   / offline-eligible error with [OidcUserManagerSettings.supportOfflineAuth]
+  ///   enabled), this returns the RETAINED [currentUser] with a `null`
+  ///   `failureKind` — the same "keep the cached session, don't throw"
+  ///   contract [_refreshToken] already gives `refreshToken()`. Without this,
+  ///   [getAccessToken] / [signInSilent] would throw a `kind: transient`
+  ///   [OidcException] the moment offline mode kicks in, defeating the entire
+  ///   point of `supportOfflineAuth` for those two entry points (a `getAccessToken`
+  ///   call while offline should hand back the cached token, not throw).
+  /// * Otherwise (terminal failure, or offline auth not eligible/enabled) the
+  ///   failure `OidcTokenRefreshFailureKind` is returned with a `null` user so
+  ///   [handleTokenExpired] can decide whether to forget the session and
+  ///   [getAccessToken] / [signInSilent] can decide what to throw.
   ///
   /// This method never throws the refresh failure — it is shared with the
   /// automatic (timer-driven) paths, which must not surface an unhandled async
@@ -2108,12 +2203,25 @@ abstract class OidcUserManagerBase {
           e,
         );
         tokenEvents.unload();
+        return (
+          user: null,
+          failureKind: failedEvent.kind,
+          error: e,
+          stackTrace: st,
+        );
       }
+      // Offline mode absorbed the failure: report a SUCCESS-shaped outcome
+      // (the retained user, `failureKind: null`) rather than the raw failure.
+      // [handleTokenExpired] only forgets on `failureKind == terminal`, so
+      // this is a no-op change for the timer-driven callers (unaffected —
+      // they already never saw `terminal` here); it is what makes
+      // [getAccessToken] / [signInSilent] hand back the cached access token
+      // instead of throwing while offline (see the dartdoc above).
       return (
-        user: null,
-        failureKind: failedEvent.kind,
-        error: e,
-        stackTrace: st,
+        user: currentUser,
+        failureKind: null,
+        error: null,
+        stackTrace: null,
       );
     }
   }
@@ -3631,8 +3739,16 @@ abstract class OidcUserManagerBase {
     // timers). The background pass owns the first refresh; the expiry-driven
     // auto-refresh stays suppressed until [_scheduleBackgroundRevalidation]
     // clears the gate.
+    //
+    // The future is captured into [_cacheFirstRevalidationFuture] in the SAME
+    // synchronous step (calling an async function runs it up to its first
+    // `await` and returns its Future immediately) so there is never a window
+    // where the bool is `true` but the future field is still `null` for a
+    // concurrent [getAccessToken] / [signInSilent] to observe.
     _cacheFirstRevalidationInFlight = true;
-    unawaited(_scheduleBackgroundRevalidation(restored));
+    final revalidationFuture = _scheduleBackgroundRevalidation(restored);
+    _cacheFirstRevalidationFuture = revalidationFuture;
+    unawaited(revalidationFuture);
     return true;
   }
 
@@ -3740,6 +3856,13 @@ abstract class OidcUserManagerBase {
       // expiries must go through [handleTokenExpiring] / [handleTokenExpired]
       // again.
       _cacheFirstRevalidationInFlight = false;
+      // Clear alongside the bool above: a caller that captured this future via
+      // [_joinCacheFirstRevalidationIfInFlight] already holds its own
+      // reference (it read the field into a local before this `finally` runs),
+      // so nulling the field here only stops a LATER caller from joining a
+      // revalidation that has already settled — it does not affect anyone
+      // already awaiting it.
+      _cacheFirstRevalidationFuture = null;
     }
   }
 
@@ -3829,7 +3952,10 @@ abstract class OidcUserManagerBase {
   ///
   /// 1. the refresh-token grant, when the current session has a refresh token.
   ///    This shares the same in-flight latch as [getAccessToken] and the
-  ///    automatic on-expiry refresh, so it never races a second exchange.
+  ///    automatic on-expiry refresh, so it never races a second exchange; it
+  ///    also joins an in-flight [OidcInitMode.cacheFirst] background
+  ///    revalidation the same way [getAccessToken] does, reusing its outcome
+  ///    instead of presenting the refresh token a second time.
   /// 2. otherwise `prompt=none` against the authorization endpoint, which
   ///    renews off the OP's own session cookie. This is the classic web-SPA
   ///    renewal path for a public client whose OP issues no refresh token.
@@ -3857,7 +3983,10 @@ abstract class OidcUserManagerBase {
   /// — a terminal refresh failure (`invalid_grant`), or a `prompt=none` response
   /// of `login_required` / `interaction_required` / `consent_required` /
   /// `account_selection_required`. Throws a `kind`-stamped [OidcException] for a
-  /// transient refresh failure.
+  /// transient refresh failure that offline mode did NOT absorb — same caveat
+  /// as [getAccessToken]: with [OidcUserManagerSettings.supportOfflineAuth]
+  /// enabled and an offline-eligible error, this returns the retained
+  /// [currentUser] instead of throwing.
   ///
   /// [timeout] overrides `hiddenIframeTimeout` for this call only.
   /// [scopeOverride] and [extraParameters] are forwarded to
@@ -3869,8 +3998,34 @@ abstract class OidcUserManagerBase {
     Map<String, dynamic>? extraParameters,
   }) async {
     ensureInit();
+    // Join (rather than race) an in-flight cache-first background
+    // revalidation — see [_cacheFirstRevalidationFuture]. Re-read
+    // [currentUser] AFTER the join (not a pre-join local) so the
+    // refresh-token check below reflects whatever the revalidation concluded.
+    final joinedRevalidation = await _joinCacheFirstRevalidationIfInFlight();
     final token = currentUser?.token;
     if (token != null && token.refreshToken != null) {
+      // #421/#422/#423: when we just joined an in-flight revalidation AND its
+      // outcome left this token no longer close to expiring, mechanism #1's
+      // goal ("renew via the refresh-token grant") is ALREADY satisfied by
+      // that revalidation — reuse it instead of presenting the refresh token
+      // a second time (the very race this join exists to prevent).
+      //
+      // When the token is STILL stale — no revalidation ran (joinedRevalidation
+      // is false: the normal, non-racing case, entirely unchanged below), or
+      // one ran but failed to refresh it (a transient failure that offline
+      // mode absorbed, retaining the old token) — fall through to the
+      // existing unconditional renewal attempt, so a real failure is still
+      // thrown here with the correct [OidcTokenRefreshFailureKind], exactly as
+      // this method has always promised. (A terminal failure during the
+      // revalidation instead forgets the user entirely, so `token` above is
+      // `null` and this whole branch is skipped in favor of the prompt=none
+      // fallback below — unchanged.)
+      final tokenIsFreshEnough =
+          token.expiresIn == null || !token.isAccessTokenAboutToExpire();
+      if (joinedRevalidation && tokenIsFreshEnough) {
+        return currentUser;
+      }
       final outcome = await _autoRefresh(
         token,
         source: OidcTokenRefreshSource.manual,
