@@ -249,6 +249,27 @@ jobs:
           echo "--- what resolves an https VIEW intent ---"
           adb -s "$EMU_ID" shell 'cmd package resolve-activity --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d https://example.com' || true
           echo "--- end pre-install diagnostics ---"
+
+          # HYPOTHESIS under test. Everything else is now proven: Chrome is present
+          # (com.android.chrome, and https resolves to its IntentDispatcher), the
+          # APK registers OidcRedirectActivity for com.bdayadev.oidc.example (aapt2
+          # dump of the built APK), and the conformance OP auto-approves without a
+          # human (linux/macos reach 6/14 with a loopback redirect). Yet Android
+          # completes 0/14 -- so the remaining suspect is Chrome never NAVIGATING:
+          # a first-run device shows the welcome/ToS gate, and a Custom Tab opened
+          # behind it never reaches the auth URL and never redirects back.
+          #
+          # /data/local/tmp, not /data/local -- the latter is SELinux-blocked. The
+          # first token is a placeholder because Chrome parses the file as an argv
+          # line and discards element 0.
+          # Refs: chromium.org/developers/how-tos/run-chromium-with-flags,
+          #       chromium-dev "Skipping Welcome to Chrome".
+          echo "--- suppressing Chrome first-run ---"
+          adb -s "$EMU_ID" root >/dev/null 2>&1 || true
+          adb -s "$EMU_ID" shell 'echo "_ --no-first-run --disable-fre --no-default-browser-check" > /data/local/tmp/chrome-command-line' || true
+          adb -s "$EMU_ID" shell 'am set-debug-app --persistent com.android.chrome' || true
+          adb -s "$EMU_ID" shell 'cat /data/local/tmp/chrome-command-line' || true
+          echo "--- end Chrome first-run suppression ---"
           # Runs every patrol_test/*_test.dart (conformance + e2e + offline) on
           # the emulator and collects Dart coverage via the VM service.
           # --verbose: patrol forwards NO test stdout without it, so neither the
