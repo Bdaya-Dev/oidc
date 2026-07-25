@@ -244,18 +244,21 @@ jobs:
           # tests (up from 0) but completed 0 of 14 logins, and "no browser at
           # all" and "browser present, redirect not captured" are different
           # defects with different fixes. Settle it instead of guessing.
-          echo "--- browser packages on the emulator ---"
+          echo "--- browser packages on the emulator (pre-install) ---"
           adb -s "$EMU_ID" shell pm list packages | grep -iE 'chrome|browser|webview|firefox' || echo "NO browser/chrome/webview package matched"
           echo "--- what resolves an https VIEW intent ---"
           adb -s "$EMU_ID" shell 'cmd package resolve-activity --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d https://example.com' || true
-          echo "--- what resolves our custom scheme ---"
-          adb -s "$EMU_ID" shell 'cmd package resolve-activity --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d com.bdayadev.oidc.example://oauth2redirect' || true
-          echo "--- end browser diagnostics ---"
+          echo "--- end pre-install diagnostics ---"
           # Runs every patrol_test/*_test.dart (conformance + e2e + offline) on
           # the emulator and collects Dart coverage via the VM service.
           # --verbose: patrol forwards NO test stdout without it, so neither the
           # test names nor the "Total: N" summary reach the job log.
           # `set -eo pipefail` is set above, so tee preserves patrol's exit code.
+          # Capture patrol's status instead of letting `set -e` abort here: the
+          # post-install diagnostics below are most valuable precisely when the run
+          # FAILED, and an early exit would skip them. The status is honoured at the
+          # very end of this script.
+          set +e
           patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
@@ -265,6 +268,25 @@ jobs:
             --dart-define=CI=true \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN} \
             2>&1 | tee patrol-android.log
+          PATROL_RC=${PIPESTATUS[0]}
+          set -e
+          echo "patrol exit status: $PATROL_RC"
+
+          # POST-INSTALL, which is the only point this means anything: patrol is what
+          # builds and installs the APK, so probing before it always reports "No
+          # activity found" whether or not the manifest is wired.
+          #
+          # This is the direct on-device test of the #418 fix: the app's merged
+          # manifest should register OidcRedirectActivity for its redirect scheme.
+          # If this resolves, redirect capture is wired and any remaining failure is
+          # browser/flow-side; if it does not, the manifest wiring is the defect.
+          echo "--- post-install: is our app installed? ---"
+          adb -s "$EMU_ID" shell pm list packages | grep -i 'com.bdayadev.oidc.example' || echo "app NOT installed"
+          echo "--- post-install: what resolves our custom scheme? ---"
+          adb -s "$EMU_ID" shell 'cmd package resolve-activity --brief -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d com.bdayadev.oidc.example://oauth2redirect' || true
+          echo "--- post-install: the app's declared VIEW/BROWSABLE filters ---"
+          adb -s "$EMU_ID" shell 'dumpsys package com.bdayadev.oidc.example' | grep -A 4 -iE 'android.intent.action.VIEW' | head -40 || true
+          echo "--- end post-install diagnostics ---"
 
           # RATCHET. Until now this job ran ZERO tests and reported success for
           # its entire life: the app had no androidTest source set, so
@@ -288,6 +310,14 @@ jobs:
           fi
           # patrol writes coverage/patrol_lcov.info; rename for the combine step.
           cp coverage/patrol_lcov.info coverage/android-coverage.info
+
+          # Finally honour patrol's own status, deferred above so the post-install
+          # diagnostics always run. The ratchet above is an ADDITIONAL gate, not a
+          # replacement: a run can execute 4 tests and still fail one.
+          if [ "$PATROL_RC" -ne 0 ]; then
+            echo "::error::patrol reported failure (exit $PATROL_RC) — see the test output above."
+            exit "$PATROL_RC"
+          fi
           EOF
           chmod +x android_emulator_ci.sh
       - name: Run Android Emulator and Integration Tests
