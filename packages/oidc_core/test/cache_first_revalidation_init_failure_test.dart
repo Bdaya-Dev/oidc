@@ -110,6 +110,16 @@ class _ThrowingAttachManager extends OidcUserManagerBase {
     throw _InjectedAttachFailure();
   }
 
+  /// Test-only synchronous entry points for the two timer-driven expiry
+  /// handlers (mirrors the `*Test`-suffixed wrappers already used for this
+  /// purpose elsewhere, e.g. `user_manager_internals_coverage_test.dart`) —
+  /// see the A3 test below (PR #425 review advisory A3).
+  Future<void> handleTokenExpiringForTest(OidcToken event) =>
+      handleTokenExpiring(event);
+
+  void handleTokenExpiredForTest(OidcToken event) =>
+      handleTokenExpired(event);
+
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
     OidcProviderMetadata metadata,
@@ -160,16 +170,57 @@ http.Client _client() => MockClient((req) async {
   return http.Response('unexpected request in this probe: ${req.url}', 599);
 });
 
-String _freshCachedTokenJson() => jsonEncode(
-  OidcToken(
-    creationTime: clock.now().toUtc(),
-    idToken: _signIdToken(),
-    accessToken: 'at-cached',
-    tokenType: 'Bearer',
-    expiresIn: const Duration(hours: 1),
-    refreshToken: 'rt-1',
-  ).toJson(),
+/// Same as [_client] (answers discovery), but also answers `/token` and
+/// records one entry per exchange, for the A3 test below — which asserts an
+/// exact `/token` exchange COUNT rather than just "no rethrow". `/userinfo`
+/// still must never be hit: the refreshed token replaces the existing
+/// cache-first-restored user via `currentUser.replaceToken` (id_token
+/// verified locally against the injected [_signingKey]), never a fresh
+/// `OidcUser.fromIdToken` build that would need a userinfo call.
+http.Client _clientCountingTokenExchanges(List<String> tokenExchanges) =>
+    MockClient((req) async {
+      final path = req.url.path;
+      if (path.endsWith('openid-configuration')) {
+        return http.Response(
+          jsonEncode(_metadataJson()),
+          200,
+          headers: const {'content-type': 'application/json'},
+        );
+      }
+      if (path.endsWith('/token')) {
+        tokenExchanges.add(req.body);
+        return http.Response(
+          jsonEncode({
+            'access_token': 'at-refreshed',
+            'token_type': 'Bearer',
+            'expires_in': 3600,
+            'refresh_token': 'rt-1',
+            'id_token': _signIdToken(),
+          }),
+          200,
+          headers: const {'content-type': 'application/json'},
+        );
+      }
+      return http.Response(
+        'unexpected request in this probe: ${req.url}',
+        599,
+      );
+    });
+
+/// Shared by [_freshCachedTokenJson] (seeds the store) and the A3 test below
+/// (builds the `event` handed directly to `handleTokenExpiring`/
+/// `handleTokenExpired`) — both need the same fresh, `refreshToken`-bearing
+/// token shape.
+OidcToken _freshToken() => OidcToken(
+  creationTime: clock.now().toUtc(),
+  idToken: _signIdToken(),
+  accessToken: 'at-cached',
+  tokenType: 'Bearer',
+  expiresIn: const Duration(hours: 1),
+  refreshToken: 'rt-1',
 );
+
+String _freshCachedTokenJson() => jsonEncode(_freshToken().toJson());
 
 Future<OidcMemoryStore> _seededStore() async {
   final store = OidcMemoryStore();
@@ -193,18 +244,20 @@ Future<OidcMemoryStore> _seededStore() async {
   return store;
 }
 
-_ThrowingAttachManager _lazyManager(OidcStore store) =>
-    _ThrowingAttachManager.lazy(
-      discoveryDocumentUri: _wellKnown,
-      clientCredentials: const OidcClientAuthentication.none(
-        clientId: 'client-1',
-      ),
-      store: store,
-      httpClient: _client(),
-      keyStore: JsonWebKeyStore()..addKey(_signingKey),
-      // DEFAULT settings: OidcInitMode.cacheFirst is the default init mode.
-      settings: OidcUserManagerSettings(redirectUri: Uri.parse('app://cb')),
-    );
+_ThrowingAttachManager _lazyManager(
+  OidcStore store, {
+  http.Client? httpClient,
+}) => _ThrowingAttachManager.lazy(
+  discoveryDocumentUri: _wellKnown,
+  clientCredentials: const OidcClientAuthentication.none(
+    clientId: 'client-1',
+  ),
+  store: store,
+  httpClient: httpClient ?? _client(),
+  keyStore: JsonWebKeyStore()..addKey(_signingKey),
+  // DEFAULT settings: OidcInitMode.cacheFirst is the default init mode.
+  settings: OidcUserManagerSettings(redirectUri: Uri.parse('app://cb')),
+);
 
 void main() {
   group(
@@ -261,6 +314,86 @@ void main() {
           }
           expect(secondError, isNull);
           expect(token2, 'at-cached');
+
+          await manager.dispose();
+        },
+        timeout: const Timeout(Duration(seconds: 10)),
+      );
+
+      test(
+        'on-expiry auto-refresh (handleTokenExpiring + handleTokenExpired) '
+        'is not silently disabled forever by a failed init(): exactly ONE '
+        '/token exchange once the revalidation has settled (PR #425 review '
+        'advisory A3)',
+        () async {
+          // A1 fixed a DIFFERENT, more visible symptom: getAccessToken()
+          // rethrowing the stale init() error forever. But
+          // `_cacheFirstRevalidationInFlight` gates BOTH
+          // getAccessToken()/signInSilent() (via
+          // _joinCacheFirstRevalidationIfInFlight) AND the timer-driven
+          // handleTokenExpiring/handleTokenExpired (a direct `if
+          // (_cacheFirstRevalidationInFlight) return;` each, ~:2019/~:2346) —
+          // and only the bool's OWN clearing in
+          // _scheduleBackgroundRevalidation's `finally` (~:3877) protects the
+          // second gate. A test that calls getAccessToken() cannot isolate
+          // this: pre-fix it throws (masking the bool's stuck state) and
+          // post-fix it returns the cached token without ever exercising
+          // these two handlers at all. This probe never calls
+          // getAccessToken()/signInSilent() — it drives the two handlers
+          // directly and counts real `/token` exchanges, so a stuck-`true`
+          // gate is visible as its own distinct symptom (ZERO exchanges, not
+          // a rethrown error and not a race producing two).
+          final tokenExchanges = <String>[];
+          final manager = _lazyManager(
+            await _seededStore(),
+            httpClient: _clientCountingTokenExchanges(tokenExchanges),
+          );
+
+          Object? initError;
+          try {
+            await manager.init();
+          } on Object catch (e) {
+            initError = e;
+          }
+          expect(initError, isA<_InjectedAttachFailure>());
+
+          // Let the already-scheduled `_scheduleBackgroundRevalidation`'s own
+          // `await initFuture` observe the SAME rejection and run its
+          // catch/finally. This deliberately does NOT go through
+          // getAccessToken()/_joinCacheFirstRevalidationIfInFlight (which
+          // would explicitly await the captured revalidation future and so
+          // synchronize on it for free, masking any timing gap here). There
+          // is no further network I/O on the error path (the catch/finally
+          // do only synchronous field writes and a log call), so a single
+          // `pumpEventQueue()` — draining far more than the one microtask
+          // needed — is enough to let it settle either way: post-fix it
+          // clears the gate; pre-fix (see the mutation-check in the MR
+          // description) it never does, no matter how long this waits.
+          await pumpEventQueue();
+
+          // Drive BOTH handlers off the SAME token event, back-to-back with
+          // no `await` between them — exactly the "resume fires both
+          // timers" interleaving [_autoRefresh]'s shared in-flight latch
+          // (#154) exists for, so they race the SAME gate value and (post-
+          // fix) share the SAME single exchange instead of each starting its
+          // own.
+          final tokenEvent = _freshToken();
+          final expiringDone = manager.handleTokenExpiringForTest(tokenEvent);
+          manager.handleTokenExpiredForTest(tokenEvent);
+          await expiringDone;
+          await pumpEventQueue();
+
+          expect(
+            tokenExchanges,
+            hasLength(1),
+            reason:
+                'pre-fix, _cacheFirstRevalidationInFlight never clears '
+                'after a failed init(), so both handlers hit their early '
+                '`if (_cacheFirstRevalidationInFlight) return;` and NO '
+                '/token exchange happens at all (0 — a permanently, '
+                'silently disabled auto-refresh-on-expiry — not a race '
+                'producing 2)',
+          );
 
           await manager.dispose();
         },
