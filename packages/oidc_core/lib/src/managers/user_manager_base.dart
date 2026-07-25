@@ -11,6 +11,21 @@ import 'package:oidc_core/oidc_core.dart';
 
 final _logger = Logger('OidcUserManagerBase');
 
+/// The outcome of ONE refresh-token exchange driven through the shared
+/// in-flight latch inside [OidcUserManagerBase].
+///
+/// Exactly one of `user` / `failureKind` is non-null, except for the neutral
+/// all-null outcome returned when the manager was disposed mid-flight (which
+/// every consumer treats as "do nothing"). `error` / `stackTrace` carry the
+/// original failure so a caller that must THROW (rather than swallow, as the
+/// automatic paths do) can preserve the diagnostics.
+typedef _OidcRefreshOutcome = ({
+  OidcUser? user,
+  OidcTokenRefreshFailureKind? failureKind,
+  Object? error,
+  StackTrace? stackTrace,
+});
+
 /// This class manages a single user's authentication status.
 ///
 /// It's preferred to maintain only a single instance of this class.
@@ -77,6 +92,72 @@ abstract class OidcUserManagerBase {
     return _dpopManager ??= OidcDPoPManager.generate(dpopSettings);
   }
 
+  /// Mints an RFC 9449 DPoP proof JWT for a protected-resource request, or
+  /// `null` when DPoP is not enabled (`settings.dpop == null`) or there is no
+  /// access token to bind the `ath` claim to.
+  ///
+  /// Without this, enabling [OidcUserManagerSettings.dpop] sender-constrains the
+  /// token but leaves the application unable to prove possession on its own API
+  /// calls — it would have to fall back to a plain `Bearer` header and silently
+  /// discard the guarantee. Send the pair instead:
+  ///
+  /// ```dart
+  /// final accessToken = await manager.getAccessToken();
+  /// final proof = await manager.createDPoPProof(uri: uri, method: 'GET');
+  /// final headers = {
+  ///   'Authorization': proof == null
+  ///       ? 'Bearer $accessToken'
+  ///       : 'DPoP $accessToken',
+  ///   if (proof != null) 'DPoP': proof,
+  /// };
+  /// ```
+  ///
+  /// If the resource server answers `401` with `error="use_dpop_nonce"` and a
+  /// `DPoP-Nonce` header, feed that nonce back with [cacheDPoPNonce] and mint a
+  /// fresh proof for a single retry.
+  ///
+  /// [uri] is the full request URI (RFC 9449 §4.2 `htu`; query and fragment are
+  /// stripped for you), [method] the HTTP method (`htm`). [accessToken]
+  /// overrides the token bound by the `ath` claim; it defaults to the current
+  /// user's access token, so pass whatever [getAccessToken] returned to be sure
+  /// the proof and the header agree after a refresh.
+  Future<String?> createDPoPProof({
+    required Uri uri,
+    String method = 'GET',
+    String? accessToken,
+  }) async {
+    final manager = dpopManager;
+    if (manager == null) {
+      return null;
+    }
+    final boundAccessToken = accessToken ?? currentUser?.token.accessToken;
+    if (boundAccessToken == null) {
+      return null;
+    }
+    return manager.createResourceProof(
+      method: method,
+      uri: uri,
+      accessToken: boundAccessToken,
+    );
+  }
+
+  /// Caches a `DPoP-Nonce` supplied by a resource server so the next proof
+  /// minted by [createDPoPProof] for [uri] carries it (RFC 9449 §8).
+  ///
+  /// No-op when DPoP is not enabled. Nonces are cached per endpoint, because the
+  /// authorization server and each resource server issue independent ones.
+  void cacheDPoPNonce(Uri uri, String nonce) {
+    dpopManager?.setNonceFor(uri, nonce);
+  }
+
+  /// The RFC 7638 thumbprint of this session's DPoP proof key — the value the
+  /// authorization server binds the token to as `cnf.jkt` — or `null` when DPoP
+  /// is not enabled.
+  ///
+  /// Useful for asserting that an issued access token is actually bound to this
+  /// manager's key.
+  String? get dpopThumbprint => dpopManager?.thumbprint;
+
   /// The settings used in this manager.
   final OidcUserManagerSettings settings;
 
@@ -127,15 +208,26 @@ abstract class OidcUserManagerBase {
   /// Counter for consecutive refresh failures
   int consecutiveRefreshFailures = 0;
 
-  /// #154: the in-flight automatic (on-expiry) refresh, shared between
-  /// [handleTokenExpiring] and [handleTokenExpired]. On resume both the
-  /// `expiring` and `expired` timers can be overdue and fire together; latching
-  /// both handlers onto this single future guarantees the refresh token is
-  /// exchanged exactly once (no double refresh) and lets the expired handler
-  /// defer its forget decision to the refresh outcome instead of racing it.
-  /// `null` when no auto-refresh is currently running.
-  Future<({OidcUser? user, OidcTokenRefreshFailureKind? failureKind})>?
-  _autoRefreshInFlight;
+  /// #154: the in-flight refresh, shared between [handleTokenExpiring],
+  /// [handleTokenExpired] and (#421) [getAccessToken] / [signInSilent]. On
+  /// resume both the `expiring` and `expired` timers can be overdue and fire
+  /// together; latching every handler onto this single future guarantees the
+  /// refresh token is exchanged exactly once (no double refresh) and lets the
+  /// expired handler defer its forget decision to the refresh outcome instead
+  /// of racing it.
+  ///
+  /// #421: the silent-acquisition entry points join the SAME latch, so N
+  /// parallel API calls that all discover a stale access token perform ONE
+  /// token exchange between them. That matters against an OP that rotates
+  /// refresh tokens — required for public clients by RFC 9700 §2.2.2 ("Refresh
+  /// tokens for public clients MUST be sender-constrained or use refresh token
+  /// rotation") — because rotation invalidates the previous refresh token on
+  /// every exchange, so a second concurrent exchange presents an invalidated
+  /// token and the AS "will revoke the active refresh token" (§4.14.2),
+  /// forcing a fresh authorization grant.
+  ///
+  /// `null` when no refresh is currently running.
+  Future<_OidcRefreshOutcome>? _autoRefreshInFlight;
 
   /// #201: while a cache-first background revalidation owns the refresh of the
   /// just-restored (possibly already-expired) cached token, the expiry-driven
@@ -1556,6 +1648,139 @@ abstract class OidcUserManagerBase {
     );
   }
 
+  /// Returns an access token that is guaranteed to stay valid for at least
+  /// [minValidity], refreshing it first only when it would not.
+  ///
+  /// This is the "give me a usable access token right now" entry point, meant to
+  /// be called on EVERY outgoing request to a protected resource instead of
+  /// reading `currentUser?.token.accessToken` (which is freshness-unaware):
+  ///
+  /// ```dart
+  /// final accessToken = await userManager.getAccessToken();
+  /// ```
+  ///
+  /// ## Concurrency
+  ///
+  /// Concurrent callers share a SINGLE refresh-token exchange (the same
+  /// in-flight latch the automatic on-expiry refresh uses), so N parallel API
+  /// calls that all find a stale token do not each exchange the refresh token.
+  /// This matters against an OP with refresh-token rotation, where N concurrent
+  /// exchanges of the same refresh token look like token reuse and can revoke
+  /// the entire grant family. Note that the older [refreshToken] deliberately
+  /// keeps its unconditional, un-coalesced behaviour for callers that need a
+  /// raw exchange (e.g. with an `overrideRefreshToken`).
+  ///
+  /// ## Return value and errors
+  ///
+  /// * Returns `null` when there is no signed-in user — this is a state, not an
+  ///   error, so it does not throw.
+  /// * Returns the current access token unchanged when the token carries no
+  ///   `expires_in` (the library cannot know how much time is left; the same
+  ///   assumption that disables the expiry timers) and [forceRefresh] is false.
+  /// * Throws [OidcInteractionRequiredException] when the token is stale and
+  ///   cannot be renewed silently — no refresh token, or a terminal refresh
+  ///   failure such as `invalid_grant`. Handle it by starting an interactive
+  ///   login.
+  /// * Throws an [OidcException] whose [OidcException.kind] is
+  ///   [OidcTokenRefreshFailureKind.transient] when the refresh failed for a
+  ///   recoverable reason (network / timeout / 5xx). Retrying later can succeed;
+  ///   the cached session is retained.
+  ///
+  /// [minValidity] is the freshness margin: a token expiring sooner than this is
+  /// refreshed first. [forceRefresh] refreshes unconditionally, ignoring
+  /// [minValidity].
+  Future<String?> getAccessToken({
+    Duration minValidity = const Duration(seconds: 30),
+    bool forceRefresh = false,
+  }) async {
+    ensureInit();
+    final user = currentUser;
+    if (user == null) {
+      // No session at all — a state the caller handles (e.g. show a login
+      // button), not a failure to throw about.
+      return null;
+    }
+    final token = user.token;
+    if (!forceRefresh) {
+      // `isAccessTokenAboutToExpire` reports `true` when `expiresIn` is null
+      // (unknown expiry). Treat unknown as "usable" instead, mirroring
+      // [listenToTokenRefreshIfSupported], which likewise declines to arm the
+      // expiry timers for such a token — otherwise EVERY call would refresh.
+      final stillFresh =
+          token.expiresIn == null ||
+          !token.isAccessTokenAboutToExpire(tolerance: minValidity);
+      if (stillFresh) {
+        return token.accessToken;
+      }
+    }
+
+    if (token.refreshToken == null) {
+      throw OidcInteractionRequiredException(
+        message: forceRefresh
+            ? 'A refresh was forced but the current session has no '
+                  'refresh_token; interactive re-authentication is required.'
+            : 'The access token is expired (or expires within $minValidity) '
+                  'and the current session has no refresh_token; interactive '
+                  're-authentication is required.',
+      );
+    }
+
+    final outcome = await _autoRefresh(
+      token,
+      source: OidcTokenRefreshSource.manual,
+    );
+    return _userFromRefreshOutcome(outcome)?.token.accessToken;
+  }
+
+  /// Maps a shared-latch refresh outcome onto the silent-acquisition contract
+  /// shared by [getAccessToken] and [signInSilent]: return the renewed user,
+  /// throw [OidcInteractionRequiredException] on a terminal failure, and throw a
+  /// `kind`-stamped [OidcException] on a transient one.
+  OidcUser? _userFromRefreshOutcome(_OidcRefreshOutcome outcome) {
+    final refreshedUser = outcome.user;
+    if (refreshedUser != null) {
+      return refreshedUser;
+    }
+    final failureKind = outcome.failureKind;
+    if (failureKind == null) {
+      // The manager was disposed while the refresh was in flight; the refresh
+      // deliberately became a complete no-op, so there is nothing to hand back.
+      return null;
+    }
+    final error = outcome.error;
+    if (failureKind == OidcTokenRefreshFailureKind.terminal) {
+      throw OidcInteractionRequiredException.from(
+        error ?? const OidcException('The refresh token grant was rejected.'),
+        message:
+            'The refresh token was rejected by the authorization server '
+            '(revoked, expired, or already rotated); interactive '
+            're-authentication is required.',
+        stackTrace: outcome.stackTrace,
+      );
+    }
+    if (error is OidcException) {
+      // Preserve the original diagnostics but re-stamp the classification the
+      // caller needs (the raw throw carried no `kind`).
+      throw OidcException.raw(
+        message: error.message,
+        extra: error.extra,
+        errorResponse: error.errorResponse,
+        internalException: error.internalException ?? error,
+        internalStackTrace: error.internalStackTrace ?? outcome.stackTrace,
+        rawRequest: error.rawRequest,
+        rawResponse: error.rawResponse,
+        kind: failureKind,
+      );
+    }
+    throw OidcException(
+      'Refreshing the access token failed for a recoverable reason; '
+      'retrying later may succeed.',
+      internalException: error,
+      internalStackTrace: outcome.stackTrace,
+      kind: failureKind,
+    );
+  }
+
   Future<OidcUser?> _refreshToken({
     String? overrideRefreshToken,
     OidcProviderMetadata? discoveryDocumentOverride,
@@ -1711,29 +1936,44 @@ abstract class OidcUserManagerBase {
     await _autoRefresh(event);
   }
 
-  /// Returns the in-flight automatic refresh for [event], starting one if none
-  /// is running. Concurrent callers ([handleTokenExpiring] and
-  /// [handleTokenExpired] on resume) share the SAME future, so the refresh
-  /// token is exchanged only once. The latch clears itself on completion so a
-  /// later expiry can refresh again.
-  Future<({OidcUser? user, OidcTokenRefreshFailureKind? failureKind})>
-  _autoRefresh(OidcToken event) {
-    return _autoRefreshInFlight ??= _performAutoRefresh(event).whenComplete(() {
-      _autoRefreshInFlight = null;
-    });
+  /// Returns the in-flight refresh for [event], starting one if none is
+  /// running. Concurrent callers ([handleTokenExpiring] and
+  /// [handleTokenExpired] on resume, plus every [getAccessToken] /
+  /// [signInSilent] caller) share the SAME future, so the refresh token is
+  /// exchanged only once. The latch clears itself on completion so a later
+  /// expiry can refresh again.
+  ///
+  /// [source] labels the emitted [OidcTokenRefreshFailedEvent] and only applies
+  /// to the caller that actually STARTS the exchange — a caller that joins an
+  /// already-running refresh inherits that refresh's source, because there is
+  /// only one exchange (and therefore only one failure event) to label.
+  Future<_OidcRefreshOutcome> _autoRefresh(
+    OidcToken event, {
+    OidcTokenRefreshSource source = OidcTokenRefreshSource.autoExpiry,
+  }) {
+    return _autoRefreshInFlight ??= _performAutoRefresh(event, source: source)
+        .whenComplete(() {
+          _autoRefreshInFlight = null;
+        });
   }
 
-  /// Performs one automatic (on-expiry) refresh of [event]'s refresh token and
-  /// classifies the outcome.
+  /// Performs one refresh of [event]'s refresh token and classifies the
+  /// outcome.
   ///
   /// On success the replaced user is saved (which re-arms the token timers via
   /// [userChanges]) and returned with a `null` `failureKind`. On failure the
-  /// single `OidcTokenRefreshFailedEvent` (source `autoExpiry`) is emitted,
+  /// single `OidcTokenRefreshFailedEvent` (labelled with [source]) is emitted,
   /// offline handling runs, and the failure `OidcTokenRefreshFailureKind` is
   /// returned with a `null` user so [handleTokenExpired] can decide whether to
-  /// forget the session.
-  Future<({OidcUser? user, OidcTokenRefreshFailureKind? failureKind})>
-  _performAutoRefresh(OidcToken event) async {
+  /// forget the session and [getAccessToken] can decide what to throw.
+  ///
+  /// This method never throws the refresh failure — it is shared with the
+  /// automatic (timer-driven) paths, which must not surface an unhandled async
+  /// error. Callers that need a throw re-raise from the returned `error`.
+  Future<_OidcRefreshOutcome> _performAutoRefresh(
+    OidcToken event, {
+    OidcTokenRefreshSource source = OidcTokenRefreshSource.autoExpiry,
+  }) async {
     OidcUser? newUser;
     //try getting a new token.
     try {
@@ -1773,14 +2013,19 @@ abstract class OidcUserManagerBase {
       // (possibly delayed) refresh was in flight, the outcome must be a
       // COMPLETE no-op — no user save/mutation via [createUserFromToken], no
       // `recordSuccessfulServerContact`, no event. Returning the neutral
-      // `(null, null)` also leaves [handleTokenExpired]'s forget decision a
+      // all-null outcome also leaves [handleTokenExpired]'s forget decision a
       // no-op (it only forgets on a `terminal` failureKind).
       if (_isDisposed) {
         logger.finest(
           'Auto-refresh succeeded after the manager was disposed; '
           'ignoring the new token.',
         );
-        return (user: null, failureKind: null);
+        return (
+          user: null,
+          failureKind: null,
+          error: null,
+          stackTrace: null,
+        );
       }
       newUser = await createUserFromToken(
         token: OidcToken.fromResponse(
@@ -1797,7 +2042,12 @@ abstract class OidcUserManagerBase {
       // Successful refresh - update last server contact and exit offline mode
       recordSuccessfulServerContact(newToken: newUser?.token);
       logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
-      return (user: newUser, failureKind: null);
+      return (
+        user: newUser,
+        failureKind: null,
+        error: null,
+        stackTrace: null,
+      );
     } on Object catch (e, st) {
       // Post-dispose safety: a refresh that FAILS after the manager was torn
       // down must also be a COMPLETE no-op — no failure event, no offline
@@ -1809,7 +2059,12 @@ abstract class OidcUserManagerBase {
           e,
           st,
         );
-        return (user: null, failureKind: null);
+        return (
+          user: null,
+          failureKind: null,
+          error: null,
+          stackTrace: null,
+        );
       }
       // #120: a transient failure that offline handling will absorb schedules a
       // retry; a terminal failure (e.g. invalid_grant) or a disabled offline
@@ -1825,7 +2080,7 @@ abstract class OidcUserManagerBase {
       final failedEvent = OidcTokenRefreshFailedEvent.fromError(
         error: e,
         stackTrace: st,
-        source: OidcTokenRefreshSource.autoExpiry,
+        source: source,
         willRetry: willRetry,
       );
       emitEvent(failedEvent);
@@ -1854,7 +2109,12 @@ abstract class OidcUserManagerBase {
         );
         tokenEvents.unload();
       }
-      return (user: null, failureKind: failedEvent.kind);
+      return (
+        user: null,
+        failureKind: failedEvent.kind,
+        error: e,
+        stackTrace: st,
+      );
     }
   }
 
@@ -1980,7 +2240,7 @@ abstract class OidcUserManagerBase {
         _autoRefresh(event).then((result) async {
           // Post-dispose safety: never forget (a user mutation + store write)
           // once the manager is torn down. [_performAutoRefresh] already
-          // returns the neutral `(null, null)` when disposed, so `failureKind`
+          // returns the neutral all-null outcome when disposed, so `failureKind`
           // is never `terminal` here; this is a defensive second gate against
           // a dispose that races the completion.
           if (_isDisposed) {
@@ -3553,7 +3813,122 @@ abstract class OidcUserManagerBase {
     await forgetUser();
   }
 
+  /// The OpenID Connect Core 1.0 §3.1.2.6 authorization-error codes that mean
+  /// "the OP cannot satisfy this without showing the user something", i.e.
+  /// exactly the `prompt=none` outcomes that require an interactive login.
+  static const _interactionRequiredErrorCodes = {
+    'login_required',
+    'interaction_required',
+    'consent_required',
+    'account_selection_required',
+  };
+
+  /// Renews the session WITHOUT any user interaction.
   ///
+  /// Two mechanisms, in order:
+  ///
+  /// 1. the refresh-token grant, when the current session has a refresh token.
+  ///    This shares the same in-flight latch as [getAccessToken] and the
+  ///    automatic on-expiry refresh, so it never races a second exchange.
+  /// 2. otherwise `prompt=none` against the authorization endpoint, which
+  ///    renews off the OP's own session cookie. This is the classic web-SPA
+  ///    renewal path for a public client whose OP issues no refresh token.
+  ///
+  /// ## Platform matrix — read before relying on step 2
+  ///
+  /// The `prompt=none` variant runs in a HIDDEN IFRAME and is therefore
+  /// **web-only**: on native platforms the navigation mode is ignored and the
+  /// request would surface a browser/Custom Tab, which is not silent. On native,
+  /// treat this method as "refresh-token renewal" and expect
+  /// [OidcInteractionRequiredException] when there is no refresh token.
+  ///
+  /// Even on web the iframe variant is not universally reliable: it depends on
+  /// the OP session cookie being readable in a third-party context, which
+  /// Safari's ITP blocks outright and Chrome restricts. Prefer a refresh token
+  /// when your OP can issue one.
+  ///
+  /// ## Return value and errors
+  ///
+  /// Returns the renewed [OidcUser], or `null` when the platform completes the
+  /// flow out-of-band (a full-page redirect hands the result to
+  /// `init()` instead) or when the manager was disposed mid-flight.
+  ///
+  /// Throws [OidcInteractionRequiredException] when the OP requires interaction
+  /// — a terminal refresh failure (`invalid_grant`), or a `prompt=none` response
+  /// of `login_required` / `interaction_required` / `consent_required` /
+  /// `account_selection_required`. Throws a `kind`-stamped [OidcException] for a
+  /// transient refresh failure.
+  ///
+  /// [timeout] overrides `hiddenIframeTimeout` for this call only.
+  /// [scopeOverride] and [extraParameters] are forwarded to
+  /// [loginAuthorizationCodeFlow] on the `prompt=none` path (they do not apply
+  /// to the refresh-token path, which always uses the configured scope).
+  Future<OidcUser?> signInSilent({
+    Duration? timeout,
+    List<String>? scopeOverride,
+    Map<String, dynamic>? extraParameters,
+  }) async {
+    ensureInit();
+    final token = currentUser?.token;
+    if (token != null && token.refreshToken != null) {
+      final outcome = await _autoRefresh(
+        token,
+        source: OidcTokenRefreshSource.manual,
+      );
+      return _userFromRefreshOutcome(outcome);
+    }
+
+    final baseOptions = getPlatformOptions();
+    try {
+      return await loginAuthorizationCodeFlow(
+        promptOverride: const ['none'],
+        scopeOverride: scopeOverride,
+        extraParameters: extraParameters,
+        options: OidcPlatformSpecificOptions(
+          // Every non-web section is carried over untouched: forcing the hidden
+          // iframe must not silently reset the caller's Custom Tabs / native
+          // options.
+          android: baseOptions.android,
+          ios: baseOptions.ios,
+          macos: baseOptions.macos,
+          linux: baseOptions.linux,
+          windows: baseOptions.windows,
+          web: OidcPlatformSpecificOptions_Web(
+            navigationMode:
+                OidcPlatformSpecificOptions_Web_NavigationMode.hiddenIFrame,
+            popupWidth: baseOptions.web.popupWidth,
+            popupHeight: baseOptions.web.popupHeight,
+            broadcastChannel: baseOptions.web.broadcastChannel,
+            hiddenIframeTimeout: timeout ?? baseOptions.web.hiddenIframeTimeout,
+          ),
+        ),
+      );
+    } on OidcException catch (e, st) {
+      final errorCode = e.errorResponse?.error;
+      if (errorCode != null &&
+          _interactionRequiredErrorCodes.contains(errorCode)) {
+        throw OidcInteractionRequiredException.from(
+          e,
+          message:
+              'The authorization server answered a prompt=none request with '
+              '`$errorCode`; interactive re-authentication is required.',
+          stackTrace: st,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Attempts a `prompt=none` re-authorization, forgetting the user when the OP
+  /// answers with an error response.
+  ///
+  /// Prefer the public [signInSilent], which additionally tries the
+  /// refresh-token grant first, lets the caller override the iframe timeout, and
+  /// reports an interaction requirement as a typed
+  /// [OidcInteractionRequiredException] instead of a bare `null`. This method is
+  /// retained because the session-monitor reaction wants the
+  /// forget-on-error behaviour rather than a throw.
+  @Deprecated('use signInSilent')
   @protected
   Future<OidcUser?> reAuthorizeUser() async {
     try {
