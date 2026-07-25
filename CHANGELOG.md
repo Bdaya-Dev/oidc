@@ -3,6 +3,32 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-07-25
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v3.0.0`](#oidc---v300)
+ - [`oidc_android` - `v2.0.0`](#oidc_android---v200)
+
+Packages with other changes:
+
+ - There are no other changes in this release.
+
+---
+
+#### `oidc` - `v3.0.0`
+
+ - **BREAKING** **FIX**(oidc_android): restore the redirect receiver as a fallback capture path ([#418](https://github.com/Bdaya-Dev/oidc/issues/418)) ([#419](https://github.com/Bdaya-Dev/oidc/issues/419)). ([8df8bc61](https://github.com/Bdaya-Dev/oidc/commit/8df8bc617fb91347eac9f32fcffb7ec88f95328a))
+
+#### `oidc_android` - `v2.0.0`
+
+ - **BREAKING** **FIX**(oidc_android): restore the redirect receiver as a fallback capture path ([#418](https://github.com/Bdaya-Dev/oidc/issues/418)) ([#419](https://github.com/Bdaya-Dev/oidc/issues/419)). ([8df8bc61](https://github.com/Bdaya-Dev/oidc/commit/8df8bc617fb91347eac9f32fcffb7ec88f95328a))
+
+
 ## 2026-07-14
 
 ### Changes

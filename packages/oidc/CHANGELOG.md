@@ -1,3 +1,9 @@
+## 3.0.0
+
+> Note: This release has breaking changes.
+
+ - **BREAKING** **FIX**(oidc_android): restore the redirect receiver as a fallback capture path ([#418](https://github.com/Bdaya-Dev/oidc/issues/418)) ([#419](https://github.com/Bdaya-Dev/oidc/issues/419)). ([8df8bc61](https://github.com/Bdaya-Dev/oidc/commit/8df8bc617fb91347eac9f32fcffb7ec88f95328a))
+
 ## 2.0.0
 
 > Note: This release has breaking changes.
