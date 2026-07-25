@@ -1,3 +1,7 @@
+## 1.0.2
+
+ - Update a dependency to the latest release.
+
 ## 1.0.1
 
  - **FIX**(oidc_cli): bound the interactive loopback wait with flowTimeoutSeconds ([#369](https://github.com/Bdaya-Dev/oidc/issues/369)) ([#388](https://github.com/Bdaya-Dev/oidc/issues/388)). ([5e9cf93a](https://github.com/Bdaya-Dev/oidc/commit/5e9cf93a5062cd875096ff232eb64c4d3a42ac05))

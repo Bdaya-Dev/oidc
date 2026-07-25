@@ -1,3 +1,7 @@
+## 2.1.0
+
+ - **FEAT**(oidc_core): silent-acquisition API at the manager/app boundary ([#421](https://github.com/Bdaya-Dev/oidc/issues/421), [#422](https://github.com/Bdaya-Dev/oidc/issues/422), [#423](https://github.com/Bdaya-Dev/oidc/issues/423), [#424](https://github.com/Bdaya-Dev/oidc/issues/424)) ([#425](https://github.com/Bdaya-Dev/oidc/issues/425)). ([97ac60e6](https://github.com/Bdaya-Dev/oidc/commit/97ac60e697ef3f82dfec32e6d1a3b143440a61b9))
+
 ## 2.0.0
 
 > Note: This release has breaking changes.
