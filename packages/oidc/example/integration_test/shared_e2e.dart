@@ -97,8 +97,22 @@ Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
 }
 
 /// Full OIDC conformance flow against certification.openid.net.
-Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
-  _testLogger.info('Running full OIDC conformance flow.');
+/// Runs one OpenID Connect RP certification plan end to end.
+///
+/// [planName] is a conformance-suite plan id. Each plan is driven as its own
+/// test case rather than looped here, so a failure names the profile that broke
+/// and one profile's outage cannot mask another's.
+///
+/// Verified plan ids (openid.net + panva/openid-client-certification-suite):
+///   oidcc-client-basic-certification-test-plan    - the certified profile
+///   oidcc-client-config-certification-test-plan   - OP config from .well-known
+///   oidcc-client-implicit-certification-test-plan - not implemented here
+///   oidcc-client-hybrid-certification-test-plan   - README: "no hybrid flow yet"
+Future<void> runOidcConformanceTest(
+  LaunchApp launchApp, {
+  String planName = 'oidcc-client-basic-certification-test-plan',
+}) async {
+  _testLogger.info('Running OIDC conformance plan: $planName');
   await launchApp();
   _testLogger.info('Example app launched and settled.');
 
@@ -141,8 +155,8 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
   final (path, body) = prepareTestPlanRequest(
     clientId: clientId,
     clientSecret: clientSecret,
-    planName: 'oidcc-client-basic-certification-test-plan',
-    description: 'package:oidc Conformance testing on $platform',
+    planName: planName,
+    description: 'package:oidc $planName on $platform',
     redirectUri: redirectUri.toString(),
     requestType: 'plain_http_request',
     clientRegistration: 'static_client',
@@ -303,7 +317,7 @@ Future<void> runOidcConformanceTest(LaunchApp launchApp) async {
     successfulLogins,
     greaterThan(0),
     reason:
-        'no conformance module completed a login on ${getPlatformName()}, so '
+        'no module of $planName completed a login on ${getPlatformName()}, so '
         'the browser redirect is not reaching the app. On Android, check that '
         "the OidcRedirectActivity intent-filter is registered for the app's "
         'redirect scheme.',

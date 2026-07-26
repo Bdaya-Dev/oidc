@@ -23,11 +23,22 @@ void main() {
         });
       });
     } else {
-      testWidgets('OIDC Conformance Test', (tester) async {
+      testWidgets('OIDC Conformance: Basic RP', (tester) async {
         await runOidcConformanceTest(() async {
           example.main();
           await tester.pumpAndSettle();
         });
+      });
+
+      // See the Patrol harness for why Config RP is a separate case.
+      testWidgets('OIDC Conformance: Config RP', (tester) async {
+        await runOidcConformanceTest(
+          () async {
+            example.main();
+            await tester.pumpAndSettle();
+          },
+          planName: 'oidcc-client-config-certification-test-plan',
+        );
       });
     }
   });
