@@ -83,7 +83,8 @@ void main() {
       expect(
         declared,
         isNotEmpty,
-        reason: 'the option parser found nothing; it has drifted from the model',
+        reason:
+            'the option parser found nothing; it has drifted from the model',
       );
 
       final plugin = _repoFile(
@@ -112,15 +113,15 @@ void main() {
     },
   );
 
-  test('every exemption names a real option that still discloses its limit', () {
+  test('every exemption names a real option that still discloses its limit',
+      () {
     final declared = _declaredAndroidOptions();
 
     for (final name in _exempt.keys) {
       expect(
         declared,
         contains(name),
-        reason:
-            'stale exemption: $name is no longer an option on '
+        reason: 'stale exemption: $name is no longer an option on '
             'OidcNativeOptionsAndroid. Remove it from _exempt.',
       );
       // The dartdoc must still tell a reader the option does nothing. If the
@@ -128,8 +129,7 @@ void main() {
       expect(
         declared[name],
         anyOf(contains('Reserved'), contains('No effect')),
-        reason:
-            '$name is exempt here but its dartdoc no longer discloses the '
+        reason: '$name is exempt here but its dartdoc no longer discloses the '
             'limitation, so the public API now reads as if it works.',
       );
     }

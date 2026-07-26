@@ -103,14 +103,27 @@ Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
 /// test case rather than looped here, so a failure names the profile that broke
 /// and one profile's outage cannot mask another's.
 ///
-/// Verified plan ids (openid.net + panva/openid-client-certification-suite):
-///   oidcc-client-basic-certification-test-plan    - the certified profile
-///   oidcc-client-config-certification-test-plan   - OP config from .well-known
+/// Plan ids. Only the basic plan is confirmed to RUN here — the others are
+/// transcribed from openid.net and panva/openid-client-certification-suite,
+/// which is not the same thing and was already wrong once:
+///   oidcc-client-basic-certification-test-plan    - runs green, the certified
+///                                                   profile
+///   oidcc-client-config-certification-test-plan   - OP config from
+///                                                   .well-known; the plan
+///                                                   REJECTS the static_client
+///                                                   variant with HTTP 400
 ///   oidcc-client-implicit-certification-test-plan - not implemented here
 ///   oidcc-client-hybrid-certification-test-plan   - README: "no hybrid flow yet"
+///
+/// [clientRegistration] and [requestType] are the plan's variant dimensions.
+/// They are NOT uniform across plans: a value one plan requires another
+/// rejects outright at creation time, so they are per-plan rather than
+/// constants shared by every case.
 Future<void> runOidcConformanceTest(
   LaunchApp launchApp, {
   String planName = 'oidcc-client-basic-certification-test-plan',
+  String clientRegistration = 'static_client',
+  String requestType = 'plain_http_request',
 }) async {
   _testLogger.info('Running OIDC conformance plan: $planName');
   await launchApp();
@@ -158,18 +171,37 @@ Future<void> runOidcConformanceTest(
     planName: planName,
     description: 'package:oidc $planName on $platform',
     redirectUri: redirectUri.toString(),
-    requestType: 'plain_http_request',
-    clientRegistration: 'static_client',
+    requestType: requestType,
+    clientRegistration: clientRegistration,
     postLogoutRedirectUri: redirectUri.toString(),
     frontChannelLogoutUri:
         'http://localhost:22433/redirect.html?requestType=front-channel-logout',
   );
   _testLogger.info('Submitting test plan request to $path...');
 
-  final testPlanResponse = await dio.post<Map<String, dynamic>>(
-    path,
-    data: body,
-  );
+  // A 4xx here is a plan-configuration error, not a protocol failure: the
+  // variant dimensions a plan accepts differ per plan, and one the plan does
+  // not declare is rejected outright. Dio's own message reports the status
+  // code and nothing else, so a wrong variant surfaces as a bare "status code
+  // of 400" that names neither the plan nor the offending key. The suite does
+  // say which dimension it rejected, in the response body — surface it, or the
+  // next person debugging this has to re-run CI to learn what the server
+  // already told us.
+  final Response<Map<String, dynamic>> testPlanResponse;
+  try {
+    testPlanResponse = await dio.post<Map<String, dynamic>>(path, data: body);
+  } on DioException catch (e) {
+    final response = e.response;
+    throw StateError(
+      'Creating the "$planName" test plan failed with status '
+      '${response?.statusCode}.\n'
+      'Conformance suite response: ${response?.data}\n'
+      'Request path: $path\n'
+      'If this names a variant dimension, the plan does not accept the '
+      'variant this test sends; pass the right one via `clientRegistration` '
+      'or `requestType`.',
+    );
+  }
   _testLogger.info('Test plan response status ${testPlanResponse.statusCode}.');
   expect(testPlanResponse.data, isMap);
 
