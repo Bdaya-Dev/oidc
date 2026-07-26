@@ -437,6 +437,7 @@ abstract class OidcUserManagerBase {
     Map<String, dynamic>? extraTokenParameters,
     Map<String, String>? extraTokenHeaders,
     OidcPlatformSpecificOptions? options,
+    List<String>? responseTypeOverride,
   }) async {
     ensureInit();
     final discoveryDocument =
@@ -509,6 +510,17 @@ abstract class OidcUserManagerBase {
               ? dpop.thumbprint
               : null,
         );
+    // Hybrid flow (OIDC Core §3.3): the request differs from a plain code flow
+    // only in `response_type`. Everything the exchange needs -- PKCE verifier,
+    // nonce, state, and the DPoP binding above -- was just prepared and stored
+    // identically, so overriding the response type here (rather than building a
+    // parallel request path) keeps hybrid on exactly the same machinery.
+    //
+    // Applied BEFORE the PAR push below, so a pushed hybrid request carries the
+    // real response type instead of `code`.
+    if (responseTypeOverride != null) {
+      requestContainer.request.responseType = responseTypeOverride;
+    }
     // RFC 9126 Pushed Authorization Requests: when enabled, POST the prepared
     // request to the PAR endpoint (back channel, authenticated) and continue
     // the front channel by reference (`request_uri`). state/nonce/PKCE were
@@ -810,6 +822,80 @@ abstract class OidcUserManagerBase {
       }
       rethrow;
     }
+  }
+
+  /// Logs the user in with the Hybrid flow (OpenID Connect Core §3.3).
+  ///
+  /// The authorization endpoint returns an id_token in the front channel
+  /// ALONGSIDE the code. That id_token is validated before the exchange --
+  /// `nonce` must match, `c_hash` must bind the returned code, and `at_hash`
+  /// (when present) must bind the front-channel access_token -- and only then
+  /// is the code redeemed. The user is built from the TOKEN ENDPOINT response;
+  /// the front-channel tokens are a binding check, never the final credentials.
+  ///
+  /// This is not the implicit flow and is not deprecated: the code exchange
+  /// still happens over the back channel with PKCE, so the access token never
+  /// travels through the front channel. [loginImplicitFlow] by contrast keeps
+  /// the front-channel tokens and never calls the token endpoint.
+  ///
+  /// [responseType] must contain `code`; that is what makes a response hybrid
+  /// rather than implicit. Valid values are `code id_token`, `code token`, and
+  /// `code id_token token` (§3.3.2.1). Passing one without `code` is rejected,
+  /// because it would silently degrade to implicit -- the exact confusion this
+  /// method exists to remove.
+  Future<OidcUser?> loginHybridFlow({
+    List<String> responseType = const [
+      OidcConstants_AuthorizationEndpoint_ResponseType.code,
+      OidcConstants_AuthorizationEndpoint_ResponseType.idToken,
+    ],
+    OidcProviderMetadata? discoveryDocumentOverride,
+    Uri? redirectUriOverride,
+    Uri? originalUri,
+    List<String>? scopeOverride,
+    List<String>? promptOverride,
+    List<String>? uiLocalesOverride,
+    String? displayOverride,
+    List<String>? acrValuesOverride,
+    dynamic extraStateData,
+    bool includeIdTokenHintFromCurrentUser = true,
+    String? idTokenHintOverride,
+    String? loginHint,
+    Duration? maxAgeOverride,
+    Map<String, dynamic>? extraParameters,
+    Map<String, dynamic>? extraTokenParameters,
+    Map<String, String>? extraTokenHeaders,
+    OidcPlatformSpecificOptions? options,
+  }) {
+    if (!responseType.contains(
+      OidcConstants_AuthorizationEndpoint_ResponseType.code,
+    )) {
+      logAndThrow(
+        'Hybrid flow requires `code` in response_type (OIDC Core §3.3.2.1); '
+        'got "${responseType.join(' ')}". Without it no code is returned, '
+        'there is nothing to exchange, and the flow is implicit -- use '
+        'loginImplicitFlow if that is what you meant.',
+      );
+    }
+    return loginAuthorizationCodeFlow(
+      discoveryDocumentOverride: discoveryDocumentOverride,
+      redirectUriOverride: redirectUriOverride,
+      originalUri: originalUri,
+      scopeOverride: scopeOverride,
+      promptOverride: promptOverride,
+      uiLocalesOverride: uiLocalesOverride,
+      displayOverride: displayOverride,
+      acrValuesOverride: acrValuesOverride,
+      extraStateData: extraStateData,
+      includeIdTokenHintFromCurrentUser: includeIdTokenHintFromCurrentUser,
+      idTokenHintOverride: idTokenHintOverride,
+      loginHint: loginHint,
+      maxAgeOverride: maxAgeOverride,
+      extraParameters: extraParameters,
+      extraTokenParameters: extraTokenParameters,
+      extraTokenHeaders: extraTokenHeaders,
+      options: options,
+      responseTypeOverride: responseType,
+    );
   }
 
   ///
