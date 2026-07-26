@@ -85,6 +85,7 @@ void main() {
       await runOidcConformanceTest(
         () => _launch($),
         planName: 'oidcc-client-rp-initiated-logout-rp-basic',
+        clientAuthType: 'client_secret_basic',
       );
     });
 
@@ -92,6 +93,7 @@ void main() {
       await runOidcConformanceTest(
         () => _launch($),
         planName: 'oidcc-client-front-channel-logout-rp-basic',
+        clientAuthType: 'client_secret_basic',
       );
     });
 
@@ -99,6 +101,7 @@ void main() {
       await runOidcConformanceTest(
         () => _launch($),
         planName: 'oidcc-client-back-channel-logout-rp-basic',
+        clientAuthType: 'client_secret_basic',
       );
     });
 
@@ -106,6 +109,7 @@ void main() {
       await runOidcConformanceTest(
         () => _launch($),
         planName: 'oidcc-client-rp-session-management-rp-basic',
+        clientAuthType: 'client_secret_basic',
       );
     });
 

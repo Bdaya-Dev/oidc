@@ -22,6 +22,12 @@ import 'package:dio/dio.dart';
 /// entry turns that network round trip into an immediate local error.
 const _requiredExtraVariants = <String, List<String>>{
   'oidcc-client-config-certification-test-plan': ['client_auth_type'],
+  // All four logout plans demand it too, like config and unlike hybrid and
+  // implicit, which reject it. Five plans, three answers, one dimension.
+  'oidcc-client-rp-initiated-logout-rp-basic': ['client_auth_type'],
+  'oidcc-client-front-channel-logout-rp-basic': ['client_auth_type'],
+  'oidcc-client-back-channel-logout-rp-basic': ['client_auth_type'],
+  'oidcc-client-rp-session-management-rp-basic': ['client_auth_type'],
 };
 
 /// Variant dimensions a plan sets ITSELF, and rejects the caller for setting.
