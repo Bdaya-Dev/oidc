@@ -28,7 +28,10 @@ const _requiredExtraVariants = <String, List<String>>{
   'oidcc-client-front-channel-logout-rp-basic': ['client_auth_type'],
   'oidcc-client-back-channel-logout-rp-basic': ['client_auth_type'],
   'oidcc-client-rp-session-management-rp-basic': ['client_auth_type'],
-  'oidcc-client-test-3rd-party-init-login-test-plan': ['client_auth_type'],
+  'oidcc-client-test-3rd-party-init-login-test-plan': [
+    'client_auth_type',
+    'response_type',
+  ],
 };
 
 /// Variant dimensions a plan sets ITSELF, and rejects the caller for setting.
@@ -50,7 +53,13 @@ const _forbiddenExtraVariants = <String, List<String>>{
   // itself, so the plain_http_request every other plan needs is rejected here.
   // request_type is therefore nullable below: "always send it" was an
   // assumption, not a requirement.
-  'oidcc-client-dynamic-certification-test-plan': ['request_type'],
+  // Dynamic RP sets BOTH itself. Passing client_registration: dynamic_client
+  // looked like the obvious counterpart to static_client and was rejected --
+  // the plan is "dynamic" precisely because it owns that dimension.
+  'oidcc-client-dynamic-certification-test-plan': [
+    'request_type',
+    'client_registration',
+  ],
 };
 
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
@@ -60,7 +69,7 @@ const _forbiddenExtraVariants = <String, List<String>>{
   required String clientId,
   required String redirectUri,
   // {"request_type":"plain_http_request","client_registration":"static_client"}
-  required String clientRegistration,
+  String? clientRegistration,
   String? requestType,
   String? alias,
   String? clientSecret,
@@ -71,7 +80,7 @@ const _forbiddenExtraVariants = <String, List<String>>{
 }) {
   final variant = {
     if (requestType != null) 'request_type': requestType,
-    'client_registration': clientRegistration,
+    if (clientRegistration != null) 'client_registration': clientRegistration,
     ...?extraVariant,
   };
   final missing = (_requiredExtraVariants[planName] ?? const <String>[])

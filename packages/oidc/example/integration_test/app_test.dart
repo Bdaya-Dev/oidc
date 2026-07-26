@@ -112,6 +112,7 @@ void main() {
             await tester.pumpAndSettle();
           },
           planName: 'oidcc-client-test-3rd-party-init-login-test-plan',
+          extraPlanVariant: {'response_type': 'code'},
           clientAuthType: 'client_secret_basic',
         );
       });
@@ -127,7 +128,7 @@ void main() {
             await tester.pumpAndSettle();
           },
           planName: 'oidcc-client-dynamic-certification-test-plan',
-          clientRegistration: 'dynamic_client',
+          clientRegistration: null,
           requestType: null,
         );
       });

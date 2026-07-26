@@ -202,9 +202,10 @@ Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
 Future<void> runOidcConformanceTest(
   LaunchApp launchApp, {
   String planName = 'oidcc-client-basic-certification-test-plan',
-  String clientRegistration = 'static_client',
+  String? clientRegistration = 'static_client',
   String? requestType = 'plain_http_request',
   String? clientAuthType,
+  Map<String, String> extraPlanVariant = const {},
 }) async {
   _testLogger.info('Running OIDC conformance plan: $planName');
   await launchApp();
@@ -269,6 +270,7 @@ Future<void> runOidcConformanceTest(
     clientRegistration: clientRegistration,
     extraVariant: {
       if (clientAuthType != null) 'client_auth_type': clientAuthType,
+      ...extraPlanVariant,
     },
     postLogoutRedirectUri: redirectUri.toString(),
     frontChannelLogoutUri:
