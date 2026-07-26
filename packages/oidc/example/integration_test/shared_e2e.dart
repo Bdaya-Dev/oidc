@@ -34,6 +34,44 @@ const String oidcConformanceToken = String.fromEnvironment(
 
 final Logger _testLogger = Logger('oidc.conformance');
 
+bool _planIdsLogged = false;
+
+/// Logs every RP plan id the suite actually publishes, once per run.
+///
+/// Plan ids have been the single biggest source of wasted CI round trips here:
+/// a wrong one is an HTTP 400 at creation, and the logout profiles could not be
+/// wired at all because their ids were never found in any public document --
+/// openid.net names the four logout PROFILES but not their plan ids, and the
+/// only concrete name findable elsewhere turned out to be an OP-side plan.
+///
+/// Guessing was refused, and that was right; but "unverifiable" was wrong. The
+/// suite will simply list them, and CI holds the token that makes it answer.
+/// Read the ids out of the CI log rather than searching for them again.
+Future<void> _logAvailableClientPlanIds(Dio dio) async {
+  if (_planIdsLogged) {
+    return;
+  }
+  _planIdsLogged = true;
+  try {
+    final resp = await dio.get<List<dynamic>>('api/plan/available');
+    final names =
+        (resp.data ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map((e) => e['planName'] as String?)
+            .whereType<String>()
+            .where((e) => e.contains('client'))
+            .toList()
+          ..sort();
+    _testLogger.info('Available RP plan ids (${names.length}):');
+    for (final name in names) {
+      _testLogger.info('  PLAN_ID $name');
+    }
+  } on Object catch (e) {
+    // Never fail a conformance run over a diagnostic.
+    _testLogger.warning('Could not list available plans: $e');
+  }
+}
+
 bool _loggingConfigured = false;
 
 /// Configures hierarchical logging once, printing every record.
@@ -103,24 +141,24 @@ Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
 /// test case rather than looped here, so a failure names the profile that broke
 /// and one profile's outage cannot mask another's.
 ///
-/// Plan ids. Only the basic plan is confirmed to RUN here — the others are
-/// transcribed from openid.net and panva/openid-client-certification-suite,
-/// which is not the same thing and was already wrong once:
-///   oidcc-client-basic-certification-test-plan    - runs green, the certified
+/// Plan ids, all four confirmed green against the live suite:
+///   oidcc-client-basic-certification-test-plan    - 14 modules; the certified
 ///                                                   profile
-///   oidcc-client-config-certification-test-plan   - OP config from
-///                                                   .well-known; needs an
-///                                                   explicit clientAuthType
-///   oidcc-client-implicit-certification-test-plan - wired, NOT yet confirmed
-///                                                   to run
-///   oidcc-client-hybrid-certification-test-plan   - wired, NOT yet confirmed
-///                                                   to run
+///   oidcc-client-hybrid-certification-test-plan   - 48 modules; includes the
+///                                                   invalid/missing c_hash
+///                                                   negatives
+///   oidcc-client-implicit-certification-test-plan - 27 modules
+///   oidcc-client-config-certification-test-plan   -  6 modules; OP config
+///                                                   from .well-known
 ///
 /// The flow each module needs is read from that module's own `response_type`
 /// variant rather than assumed, so hybrid and implicit need no special driving
-/// here -- only their plan id. Whether these two plans accept the variant this
-/// harness sends is unknown until CI runs them; a wrong one is an HTTP 400 at
-/// creation that names the offending dimension.
+/// here -- only their plan id.
+///
+/// The logout profiles are NOT here: openid.net documents the four profiles
+/// but not their plan ids, and guessing one costs an HTTP 400 per attempt.
+/// `_logAvailableClientPlanIds` above asks the suite to list them instead;
+/// read the ids out of a CI log and wire them from that.
 ///
 /// [clientRegistration], [requestType] and [clientAuthType] are the plan's
 /// variant dimensions, and which ones a plan REQUIRES is not uniform. The
@@ -170,6 +208,8 @@ Future<void> runOidcConformanceTest(
   final currentUser = await dio.get<Map<String, dynamic>>('api/currentuser');
   _testLogger.info('Current user OK (status ${currentUser.statusCode}).');
   expect(currentUser.statusCode, 200);
+
+  await _logAvailableClientPlanIds(dio);
 
   final platform = getPlatformName();
   _testLogger.info('Detected platform: $platform');
