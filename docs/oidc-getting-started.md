@@ -20,7 +20,8 @@ every platform you support has its own configuration and set up.
 Native browser handling is **first-party on every platform** (no third-party
 auth SDK):
 
-- **Android** — **Chrome Custom Tabs**.
+- **Android** — **Auth Tab**, falling back to **Chrome Custom Tabs** (requires
+  **minSdk 23+**).
 - **iOS** — **ASWebAuthenticationSession** (requires **iOS 13+**).
 - **macOS** — **ASWebAuthenticationSession** (requires **macOS 10.15+**).
 
@@ -47,7 +48,8 @@ go to `android/app/build.gradle`, and add the following under `defaultConfig`:
 ```diff
 defaultConfig {
     applicationId "com.my.app"
-    minSdkVersion flutter.minSdkVersion
+-   minSdkVersion flutter.minSdkVersion
++   minSdkVersion 23
     targetSdkVersion flutter.targetSdkVersion
     versionCode flutterVersionCode.toInteger()
     versionName flutterVersionName
@@ -56,6 +58,12 @@ defaultConfig {
 +   ]
 }
 ```
+
+`minSdkVersion` must be **23 or higher**. `oidc_android` depends on
+`androidx.browser:browser:1.10.0`, which declares `minSdk 23`; a lower value in
+your app fails the manifest merge at build time. If you are upgrading from
+`oidc_android` 1.0.1 or earlier, this is the one change that can break your
+build — its floor was 21.
 replace `com.my.app` with the scheme of your `redirect_uri` (a reverse-DNS
 scheme you own, per [RFC 8252 §7.1](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1));
 your `redirect_uri` then looks like `com.my.app://oauth2redirect`.
@@ -83,13 +91,14 @@ your `redirect_uri` then looks like `com.my.app://oauth2redirect`.
 
 [Source](https://pub.dev/packages/flutter_secure_storage#configure-android-version)
 
-1. In `android/app/build.gradle` set `minSdkVersion` to >= 18.
+1. `flutter_secure_storage` needs `minSdkVersion` >= 18, which the 23 required
+   above already satisfies — no further change if you set it.
     ```diff
     defaultConfig {   
         
         applicationId "com.my_app"
     -   minSdkVersion flutter.minSdkVersion
-    +   minSdkVersion 21
+    +   minSdkVersion 23
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
