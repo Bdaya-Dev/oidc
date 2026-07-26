@@ -65,7 +65,6 @@ void main() {
       await runOidcConformanceTest(
         () => _launch($),
         planName: 'oidcc-client-hybrid-certification-test-plan',
-        clientAuthType: 'client_secret_basic',
       );
     });
 
@@ -73,7 +72,6 @@ void main() {
       await runOidcConformanceTest(
         () => _launch($),
         planName: 'oidcc-client-implicit-certification-test-plan',
-        clientAuthType: 'client_secret_basic',
       );
     });
 

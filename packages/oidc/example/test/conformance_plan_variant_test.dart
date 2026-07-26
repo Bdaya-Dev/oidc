@@ -54,6 +54,36 @@ void main() {
     );
   });
 
+  test('the hybrid plan is rejected locally when client_auth_type is sent', () {
+    // The mirror image of the config case, and the reason this cannot be
+    // reasoned out offline: the suite sets client_auth_type itself for these
+    // plans and rejects any attempt to also set it.
+    //
+    //   Variant 'client_auth_type' has been set by user, but test plan
+    //   already sets this variant for module 'oidcc-client-test'
+    //
+    // Basic defaults it, Config demands it, Hybrid/Implicit forbid it. Same
+    // dimension, three rules, one HTTP 400 apiece to find out.
+    expect(
+      () => build(
+        'oidcc-client-hybrid-certification-test-plan',
+        extraVariant: {'client_auth_type': 'client_secret_basic'},
+      ),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.message,
+          'message',
+          contains('client_auth_type'),
+        ),
+      ),
+    );
+  });
+
+  test('the hybrid plan builds when client_auth_type is left alone', () {
+    final (path, _) = build('oidcc-client-hybrid-certification-test-plan');
+    expect(path, isNot(contains('client_auth_type')));
+  });
+
   test('the config plan builds once client_auth_type is supplied', () {
     final (path, _) = build(
       configPlan,

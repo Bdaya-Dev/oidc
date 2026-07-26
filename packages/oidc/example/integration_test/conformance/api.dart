@@ -24,6 +24,23 @@ const _requiredExtraVariants = <String, List<String>>{
   'oidcc-client-config-certification-test-plan': ['client_auth_type'],
 };
 
+/// Variant dimensions a plan sets ITSELF, and rejects the caller for setting.
+///
+/// The exact inverse of [_requiredExtraVariants], for the same dimension:
+///
+///   Variant 'client_auth_type' has been set by user, but test plan already
+///   sets this variant for module 'oidcc-client-test'
+///
+/// So `client_auth_type` is optional on the basic plan, mandatory on the
+/// config plan, and forbidden on these two. Three rules for one dimension,
+/// none of them derivable from the plan name -- each cost an HTTP 400 to
+/// learn, which is precisely why both directions are recorded here instead of
+/// being rediscovered from CI.
+const _forbiddenExtraVariants = <String, List<String>>{
+  'oidcc-client-hybrid-certification-test-plan': ['client_auth_type'],
+  'oidcc-client-implicit-certification-test-plan': ['client_auth_type'],
+};
+
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
   // oidcc-client-basic-certification-test-plan
   required String planName,
@@ -54,6 +71,16 @@ const _requiredExtraVariants = <String, List<String>>{
       '${missing.join(', ')}. The conformance suite enforces this at plan '
       'creation and answers HTTP 400, so pass them via extraVariant rather '
       'than discovering it from CI.',
+    );
+  }
+  final forbidden = (_forbiddenExtraVariants[planName] ?? const <String>[])
+      .where(variant.containsKey)
+      .toList();
+  if (forbidden.isNotEmpty) {
+    throw ArgumentError(
+      'The "$planName" plan sets the variant dimension(s) '
+      '${forbidden.join(', ')} itself and rejects a caller-supplied value '
+      'with HTTP 400. Drop them rather than discovering it from CI.',
     );
   }
   final uri = Uri(
