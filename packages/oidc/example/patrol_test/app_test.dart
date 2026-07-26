@@ -113,6 +113,38 @@ void main() {
       );
     });
 
+    // Form Post and 3rd-party-init, from the suite's published list. Variant
+    // rules are unknown for these; they omit clientAuthType, matching the
+    // plans they most resemble. A wrong choice is named by the plan-creation
+    // diagnostic and pinned in api.dart, not rediscovered.
+    patrolTest('OIDC Conformance: Form Post Basic RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-formpost-basic-certification-test-plan',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Form Post Hybrid RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-formpost-hybrid-certification-test-plan',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Form Post Implicit RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-formpost-implicit-certification-test-plan',
+      );
+    });
+
+    patrolTest('OIDC Conformance: 3rd Party-Init Login RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-test-3rd-party-init-login-test-plan',
+      );
+    });
+
     patrolTest('OIDC Conformance: Config RP', ($) async {
       await runOidcConformanceTest(
         () => _launch($),

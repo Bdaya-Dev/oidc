@@ -80,6 +80,38 @@ void main() {
         );
       });
 
+      // Form Post and 3rd-party-init, from the suite's published list. Variant
+      // rules are unknown for these; they omit clientAuthType, matching the
+      // plans they most resemble. A wrong choice is named by the plan-creation
+      // diagnostic and pinned in api.dart, not rediscovered.
+      testWidgets('OIDC Conformance: Form Post Basic RP', (tester) async {
+        await runOidcConformanceTest(() async {
+          example.main();
+          await tester.pumpAndSettle();
+        }, planName: 'oidcc-client-formpost-basic-certification-test-plan');
+      });
+
+      testWidgets('OIDC Conformance: Form Post Hybrid RP', (tester) async {
+        await runOidcConformanceTest(() async {
+          example.main();
+          await tester.pumpAndSettle();
+        }, planName: 'oidcc-client-formpost-hybrid-certification-test-plan');
+      });
+
+      testWidgets('OIDC Conformance: Form Post Implicit RP', (tester) async {
+        await runOidcConformanceTest(() async {
+          example.main();
+          await tester.pumpAndSettle();
+        }, planName: 'oidcc-client-formpost-implicit-certification-test-plan');
+      });
+
+      testWidgets('OIDC Conformance: 3rd Party-Init Login RP', (tester) async {
+        await runOidcConformanceTest(() async {
+          example.main();
+          await tester.pumpAndSettle();
+        }, planName: 'oidcc-client-test-3rd-party-init-login-test-plan');
+      });
+
       // See the Patrol harness for why each plan is a separate case.
       testWidgets('OIDC Conformance: Hybrid RP', (tester) async {
         await runOidcConformanceTest(() async {
