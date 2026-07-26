@@ -25,6 +25,15 @@ import 'package:flutter_test/flutter_test.dart';
 //
 // Adding an option to this map is the reviewable act. Adding one to the model
 // and forgetting it is not possible.
+//
+// SCOPE, before anyone copies this to another platform: it checks ONE native
+// file because Android handles no option in Dart -- `oidc_android.dart` passes
+// `options.android.toJson()` straight to Pigeon and reads nothing itself. That
+// is not true elsewhere. `oidc_darwin` implements `navigationMode` and its three
+// response bodies entirely in Dart (`oidc_darwin.dart`), so the same check
+// pointed at `OidcPlugin.swift` alone reports four working options as inert.
+// Any port must cover every layer that can consume an option, not just the
+// native one.
 const _exempt = <String, String>{
   'preferredBrowserPackages':
       'dartdoc: "Reserved - not yet wired natively"; the launch does not pin a '
