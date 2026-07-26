@@ -62,6 +62,9 @@ void main() {
       await runOidcConformanceTest(
         () => _launch($),
         planName: 'oidcc-client-config-certification-test-plan',
+        // The discovery module rejects the plan outright without this; the
+        // Basic plan defaults it, this one does not.
+        clientAuthType: 'client_secret_basic',
       );
     });
   }

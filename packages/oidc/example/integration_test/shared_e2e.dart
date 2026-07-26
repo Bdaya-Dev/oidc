@@ -109,21 +109,27 @@ Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
 ///   oidcc-client-basic-certification-test-plan    - runs green, the certified
 ///                                                   profile
 ///   oidcc-client-config-certification-test-plan   - OP config from
-///                                                   .well-known; the plan
-///                                                   REJECTS the static_client
-///                                                   variant with HTTP 400
+///                                                   .well-known; needs an
+///                                                   explicit clientAuthType
 ///   oidcc-client-implicit-certification-test-plan - not implemented here
 ///   oidcc-client-hybrid-certification-test-plan   - README: "no hybrid flow yet"
 ///
-/// [clientRegistration] and [requestType] are the plan's variant dimensions.
-/// They are NOT uniform across plans: a value one plan requires another
-/// rejects outright at creation time, so they are per-plan rather than
-/// constants shared by every case.
+/// [clientRegistration], [requestType] and [clientAuthType] are the plan's
+/// variant dimensions, and which ones a plan REQUIRES is not uniform. The
+/// basic plan resolves `client_auth_type` to `client_secret_basic` on its own,
+/// so omitting it works there. The config plan does not:
+///
+///   TestModule 'oidcc-client-test-discovery-openid-config' requires a value
+///   for variant 'client_auth_type'
+///
+/// which is an HTTP 400 at plan creation, before any module runs. Pass
+/// [clientAuthType] for any plan whose modules need it stated outright.
 Future<void> runOidcConformanceTest(
   LaunchApp launchApp, {
   String planName = 'oidcc-client-basic-certification-test-plan',
   String clientRegistration = 'static_client',
   String requestType = 'plain_http_request',
+  String? clientAuthType,
 }) async {
   _testLogger.info('Running OIDC conformance plan: $planName');
   await launchApp();
@@ -173,6 +179,9 @@ Future<void> runOidcConformanceTest(
     redirectUri: redirectUri.toString(),
     requestType: requestType,
     clientRegistration: clientRegistration,
+    extraVariant: {
+      if (clientAuthType != null) 'client_auth_type': clientAuthType,
+    },
     postLogoutRedirectUri: redirectUri.toString(),
     frontChannelLogoutUri:
         'http://localhost:22433/redirect.html?requestType=front-channel-logout',
