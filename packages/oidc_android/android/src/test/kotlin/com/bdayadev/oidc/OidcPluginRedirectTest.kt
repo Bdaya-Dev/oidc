@@ -1,6 +1,7 @@
 package com.bdayadev.oidc
 
 import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import org.junit.Before
@@ -10,9 +11,11 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -71,6 +74,35 @@ class OidcPluginRedirectTest {
         assertEquals(
             "com.example.app://callback?code=code-1&state=s",
             results.single().getOrNull(),
+        )
+    }
+
+    @Test
+    fun `consuming the redirect brings the host forward and clears the Custom Tab`() {
+        // CustomTabsIntent.launchUrl starts the browser with no
+        // FLAG_ACTIVITY_NEW_TASK, so it sits in the host app's OWN task:
+        //   host -> CustomTab -> OidcRedirectActivity
+        // Finishing the transparent receiver pops only itself and leaves the
+        // user looking at the browser, which they then have to close by hand.
+        // Consuming the redirect must therefore re-launch the host with
+        // CLEAR_TOP, which pops the Custom Tab off the task with it.
+        startAuthorize()
+        // Drain the browser Intent that starting the flow queued, so the
+        // assertion below reads the redirect's own re-launch and not that.
+        assertNotNull(shadowOf(activity).nextStartedActivity, "sanity: the browser was launched")
+
+        assertTrue(OidcPlugin.handleRedirect(Uri.parse("com.example.app://callback?code=c")))
+
+        val started = shadowOf(activity).nextStartedActivity
+        assertNotNull(started, "the host must be re-launched to clear the browser above it")
+        assertEquals(activity.javaClass.name, started.component?.className)
+        assertTrue(
+            started.flags and Intent.FLAG_ACTIVITY_CLEAR_TOP != 0,
+            "FLAG_ACTIVITY_CLEAR_TOP is what pops the Custom Tab off the task",
+        )
+        assertTrue(
+            started.flags and Intent.FLAG_ACTIVITY_SINGLE_TOP != 0,
+            "SINGLE_TOP delivers to the existing host via onNewIntent instead of recreating it",
         )
     }
 

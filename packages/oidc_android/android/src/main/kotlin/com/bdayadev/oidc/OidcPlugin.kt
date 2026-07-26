@@ -278,7 +278,34 @@ class OidcPlugin :
             ),
         )
         finishPending(Result.success(data.toString()))
+        dismissBrowser()
         return true
+    }
+
+    /**
+     * Brings the host Activity back to the front, popping the browser with it.
+     *
+     * `CustomTabsIntent.launchUrl` starts the browser with no
+     * `FLAG_ACTIVITY_NEW_TASK`, so the Custom Tab lives in the host app's OWN
+     * task: host -> CustomTab -> OidcRedirectActivity. Finishing the transparent
+     * receiver pops only itself and leaves the user looking at the browser, which
+     * they then have to close by hand.
+     *
+     * `CLEAR_TOP` pops everything above the host, taking the Custom Tab with it.
+     * `SINGLE_TOP` delivers to the existing instance through `onNewIntent`
+     * instead of recreating it, so the Flutter engine and its widget state
+     * survive.
+     *
+     * Only the intent-filter path needs this. Auth Tab closes its own tab when
+     * it returns the Activity Result.
+     */
+    private fun dismissBrowser() {
+        val host = activity ?: return
+        host.startActivity(
+            Intent(host, host.javaClass).addFlags(
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            ),
+        )
     }
 
     /** Handles the Auth Tab [AuthTabIntent.AuthResult] on the main thread. */
