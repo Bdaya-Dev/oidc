@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-07-26
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_android` - `v2.0.1`](#oidc_android---v201)
+ - [`oidc` - `v3.0.1`](#oidc---v301)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc` - `v3.0.1`
+
+---
+
+#### `oidc_android` - `v2.0.1`
+
+ - **DOCS**(oidc_android): state the minSdk 23 requirement, and stop instructing 21 ([#427](https://github.com/Bdaya-Dev/oidc/issues/427)). ([1f210d0a](https://github.com/Bdaya-Dev/oidc/commit/1f210d0a36843dd0aa5080be499ecbafa0347c35))
+
+
 ## 2026-07-25
 
 ### Changes
