@@ -112,6 +112,21 @@ void main() {
         }, planName: 'oidcc-client-test-3rd-party-init-login-test-plan');
       });
 
+      // Dynamic RP: the client registers itself at the OP rather than being
+      // pre-provisioned, so this is the one plan that does NOT take
+      // static_client. `dynamic_client` is the documented counterpart already
+      // named in the harness's own variant comment, not a guess at a new value.
+      testWidgets('OIDC Conformance: Dynamic RP', (tester) async {
+        await runOidcConformanceTest(
+          () async {
+            example.main();
+            await tester.pumpAndSettle();
+          },
+          planName: 'oidcc-client-dynamic-certification-test-plan',
+          clientRegistration: 'dynamic_client',
+        );
+      });
+
       // See the Patrol harness for why each plan is a separate case.
       testWidgets('OIDC Conformance: Hybrid RP', (tester) async {
         await runOidcConformanceTest(() async {
