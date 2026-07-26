@@ -34,6 +34,15 @@ const String oidcConformanceToken = String.fromEnvironment(
 
 final Logger _testLogger = Logger('oidc.conformance');
 
+/// Whether [planName] is one of the four logout profiles.
+///
+/// Matched on substring rather than an enumerated list: the logout plans also
+/// ship `-rp-hybrid` and `-rp-implicit` variants that are not wired yet, and a
+/// list would silently drive those as login-only when they are added -- the
+/// same failure this predicate exists to remove.
+bool isLogoutConformancePlan(String planName) =>
+    planName.contains('-logout-') || planName.contains('-session-management-');
+
 bool _planIdsLogged = false;
 
 /// Logs every RP plan id the suite actually publishes, once per run.
@@ -155,10 +164,9 @@ Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
 /// variant rather than assumed, so hybrid and implicit need no special driving
 /// here -- only their plan id.
 ///
-/// The logout profiles are NOT here: openid.net documents the four profiles
-/// but not their plan ids, and guessing one costs an HTTP 400 per attempt.
-/// `_logAvailableClientPlanIds` above asks the suite to list them instead;
-/// read the ids out of a CI log and wire them from that.
+/// The logout profiles ARE wired now, and they are two-step: log in, then
+/// logout. See [isLogoutConformancePlan] -- driving only the login leaves every
+/// module waiting for an end-session request that never arrives.
 ///
 /// [clientRegistration], [requestType] and [clientAuthType] are the plan's
 /// variant dimensions, and which ones a plan REQUIRES is not uniform. The
@@ -402,6 +410,27 @@ Future<void> runOidcConformanceTest(
     }();
     if (authResult != null) {
       successfulLogins++;
+      // The logout profiles are two-step: log in, THEN initiate logout, and the
+      // module only completes once it observes the end-session request. This
+      // harness drove the login and stopped, so every logout module sat waiting
+      // for a logout that never came, timed out at flowTimeoutSeconds, and
+      // reported no user -- four plans failing for one missing call, not four
+      // separate defects.
+      //
+      // postLogoutRedirectUri and frontChannelLogoutUri were already configured
+      // on the plan request, which is exactly why this looked wired.
+      if (isLogoutConformancePlan(planName)) {
+        logger.info('Logout profile: initiating RP-initiated logout...');
+        try {
+          await manager.logout();
+          logger.info('Logout completed.');
+        } catch (e, stackTrace) {
+          // Some logout modules deliberately break the end-session response;
+          // record it rather than failing the whole plan here, matching how the
+          // login step treats its own negative modules.
+          logger.severe('Logout threw for $moduleName', e, stackTrace);
+        }
+      }
     }
     // print(), not logger: logger output goes into the certification archive
     // rather than CI stdout. patrol also drops test stdout unless --verbose.

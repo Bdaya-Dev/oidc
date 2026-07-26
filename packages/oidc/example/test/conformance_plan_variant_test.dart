@@ -4,6 +4,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../integration_test/conformance/api.dart';
+import '../integration_test/shared_e2e.dart';
 
 // The Config RP plan shipped broken: the harness sent request_type and
 // client_registration, and the conformance suite answered
@@ -121,4 +122,34 @@ void main() {
       expect(path, isNot(contains('client_auth_type')));
     },
   );
+
+  group('logout profiles are recognised so the harness logs out', () {
+    // Four plans failed because the harness only ever logged in. The modules
+    // wait for an end-session request, so each timed out at
+    // flowTimeoutSeconds and reported no user.
+    for (final plan in [
+      'oidcc-client-rp-initiated-logout-rp-basic',
+      'oidcc-client-front-channel-logout-rp-basic',
+      'oidcc-client-back-channel-logout-rp-basic',
+      'oidcc-client-rp-session-management-rp-basic',
+      // Not wired yet; must still be recognised the day they are.
+      'oidcc-client-rp-initiated-logout-rp-hybrid',
+      'oidcc-client-back-channel-logout-rp-implicit',
+    ]) {
+      test('$plan drives a logout', () {
+        expect(isLogoutConformancePlan(plan), isTrue);
+      });
+    }
+
+    for (final plan in [
+      'oidcc-client-basic-certification-test-plan',
+      'oidcc-client-hybrid-certification-test-plan',
+      'oidcc-client-config-certification-test-plan',
+      'oidcc-client-formpost-basic-certification-test-plan',
+    ]) {
+      test('$plan does not', () {
+        expect(isLogoutConformancePlan(plan), isFalse);
+      });
+    }
+  });
 }
