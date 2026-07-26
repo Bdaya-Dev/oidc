@@ -30,6 +30,40 @@ void main() {
         });
       });
 
+      // The four logout profiles, discovered from the suite's own api/plan/available
+      // rather than guessed. Note the shape: they do NOT use the
+      // `-certification-test-plan` suffix the other profiles use, which is why no
+      // amount of searching produced them and why every guessed id would have
+      // 400ed. Each is pinned to the `-rp-basic` variant, matching the profile
+      // this library is certified against.
+      testWidgets('OIDC Conformance: RP-Initiated Logout', (tester) async {
+        await runOidcConformanceTest(() async {
+          example.main();
+          await tester.pumpAndSettle();
+        }, planName: 'oidcc-client-rp-initiated-logout-rp-basic');
+      });
+
+      testWidgets('OIDC Conformance: Front-Channel Logout', (tester) async {
+        await runOidcConformanceTest(() async {
+          example.main();
+          await tester.pumpAndSettle();
+        }, planName: 'oidcc-client-front-channel-logout-rp-basic');
+      });
+
+      testWidgets('OIDC Conformance: Back-Channel Logout', (tester) async {
+        await runOidcConformanceTest(() async {
+          example.main();
+          await tester.pumpAndSettle();
+        }, planName: 'oidcc-client-back-channel-logout-rp-basic');
+      });
+
+      testWidgets('OIDC Conformance: Session Management', (tester) async {
+        await runOidcConformanceTest(() async {
+          example.main();
+          await tester.pumpAndSettle();
+        }, planName: 'oidcc-client-rp-session-management-rp-basic');
+      });
+
       // See the Patrol harness for why each plan is a separate case.
       testWidgets('OIDC Conformance: Hybrid RP', (tester) async {
         await runOidcConformanceTest(() async {

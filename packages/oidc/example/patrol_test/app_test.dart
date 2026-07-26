@@ -75,6 +75,40 @@ void main() {
       );
     });
 
+    // The four logout profiles, discovered from the suite's own api/plan/available
+    // rather than guessed. Note the shape: they do NOT use the
+    // `-certification-test-plan` suffix the other profiles use, which is why no
+    // amount of searching produced them and why every guessed id would have
+    // 400ed. Each is pinned to the `-rp-basic` variant, matching the profile
+    // this library is certified against.
+    patrolTest('OIDC Conformance: RP-Initiated Logout', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-rp-initiated-logout-rp-basic',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Front-Channel Logout', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-front-channel-logout-rp-basic',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Back-Channel Logout', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-back-channel-logout-rp-basic',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Session Management', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-rp-session-management-rp-basic',
+      );
+    });
+
     patrolTest('OIDC Conformance: Config RP', ($) async {
       await runOidcConformanceTest(
         () => _launch($),
