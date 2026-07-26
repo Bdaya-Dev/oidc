@@ -296,9 +296,13 @@ Future<void> runOidcConformanceTest(
       '${response?.statusCode}.\n'
       'Conformance suite response: ${response?.data}\n'
       'Request path: $path\n'
-      'If this names a variant dimension, the plan does not accept the '
-      'variant this test sends; pass the right one via `clientRegistration` '
-      'or `requestType`.',
+      'If this names a variant dimension, the plan disagrees with what this '
+      'test sent: pass or drop it via `clientAuthType`, `clientRegistration`, '
+      '`requestType`, or `extraPlanVariant`.\n'
+      'Note the local guard in api.dart only checks that a dimension is '
+      'PRESENT or ABSENT, never that its VALUE is one the plan accepts, so a '
+      '4xx can still come from a wrong clientAuthType even when the guard is '
+      'satisfied.',
     );
   }
   _testLogger.info('Test plan response status ${testPlanResponse.statusCode}.');

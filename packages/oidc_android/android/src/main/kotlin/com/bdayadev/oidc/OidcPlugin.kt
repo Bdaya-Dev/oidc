@@ -440,6 +440,15 @@ class OidcPlugin :
                 is Long -> intent.putExtra(name, value)
                 is Double -> intent.putExtra(name, value)
                 is ArrayList<*> -> intent.putExtra(name, value)
+                // A Kotlin Map is not itself Serializable, so it cannot go
+                // through putExtra directly; HashMap is. Pigeon only delivers
+                // primitives inside, so the copy is safe to serialize.
+                //
+                // This branch was missing while the doc comment above already
+                // claimed Map support, and the raw-extras test covered only
+                // String/Bool/Int -- so a documented type was dropped and
+                // everything stayed green. Caught in review, not by the suite.
+                is Map<*, *> -> intent.putExtra(name, HashMap(value))
                 else -> emit(
                     "rawIntentExtraSkipped",
                     mapOf("key" to name, "type" to value.javaClass.simpleName),
