@@ -43,6 +43,27 @@ final Logger _testLogger = Logger('oidc.conformance');
 bool isLogoutConformancePlan(String planName) =>
     planName.contains('-logout-') || planName.contains('-session-management-');
 
+/// Whether [planName] uses `response_mode=form_post`.
+bool isFormPostConformancePlan(String planName) =>
+    planName.contains('-formpost-');
+
+/// Whether an authorization response can be delivered to [redirectUri] as a
+/// form POST.
+///
+/// `response_mode=form_post` has the OP deliver the response as an HTTP POST
+/// body to the redirect URI. A custom scheme -- `com.bdayadev.oidc.example:/`
+/// on iOS/macOS/Android -- is not an HTTP endpoint at all, so no browser can
+/// POST to it. The formpost plans are therefore not merely failing on those
+/// platforms; they cannot be delivered there by construction, whatever the
+/// library does.
+///
+/// This is NOT the loopback listener's 405-on-non-GET
+/// (`oidc_loopback_listener.dart`). That one is real and does block form_post
+/// on desktop, but macOS never reaches it: it redirects to a custom scheme via
+/// ASWebAuthenticationSession. Chasing the 405 first was a wrong lead.
+bool canReceiveFormPost(Uri redirectUri) =>
+    redirectUri.scheme == 'http' || redirectUri.scheme == 'https';
+
 bool _planIdsLogged = false;
 
 /// Logs every RP plan id the suite actually publishes, once per run.
@@ -221,6 +242,17 @@ Future<void> runOidcConformanceTest(
 
   final platform = getPlatformName();
   _testLogger.info('Detected platform: $platform');
+
+  if (isFormPostConformancePlan(planName) &&
+      !canReceiveFormPost(getPlatformRedirectUri())) {
+    // Not a skipped failure: the OP cannot POST to a custom scheme, so there is
+    // no outcome to observe on this platform.
+    markTestSkipped(
+      '$planName needs an http(s) redirect to receive a form POST; '
+      '$platform redirects to ${getPlatformRedirectUri().scheme}: scheme.',
+    );
+    return;
+  }
 
   const clientId = 'my_client';
   const clientSecret = 'my_client_secret';

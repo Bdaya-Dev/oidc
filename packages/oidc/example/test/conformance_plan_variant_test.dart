@@ -152,4 +152,42 @@ void main() {
       });
     }
   });
+
+  group('form_post needs an http(s) redirect', () {
+    test('custom scheme cannot receive a form POST', () {
+      expect(
+        canReceiveFormPost(
+          Uri.parse('com.bdayadev.oidc.example:/oauth2redirect'),
+        ),
+        isFalse,
+        reason: 'a custom scheme is not an HTTP endpoint; no browser can POST',
+      );
+    });
+
+    test('loopback and web redirects can', () {
+      expect(canReceiveFormPost(Uri.parse('http://localhost:22434')), isTrue);
+      expect(
+        canReceiveFormPost(Uri.parse('http://localhost:22433/redirect.html')),
+        isTrue,
+      );
+      expect(
+        canReceiveFormPost(Uri.parse('https://app.example.com/cb')),
+        isTrue,
+      );
+    });
+
+    test('the formpost plans are recognised, and others are not', () {
+      for (final p in [
+        'oidcc-client-formpost-basic-certification-test-plan',
+        'oidcc-client-formpost-hybrid-certification-test-plan',
+        'oidcc-client-formpost-implicit-certification-test-plan',
+      ]) {
+        expect(isFormPostConformancePlan(p), isTrue);
+      }
+      expect(
+        isFormPostConformancePlan('oidcc-client-basic-certification-test-plan'),
+        isFalse,
+      );
+    });
+  });
 }
