@@ -54,6 +54,10 @@ OidcUserManager conformanceManager(
       // the same bound.
       linux: OidcPlatformSpecificOptions_Native(flowTimeoutSeconds: 30),
       windows: OidcPlatformSpecificOptions_Native(flowTimeoutSeconds: 30),
+      // Web hung the same way and had no knob at all until now:
+      // hiddenIframeTimeout bounds the silent-renew iframe, not the popup the
+      // interactive flow actually uses.
+      web: OidcPlatformSpecificOptions_Web(flowTimeoutSeconds: 30),
     ),
     scope: const [
       OidcConstants_Scopes.openid,

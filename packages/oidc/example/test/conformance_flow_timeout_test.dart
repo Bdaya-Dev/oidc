@@ -43,8 +43,15 @@ void main() {
       isNotNull,
       reason: 'windows drives the same loopback listener as linux',
     );
+    expect(
+      options.web.flowTimeoutSeconds,
+      isNotNull,
+      reason:
+          'web hung identically; hiddenIframeTimeout does not cover the popup '
+          'the interactive flow uses',
+    );
     // Regression: these three were already set, and are the reason
-    // macos/ios/android pass while the desktop pair hangs.
+    // macos/ios/android pass while the others hang.
     expect(options.macos.flowTimeoutSeconds, isNotNull);
     expect(options.ios.flowTimeoutSeconds, isNotNull);
     expect(options.android.flowTimeoutSeconds, isNotNull);
