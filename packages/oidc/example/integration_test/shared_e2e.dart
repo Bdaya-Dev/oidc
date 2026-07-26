@@ -469,6 +469,29 @@ Future<void> runOidcConformanceTest(
     print(
       '[e2e] $moduleName -> authResult ${authResult == null ? 'NULL' : 'ok'}',
     );
+    if (authResult == null) {
+      // "No user returned" is all the client can say, and it is not enough: a
+      // login that silently timed out and a negative module the client
+      // correctly rejected produce the identical line. The suite knows which
+      // happened -- ask it, rather than inferring from the client side.
+      //
+      // This is what the logout modules needed: each spent ~33s in
+      // loginAuthorizationCodeFlow and returned nothing, with no exception, so
+      // there was no way to tell whether the OP was waiting on the client or
+      // the client was waiting on the OP.
+      try {
+        final status = await getTestStatus(
+          dio: dio,
+          instanceId: testInstanceId,
+        );
+        logger.info(
+          'Suite status for $moduleName: '
+          'status=${status['status']} result=${status['result']}',
+        );
+      } on Object catch (e) {
+        logger.warning('Could not read suite status for $moduleName: $e');
+      }
+    }
     logger
       ..info(
         authResult == null
