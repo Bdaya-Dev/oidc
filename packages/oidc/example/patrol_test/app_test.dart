@@ -58,6 +58,25 @@ void main() {
     // (OpenID Connect Discovery). Only the Basic plan was ever run, so that
     // claim has never been verified by the suite. A separate test so a Config
     // failure names itself instead of surfacing as a Basic regression.
+    // Hybrid and Implicit exercise response types the Basic/Config plans never
+    // request. The flow is chosen per-module from the suite's own variant, so
+    // these need no special driving -- only the plan id.
+    patrolTest('OIDC Conformance: Hybrid RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-hybrid-certification-test-plan',
+        clientAuthType: 'client_secret_basic',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Implicit RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-implicit-certification-test-plan',
+        clientAuthType: 'client_secret_basic',
+      );
+    });
+
     patrolTest('OIDC Conformance: Config RP', ($) async {
       await runOidcConformanceTest(
         () => _launch($),

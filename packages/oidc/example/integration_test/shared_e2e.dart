@@ -111,8 +111,16 @@ Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
 ///   oidcc-client-config-certification-test-plan   - OP config from
 ///                                                   .well-known; needs an
 ///                                                   explicit clientAuthType
-///   oidcc-client-implicit-certification-test-plan - not implemented here
-///   oidcc-client-hybrid-certification-test-plan   - README: "no hybrid flow yet"
+///   oidcc-client-implicit-certification-test-plan - wired, NOT yet confirmed
+///                                                   to run
+///   oidcc-client-hybrid-certification-test-plan   - wired, NOT yet confirmed
+///                                                   to run
+///
+/// The flow each module needs is read from that module's own `response_type`
+/// variant rather than assumed, so hybrid and implicit need no special driving
+/// here -- only their plan id. Whether these two plans accept the variant this
+/// harness sends is unknown until CI runs them; a wrong one is an HTTP 400 at
+/// creation that names the offending dimension.
 ///
 /// [clientRegistration], [requestType] and [clientAuthType] are the plan's
 /// variant dimensions, and which ones a plan REQUIRES is not uniform. The
@@ -313,9 +321,37 @@ Future<void> runOidcConformanceTest(
     // Recorded rather than discarded: swallowing the result here would let the
     // suite pass whether or not the browser can capture a redirect at all. Not
     // asserted per-module, since a negative module ends with no user by design.
-    logger.info('Starting login authorization code flow...');
+    // Which flow to drive is the module's decision, not ours: the suite states
+    // it in the variant, and the Basic/Config plans simply always say `code`.
+    // Hardcoding the code flow is why the hybrid and implicit plans could not
+    // be run at all -- every module would have been driven with the wrong
+    // response_type and failed for a reason that had nothing to do with the
+    // library.
+    final responseTypes = (variant['response_type'] as String? ?? 'code')
+        .split(' ')
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final hasCode = responseTypes.contains('code');
+    final hasFrontChannelToken =
+        responseTypes.contains('id_token') || responseTypes.contains('token');
+    final flowName = hasCode
+        ? (hasFrontChannelToken ? 'hybrid' : 'authorization code')
+        : 'implicit';
+    logger.info(
+      'Starting login $flowName flow (${responseTypes.join(' ')})...',
+    );
     final authResult = await () async {
       try {
+        if (!hasCode) {
+          // No code comes back, so there is nothing to exchange. Deprecated in
+          // the library and by the OAuth Security BCP, but the Implicit RP
+          // profile is defined in terms of it.
+          // ignore: deprecated_member_use
+          return await manager.loginImplicitFlow(responseType: responseTypes);
+        }
+        if (hasFrontChannelToken) {
+          return await manager.loginHybridFlow(responseType: responseTypes);
+        }
         return await manager.loginAuthorizationCodeFlow();
       } catch (e, stackTrace) {
         // Expected for the negative modules, whose broken responses the client

@@ -30,6 +30,29 @@ void main() {
         });
       });
 
+      // See the Patrol harness for why each plan is a separate case.
+      testWidgets('OIDC Conformance: Hybrid RP', (tester) async {
+        await runOidcConformanceTest(
+          () async {
+            example.main();
+            await tester.pumpAndSettle();
+          },
+          planName: 'oidcc-client-hybrid-certification-test-plan',
+          clientAuthType: 'client_secret_basic',
+        );
+      });
+
+      testWidgets('OIDC Conformance: Implicit RP', (tester) async {
+        await runOidcConformanceTest(
+          () async {
+            example.main();
+            await tester.pumpAndSettle();
+          },
+          planName: 'oidcc-client-implicit-certification-test-plan',
+          clientAuthType: 'client_secret_basic',
+        );
+      });
+
       // See the Patrol harness for why Config RP is a separate case.
       testWidgets('OIDC Conformance: Config RP', (tester) async {
         await runOidcConformanceTest(
