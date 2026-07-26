@@ -106,10 +106,14 @@ void main() {
       });
 
       testWidgets('OIDC Conformance: 3rd Party-Init Login RP', (tester) async {
-        await runOidcConformanceTest(() async {
-          example.main();
-          await tester.pumpAndSettle();
-        }, planName: 'oidcc-client-test-3rd-party-init-login-test-plan');
+        await runOidcConformanceTest(
+          () async {
+            example.main();
+            await tester.pumpAndSettle();
+          },
+          planName: 'oidcc-client-test-3rd-party-init-login-test-plan',
+          clientAuthType: 'client_secret_basic',
+        );
       });
 
       // Dynamic RP: the client registers itself at the OP rather than being
@@ -124,6 +128,7 @@ void main() {
           },
           planName: 'oidcc-client-dynamic-certification-test-plan',
           clientRegistration: 'dynamic_client',
+          requestType: null,
         );
       });
 

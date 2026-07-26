@@ -142,6 +142,7 @@ void main() {
       await runOidcConformanceTest(
         () => _launch($),
         planName: 'oidcc-client-test-3rd-party-init-login-test-plan',
+        clientAuthType: 'client_secret_basic',
       );
     });
 
@@ -154,6 +155,7 @@ void main() {
         () => _launch($),
         planName: 'oidcc-client-dynamic-certification-test-plan',
         clientRegistration: 'dynamic_client',
+        requestType: null,
       );
     });
 

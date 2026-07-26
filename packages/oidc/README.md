@@ -78,7 +78,7 @@ await manager.logout();
 ### Implemented specs
 
 - [OpenId Connect Core 1.0][oidc_core_spec_link].
-    - no hybrid flow support yet.    
+    - authorization code, hybrid (`loginHybridFlow`), and implicit flows.
 - [OpenId Connect Discovery][discovery_spec_link].
     - no webfinger support yet.
 - [RP Initiated logout][rp_logout_link].

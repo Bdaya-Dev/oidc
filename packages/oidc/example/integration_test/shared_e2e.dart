@@ -174,7 +174,7 @@ Future<void> runOidcConformanceTest(
   LaunchApp launchApp, {
   String planName = 'oidcc-client-basic-certification-test-plan',
   String clientRegistration = 'static_client',
-  String requestType = 'plain_http_request',
+  String? requestType = 'plain_http_request',
   String? clientAuthType,
 }) async {
   _testLogger.info('Running OIDC conformance plan: $planName');

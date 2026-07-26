@@ -28,12 +28,13 @@ void main() {
   (String, Map<String, dynamic>) build(
     String planName, {
     Map<String, String>? extraVariant,
+    String? requestType = 'plain_http_request',
   }) => prepareTestPlanRequest(
     planName: planName,
     description: 'test',
     clientId: 'my_client',
     redirectUri: 'http://localhost:22434',
-    requestType: 'plain_http_request',
+    requestType: requestType,
     clientRegistration: 'static_client',
     extraVariant: extraVariant,
   );
@@ -82,6 +83,24 @@ void main() {
   test('the hybrid plan builds when client_auth_type is left alone', () {
     final (path, _) = build('oidcc-client-hybrid-certification-test-plan');
     expect(path, isNot(contains('client_auth_type')));
+  });
+
+  test('the dynamic plan is rejected locally when request_type is sent', () {
+    // A SECOND dimension with per-plan rules, found the same way as the first:
+    //   Variant 'request_type' has been set by user, but test plan already
+    //   sets this variant
+    // Every other plan requires plain_http_request, so "always send it" looked
+    // like a constant until this plan proved it was an assumption.
+    expect(
+      () => build('oidcc-client-dynamic-certification-test-plan'),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.message,
+          'message',
+          contains('request_type'),
+        ),
+      ),
+    );
   });
 
   test('the config plan builds once client_auth_type is supplied', () {
