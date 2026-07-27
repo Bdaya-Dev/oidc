@@ -425,8 +425,11 @@ class OidcPlugin :
      *
      * The Dart API restricts these to serializable primitives / List / Map, so
      * anything the Pigeon codec delivered is already a supported extra type.
-     * Applied after `build()` so a caller cannot overwrite a builder-managed
-     * extra by accident.
+     * Applied after `build()`, which means a raw extra whose key collides with
+     * a builder-managed one REPLACES it -- `putExtra` overwrites. The original
+     * comment here claimed the opposite. Last-write-wins is the intended
+     * behaviour (a caller asking for a raw extra should get it), but it is an
+     * override, not a guard.
      */
     private fun applyRawIntentExtras(intent: Intent, options: Map<String, Any?>) {
         val extras = options["rawIntentExtras"] as? Map<*, *> ?: return
@@ -440,6 +443,15 @@ class OidcPlugin :
                 is Long -> intent.putExtra(name, value)
                 is Double -> intent.putExtra(name, value)
                 is ArrayList<*> -> intent.putExtra(name, value)
+                // A Kotlin Map is not itself Serializable, so it cannot go
+                // through putExtra directly; HashMap is. Pigeon only delivers
+                // primitives inside, so the copy is safe to serialize.
+                //
+                // This branch was missing while the doc comment above already
+                // claimed Map support, and the raw-extras test covered only
+                // String/Bool/Int -- so a documented type was dropped and
+                // everything stayed green. Caught in review, not by the suite.
+                is Map<*, *> -> intent.putExtra(name, HashMap(value))
                 else -> emit(
                     "rawIntentExtraSkipped",
                     mapOf("key" to name, "type" to value.javaClass.simpleName),

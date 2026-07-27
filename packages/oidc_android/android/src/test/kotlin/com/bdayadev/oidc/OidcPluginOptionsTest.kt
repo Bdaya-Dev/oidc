@@ -192,6 +192,23 @@ class OidcPluginOptionsTest {
     }
 
     @Test
+    fun `a Map-valued raw extra is forwarded, not dropped`() {
+        // The doc comment on applyRawIntentExtras claims "primitives / List /
+        // Map", but the `when` had no Map branch, so Maps fell through to
+        // `else` and were emitted as rawIntentExtraSkipped. The test above
+        // covered String/Bool/Int only, so it stayed green while a documented
+        // type was discarded on arrival -- the same defect this whole file
+        // exists to catch, reintroduced in the fix for it.
+        val intent = launchWith(
+            mapOf("rawIntentExtras" to mapOf("com.example.MAP" to mapOf("a" to 1))),
+        )
+        @Suppress("UNCHECKED_CAST")
+        val received = intent.getSerializableExtra("com.example.MAP") as? Map<String, Any?>
+        assertNotNull(received, "a Map extra must reach the Intent")
+        assertEquals(1, received["a"])
+    }
+
+    @Test
     fun `ephemeralBrowsing still reaches the intent`() {
         // Regression: this one already worked, and must survive the refactor
         // that introduced the option-application helpers.
