@@ -164,15 +164,25 @@ void main() {
       );
     });
 
-    test('loopback and web redirects can', () {
-      expect(canReceiveFormPost(Uri.parse('http://localhost:22434')), isTrue);
+    test('no transport in this harness can — not loopback, not web', () {
+      // This test used to assert loopback and web COULD. That was the
+      // predicate's implementation asserted back at itself, not a capability:
+      //   * loopback — oidc_loopback_listener.dart:70 answers 405 to every
+      //     non-GET, so a form POST never becomes a captured redirect.
+      //   * web — redirect.html reads location.hash/search in JS; a POST body
+      //     is not readable from the page at all.
+      //   * custom scheme — not an HTTP endpoint; nothing can POST to it.
+      // Until the loopback listener accepts POST, false everywhere is the
+      // honest answer, and the plans skip with a reason instead of burning
+      // 30s per module and failing with an Android-specific message on Linux.
+      expect(canReceiveFormPost(Uri.parse('http://localhost:22434')), isFalse);
       expect(
         canReceiveFormPost(Uri.parse('http://localhost:22433/redirect.html')),
-        isTrue,
+        isFalse,
       );
       expect(
-        canReceiveFormPost(Uri.parse('https://app.example.com/cb')),
-        isTrue,
+        canReceiveFormPost(Uri.parse('com.bdayadev.oidc.example:/cb')),
+        isFalse,
       );
     });
 

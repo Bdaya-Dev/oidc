@@ -54,8 +54,8 @@ bool isFragmentResponsePlan(String planName) =>
     !isFormPostConformancePlan(planName) &&
     (planName.contains('-hybrid-') || planName.contains('-implicit-'));
 
-/// Whether a response delivered in the URL fragment can reach the app at
-/// [redirectUri].
+/// Whether a response delivered in the URL fragment can reach the app on
+/// [platform].
 ///
 /// A fragment is never sent to a server -- the browser strips it before the
 /// request goes out. So a bare loopback HTTP listener cannot observe one:
@@ -96,8 +96,29 @@ bool isFormPostConformancePlan(String planName) =>
 /// (`oidc_loopback_listener.dart`). That one is real and does block form_post
 /// on desktop, but macOS never reaches it: it redirects to a custom scheme via
 /// ASWebAuthenticationSession. Chasing the 405 first was a wrong lead.
-bool canReceiveFormPost(Uri redirectUri) =>
-    redirectUri.scheme == 'http' || redirectUri.scheme == 'https';
+bool canReceiveFormPost(Uri redirectUri) {
+  // No transport this example has can receive one today:
+  //   * custom scheme (iOS/macOS/Android) -- not an HTTP endpoint, so nothing
+  //     can POST to it.
+  //   * loopback (linux/windows) -- OidcLoopbackListener answers 405 to every
+  //     non-GET (oidc_loopback_listener.dart), so the POST never becomes a
+  //     captured redirect.
+  //   * web -- redirect.html reads location.hash/search in JS; a POST body is
+  //     not readable from the page.
+  //
+  // The first version returned `scheme == http || https`, which made this
+  // answer true on loopback and web. That was the implementation asserted back
+  // at itself: an http scheme says nothing about whether the receiver handles
+  // POST. The consequence was concrete -- the three formpost plans ran on
+  // linux/windows, hit the 405, burned the full flowTimeoutSeconds on every
+  // module, and failed with an Android-specific "check the OidcRedirectActivity
+  // intent-filter" message on a platform that has no such thing.
+  //
+  // Flip this to a real capability check when the loopback listener learns to
+  // accept POST and parse the form body; that is a change to
+  // oidc_loopback_listener, not to this harness.
+  return false;
+}
 
 bool _planIdsLogged = false;
 
