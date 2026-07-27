@@ -94,6 +94,49 @@ bool canReceiveFragmentResponse(String platform) =>
 bool isThirdPartyInitPlan(String planName) =>
     planName.contains('3rd-party-init');
 
+/// Whether [planName] is the Back-Channel Logout profile.
+///
+/// Back-Channel Logout is the one logout profile with no browser in the loop:
+/// the OP POSTs a logout token DIRECTLY to the RP's `backchannel_logout_uri`
+/// (OpenID Connect Back-Channel Logout 1.0 section 2.5). That makes it the only
+/// profile here whose transport runs inbound, from the public internet to the
+/// RP.
+///
+/// A CI runner's RP listens on loopback behind NAT, so certification.openid.net
+/// cannot reach it, and no `backchannel_logout_uri` value fixes that -- the URI
+/// is missing from the plan request because there is no reachable value to put
+/// there, not the other way round. On linux all eight of its modules therefore
+/// ended in "The end session flow timed out after 30 seconds", while the plan
+/// still reported success because the aggregate counted logins only.
+///
+/// Running it would need a publicly reachable tunnel to the runner. Until then
+/// this is stated rather than scored.
+bool isBackChannelLogoutPlan(String planName) =>
+    planName.contains('back-channel-logout');
+
+/// Whether the suite can compute a `session_state` for [redirectUri].
+///
+/// OpenID Connect Session Management derives `session_state` from the Client's
+/// ORIGIN, and the suite builds that origin as `scheme://host` taken from
+/// `redirect_uri` (`GenerateSessionState.java:69`). Every logout plan inherits
+/// that condition through
+/// `AbstractOIDCCClientLogoutTest.validateAuthorizationEndpointRequestParameters`,
+/// so it runs on the AUTHORIZATION request, before any redirect is issued.
+///
+/// A private-use URI scheme has no authority, so `URI.getHost()` returns null
+/// and the suite throws an NPE it does not catch (its handler covers only
+/// `URISyntaxException`). The module then never redirects, the client waits out
+/// `flowTimeoutSeconds`, and the plan reports zero logins.
+///
+/// The redirect URI is NOT the thing to change. RFC 8252 section 7.1: "as there
+/// is no naming authority for private-use URI scheme redirects, only a single
+/// slash ('/') appears after the scheme component". Giving it an authority to
+/// please the suite would break the BCP this package exists to conform to, on
+/// every native plan, to work around an upstream defect. It is also consistent
+/// with README.md scoping Session Management as web-only: a native app has no
+/// origin for `session_state` to be computed from in the first place.
+bool canGenerateSessionState(Uri redirectUri) => redirectUri.host.isNotEmpty;
+
 /// Whether [planName] uses `response_mode=form_post`.
 bool isFormPostConformancePlan(String planName) =>
     planName.contains('-formpost-');
@@ -335,6 +378,33 @@ Future<void> runOidcConformanceTest(
     return;
   }
 
+  if (isBackChannelLogoutPlan(planName)) {
+    markTestSkipped(
+      '$planName needs the OP to POST a logout token directly to the RP, and a '
+      'CI runner listening on loopback is not reachable from '
+      'certification.openid.net. Every module timed out waiting for that POST '
+      'while the plan reported success, because the aggregate counted logins '
+      'only. Unskip once the runner is publicly reachable.',
+    );
+    return;
+  }
+
+  if (isLogoutConformancePlan(planName) &&
+      !canGenerateSessionState(getPlatformRedirectUri())) {
+    // Not a client defect and not a skipped failure: the suite aborts before it
+    // ever issues a redirect, so there is no client behaviour to observe.
+    markTestSkipped(
+      '$planName runs GenerateSessionState on the AUTHORIZATION request, which '
+      'builds an origin as scheme://host from redirect_uri '
+      '(GenerateSessionState.java:69). $platform redirects to '
+      '${getPlatformRedirectUri()}, a private-use scheme with no authority, so '
+      'getHost() is null and the suite throws before issuing any redirect. '
+      'RFC 8252 section 7.1 requires that shape, so the redirect URI is correct '
+      'and the suite cannot run these modules against it.',
+    );
+    return;
+  }
+
   if (isFormPostConformancePlan(planName) &&
       !canReceiveFormPost(getPlatformRedirectUri())) {
     // Not a skipped failure: the OP cannot POST to a custom scheme, so there is
@@ -416,6 +486,12 @@ Future<void> runOidcConformanceTest(
   // response and a null result is the correct outcome. No single module can be
   // required to succeed, so the aggregate is asserted after the loop instead.
   var successfulLogins = 0;
+  // Counted separately because counting logins alone made the logout plans
+  // report success while every one of their logout calls threw: on linux all
+  // eight back-channel modules ended with "The end session flow timed out after
+  // 30 seconds", and the plan still passed. An assertion that cannot observe
+  // the thing the plan exists to test is not a test of it.
+  var successfulLogouts = 0;
 
   for (final testPlanModule
       in testPlanModules.whereType<Map<String, dynamic>>()) {
@@ -595,6 +671,7 @@ Future<void> runOidcConformanceTest(
         logger.info('Logout profile: initiating RP-initiated logout...');
         try {
           await manager.logout();
+          successfulLogouts++;
           logger.info('Logout completed.');
         } catch (e, stackTrace) {
           // Some logout modules deliberately break the end-session response;
@@ -661,11 +738,36 @@ Future<void> runOidcConformanceTest(
     successfulLogins,
     greaterThan(0),
     reason:
-        'no module of $planName completed a login on ${getPlatformName()}, so '
-        'the browser redirect is not reaching the app. On Android, check that '
-        "the OidcRedirectActivity intent-filter is registered for the app's "
-        'redirect scheme.',
+        'no module of $planName completed a login on ${getPlatformName()}. '
+        'Two very different causes produce this, and the per-module suite '
+        'status dumped above distinguishes them: either the redirect never '
+        'reached the app, or the suite aborted before issuing one (a module '
+        'whose status carries an error stack and no '
+        'authorization_endpoint_response_redirect never redirected at all). '
+        'Do not assume the former -- this message previously blamed the '
+        "Android intent-filter, and the real cause was the suite's "
+        'GenerateSessionState throwing on a host-less redirect_uri, on macOS '
+        'as much as on Android.',
   );
+
+  // The logout plans exist to exercise logout, so a login-only gate cannot
+  // report on them. Kept separate from the login gate above so a failure says
+  // which half broke.
+  if (isLogoutConformancePlan(planName)) {
+    print(
+      '[e2e] successful logouts: $successfulLogouts / ${testPlanModules.length}',
+    );
+    expect(
+      successfulLogouts,
+      greaterThan(0),
+      reason:
+          'every logout in $planName threw on ${getPlatformName()}, so the '
+          'plan proves nothing about logout even though its logins succeeded. '
+          'Check the end-session redirect: back-channel modules need a '
+          'backchannel_logout_uri the OP can reach, and front-channel modules '
+          'need a frontchannel_logout_uri this platform can actually serve.',
+    );
+  }
 
   if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
     try {

@@ -423,6 +423,86 @@ void main() {
     });
   });
 
+  // The logout/session-management modules run GenerateSessionState on the
+  // AUTHORIZATION request, and it computes an origin from redirect_uri:
+  //
+  //   uri.getScheme().toLowerCase() + "://" + uri.getHost().toLowerCase(...)
+  //     -- GenerateSessionState.java:69, reached from
+  //        AbstractOIDCCClientLogoutTest.validateAuthorizationEndpointRequestParameters
+  //
+  // A private-use scheme has no authority, so getHost() is null and the suite
+  // throws before issuing any redirect. Our redirect_uri is not the thing to
+  // change: RFC 8252 section 7.1 requires exactly this shape -- "as there is no
+  // naming authority for private-use URI scheme redirects, only a single slash
+  // ('/') appears after the scheme component" -- so adding an authority to
+  // satisfy the suite would break the BCP this package exists to conform to.
+  // Back-channel logout is the only profile with no browser in the loop: the OP
+  // POSTs the logout token straight to the RP. A CI runner on loopback is not
+  // reachable from the internet, so no backchannel_logout_uri value helps.
+  group('back-channel logout needs an OP-reachable RP', () {
+    test('the back-channel plan is recognised', () {
+      expect(
+        isBackChannelLogoutPlan('oidcc-client-back-channel-logout-rp-basic'),
+        isTrue,
+      );
+    });
+
+    test('the browser-based logout plans are not', () {
+      for (final p in [
+        'oidcc-client-rp-initiated-logout-rp-basic',
+        'oidcc-client-front-channel-logout-rp-basic',
+        'oidcc-client-rp-session-management-rp-basic',
+      ]) {
+        expect(isBackChannelLogoutPlan(p), isFalse, reason: p);
+      }
+    });
+
+    test('it is still a logout plan, so the gates compose', () {
+      expect(
+        isLogoutConformancePlan('oidcc-client-back-channel-logout-rp-basic'),
+        isTrue,
+      );
+    });
+  });
+
+  group('session_state generation needs an authority in redirect_uri', () {
+    test('a loopback redirect can generate one', () {
+      expect(
+        canGenerateSessionState(Uri.parse('http://localhost:22434')),
+        isTrue,
+      );
+    });
+
+    test('the web redirect can generate one', () {
+      expect(
+        canGenerateSessionState(
+          Uri.parse('http://localhost:22433/redirect.html'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('an RFC 8252 private-use scheme redirect cannot', () {
+      expect(
+        canGenerateSessionState(
+          Uri.parse('com.bdayadev.oidc.example:/oauth2redirect'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('the RFC 8252 example form cannot either', () {
+      // Straight from RFC 8252 section 7.1, so this pins the spec shape rather
+      // than our particular scheme.
+      expect(
+        canGenerateSessionState(
+          Uri.parse('com.example.app:/oauth2redirect/example-provider'),
+        ),
+        isFalse,
+      );
+    });
+  });
+
   // Dynamic RP's 500 was never a missing dimension. The suite attaches a new
   // module instance to its plan with a Mongo arrayFilter built from the variant
   // the CALLER sent (DBTestPlanService.updateTestPlanWithModule):
