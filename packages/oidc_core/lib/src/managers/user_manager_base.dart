@@ -834,8 +834,15 @@ abstract class OidcUserManagerBase {
   /// the front-channel tokens are a binding check, never the final credentials.
   ///
   /// This is not the implicit flow and is not deprecated: the code exchange
-  /// still happens over the back channel with PKCE, so the access token never
-  /// travels through the front channel. [loginImplicitFlow] by contrast keeps
+  /// still happens over the back channel with PKCE, and the credentials this
+  /// method RETURNS always come from the token endpoint.
+  ///
+  /// That is not the same as "no token crosses the front channel". `code
+  /// token` and `code id_token token` put an access token in the redirect by
+  /// definition (§3.3.2.1), where it can reach browser history, `Referer`
+  /// headers and proxy logs. `at_hash` binding is enforced when it is present,
+  /// but if you want nothing but the code in the front channel, use
+  /// `code id_token` -- the default here. [loginImplicitFlow] by contrast keeps
   /// the front-channel tokens and never calls the token endpoint.
   ///
   /// [responseType] must contain `code`; that is what makes a response hybrid
@@ -866,6 +873,8 @@ abstract class OidcUserManagerBase {
     Map<String, String>? extraTokenHeaders,
     OidcPlatformSpecificOptions? options,
   }) {
+    const idToken = OidcConstants_AuthorizationEndpoint_ResponseType.idToken;
+    const token = OidcConstants_AuthorizationEndpoint_ResponseType.token;
     if (!responseType.contains(
       OidcConstants_AuthorizationEndpoint_ResponseType.code,
     )) {
@@ -874,6 +883,19 @@ abstract class OidcUserManagerBase {
         'got "${responseType.join(' ')}". Without it no code is returned, '
         'there is nothing to exchange, and the flow is implicit -- use '
         'loginImplicitFlow if that is what you meant.',
+      );
+    }
+    // `code` alone is a plain authorization-code flow, not hybrid: nothing
+    // comes back in the front channel, so validateFrontChannelIdToken has
+    // nothing to check and this method silently becomes
+    // loginAuthorizationCodeFlow. Rejecting it closes the degradation the
+    // branch above guards in the other direction.
+    if (!responseType.contains(idToken) && !responseType.contains(token)) {
+      logAndThrow(
+        'Hybrid flow requires `id_token` and/or `token` alongside `code` '
+        '(OIDC Core §3.3.2.1); got "${responseType.join(' ')}". With `code` '
+        'alone nothing is returned in the front channel and this is a plain '
+        'authorization-code flow -- call loginAuthorizationCodeFlow instead.',
       );
     }
     return loginAuthorizationCodeFlow(

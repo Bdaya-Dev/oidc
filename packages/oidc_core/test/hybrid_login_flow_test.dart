@@ -187,6 +187,43 @@ void main() {
           'front-channel access_token is not the login result',
     );
   });
+
+  test('a response type without a front-channel token is rejected', () async {
+    // The guard only required `code`, so loginHybridFlow(responseType:
+    // ['code']) ran a plain authorization-code flow: nothing in the front
+    // channel, nothing for validateFrontChannelIdToken to check, no error.
+    // That is the silent degradation the guard's own message says it exists to
+    // prevent, running in the opposite direction -- hybrid quietly becoming a
+    // code flow.
+    final manager = _TestManager(
+      discoveryDocument: _metadata,
+      clientCredentials: const OidcClientAuthentication.none(
+        clientId: 'client-1',
+      ),
+      store: OidcMemoryStore(),
+      settings: OidcUserManagerSettings(
+        redirectUri: Uri.parse('com.example.app://cb'),
+      ),
+      cannedResponse: (request) async => throw StateError('must not be called'),
+    );
+    await manager.init();
+
+    // Note the closure: the guard runs BEFORE the first await, so it throws
+    // synchronously rather than returning a rejected Future. A caller using
+    // `.catchError` would not see it; `try`/`catch` around the call would.
+    // Asserting it as a rejected future silently passes for the wrong reason,
+    // because the exception escapes expectLater entirely.
+    expect(
+      () => manager.loginHybridFlow(responseType: const ['code']),
+      throwsA(
+        isA<OidcException>().having(
+          (e) => e.message,
+          'message',
+          allOf(contains('id_token'), contains('code')),
+        ),
+      ),
+    );
+  });
 }
 
 late String _capturedNonce;
