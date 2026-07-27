@@ -293,4 +293,30 @@ void main() {
       });
     },
   );
+
+  group('module-level variants differ from plan-level ones', () {
+    test('dynamic requires client_registration at the MODULE endpoint', () {
+      // The sharpest rule found in this whole exercise, and unguessable:
+      //   api/plan   -> "Variant 'client_registration' has been set by user,
+      //                  but test plan already sets this variant"
+      //   api/runner -> "createTestModule failed: Missing value for required
+      //                  variant parameter: client_registration"
+      // Forbidden on one endpoint, required on the other, for the same
+      // dimension of the same plan.
+      expect(
+        moduleVariantFor('oidcc-client-dynamic-certification-test-plan'),
+        containsPair('client_registration', 'dynamic_client'),
+      );
+    });
+
+    test('other plans send no extra module variant', () {
+      for (final p in [
+        'oidcc-client-basic-certification-test-plan',
+        'oidcc-client-config-certification-test-plan',
+        'oidcc-client-hybrid-certification-test-plan',
+      ]) {
+        expect(moduleVariantFor(p), isEmpty, reason: p);
+      }
+    });
+  });
 }

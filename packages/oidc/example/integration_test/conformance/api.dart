@@ -68,6 +68,33 @@ const _forbiddenExtraVariants = <String, List<String>>{
   ],
 };
 
+/// Extra variant dimensions a plan needs at the MODULE endpoint
+/// (`api/runner`), which are NOT the same as the ones it needs at the PLAN
+/// endpoint (`api/plan`).
+///
+/// Dynamic RP is the case that forced this to exist, and it is the sharpest
+/// rule in the whole set because the two endpoints disagree:
+///
+///   api/plan    Variant 'client_registration' has been set by user, but test
+///               plan already sets this variant
+///   api/runner  createTestModule failed: Missing value for required variant
+///               parameter: client_registration
+///
+/// Forbidden on one, required on the other, same dimension, same plan. The
+/// plan endpoint chooses the value and the module endpoint makes you restate
+/// it. `dynamic_client` is that value -- the profile is dynamic client
+/// registration -- and if it is wrong the module-instance diagnostic now names
+/// the parameter rather than reporting a bare 500.
+const _extraModuleVariants = <String, Map<String, String>>{
+  'oidcc-client-dynamic-certification-test-plan': {
+    'client_registration': 'dynamic_client',
+  },
+};
+
+/// The extra module-level variant [planName] requires, empty when it needs none.
+Map<String, String> moduleVariantFor(String planName) =>
+    _extraModuleVariants[planName] ?? const {};
+
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
   // oidcc-client-basic-certification-test-plan
   required String planName,

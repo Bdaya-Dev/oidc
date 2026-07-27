@@ -429,6 +429,9 @@ Future<void> runOidcConformanceTest(
           variant['client_auth_type'] as String? ?? 'client_secret_basic',
       responseType: variant['response_type'] as String? ?? 'code',
       responseMode: variant['response_mode'] as String? ?? 'default',
+      // Module-level variants are NOT the same as plan-level ones. Dynamic RP
+      // rejects client_registration at api/plan and requires it at api/runner.
+      extraVariant: moduleVariantFor(planName),
     );
 
     final testInstanceId = testInstance['id'] as String;
