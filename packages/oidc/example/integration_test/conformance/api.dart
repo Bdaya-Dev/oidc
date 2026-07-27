@@ -184,7 +184,28 @@ Future<Map<String, dynamic>> createTestModuleInstance({
       }),
     },
   );
-  final response = await dio.postUri<Map<String, dynamic>>(uri);
+  // Same treatment prepareTestPlanRequest already gets, for the same reason.
+  // Dio reports only the status code, and a bare "500" from this endpoint says
+  // nothing about WHICH of the three dimensions below the suite objected to.
+  // Dynamic RP fails here, and three earlier mysteries at the plan endpoint
+  // each turned into a one-line fix the moment the server's own words were
+  // printed instead of guessed at.
+  final Response<Map<String, dynamic>> response;
+  try {
+    response = await dio.postUri<Map<String, dynamic>>(uri);
+  } on DioException catch (e) {
+    throw StateError(
+      'Creating a module instance for "$moduleName" failed with status '
+      '${e.response?.statusCode}.\n'
+      'Conformance suite response: ${e.response?.data}\n'
+      'Request path: $uri\n'
+      'Variant sent: client_auth_type=$clientAuthType '
+      'response_type=$responseType response_mode=$responseMode'
+      '${extraVariant == null ? '' : ' extra=$extraVariant'}\n'
+      'Note this endpoint takes the variant PER MODULE, and a plan that '
+      'rejects a dimension at plan level may reject it here too.',
+    );
+  }
   return response.data ?? {};
 }
 
