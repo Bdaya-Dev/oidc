@@ -3,6 +3,7 @@ library;
 
 // ignore_for_file: prefer_const_constructors
 
+import 'dart:async';
 import 'dart:js_interop';
 
 import 'package:oidc_core/oidc_core.dart';
@@ -287,6 +288,48 @@ void main() {
             'window_closed',
           ),
         ),
+      );
+    });
+
+    test('flowTimeoutSeconds bounds a login nobody ever completes '
+        '(skips when window.open is blocked)', () async {
+      // The window-closed detector above is the ONLY other way out of this
+      // await, and it disarms itself when COOP severs the WindowProxy. So a
+      // user who opens the login and walks away leaves a future pending for
+      // the lifetime of the tab. hiddenIframeTimeout does not apply here --
+      // it bounds the iframe mode only.
+      //
+      // Note what failure looks like without the fix: this test does not
+      // fail, it HANGS, until the runner gives up. That is precisely the
+      // behaviour being removed, and it is why the option exists.
+      const channelName = 'flows-flow-timeout';
+      final options = OidcPlatformSpecificOptions_Web(
+        broadcastChannel: channelName,
+        flowTimeoutSeconds: 1,
+      );
+      final preparation = core.prepareForRedirectFlow(options);
+      final win = preparation['web_window'] as web.Window?;
+      if (win == null) {
+        markTestSkipped('window.open returned null (no user gesture).');
+        return;
+      }
+
+      final future = core.getAuthorizationResponse(
+        _authMetadata(),
+        _authRequest(state: 'timeout-state'),
+        options,
+        preparation,
+      );
+
+      // Nothing is ever posted on the channel and the window is left open,
+      // so the timeout is the only thing that can resolve this.
+      await expectLater(future, throwsA(isA<TimeoutException>()));
+      // The flow must also clean up after itself on the timeout path, not
+      // just the success path.
+      expect(
+        win.closed,
+        isTrue,
+        reason: 'a timed-out flow must close the window it opened',
       );
     });
   });

@@ -50,8 +50,22 @@ void main() {
       await runManagerSmokeTest(() => _launch($));
     });
   } else {
-    patrolTest('OIDC Conformance Test', ($) async {
+    patrolTest('OIDC Conformance: Basic RP', ($) async {
       await runOidcConformanceTest(() => _launch($));
+    });
+
+    // Config RP exercises the OP configuration the README lists as implemented
+    // (OpenID Connect Discovery). Only the Basic plan was ever run, so that
+    // claim has never been verified by the suite. A separate test so a Config
+    // failure names itself instead of surfacing as a Basic regression.
+    patrolTest('OIDC Conformance: Config RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-config-certification-test-plan',
+        // The discovery module rejects the plan outright without this; the
+        // Basic plan defaults it, this one does not.
+        clientAuthType: 'client_secret_basic',
+      );
     });
   }
 }

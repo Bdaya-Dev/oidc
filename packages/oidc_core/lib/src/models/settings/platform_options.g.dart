@@ -312,6 +312,7 @@ OidcPlatformSpecificOptions_Web _$OidcPlatformSpecificOptions_WebFromJson(
   hiddenIframeTimeout: json['hiddenIframeTimeout'] == null
       ? const Duration(seconds: 10)
       : Duration(microseconds: (json['hiddenIframeTimeout'] as num).toInt()),
+  flowTimeoutSeconds: (json['flowTimeoutSeconds'] as num?)?.toInt(),
 );
 
 Map<String, dynamic> _$OidcPlatformSpecificOptions_WebToJson(
@@ -324,6 +325,7 @@ Map<String, dynamic> _$OidcPlatformSpecificOptions_WebToJson(
   'popupHeight': instance.popupHeight,
   'broadcastChannel': instance.broadcastChannel,
   'hiddenIframeTimeout': instance.hiddenIframeTimeout.inMicroseconds,
+  'flowTimeoutSeconds': instance.flowTimeoutSeconds,
 };
 
 const _$OidcPlatformSpecificOptions_Web_NavigationModeEnumMap = {

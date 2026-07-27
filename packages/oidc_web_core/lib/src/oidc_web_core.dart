@@ -209,10 +209,27 @@ class OidcWebCore {
             );
           });
           //listen to response uri.
-          final res = await c.future;
-          preparedWindowClosedTimer.cancel();
-          if (!preparedWindow.closed) {
-            preparedWindow.close();
+          //
+          // The window-closed poller above is the only other way out of this
+          // await, and it gives up on itself when COOP severs the WindowProxy
+          // (see `canDetectPreparedWindowClosure`). So without a timeout a
+          // user who walks away from the login leaves this future pending
+          // forever. hiddenIframeTimeout does not apply here; it bounds only
+          // the iframe mode below.
+          final flowTimeout = options.flowTimeoutSeconds;
+          final Uri res;
+          try {
+            res = flowTimeout == null || flowTimeout <= 0
+                ? await c.future
+                : await c.future.timeout(Duration(seconds: flowTimeout));
+          } finally {
+            // Also runs when the flow throws (window closed, or timed out).
+            // Previously these two lines were only reached on success, so an
+            // aborted flow left the auth window open behind the app.
+            preparedWindowClosedTimer.cancel();
+            if (!preparedWindow.closed) {
+              preparedWindow.close();
+            }
           }
           return res;
 

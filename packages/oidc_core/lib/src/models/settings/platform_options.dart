@@ -559,6 +559,7 @@ class OidcPlatformSpecificOptions_Web {
     this.broadcastChannel =
         OidcPlatformSpecificOptions_Web.defaultBroadcastChannel,
     this.hiddenIframeTimeout = const Duration(seconds: 10),
+    this.flowTimeoutSeconds,
   });
 
   /// The default broadcast channel to use.
@@ -583,6 +584,25 @@ class OidcPlatformSpecificOptions_Web {
   ///
   /// default is 10 seconds
   final Duration hiddenIframeTimeout;
+
+  /// Maximum seconds an INTERACTIVE flow
+  /// ([OidcPlatformSpecificOptions_Web_NavigationMode.popup] and
+  /// [OidcPlatformSpecificOptions_Web_NavigationMode.newPage]) may wait for a
+  /// redirect before failing with a [TimeoutException].
+  ///
+  /// `null` (default) means no timeout, preserving existing behavior.
+  ///
+  /// [hiddenIframeTimeout] does NOT cover these modes — it bounds only the
+  /// hidden-iframe silent-renew path. Without this, the interactive await has
+  /// no upper bound: the sole escape is a poller watching for the auth window
+  /// to be closed, and that poller disables itself when COOP severs the
+  /// `WindowProxy` (it cannot distinguish a severed handle from a closed
+  /// window). A user who abandons the login, or a browser that applies COOP,
+  /// therefore leaves a future that never completes.
+  ///
+  /// Mirrors [OidcNativeOptionsAndroid.flowTimeoutSeconds] and
+  /// [OidcPlatformSpecificOptions_Native.flowTimeoutSeconds].
+  final int? flowTimeoutSeconds;
 
   Map<String, dynamic> toJson() {
     return _$OidcPlatformSpecificOptions_WebToJson(this);

@@ -59,8 +59,10 @@ class OidcAndroid extends OidcPlatform {
         url.toString(),
         request.redirectUri.toString(),
         request.redirectUri.scheme,
-        // Serialized Chrome Custom Tabs options; the native side applies the
-        // ones it supports and ignores the rest.
+        // Serialized Custom Tabs options. Every field the model documents as
+        // working is applied natively; the two marked "Reserved" in the dartdoc
+        // are not yet, and `native_option_wiring_test.dart` fails if that set
+        // ever grows silently.
         options.android.toJson(),
       ),
     );

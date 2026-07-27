@@ -8,6 +8,7 @@ import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.browser.auth.AuthTabIntent
+import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -195,11 +196,36 @@ class OidcPlugin :
         // plain Custom Tab elsewhere, where OidcRedirectActivity completes the
         // flow instead. A plain FlutterActivity has no ActivityResultLauncher,
         // so open a Custom Tab directly and rely on the intent-filter.
+        //
+        // `useAuthTab` overrides that default: `never` pins the Custom Tabs +
+        // intent-filter path even on a ComponentActivity host, and `force`
+        // refuses to silently downgrade when Auth Tab is unavailable.
         val launcher = authLauncher
-        if (launcher != null) {
-            launchAuthTab(launcher, url, ephemeral)
-        } else {
-            launchCustomTab(host, url, ephemeral)
+        when (options["useAuthTab"] as? String ?: "auto") {
+            "never" -> launchCustomTab(host, url, ephemeral, options)
+            "force" -> {
+                if (launcher == null) {
+                    finishPending(
+                        Result.failure(
+                            FlutterError(
+                                "NO_COMPONENT_ACTIVITY",
+                                "useAuthTab: force requires a ComponentActivity host " +
+                                    "(e.g. FlutterFragmentActivity) to receive the Auth Tab " +
+                                    "result. Use OidcAuthTabMode.auto to allow the Custom Tabs " +
+                                    "fallback.",
+                                null,
+                            ),
+                        ),
+                    )
+                    return
+                }
+                launchAuthTab(launcher, url, ephemeral)
+            }
+            else -> if (launcher != null) {
+                launchAuthTab(launcher, url, ephemeral)
+            } else {
+                launchCustomTab(host, url, ephemeral, options)
+            }
         }
         scheduleFlowTimeout(options)
     }
@@ -234,11 +260,18 @@ class OidcPlugin :
      * therefore have no [ActivityResultLauncher]. The redirect can only return
      * through [OidcRedirectActivity] on this path.
      */
-    private fun launchCustomTab(host: Activity, url: String, ephemeral: Boolean) {
-        CustomTabsIntent.Builder()
+    private fun launchCustomTab(
+        host: Activity,
+        url: String,
+        ephemeral: Boolean,
+        options: Map<String, Any?>,
+    ) {
+        val builder = CustomTabsIntent.Builder()
             .setEphemeralBrowsingEnabled(ephemeral)
-            .build()
-            .launchUrl(host, Uri.parse(url))
+        applyCustomTabsOptions(builder, options)
+        val intent = builder.build()
+        applyRawIntentExtras(intent.intent, options)
+        intent.launchUrl(host, Uri.parse(url))
         emit(
             "opened",
             mapOf(
@@ -278,7 +311,179 @@ class OidcPlugin :
             ),
         )
         finishPending(Result.success(data.toString()))
+        dismissBrowser()
         return true
+    }
+
+    /**
+     * Applies the declarative `OidcNativeOptionsAndroid` fields to the builder.
+     *
+     * Every option here is public, documented API. Each was previously
+     * serialized across the Pigeon boundary and dropped, so the Dart side
+     * round-tripped a value that changed nothing.
+     *
+     * Unset (`null`) leaves the browser default; the model's own defaults are
+     * chosen to match those, so a caller who sets nothing gets the same Intent
+     * as before.
+     */
+    private fun applyCustomTabsOptions(
+        builder: CustomTabsIntent.Builder,
+        options: Map<String, Any?>,
+    ) {
+        (options["showTitle"] as? Boolean)?.let(builder::setShowTitle)
+        (options["urlBarHidingEnabled"] as? Boolean)?.let(builder::setUrlBarHidingEnabled)
+
+        when (options["shareState"] as? String) {
+            "on" -> builder.setShareState(CustomTabsIntent.SHARE_STATE_ON)
+            "off" -> builder.setShareState(CustomTabsIntent.SHARE_STATE_OFF)
+            // browserDefault, or absent: leave SHARE_STATE_DEFAULT.
+            else -> Unit
+        }
+
+        when (options["closeButtonPosition"] as? String) {
+            "start" -> builder.setCloseButtonPosition(
+                CustomTabsIntent.CLOSE_BUTTON_POSITION_START,
+            )
+            "end" -> builder.setCloseButtonPosition(
+                CustomTabsIntent.CLOSE_BUTTON_POSITION_END,
+            )
+            else -> Unit
+        }
+
+        applyColorSchemes(builder, options["colorSchemes"] as? Map<*, *>)
+        applyPartialCustomTabs(builder, options["partialCustomTabs"] as? Map<*, *>)
+    }
+
+    /** Maps `OidcCustomTabsColorSchemes` onto the builder. Colors are ARGB ints. */
+    private fun applyColorSchemes(builder: CustomTabsIntent.Builder, schemes: Map<*, *>?) {
+        if (schemes == null) return
+        when (schemes["colorScheme"] as? String) {
+            "light" -> builder.setColorScheme(CustomTabsIntent.COLOR_SCHEME_LIGHT)
+            "dark" -> builder.setColorScheme(CustomTabsIntent.COLOR_SCHEME_DARK)
+            "system" -> builder.setColorScheme(CustomTabsIntent.COLOR_SCHEME_SYSTEM)
+            else -> Unit
+        }
+        colorParams(schemes["defaultParams"] as? Map<*, *>)?.let(
+            builder::setDefaultColorSchemeParams,
+        )
+        colorParams(schemes["lightParams"] as? Map<*, *>)?.let {
+            builder.setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_LIGHT, it)
+        }
+        colorParams(schemes["darkParams"] as? Map<*, *>)?.let {
+            builder.setColorSchemeParams(CustomTabsIntent.COLOR_SCHEME_DARK, it)
+        }
+    }
+
+    /** Builds `CustomTabColorSchemeParams`, or null when no color was supplied. */
+    private fun colorParams(src: Map<*, *>?): CustomTabColorSchemeParams? {
+        if (src == null) return null
+        val params = CustomTabColorSchemeParams.Builder()
+        var any = false
+        (src["toolbarColor"] as? Number)?.let { params.setToolbarColor(it.toInt()); any = true }
+        (src["secondaryToolbarColor"] as? Number)?.let {
+            params.setSecondaryToolbarColor(it.toInt()); any = true
+        }
+        (src["navigationBarColor"] as? Number)?.let {
+            params.setNavigationBarColor(it.toInt()); any = true
+        }
+        (src["navigationBarDividerColor"] as? Number)?.let {
+            params.setNavigationBarDividerColor(it.toInt()); any = true
+        }
+        return if (any) params.build() else null
+    }
+
+    /**
+     * Maps `OidcPartialCustomTabs` onto the builder.
+     *
+     * `setInitialActivityHeightPx` throws on a non-positive height, so a
+     * caller's zero or negative value is dropped rather than crashing the flow.
+     */
+    private fun applyPartialCustomTabs(
+        builder: CustomTabsIntent.Builder,
+        partial: Map<*, *>?,
+    ) {
+        if (partial == null) return
+        val height = (partial["initialHeightPx"] as? Number)?.toInt()
+        if (height != null && height > 0) {
+            val behavior = when (partial["resizeBehavior"] as? String) {
+                "adjustable" -> CustomTabsIntent.ACTIVITY_HEIGHT_ADJUSTABLE
+                "fixed" -> CustomTabsIntent.ACTIVITY_HEIGHT_FIXED
+                else -> CustomTabsIntent.ACTIVITY_HEIGHT_DEFAULT
+            }
+            builder.setInitialActivityHeightPx(height, behavior)
+        }
+        (partial["toolbarCornerRadiusDp"] as? Number)?.let {
+            builder.setToolbarCornerRadiusDp(it.toInt())
+        }
+        (partial["backgroundInteractionEnabled"] as? Boolean)?.let(
+            builder::setBackgroundInteractionEnabled,
+        )
+    }
+
+    /**
+     * Forwards `rawIntentExtras` verbatim onto the built Intent.
+     *
+     * The Dart API restricts these to serializable primitives / List / Map, so
+     * anything the Pigeon codec delivered is already a supported extra type.
+     * Applied after `build()`, which means a raw extra whose key collides with
+     * a builder-managed one REPLACES it -- `putExtra` overwrites. The original
+     * comment here claimed the opposite. Last-write-wins is the intended
+     * behaviour (a caller asking for a raw extra should get it), but it is an
+     * override, not a guard.
+     */
+    private fun applyRawIntentExtras(intent: Intent, options: Map<String, Any?>) {
+        val extras = options["rawIntentExtras"] as? Map<*, *> ?: return
+        for ((key, value) in extras) {
+            val name = key as? String ?: continue
+            when (value) {
+                null -> Unit
+                is String -> intent.putExtra(name, value)
+                is Boolean -> intent.putExtra(name, value)
+                is Int -> intent.putExtra(name, value)
+                is Long -> intent.putExtra(name, value)
+                is Double -> intent.putExtra(name, value)
+                is ArrayList<*> -> intent.putExtra(name, value)
+                // A Kotlin Map is not itself Serializable, so it cannot go
+                // through putExtra directly; HashMap is. Pigeon only delivers
+                // primitives inside, so the copy is safe to serialize.
+                //
+                // This branch was missing while the doc comment above already
+                // claimed Map support, and the raw-extras test covered only
+                // String/Bool/Int -- so a documented type was dropped and
+                // everything stayed green. Caught in review, not by the suite.
+                is Map<*, *> -> intent.putExtra(name, HashMap(value))
+                else -> emit(
+                    "rawIntentExtraSkipped",
+                    mapOf("key" to name, "type" to value.javaClass.simpleName),
+                )
+            }
+        }
+    }
+
+    /**
+     * Brings the host Activity back to the front, popping the browser with it.
+     *
+     * `CustomTabsIntent.launchUrl` starts the browser with no
+     * `FLAG_ACTIVITY_NEW_TASK`, so the Custom Tab lives in the host app's OWN
+     * task: host -> CustomTab -> OidcRedirectActivity. Finishing the transparent
+     * receiver pops only itself and leaves the user looking at the browser, which
+     * they then have to close by hand.
+     *
+     * `CLEAR_TOP` pops everything above the host, taking the Custom Tab with it.
+     * `SINGLE_TOP` delivers to the existing instance through `onNewIntent`
+     * instead of recreating it, so the Flutter engine and its widget state
+     * survive.
+     *
+     * Only the intent-filter path needs this. Auth Tab closes its own tab when
+     * it returns the Activity Result.
+     */
+    private fun dismissBrowser() {
+        val host = activity ?: return
+        host.startActivity(
+            Intent(host, host.javaClass).addFlags(
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            ),
+        )
     }
 
     /** Handles the Auth Tab [AuthTabIntent.AuthResult] on the main thread. */

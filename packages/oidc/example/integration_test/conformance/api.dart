@@ -7,6 +7,23 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+/// Variant dimensions a plan's modules require to be stated outright.
+///
+/// The suite defaults some dimensions and demands others, and which is which
+/// cannot be read off the plan name. Getting it wrong is not a test failure:
+/// it is an HTTP 400 at plan creation, from a live third-party server, so the
+/// mistake costs a full CI round trip to discover. `client_auth_type` is
+/// recorded here because the config plan's discovery module refuses the whole
+/// plan without it, while the basic plan resolves it to `client_secret_basic`
+/// on its own -- which is exactly why the omission went unnoticed on the only
+/// plan that had ever been run.
+///
+/// Add a plan here when the suite rejects it for a missing dimension. The
+/// entry turns that network round trip into an immediate local error.
+const _requiredExtraVariants = <String, List<String>>{
+  'oidcc-client-config-certification-test-plan': ['client_auth_type'],
+};
+
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
   // oidcc-client-basic-certification-test-plan
   required String planName,
@@ -28,6 +45,17 @@ import 'package:dio/dio.dart';
     'client_registration': clientRegistration,
     ...?extraVariant,
   };
+  final missing = (_requiredExtraVariants[planName] ?? const <String>[])
+      .where((dimension) => !variant.containsKey(dimension))
+      .toList();
+  if (missing.isNotEmpty) {
+    throw ArgumentError(
+      'The "$planName" plan requires the variant dimension(s) '
+      '${missing.join(', ')}. The conformance suite enforces this at plan '
+      'creation and answers HTTP 400, so pass them via extraVariant rather '
+      'than discovering it from CI.',
+    );
+  }
   final uri = Uri(
     path: '/api/plan',
     queryParameters: {'planName': planName, 'variant': jsonEncode(variant)},
