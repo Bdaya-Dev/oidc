@@ -1,3 +1,9 @@
+## 3.0.0
+
+> Note: This release has breaking changes.
+
+ - **BREAKING** **FIX**(oidc_android): dismiss the Custom Tab, apply dropped options, and bound abandoned flows ([#429](https://github.com/Bdaya-Dev/oidc/issues/429)). ([918d3ae6](https://github.com/Bdaya-Dev/oidc/commit/918d3ae67a43dfbacb3ddd037eae29c78a5d6b7a))
+
 ## 2.0.1
 
  - **DOCS**(oidc_android): state the minSdk 23 requirement, and stop instructing 21 ([#427](https://github.com/Bdaya-Dev/oidc/issues/427)). ([1f210d0a](https://github.com/Bdaya-Dev/oidc/commit/1f210d0a36843dd0aa5080be499ecbafa0347c35))

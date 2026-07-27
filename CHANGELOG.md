@@ -3,6 +3,62 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-07-27
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v4.0.0`](#oidc---v400)
+ - [`oidc_android` - `v3.0.0`](#oidc_android---v300)
+ - [`oidc_core` - `v3.0.0`](#oidc_core---v300)
+ - [`oidc_web_core` - `v2.0.0`](#oidc_web_core---v200)
+
+Packages with other changes:
+
+ - [`oidc_cli` - `v1.0.3`](#oidc_cli---v103)
+ - [`oidc_default_store` - `v1.1.2`](#oidc_default_store---v112)
+ - [`oidc_desktop` - `v1.0.3`](#oidc_desktop---v103)
+ - [`oidc_darwin` - `v1.1.2`](#oidc_darwin---v112)
+ - [`oidc_linux` - `v1.0.3`](#oidc_linux---v103)
+ - [`oidc_platform_interface` - `v1.0.3`](#oidc_platform_interface---v103)
+ - [`oidc_web` - `v1.0.3`](#oidc_web---v103)
+ - [`oidc_windows` - `v1.0.3`](#oidc_windows---v103)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_cli` - `v1.0.3`
+ - `oidc_default_store` - `v1.1.2`
+ - `oidc_desktop` - `v1.0.3`
+ - `oidc_darwin` - `v1.1.2`
+ - `oidc_linux` - `v1.0.3`
+ - `oidc_platform_interface` - `v1.0.3`
+ - `oidc_web` - `v1.0.3`
+ - `oidc_windows` - `v1.0.3`
+
+---
+
+#### `oidc` - `v4.0.0`
+
+ - **BREAKING** **FIX**(oidc_android): dismiss the Custom Tab, apply dropped options, and bound abandoned flows ([#429](https://github.com/Bdaya-Dev/oidc/issues/429)). ([918d3ae6](https://github.com/Bdaya-Dev/oidc/commit/918d3ae67a43dfbacb3ddd037eae29c78a5d6b7a))
+
+#### `oidc_android` - `v3.0.0`
+
+ - **BREAKING** **FIX**(oidc_android): dismiss the Custom Tab, apply dropped options, and bound abandoned flows ([#429](https://github.com/Bdaya-Dev/oidc/issues/429)). ([918d3ae6](https://github.com/Bdaya-Dev/oidc/commit/918d3ae67a43dfbacb3ddd037eae29c78a5d6b7a))
+
+#### `oidc_core` - `v3.0.0`
+
+ - **BREAKING** **FIX**(oidc_android): dismiss the Custom Tab, apply dropped options, and bound abandoned flows ([#429](https://github.com/Bdaya-Dev/oidc/issues/429)). ([918d3ae6](https://github.com/Bdaya-Dev/oidc/commit/918d3ae67a43dfbacb3ddd037eae29c78a5d6b7a))
+
+#### `oidc_web_core` - `v2.0.0`
+
+ - **BREAKING** **FIX**(oidc_android): dismiss the Custom Tab, apply dropped options, and bound abandoned flows ([#429](https://github.com/Bdaya-Dev/oidc/issues/429)). ([918d3ae6](https://github.com/Bdaya-Dev/oidc/commit/918d3ae67a43dfbacb3ddd037eae29c78a5d6b7a))
+
+
 ## 2026-07-26
 
 ### Changes

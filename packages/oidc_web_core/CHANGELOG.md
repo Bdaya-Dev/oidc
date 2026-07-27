@@ -1,3 +1,9 @@
+## 2.0.0
+
+> Note: This release has breaking changes.
+
+ - **BREAKING** **FIX**(oidc_android): dismiss the Custom Tab, apply dropped options, and bound abandoned flows ([#429](https://github.com/Bdaya-Dev/oidc/issues/429)). ([918d3ae6](https://github.com/Bdaya-Dev/oidc/commit/918d3ae67a43dfbacb3ddd037eae29c78a5d6b7a))
+
 ## 1.1.1
 
  - Update a dependency to the latest release.
