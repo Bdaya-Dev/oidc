@@ -2,6 +2,7 @@ package com.bdayadev.oidc
 
 import android.app.Activity
 import android.net.Uri
+import androidx.activity.ComponentActivity
 import androidx.browser.customtabs.CustomTabsIntent
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import org.junit.Before
@@ -18,7 +19,16 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Asserts that `OidcNativeOptionsAndroid` reaches the launched Intent.
+ * Asserts that `OidcNativeOptionsAndroid` reaches the launched Intent ON THE
+ * CUSTOM TABS PATH.
+ *
+ * Scope matters here and used to be unstated. Every test below pins a
+ * non-ComponentActivity host, so none of them can observe the Auth Tab path --
+ * which is the DEFAULT on a ComponentActivity host such as
+ * FlutterFragmentActivity. A reviewer found that `launchAuthTab` was dropping
+ * seven options in silence and no test in this file could have caught it,
+ * because the file was built to exercise only the path being fixed.
+ * `authTabTakesADifferentPath` below is the counterweight.
  *
  * `platform_options_serialization_test.dart` already pins each option's JSON
  * shape and round-trip, and every one of them passed while the native side read
@@ -215,6 +225,48 @@ class OidcPluginOptionsTest {
         assertTrue(
             launchWith(mapOf("ephemeralBrowsing" to true))
                 .getBooleanExtra(CustomTabsIntent.EXTRA_ENABLE_EPHEMERAL_BROWSING, false),
+        )
+    }
+
+    @Test
+    fun `authTabTakesADifferentPath - a ComponentActivity host bypasses Custom Tabs options`() {
+        // The path difference is the point. On a ComponentActivity host the
+        // plugin registers an Auth Tab launcher and prefers it, and
+        // AuthTabIntent.Builder has no equivalent for title visibility, share
+        // state, close-button position, colour schemes, partial heights or raw
+        // extras -- so an app setting them there gets nothing, while the same
+        // app on a plain FlutterActivity gets everything.
+        //
+        // Characterising it here so the asymmetry cannot change unnoticed: if
+        // someone teaches launchAuthTab to apply an option, this test fails and
+        // the docs on OidcNativeOptionsAndroid must be updated with it.
+        val componentPlugin = OidcPlugin()
+        val componentActivity =
+            Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        val binding = mock(ActivityPluginBinding::class.java)
+        `when`(binding.activity).thenReturn(componentActivity)
+        componentPlugin.onAttachedToActivity(binding)
+
+        componentPlugin.authorize(
+            "https://op.example.com/authorize",
+            "com.example.app://callback",
+            "com.example.app",
+            mapOf("showTitle" to false),
+        ) { }
+
+        val intent = shadowOf(componentActivity).nextStartedActivity
+        // Either no Custom Tab was launched at all (Auth Tab went through the
+        // result launcher), or if one was, it carries no title-visibility
+        // extra. Both express the same fact: Custom Tabs options do not apply
+        // on this path.
+        val titleExtra = intent?.getIntExtra(
+            CustomTabsIntent.EXTRA_TITLE_VISIBILITY_STATE,
+            -1,
+        ) ?: -1
+        assertEquals(
+            -1,
+            titleExtra,
+            "Custom Tabs options must not be expected to apply on the Auth Tab path",
         )
     }
 
