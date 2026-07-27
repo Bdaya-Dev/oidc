@@ -86,14 +86,43 @@ void main() {
     expect(path, isNot(contains('client_auth_type')));
   });
 
+  test('the dynamic plan is rejected locally without client_auth_type', () {
+    // Dynamic RP is the fourth distinct combination for the same three
+    // dimensions: it FORBIDS request_type and client_registration, and
+    // REQUIRES client_auth_type. Both forbidden rules were recorded from
+    // earlier 400s; the required one was not, so the plan still failed at
+    // creation:
+    //   TestModule 'oidcc-client-test-discovery-webfinger-acct' requires a
+    //   value for variant 'client_auth_type'
+    expect(
+      () => build(
+        'oidcc-client-dynamic-certification-test-plan',
+        requestType: null,
+      ),
+      throwsA(
+        isA<ArgumentError>().having(
+          (e) => e.message,
+          'message',
+          contains('client_auth_type'),
+        ),
+      ),
+    );
+  });
+
   test('the dynamic plan is rejected locally when request_type is sent', () {
     // A SECOND dimension with per-plan rules, found the same way as the first:
     //   Variant 'request_type' has been set by user, but test plan already
     //   sets this variant
     // Every other plan requires plain_http_request, so "always send it" looked
     // like a constant until this plan proved it was an assumption.
+    // client_auth_type is supplied so the REQUIRED check passes and this
+    // isolates the FORBIDDEN one; without it the required check fires first
+    // and the assertion would pass on the wrong message.
     expect(
-      () => build('oidcc-client-dynamic-certification-test-plan'),
+      () => build(
+        'oidcc-client-dynamic-certification-test-plan',
+        extraVariant: {'client_auth_type': 'client_secret_basic'},
+      ),
       throwsA(
         isA<ArgumentError>().having(
           (e) => e.message,

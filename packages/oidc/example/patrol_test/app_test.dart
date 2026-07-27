@@ -156,6 +156,7 @@ void main() {
         () => _launch($),
         planName: 'oidcc-client-dynamic-certification-test-plan',
         clientRegistration: null,
+        clientAuthType: 'client_secret_basic',
         requestType: null,
       );
     });

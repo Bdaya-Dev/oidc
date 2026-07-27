@@ -32,6 +32,12 @@ const _requiredExtraVariants = <String, List<String>>{
     'client_auth_type',
     'response_type',
   ],
+  // Dynamic RP is the fourth distinct combination for the same three
+  // dimensions: FORBIDS request_type and client_registration (below), and
+  // REQUIRES client_auth_type. Its webfinger module said so:
+  //   TestModule 'oidcc-client-test-discovery-webfinger-acct' requires a
+  //   value for variant 'client_auth_type'
+  'oidcc-client-dynamic-certification-test-plan': ['client_auth_type'],
 };
 
 /// Variant dimensions a plan sets ITSELF, and rejects the caller for setting.
