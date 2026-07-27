@@ -425,8 +425,11 @@ class OidcPlugin :
      *
      * The Dart API restricts these to serializable primitives / List / Map, so
      * anything the Pigeon codec delivered is already a supported extra type.
-     * Applied after `build()` so a caller cannot overwrite a builder-managed
-     * extra by accident.
+     * Applied after `build()`, which means a raw extra whose key collides with
+     * a builder-managed one REPLACES it -- `putExtra` overwrites. The original
+     * comment here claimed the opposite. Last-write-wins is the intended
+     * behaviour (a caller asking for a raw extra should get it), but it is an
+     * override, not a guard.
      */
     private fun applyRawIntentExtras(intent: Intent, options: Map<String, Any?>) {
         val extras = options["rawIntentExtras"] as? Map<*, *> ?: return

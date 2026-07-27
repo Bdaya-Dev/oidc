@@ -221,7 +221,19 @@ class OidcWebCore {
           try {
             res = flowTimeout == null || flowTimeout <= 0
                 ? await c.future
-                : await c.future.timeout(Duration(seconds: flowTimeout));
+                : await c.future.timeout(
+                    Duration(seconds: flowTimeout),
+                    // Wrapped, not raw. The window_closed path above throws
+                    // OidcException, and every documented failure contract in
+                    // this library promises OidcException -- letting a bare
+                    // TimeoutException out would slip past an app catching
+                    // exactly what the docs tell it to catch.
+                    onTimeout: () => throw OidcException(
+                      'The authentication flow timed out after '
+                      '$flowTimeout seconds without a redirect.',
+                      extra: const {'reason': 'flow_timeout'},
+                    ),
+                  );
           } finally {
             // Also runs when the flow throws (window closed, or timed out).
             // Previously these two lines were only reached on success, so an
