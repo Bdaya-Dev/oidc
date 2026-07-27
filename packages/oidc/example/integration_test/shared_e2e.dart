@@ -78,6 +78,22 @@ bool isFragmentResponsePlan(String planName) =>
 bool canReceiveFragmentResponse(String platform) =>
     !(platform == 'linux' || platform == 'windows');
 
+/// Whether [planName] is the third-party-initiated login profile.
+///
+/// In that flow the OP starts the login by calling the RP's
+/// `initiate_login_uri` (OIDC Core §4). The RP must therefore HOST an endpoint
+/// the OP can reach and act on. This example is a Flutter app -- it has no
+/// server, and `redirect.html` on web only receives a redirect, it cannot be
+/// invoked to begin one. So the module waits for the app to react to a call it
+/// never receives.
+///
+/// Observed on linux at de71aa7: the plan created 1 module and the job log
+/// simply ends there, with `dynamic` and `config` never reaching the runner --
+/// this module consumed the remaining job budget. Everything before it passed
+/// or skipped correctly.
+bool isThirdPartyInitPlan(String planName) =>
+    planName.contains('3rd-party-init');
+
 /// Whether [planName] uses `response_mode=form_post`.
 bool isFormPostConformancePlan(String planName) =>
     planName.contains('-formpost-');
@@ -299,6 +315,15 @@ Future<void> runOidcConformanceTest(
 
   final platform = getPlatformName();
   _testLogger.info('Detected platform: $platform');
+
+  if (isThirdPartyInitPlan(planName)) {
+    markTestSkipped(
+      '$planName needs the RP to host an initiate_login_uri the OP can call '
+      '(OIDC Core §4). This example app hosts no such endpoint on any '
+      'platform, so the module waits for a call that never arrives.',
+    );
+    return;
+  }
 
   if (isFragmentResponsePlan(planName) &&
       !canReceiveFragmentResponse(platform)) {

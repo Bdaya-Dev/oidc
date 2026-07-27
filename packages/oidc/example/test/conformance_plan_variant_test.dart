@@ -240,4 +240,28 @@ void main() {
       }
     });
   });
+
+  group(
+    'third-party-initiated login needs an endpoint the app cannot host',
+    () {
+      test('the 3rd-party-init plan is recognised', () {
+        expect(
+          isThirdPartyInitPlan(
+            'oidcc-client-test-3rd-party-init-login-test-plan',
+          ),
+          isTrue,
+        );
+      });
+
+      test('ordinary plans are not', () {
+        for (final p in [
+          'oidcc-client-basic-certification-test-plan',
+          'oidcc-client-dynamic-certification-test-plan',
+          'oidcc-client-rp-initiated-logout-rp-basic',
+        ]) {
+          expect(isThirdPartyInitPlan(p), isFalse, reason: p);
+        }
+      });
+    },
+  );
 }
