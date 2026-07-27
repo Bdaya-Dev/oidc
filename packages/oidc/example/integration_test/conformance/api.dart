@@ -82,19 +82,64 @@ const _forbiddenExtraVariants = <String, List<String>>{
 ///
 /// Forbidden on one, required on the other, same dimension, same plan. The
 /// plan endpoint chooses the value and the module endpoint makes you restate
-/// it. `dynamic_client` is that value -- the profile is dynamic client
-/// registration -- and if it is wrong the module-instance diagnostic now names
-/// the parameter rather than reporting a bare 500.
-const _extraModuleVariants = <String, Map<String, String>>{
-  'oidcc-client-dynamic-certification-test-plan': {
-    'client_registration': 'dynamic_client',
-    // BOTH dimensions the plan endpoint forbids are required here. The suite
-    // revealed them one at a time: once client_registration was supplied it
-    // stopped complaining about it -- confirming dynamic_client was the right
-    // value -- and asked for request_type instead.
-    'request_type': 'plain_http_request',
-  },
+/// it.
+///
+/// No plan needs an entry today. Dynamic RP had one -- client_registration
+/// and request_type -- and it was the wrong answer to the right complaint:
+/// stating them silenced "Missing value for required variant parameter" and
+/// replaced it with a 500 carrying "modifiedCount=0". See
+/// [moduleVariantComesFromPlan] for why restating a dimension the plan owns
+/// cannot work. The map stays because the plan endpoint's asymmetry is real
+/// and the next plan may genuinely need it.
+const _extraModuleVariants = <String, Map<String, String>>{};
+
+/// Plans whose module instances are created with NO `variant` at all, letting
+/// the suite fill it in from the plan.
+///
+/// The suite attaches a module instance to its plan with a Mongo arrayFilter
+/// assembled from the variant the caller sent
+/// (`DBTestPlanService.updateTestPlanWithModule`):
+///
+///   variant.getVariant().forEach((name, value) ->
+///       updateCriteria.and("module.variant." + name).is(value));
+///   updateCriteria.and("module.testModule").is(testName);
+///
+/// Each dimension sent is one more equality the STORED module entry has to
+/// satisfy. Send a dimension the plan recorded differently -- or did not
+/// record -- and the filter matches no array element, the update reports
+/// `modifiedCount=1 != 0`, and the whole request 500s with a Java stack trace
+/// that names neither the dimension nor the value.
+///
+/// Sending nothing is the path the suite is built for: `TestRunner` reaches
+/// `getFixedVariantIfOnlyOneMatchingModuleInPlan` -- which hands back the
+/// module's own stored variant -- only when no variant arrived from the API.
+/// That value satisfies the filter by construction, so this works without the
+/// harness ever knowing what the plan chose.
+///
+/// Scoped to the one plan that needs it. The other twelve pass while stating
+/// their variant, which means theirs already matches what the plan stored.
+const _moduleVariantFromPlan = <String>{
+  'oidcc-client-dynamic-certification-test-plan',
 };
+
+/// Whether [planName]'s module instances omit the `variant` parameter.
+bool moduleVariantComesFromPlan(String planName) =>
+    _moduleVariantFromPlan.contains(planName);
+
+/// The `api/runner` URL that creates a module instance, with `variant` present
+/// only when [variant] is non-null.
+Uri moduleInstanceUri({
+  required String planId,
+  required String moduleName,
+  Map<String, dynamic>? variant,
+}) => Uri(
+  path: 'api/runner',
+  queryParameters: {
+    'plan': planId,
+    'test': moduleName,
+    if (variant != null) 'variant': jsonEncode(variant),
+  },
+);
 
 /// The extra module-level variant [planName] requires, empty when it needs none.
 Map<String, String> moduleVariantFor(String planName) =>
@@ -255,22 +300,23 @@ Future<Map<String, dynamic>> createTestModuleInstance({
   String responseType = 'code',
   String responseMode = 'default',
   Map<String, dynamic>? extraVariant,
+  bool variantFromPlan = false,
 }) async {
   /*
   {"client_auth_type":"client_secret_basic","response_type":"code","response_mode":"default"}
    */
-  final uri = Uri(
-    path: 'api/runner',
-    queryParameters: {
-      'plan': planId,
-      'test': moduleName,
-      'variant': jsonEncode({
-        'client_auth_type': clientAuthType,
-        'response_type': responseType,
-        'response_mode': responseMode,
-        ...?extraVariant,
-      }),
-    },
+  final variant = variantFromPlan
+      ? null
+      : <String, dynamic>{
+          'client_auth_type': clientAuthType,
+          'response_type': responseType,
+          'response_mode': responseMode,
+          ...?extraVariant,
+        };
+  final uri = moduleInstanceUri(
+    planId: planId,
+    moduleName: moduleName,
+    variant: variant,
   );
   // Same treatment prepareTestPlanRequest already gets, for the same reason.
   // Dio reports only the status code, and a bare "500" from this endpoint says
@@ -304,9 +350,7 @@ Future<Map<String, dynamic>> createTestModuleInstance({
       '${e.response?.statusCode}.\n'
       'Conformance suite response: ${e.response?.data}\n'
       'Request path: $uri\n'
-      'Variant sent: client_auth_type=$clientAuthType '
-      'response_type=$responseType response_mode=$responseMode'
-      '${extraVariant == null ? '' : ' extra=$extraVariant'}\n'
+      '${variant == null ? 'Variant sent: none (supplied by the plan).\n' : 'Variant sent: $variant\n'}'
       'Note this endpoint takes the variant PER MODULE, and a plan that '
       'rejects a dimension at plan level may reject it here too.\n'
       'PLAN AS STORED BY THE SUITE (compare its module variant to the one '

@@ -432,6 +432,10 @@ Future<void> runOidcConformanceTest(
           variant['client_auth_type'] as String? ?? 'client_secret_basic',
       responseType: variant['response_type'] as String? ?? 'code',
       responseMode: variant['response_mode'] as String? ?? 'default',
+      // Dynamic RP sends no variant at all: every dimension stated here becomes
+      // an equality the plan's stored module entry must satisfy, and one it
+      // recorded differently makes the attach match nothing.
+      variantFromPlan: moduleVariantComesFromPlan(planName),
       // Module-level variants are NOT the same as plan-level ones. Dynamic RP
       // rejects client_registration at api/plan and requires it at api/runner.
       extraVariant: moduleVariantFor(planName),

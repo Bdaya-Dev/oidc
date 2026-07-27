@@ -296,25 +296,24 @@ void main() {
   );
 
   group('module-level variants differ from plan-level ones', () {
-    test('dynamic requires client_registration at the MODULE endpoint', () {
-      // The sharpest rule found in this whole exercise, and unguessable:
+    test('no plan restates a dimension at the MODULE endpoint', () {
+      // This asserted the opposite until the suite's source explained the 500.
+      // The observation was real:
       //   api/plan   -> "Variant 'client_registration' has been set by user,
       //                  but test plan already sets this variant"
       //   api/runner -> "createTestModule failed: Missing value for required
       //                  variant parameter: client_registration"
-      // Forbidden on one endpoint, required on the other, for the same
-      // dimension of the same plan.
-      // BOTH dimensions the plan endpoint forbids are required here. The
-      // suite revealed them one at a time: supplying client_registration
-      // stopped that complaint and produced
-      //   Missing value for required variant parameter: request_type
-      // which also confirms dynamic_client was the correct value.
+      // Forbidden on one endpoint, demanded by the other. But restating it to
+      // satisfy api/runner only moved the failure: the value then joins the
+      // arrayFilter that attaches the module to its plan, the stored entry
+      // does not match, and the request 500s with "modifiedCount=0".
+      //
+      // Both complaints have one answer -- send NO variant, per
+      // [moduleVariantComesFromPlan] -- so this map is empty and the rule it
+      // encoded is recorded as a dead end rather than a fact.
       expect(
         moduleVariantFor('oidcc-client-dynamic-certification-test-plan'),
-        allOf(
-          containsPair('client_registration', 'dynamic_client'),
-          containsPair('request_type', 'plain_http_request'),
-        ),
+        isEmpty,
       );
     });
 
@@ -421,6 +420,54 @@ void main() {
         extraVariant: const {'client_auth_type': 'client_secret_basic'},
       );
       expect(withoutAlias.containsKey('alias'), isFalse);
+    });
+  });
+
+  // Dynamic RP's 500 was never a missing dimension. The suite attaches a new
+  // module instance to its plan with a Mongo arrayFilter built from the variant
+  // the CALLER sent (DBTestPlanService.updateTestPlanWithModule):
+  //
+  //   variant.getVariant().forEach((name, value) ->
+  //       updateCriteria.and("module.variant." + name).is(value));
+  //   updateCriteria.and("module.testModule").is(testName);
+  //
+  // Every dimension sent becomes another equality the stored module entry must
+  // satisfy, so sending MORE over-constrains the filter and it matches nothing
+  // -- "modifiedCount=0". Sending none is the supported path: TestRunner only
+  // calls getFixedVariantIfOnlyOneMatchingModuleInPlan, which returns the
+  // module's OWN stored variant, when no variant arrived from the API. That
+  // value matches the filter by construction, whatever it happens to be.
+  group('module variant that the plan owns is not restated', () {
+    const dynamicPlan = 'oidcc-client-dynamic-certification-test-plan';
+
+    test('the dynamic plan lets the suite supply the module variant', () {
+      expect(moduleVariantComesFromPlan(dynamicPlan), isTrue);
+    });
+
+    test('every other plan still sends its own', () {
+      for (final p in [
+        'oidcc-client-basic-certification-test-plan',
+        'oidcc-client-config-certification-test-plan',
+        'oidcc-client-hybrid-certification-test-plan',
+      ]) {
+        expect(moduleVariantComesFromPlan(p), isFalse, reason: p);
+      }
+    });
+
+    test('omitting the variant leaves it out of the query entirely', () {
+      final uri = moduleInstanceUri(planId: 'p1', moduleName: 'm1');
+      expect(uri.queryParameters.containsKey('variant'), isFalse);
+      expect(uri.queryParameters['plan'], 'p1');
+      expect(uri.queryParameters['test'], 'm1');
+    });
+
+    test('supplying one still encodes it', () {
+      final uri = moduleInstanceUri(
+        planId: 'p1',
+        moduleName: 'm1',
+        variant: const {'response_type': 'code'},
+      );
+      expect(uri.queryParameters['variant'], '{"response_type":"code"}');
     });
   });
 
