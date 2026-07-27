@@ -303,9 +303,17 @@ void main() {
       //                  variant parameter: client_registration"
       // Forbidden on one endpoint, required on the other, for the same
       // dimension of the same plan.
+      // BOTH dimensions the plan endpoint forbids are required here. The
+      // suite revealed them one at a time: supplying client_registration
+      // stopped that complaint and produced
+      //   Missing value for required variant parameter: request_type
+      // which also confirms dynamic_client was the correct value.
       expect(
         moduleVariantFor('oidcc-client-dynamic-certification-test-plan'),
-        containsPair('client_registration', 'dynamic_client'),
+        allOf(
+          containsPair('client_registration', 'dynamic_client'),
+          containsPair('request_type', 'plain_http_request'),
+        ),
       );
     });
 

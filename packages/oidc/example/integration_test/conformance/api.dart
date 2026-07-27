@@ -88,6 +88,11 @@ const _forbiddenExtraVariants = <String, List<String>>{
 const _extraModuleVariants = <String, Map<String, String>>{
   'oidcc-client-dynamic-certification-test-plan': {
     'client_registration': 'dynamic_client',
+    // BOTH dimensions the plan endpoint forbids are required here. The suite
+    // revealed them one at a time: once client_registration was supplied it
+    // stopped complaining about it -- confirming dynamic_client was the right
+    // value -- and asked for request_type instead.
+    'request_type': 'plain_http_request',
   },
 };
 
