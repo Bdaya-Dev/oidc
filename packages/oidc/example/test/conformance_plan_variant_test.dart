@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:oidc/oidc.dart';
 
 import '../integration_test/conformance/api.dart';
 import '../integration_test/shared_e2e.dart';
@@ -324,6 +325,164 @@ void main() {
         'oidcc-client-hybrid-certification-test-plan',
       ]) {
         expect(moduleVariantFor(p), isEmpty, reason: p);
+      }
+    });
+  });
+
+  // The WebFinger modules address the running test through an alias:
+  // `acct:<alias>.<testName>@<host>`, parsed by the conformance suite's
+  // TestDispatcher with
+  //
+  //   ^acct:([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)@.*$
+  //
+  // A dot inside the alias would be read as the alias/test-name separator, and
+  // an alias the suite has no running test for answers 404. So the alias is not
+  // cosmetic: without one the harness cannot name the test it is driving, and
+  // no WebFinger module can resolve.
+  group('conformance alias', () {
+    const dynamicPlan = 'oidcc-client-dynamic-certification-test-plan';
+
+    test('is legal for the suite dispatcher regex', () {
+      final alias = conformanceAlias(planName: dynamicPlan, platform: 'linux');
+      expect(alias, matches(RegExp(r'^[a-zA-Z0-9_-]+$')));
+      expect(alias, isNot(contains('.')));
+      expect(alias, isNotEmpty);
+    });
+
+    test('is distinct per platform so matrix jobs cannot collide', () {
+      final seen = {
+        for (final p in ['linux', 'web', 'android', 'ios', 'macos', 'windows'])
+          p: conformanceAlias(planName: dynamicPlan, platform: p),
+      };
+      expect(seen.values.toSet(), hasLength(seen.length));
+    });
+
+    test('is distinct per plan', () {
+      expect(
+        conformanceAlias(planName: dynamicPlan, platform: 'linux'),
+        isNot(
+          conformanceAlias(
+            planName: 'oidcc-client-basic-certification-test-plan',
+            platform: 'linux',
+          ),
+        ),
+      );
+    });
+
+    test('sanitises characters the dispatcher regex would reject', () {
+      final alias = conformanceAlias(
+        planName: 'weird.plan/name with spaces',
+        platform: 'linux',
+      );
+      expect(alias, matches(RegExp(r'^[a-zA-Z0-9_-]+$')));
+    });
+
+    test('is required only by the plan whose modules use WebFinger', () {
+      expect(planNeedsAlias(dynamicPlan), isTrue);
+      for (final p in [
+        'oidcc-client-basic-certification-test-plan',
+        'oidcc-client-config-certification-test-plan',
+        'oidcc-client-hybrid-certification-test-plan',
+        'oidcc-client-test-3rd-party-init-login-test-plan',
+      ]) {
+        expect(planNeedsAlias(p), isFalse, reason: p);
+      }
+    });
+
+    test('feeds a WebFinger identifier the library can normalize', () {
+      // The whole point of the alias: it is the only handle the RP has on the
+      // running test, and it reaches the suite through the identifier.
+      final identifier = webFingerIdentifierFor(
+        moduleName: 'oidcc-client-test-discovery-webfinger-acct',
+        alias: conformanceAlias(planName: dynamicPlan, platform: 'linux'),
+        host: 'www.certification.openid.net',
+      );
+      final normalized = OidcUtils.normalizeWebFingerIdentifier(identifier!);
+      expect(normalized.host, 'www.certification.openid.net');
+      expect(normalized.resource, startsWith('acct:'));
+    });
+
+    test('reaches the plan request body only when supplied', () {
+      final (_, withAlias) = prepareTestPlanRequest(
+        planName: dynamicPlan,
+        description: 'd',
+        clientId: 'c',
+        redirectUri: 'http://localhost:22434',
+        alias: 'oidc_linux',
+        extraVariant: const {'client_auth_type': 'client_secret_basic'},
+      );
+      expect(withAlias['alias'], 'oidc_linux');
+
+      final (_, withoutAlias) = prepareTestPlanRequest(
+        planName: dynamicPlan,
+        description: 'd',
+        clientId: 'c',
+        redirectUri: 'http://localhost:22434',
+        extraVariant: const {'client_auth_type': 'client_secret_basic'},
+      );
+      expect(withoutAlias.containsKey('alias'), isFalse);
+    });
+  });
+
+  // The two identifier shapes the suite's dispatcher parses. They are not
+  // interchangeable: each module validates the scheme of the resource it was
+  // asked with, so the acct form sent to the URL module is refused with
+  // "This test expects a webfinger request using URL syntax", and vice versa.
+  group('WebFinger identifiers', () {
+    const host = 'www.certification.openid.net';
+    const alias = 'oidc_linux';
+
+    test('the acct module wants acct:<alias>.<module>@<host>', () {
+      expect(
+        webFingerIdentifierFor(
+          moduleName: 'oidcc-client-test-discovery-webfinger-acct',
+          alias: alias,
+          host: host,
+        ),
+        'acct:$alias.oidcc-client-test-discovery-webfinger-acct@$host',
+      );
+    });
+
+    test('the url module wants https://<host>/<alias>/<module>', () {
+      expect(
+        webFingerIdentifierFor(
+          moduleName: 'oidcc-client-test-discovery-webfinger-url',
+          alias: alias,
+          host: host,
+        ),
+        'https://$host/$alias/oidcc-client-test-discovery-webfinger-url',
+      );
+    });
+
+    test('every other module resolves its issuer the ordinary way', () {
+      for (final m in [
+        'oidcc-client-test-discovery-openid-config',
+        'oidcc-client-test-registration-dynamic',
+        'oidcc-client-test',
+      ]) {
+        expect(
+          webFingerIdentifierFor(moduleName: m, alias: alias, host: host),
+          isNull,
+          reason: m,
+        );
+      }
+    });
+
+    test('both identifiers normalize back to the suite host', () {
+      for (final m in [
+        'oidcc-client-test-discovery-webfinger-acct',
+        'oidcc-client-test-discovery-webfinger-url',
+      ]) {
+        final identifier = webFingerIdentifierFor(
+          moduleName: m,
+          alias: alias,
+          host: host,
+        );
+        expect(
+          OidcUtils.normalizeWebFingerIdentifier(identifier!).host,
+          host,
+          reason: m,
+        );
       }
     });
   });

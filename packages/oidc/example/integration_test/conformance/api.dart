@@ -100,6 +100,62 @@ const _extraModuleVariants = <String, Map<String, String>>{
 Map<String, String> moduleVariantFor(String planName) =>
     _extraModuleVariants[planName] ?? const {};
 
+/// Whether [planName] contains modules that address the running test through
+/// the suite's `alias` rather than through the URL `api/runner` hands back.
+///
+/// Only the Dynamic RP plan does. Its WebFinger modules expect the RP to look
+/// up `acct:<alias>.oidcc-client-test-discovery-webfinger-acct@<host>`, and the
+/// suite resolves that alias to the running test -- there is no other way to
+/// name it. Every other plan reads its test URL straight out of the
+/// module-instance response, so they are deliberately left alone: sending an
+/// alias changes the URL shape the suite issues, and twelve currently-passing
+/// profiles are not worth risking for a field they never read.
+bool planNeedsAlias(String planName) =>
+    planName == 'oidcc-client-dynamic-certification-test-plan';
+
+/// An alias that survives the suite dispatcher's parse.
+///
+/// The dispatcher splits a WebFinger `acct:` resource with
+/// `^acct:([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)@.*$`, so a dot inside the alias
+/// would be read as the alias/test-name separator and the lookup would resolve
+/// to neither. Every character outside that class is folded to `_`.
+///
+/// Both [platform] and [planName] are in the key because the CI matrix runs
+/// platforms as parallel jobs against one shared suite instance: an alias
+/// another job already registered would resolve to that job's test.
+String conformanceAlias({required String planName, required String platform}) =>
+    'oidc_${platform}_$planName'.replaceAll(RegExp('[^a-zA-Z0-9_-]'), '_');
+
+/// The WebFinger identifier [moduleName] expects the RP to start discovery
+/// from, or null when the module resolves its issuer the ordinary way.
+///
+/// Only two modules use WebFinger, and they demand different syntaxes. Each
+/// validates the scheme of the resource it was queried with, so the shapes are
+/// not interchangeable:
+///
+///   acct  acct:<alias>.<moduleName>@<host>
+///   url   https://<host>/<alias>/<moduleName>
+///
+/// The `<alias>.<moduleName>` pair is how the suite finds the running test --
+/// its dispatcher splits on the first dot -- which is why [conformanceAlias]
+/// must never produce one.
+///
+/// This returns the identifier only. Resolving it is the library's job, via
+/// `OidcEndpoints.getIssuerViaWebFinger`: the module under test is a test of
+/// the RP, so a lookup performed by the harness would prove nothing about
+/// package:oidc.
+String? webFingerIdentifierFor({
+  required String moduleName,
+  required String alias,
+  required String host,
+}) => switch (moduleName) {
+  'oidcc-client-test-discovery-webfinger-acct' =>
+    'acct:$alias.$moduleName@$host',
+  'oidcc-client-test-discovery-webfinger-url' =>
+    'https://$host/$alias/$moduleName',
+  _ => null,
+};
+
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
   // oidcc-client-basic-certification-test-plan
   required String planName,

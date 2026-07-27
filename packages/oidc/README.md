@@ -80,7 +80,8 @@ await manager.logout();
 - [OpenId Connect Core 1.0][oidc_core_spec_link].
     - authorization code, hybrid (`loginHybridFlow`), and implicit flows.
 - [OpenId Connect Discovery][discovery_spec_link].
-    - no webfinger support yet.
+    - §4 Provider Configuration: the `.well-known/openid-configuration` document (also RFC 8414 `.well-known/oauth-authorization-server`), with `issuer` validation and RFC 8414 `signed_metadata` verification.
+    - §2 OpenID Provider Issuer Discovery: [WebFinger](https://www.rfc-editor.org/rfc/rfc7033) via `OidcEndpoints.getIssuerViaWebFinger('joe@example.com')`, including §2.1 identifier normalization (`OidcUtils.normalizeWebFingerIdentifier`), HTTPS-only transport with https-only redirects, and client-side `rel` filtering. Resolve the identifier to an issuer first, then pass that issuer to `OidcUserManager` — the manager does not run WebFinger on your behalf. Internationalized host names are not supported: convert them to their punycode A-label (RFC 5891) before calling, or normalization throws.
 - [RP Initiated logout][rp_logout_link].
 - [Front-Channel Logout][frontchannel_logout_link].
 - [Authorization code grant][auth_code_link] with [PKCE][pkce_link].

@@ -356,6 +356,9 @@ Future<void> runOidcConformanceTest(
     clientSecret: clientSecret,
     planName: planName,
     description: 'package:oidc $planName on $platform',
+    alias: planNeedsAlias(planName)
+        ? conformanceAlias(planName: planName, platform: platform)
+        : null,
     redirectUri: redirectUri.toString(),
     requestType: requestType,
     clientRegistration: clientRegistration,
@@ -448,8 +451,35 @@ Future<void> runOidcConformanceTest(
       ..info('Test instance created: $testInstance')
       ..info('Test Instance ID: $testInstanceId, URL: $url');
 
+    // The WebFinger modules do NOT issue at the URL above. The suite appends a
+    // random per-run suffix to the issuer for exactly these two modules, and
+    // hands the result out only through the WebFinger response -- so this
+    // lookup is load-bearing: skip it and discovery goes to the wrong issuer.
+    //
+    // Resolved through the library rather than the harness's Dio on purpose.
+    // These modules test whether the RELYING PARTY can do WebFinger; a lookup
+    // written here would pass while package:oidc still could not.
+    var issuer = url;
+    final webFingerIdentifier = webFingerIdentifierFor(
+      moduleName: moduleName,
+      alias: conformanceAlias(planName: planName, platform: platform),
+      host: Uri.parse(baseUrl).host,
+    );
+    if (webFingerIdentifier != null) {
+      logger.info('Resolving issuer via WebFinger: $webFingerIdentifier');
+      // The suite is a live third party and this Dio carries no timeout, so an
+      // unbounded lookup would hang the job rather than fail it -- the exact
+      // failure mode manager.dart's flowTimeoutSeconds exists to prevent, but
+      // that bounds the browser flow only, not a bare GET.
+      final resolved = await OidcEndpoints.getIssuerViaWebFinger(
+        webFingerIdentifier,
+      ).timeout(const Duration(seconds: 30));
+      issuer = resolved.toString();
+      logger.info('WebFinger resolved issuer: $issuer');
+    }
+
     final manager = conformanceManager(
-      url,
+      issuer,
       clientId: clientId,
       clientSecret: clientSecret,
       redirectUri: redirectUri,

@@ -657,6 +657,69 @@ class OidcConstants_ProviderMetadata {
       'dpop_signing_alg_values_supported';
 }
 
+/// OpenID Connect Discovery 1.0 §2 (OpenID Provider Issuer Discovery) +
+/// RFC 7033 (WebFinger) protocol constants.
+class OidcConstants_WebFinger {
+  /// RFC 7033 §4: the well-known path MUST be `/.well-known/webfinger`.
+  static const wellKnownPathSegments = <String>['.well-known', 'webfinger'];
+
+  /// RFC 7033 §4.1 REQUIRED query parameter carrying the normalized Resource.
+  static const resource = 'resource';
+
+  /// RFC 7033 §4.1/§4.3 OPTIONAL, repeatable link-relation-type filter.
+  static const rel = 'rel';
+
+  /// OIDC Discovery 1.0 §2 `host` WebFinger parameter. Conveyed as the request
+  /// URL authority / HTTP `Host` header, NOT as a query parameter.
+  static const host = 'host';
+
+  /// OIDC Discovery 1.0 §2 "OpenID Connect Issuer" rel type. The literal `http`
+  /// scheme is correct: this is an identifier, never a fetched URL.
+  static const relOpenIdIssuer = 'http://openid.net/specs/connect/1.0/issuer';
+
+  /// RFC 7033 §4.2/§10.2 JSON Resource Descriptor media type.
+  static const jrdContentType = 'application/jrd+json';
+
+  /// RFC 7565 `acct` URI scheme, assumed by OIDC Discovery §2.1.2 rule 2.
+  static const acctScheme = 'acct';
+
+  /// The scheme assumed by OIDC Discovery §2.1.2 rule 3.
+  static const httpsScheme = 'https';
+}
+
+/// RFC 7033 §4.4 JSON Resource Descriptor (JRD) top-level member names.
+class OidcConstants_WebFinger_JRD {
+  /// §4.4.1 — the URI of the entity the JRD describes.
+  static const subject = 'subject';
+
+  /// §4.4.2 — alternative identifiers for the [subject].
+  static const aliases = 'aliases';
+
+  /// §4.4.3 — additional information about the [subject].
+  static const properties = 'properties';
+
+  /// §4.4.4 — the array of link relation objects.
+  static const links = 'links';
+}
+
+/// RFC 7033 §4.4.4 link-relation-object member names.
+class OidcConstants_WebFinger_Link {
+  /// §4.4.4.1 — the link's relation type; the only REQUIRED member.
+  static const rel = 'rel';
+
+  /// §4.4.4.2 — the media type of the target resource.
+  static const type = 'type';
+
+  /// §4.4.4.3 — the target URI.
+  static const href = 'href';
+
+  /// §4.4.4.4 — human-readable titles, keyed by language tag.
+  static const titles = 'titles';
+
+  /// §4.4.4.5 — additional information about the link relation.
+  static const properties = 'properties';
+}
+
 class OidcConstants_AuthorizeRequest_ResponseMode {
   /// query
   static const String query = 'query';
