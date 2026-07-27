@@ -588,7 +588,12 @@ class OidcPlatformSpecificOptions_Web {
   /// Maximum seconds an INTERACTIVE flow
   /// ([OidcPlatformSpecificOptions_Web_NavigationMode.popup] and
   /// [OidcPlatformSpecificOptions_Web_NavigationMode.newPage]) may wait for a
-  /// redirect before failing with a [TimeoutException].
+  /// redirect before failing with an `OidcException` carrying
+  /// `extra['reason'] == 'flow_timeout'`.
+  ///
+  /// NOT a raw `TimeoutException`: the sibling window-closed failure throws
+  /// `OidcException`, and an app catching what this library's docs tell it to
+  /// catch must catch this too.
   ///
   /// `null` (default) means no timeout, preserving existing behavior.
   ///

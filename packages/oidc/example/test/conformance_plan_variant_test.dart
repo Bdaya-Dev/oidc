@@ -190,4 +190,44 @@ void main() {
       );
     });
   });
+
+  group('fragment responses need a transport that can carry a fragment', () {
+    test('hybrid and implicit return fragments', () {
+      expect(
+        isFragmentResponsePlan('oidcc-client-hybrid-certification-test-plan'),
+        isTrue,
+      );
+      expect(
+        isFragmentResponsePlan('oidcc-client-implicit-certification-test-plan'),
+        isTrue,
+      );
+    });
+
+    test('formpost variants do NOT, despite -hybrid-/-implicit- in the id', () {
+      // response_mode=form_post overrides the default, so these arrive as a
+      // POST body. A naive substring match classifies them as fragment plans
+      // and skips them for the wrong reason.
+      for (final p in [
+        'oidcc-client-formpost-hybrid-certification-test-plan',
+        'oidcc-client-formpost-implicit-certification-test-plan',
+      ]) {
+        expect(isFragmentResponsePlan(p), isFalse, reason: p);
+      }
+    });
+
+    test('the logout -rp-hybrid variants are not fragment plans either', () {
+      expect(
+        isFragmentResponsePlan('oidcc-client-rp-initiated-logout-rp-hybrid'),
+        isFalse,
+      );
+    });
+
+    test('loopback platforms cannot receive a fragment; others can', () {
+      expect(canReceiveFragmentResponse('linux'), isFalse);
+      expect(canReceiveFragmentResponse('windows'), isFalse);
+      for (final p in ['macos', 'ios', 'android', 'web']) {
+        expect(canReceiveFragmentResponse(p), isTrue, reason: p);
+      }
+    });
+  });
 }

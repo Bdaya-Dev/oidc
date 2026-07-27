@@ -219,10 +219,10 @@ class OidcPlugin :
                     )
                     return
                 }
-                launchAuthTab(launcher, url, ephemeral)
+                launchAuthTab(launcher, url, ephemeral, options)
             }
             else -> if (launcher != null) {
-                launchAuthTab(launcher, url, ephemeral)
+                launchAuthTab(launcher, url, ephemeral, options)
             } else {
                 launchCustomTab(host, url, ephemeral, options)
             }
@@ -230,11 +230,29 @@ class OidcPlugin :
         scheduleFlowTimeout(options)
     }
 
+    /**
+     * Opens an Auth Tab. This is the DEFAULT path whenever the host is a
+     * [ComponentActivity] (e.g. `FlutterFragmentActivity`, which this plugin's
+     * own docs recommend) and the browser supports it.
+     *
+     * [AuthTabIntent.Builder] exposes only a fraction of what
+     * [CustomTabsIntent.Builder] does: there is no title visibility, URL-bar
+     * hiding, share state, close-button position, partial-height sizing, or
+     * arbitrary Intent extras on this API. Those options are Custom Tabs only.
+     *
+     * They used to be dropped in silence here, which meant the same option an
+     * app set worked on a plain `FlutterActivity` and did nothing on a
+     * `FlutterFragmentActivity` -- looking random rather than path-dependent.
+     * Anything unsupported is now reported through the observability channel as
+     * `optionIgnoredOnAuthTab`, one event per option, so the loss is visible.
+     */
     private fun launchAuthTab(
         launcher: ActivityResultLauncher<Intent>,
         url: String,
         ephemeral: Boolean,
+        options: Map<String, Any?>,
     ) {
+        reportOptionsUnsupportedByAuthTab(options)
         val authTab = AuthTabIntent.Builder()
             .setEphemeralBrowsingEnabled(ephemeral)
             .build()
@@ -253,6 +271,36 @@ class OidcPlugin :
                 "captureMode" to "authTab",
             ),
         )
+    }
+
+    /**
+     * Custom Tabs options that [AuthTabIntent.Builder] has no equivalent for.
+     *
+     * Kept as data rather than scattered `if`s so the set is greppable and so a
+     * new option added to `OidcNativeOptionsAndroid` is a one-line decision
+     * here instead of an invisible omission.
+     */
+    private val authTabUnsupportedOptions = listOf(
+        "showTitle",
+        "urlBarHidingEnabled",
+        "shareState",
+        "closeButtonPosition",
+        "colorSchemes",
+        "partialCustomTabs",
+        "rawIntentExtras",
+    )
+
+    /** Emits one `optionIgnoredOnAuthTab` event per option this path drops. */
+    private fun reportOptionsUnsupportedByAuthTab(options: Map<String, Any?>) {
+        for (name in authTabUnsupportedOptions) {
+            val value = options[name] ?: continue
+            // Skip values that are merely the model's default, so an app that
+            // never touched the option is not warned about it.
+            if (value is Boolean && !value) continue
+            if (value is Map<*, *> && value.isEmpty()) continue
+            if (value is String && value == "browserDefault") continue
+            emit("optionIgnoredOnAuthTab", mapOf("option" to name))
+        }
     }
 
     /**
