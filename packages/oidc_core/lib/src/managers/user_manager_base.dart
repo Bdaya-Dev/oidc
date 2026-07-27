@@ -26,6 +26,109 @@ typedef _OidcRefreshOutcome = ({
   StackTrace? stackTrace,
 });
 
+/// Why a persisted client registration cannot simply be re-used as it is.
+enum _OidcClientRegistrationStaleness {
+  /// Usable as-is: it still matches what this build registers for and its
+  /// `client_secret` (if any) is live.
+  current,
+
+  /// The staleness fingerprint no longer matches what this build would
+  /// register for. A replacement must be issued, but the entry itself is still
+  /// a working credential — it is the fallback when that replacement cannot be
+  /// obtained.
+  superseded,
+
+  /// RFC 7591 §3.2.1 `client_secret_expires_at` is in the past. The OP has
+  /// retired the credential, so this can never authenticate again and is never
+  /// used as a fallback — a replacement must be registered.
+  ///
+  /// The entry is still left on disk: it is the only copy of the RFC 7592 §3
+  /// `registration_access_token`, which is what an app needs to retire the
+  /// OP-side client with [OidcEndpoints.deleteClientConfiguration], and a
+  /// replacement overwrites it in place anyway.
+  secretExpired,
+}
+
+/// A persisted client registration that could be parsed and converted, paired
+/// with the credentials it converts to and why (if at all) it is stale.
+///
+/// Carrying the credentials keeps the conversion inside the read path's discard
+/// logic, so a cached entry that cannot become credentials is dropped rather
+/// than thrown on.
+typedef _OidcCachedClientRegistration = ({
+  OidcClientRegistrationResponse response,
+  OidcClientAuthentication credentials,
+  _OidcClientRegistrationStaleness staleness,
+});
+
+/// A [JsonWebKeyStore] that always offers the `oct` verification key of the
+/// CURRENT `client_secret`, on top of everything registered in [inner].
+///
+/// RFC 7518 §3.2 (with OpenID Connect Core §16.19) makes the `client_secret`
+/// octets the verification key of an HS*-signed id_token. Under RFC 7591
+/// dynamic registration that secret is not known until `init()` has resolved
+/// the registration, and [JsonWebKeyStore] offers no way to remove a key once
+/// added — so a store built eagerly from the constructor-supplied seed would
+/// leave a secret that was never registered able to verify id_tokens forever.
+/// Deriving it at lookup time makes "only the credentials the manager is
+/// actually running as can verify" hold BY CONSTRUCTION, instead of depending
+/// on every site that replaces the credentials remembering to rebuild the
+/// store.
+class _OidcClientSecretKeyStore extends JsonWebKeyStore {
+  _OidcClientSecretKeyStore({
+    required this.inner,
+    required this.currentClientSecret,
+  });
+
+  /// The store the app supplied (or the manager's own). Every mutation is
+  /// forwarded here, so keys an app registers after construction keep working.
+  final JsonWebKeyStore inner;
+
+  final String? Function() currentClientSecret;
+
+  String? _derivedFrom;
+  JsonWebKeyStore? _derived;
+
+  @override
+  void addKey(JsonWebKey? key) => inner.addKey(key);
+
+  @override
+  void addKeySet(JsonWebKeySet keys) => inner.addKeySet(keys);
+
+  @override
+  void addKeySetUrl(Uri url) => inner.addKeySetUrl(url);
+
+  @override
+  Stream<JsonWebKey?> findJsonWebKeys(
+    JoseHeader header,
+    String operation,
+  ) async* {
+    final secret = currentClientSecret();
+    // `alg: none` resolves to a single `null` candidate; letting both stores
+    // answer it would merely duplicate that candidate.
+    if (secret != null && header.algorithm != 'none') {
+      yield* _keyStoreFor(secret).findJsonWebKeys(header, operation);
+    }
+    yield* inner.findJsonWebKeys(header, operation);
+  }
+
+  JsonWebKeyStore _keyStoreFor(String secret) {
+    final cached = _derived;
+    if (cached != null && secret == _derivedFrom) {
+      return cached;
+    }
+    _derivedFrom = secret;
+    return _derived = JsonWebKeyStore()
+      ..addKey(
+        JsonWebKey.fromJson({
+          'kty': 'oct',
+          'k': base64Url.encode(utf8.encode(secret)).replaceAll('=', ''),
+          'use': 'sig',
+        }),
+      );
+  }
+}
+
 /// This class manages a single user's authentication status.
 ///
 /// It's preferred to maintain only a single instance of this class.
@@ -36,7 +139,7 @@ abstract class OidcUserManagerBase {
   /// consider using the [OidcUserManagerBase.lazy] constructor.
   OidcUserManagerBase({
     required OidcProviderMetadata discoveryDocument,
-    required this.clientCredentials,
+    required OidcClientAuthentication clientCredentials,
     required this.store,
     required this.settings,
     this.httpClient,
@@ -44,26 +147,38 @@ abstract class OidcUserManagerBase {
     this.id,
   }) : discoveryDocumentUri = null,
        currentDiscoveryDocument = discoveryDocument,
+       _clientCredentials = clientCredentials,
        _keyStore = keyStore;
 
   /// Create a new UserManager that delays getting the discovery document until
   /// [init] is called.
   OidcUserManagerBase.lazy({
     required Uri this.discoveryDocumentUri,
-    required this.clientCredentials,
+    required OidcClientAuthentication clientCredentials,
     required this.store,
     required this.settings,
     this.httpClient,
     JsonWebKeyStore? keyStore,
     this.id,
-  }) : _keyStore = keyStore;
+  }) : _clientCredentials = clientCredentials,
+       _keyStore = keyStore;
 
   bool get isWeb;
 
   final String? id;
 
+  OidcClientAuthentication _clientCredentials;
+
   /// The client authentication information.
-  final OidcClientAuthentication clientCredentials;
+  ///
+  /// When [OidcUserManagerSettings.dynamicClientRegistration] is enabled, this
+  /// is REPLACED during [init] by the credentials derived from the registration
+  /// response; the constructor-supplied value is only the pre-registration seed.
+  OidcClientAuthentication get clientCredentials => _clientCredentials;
+
+  @protected
+  set clientCredentials(OidcClientAuthentication value) =>
+      _clientCredentials = value;
 
   /// The http client to use when sending requests
   final http.Client? httpClient;
@@ -73,7 +188,18 @@ abstract class OidcUserManagerBase {
 
   /// The id_token verification options.
   JsonWebKeyStore? _keyStore;
-  JsonWebKeyStore get keyStore => _keyStore ??= JsonWebKeyStore();
+
+  /// The key store id_token signatures are verified against.
+  ///
+  /// This wraps the store handed to the constructor (or a fresh one): the
+  /// symmetric HS* key is derived from [clientCredentials] on every lookup, so
+  /// the RFC 7591 registration applied during [init] retires the seed's key
+  /// immediately, with no ordering dependency between [setupKeyStore] and
+  /// [ensureClientRegistration]. See [_OidcClientSecretKeyStore].
+  late final JsonWebKeyStore keyStore = _OidcClientSecretKeyStore(
+    inner: _keyStore ??= JsonWebKeyStore(),
+    currentClientSecret: () => clientCredentials.clientSecret,
+  );
 
   OidcDPoPManager? _dpopManager;
 
@@ -440,6 +566,12 @@ abstract class OidcUserManagerBase {
     List<String>? responseTypeOverride,
   }) async {
     ensureInit();
+    // Taken once, up front: the authorization request below is built from —
+    // and persisted against — this `client_id`, and the code it returns is
+    // exchanged with these same credentials in [tryGetAuthResponse]. Under
+    // dynamic client registration this is the identity [init] resolved and it
+    // does not move for the manager's lifetime.
+    final credentials = clientCredentials;
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
     options = getPlatformOptions(options);
@@ -459,10 +591,10 @@ abstract class OidcUserManagerBase {
         };
     final dpop = dpopManager;
     final simpleReq = OidcSimpleAuthorizationCodeFlowRequest(
-      clientId: clientCredentials.clientId,
+      clientId: credentials.clientId,
       originalUri: originalUri,
-      redirectUri: redirectUriOverride ?? settings.redirectUri,
-      scope: scopeOverride ?? settings.scope,
+      redirectUri: redirectUriOverride ?? effectiveRedirectUri,
+      scope: scopeOverride ?? effectiveScope,
       prompt: promptOverride ?? settings.prompt,
       display: displayOverride ?? settings.display,
       extraStateData: extraStateData,
@@ -538,7 +670,7 @@ abstract class OidcUserManagerBase {
       final parResponse = await OidcEndpoints.pushAuthorizationRequest(
         pushedAuthorizationRequestEndpoint: parEndpoint,
         request: requestContainer.request,
-        credentials: clientCredentials,
+        credentials: credentials,
         client: httpClient,
         // RFC 9449 §10: bind the authorization code to the DPoP key by sending
         // its thumbprint as `dpop_jkt` on the (back-channel) PAR request.
@@ -571,6 +703,7 @@ abstract class OidcUserManagerBase {
     final discoveryDocument =
         discoveryDocumentOverride ?? this.discoveryDocument;
 
+    final credentials = clientCredentials;
     final tokenResp = await (settings.hooks?.token).execute(
       request: OidcTokenHookRequest(
         metadata: discoveryDocument,
@@ -578,11 +711,11 @@ abstract class OidcUserManagerBase {
         request: OidcTokenRequest.password(
           username: username,
           password: password,
-          scope: scopeOverride ?? settings.scope,
-          clientId: clientCredentials.clientId,
+          scope: scopeOverride ?? effectiveScope,
+          clientId: credentials.clientId,
           extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
         ),
-        credentials: clientCredentials,
+        credentials: credentials,
         headers: {
           ...?settings.extraTokenHeaders,
           ...?extraTokenHeaders,
@@ -648,11 +781,12 @@ abstract class OidcUserManagerBase {
       deviceAuthEndpointValue.toString(),
     );
 
+    final credentials = clientCredentials;
     final deviceResp = await OidcEndpoints.deviceAuthorization(
       deviceAuthorizationEndpoint: deviceAuthorizationEndpoint,
-      credentials: clientCredentials,
+      credentials: credentials,
       request: OidcDeviceAuthorizationRequest(
-        scope: scopeOverride ?? settings.scope,
+        scope: scopeOverride ?? effectiveScope,
       ),
       client: httpClient,
     );
@@ -667,20 +801,21 @@ abstract class OidcUserManagerBase {
     while (clock.now().isBefore(deadline)) {
       await Future<void>.delayed(pollInterval);
       try {
+        final pollCredentials = clientCredentials;
         final tokenResp = await (settings.hooks?.token).execute(
           request: OidcTokenHookRequest(
             metadata: metadata,
             tokenEndpoint: tokenEndpoint,
             request: OidcTokenRequest.deviceCode(
               deviceCode: deviceResp.deviceCode,
-              clientId: clientCredentials.clientId,
-              scope: scopeOverride ?? settings.scope,
+              clientId: pollCredentials.clientId,
+              scope: scopeOverride ?? effectiveScope,
               extra: {
                 ...?settings.extraTokenParameters,
                 ...?extraTokenParameters,
               },
             ),
-            credentials: clientCredentials,
+            credentials: pollCredentials,
             headers: {
               ...?settings.extraTokenHeaders,
               ...?extraTokenHeaders,
@@ -949,8 +1084,8 @@ abstract class OidcUserManagerBase {
       responseType: responseType,
       clientId: clientCredentials.clientId,
       originalUri: originalUri,
-      redirectUri: redirectUriOverride ?? settings.redirectUri,
-      scope: scopeOverride ?? settings.scope,
+      redirectUri: redirectUriOverride ?? effectiveRedirectUri,
+      scope: scopeOverride ?? effectiveScope,
       prompt: promptOverride ?? settings.prompt,
       display: displayOverride ?? settings.display,
       extraStateData: extraStateData,
@@ -993,6 +1128,11 @@ abstract class OidcUserManagerBase {
       toDelete: {
         OidcStoreNamespace.secureTokens,
       },
+      // The dynamic client registration is app-instance identity, not user
+      // identity: forgetting the user (including on a terminal refresh failure)
+      // must not orphan the client at the OP and mint a fresh one on the next
+      // launch.
+      preserveKeyPrefixes: const {clientRegistrationKeyPrefix},
     );
     final currentUser = this.currentUser;
     if (currentUser != null) {
@@ -1066,11 +1206,12 @@ abstract class OidcUserManagerBase {
       return; // no revocation endpoint, nothing to do.
     }
 
+    final credentials = clientCredentials;
     final resp = await (settings.hooks?.revocation).execute(
       request: OidcRevocationHookRequest(
         metadata: discoveryDocument,
         revocationEndpoint: revocationEndpoint,
-        credentials: clientCredentials,
+        credentials: credentials,
         headers: {
           ...?settings.extraRevocationHeaders,
           ...?headers,
@@ -1170,11 +1311,12 @@ abstract class OidcUserManagerBase {
       return; // no revocation endpoint, nothing to do.
     }
 
+    final credentials = clientCredentials;
     final resp = await (settings.hooks?.revocation).execute(
       request: OidcRevocationHookRequest(
         metadata: discoveryDocument,
         revocationEndpoint: revocationEndpoint,
-        credentials: clientCredentials,
+        credentials: credentials,
         headers: {
           ...?settings.extraRevocationHeaders,
           ...?headers,
@@ -1259,7 +1401,7 @@ abstract class OidcUserManagerBase {
       }
     }
     final postLogoutRedirectUri =
-        postLogoutRedirectUriOverride ?? settings.postLogoutRedirectUri;
+        postLogoutRedirectUriOverride ?? effectivePostLogoutRedirectUri;
 
     final stateData = postLogoutRedirectUri == null
         ? null
@@ -1475,11 +1617,12 @@ abstract class OidcUserManagerBase {
       );
 
       //request the token.
+      final credentials = clientCredentials;
       final tokenResp = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
           metadata: metadata,
           tokenEndpoint: tokenEndpoint,
-          credentials: clientCredentials,
+          credentials: credentials,
           headers: stateData.extraTokenHeaders,
           request: OidcTokenRequest.authorizationCode(
             redirectUri: response.redirectUri ?? stateData.redirectUri,
@@ -1488,7 +1631,7 @@ abstract class OidcUserManagerBase {
                 storedCodeVerifier ??
                 stateData.codeVerifier,
             extra: stateData.extraTokenParams,
-            clientId: clientCredentials.clientId,
+            clientId: credentials.clientId,
             code: code,
           ),
           client: httpClient,
@@ -2003,8 +2146,8 @@ abstract class OidcUserManagerBase {
       // Can't refresh the access token anyway.
       return null;
     }
-
     try {
+      final credentials = clientCredentials;
       final tokenResponse = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
           metadata: discoveryDocument,
@@ -2016,12 +2159,12 @@ abstract class OidcUserManagerBase {
           // Basic header (see OidcEndpoints.token).
           request: OidcTokenRequest.refreshToken(
             refreshToken: refreshToken,
-            clientId: clientCredentials.clientId,
+            clientId: credentials.clientId,
             extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
-            scope: settings.scope,
+            scope: effectiveScope,
             resource: settings.resource,
           ),
-          credentials: clientCredentials,
+          credentials: credentials,
           headers: settings.extraTokenHeaders,
           client: httpClient,
           options: settings.options,
@@ -2187,11 +2330,12 @@ abstract class OidcUserManagerBase {
     OidcUser? newUser;
     //try getting a new token.
     try {
+      final credentials = clientCredentials;
       final tokenResponse = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
           metadata: discoveryDocument,
           tokenEndpoint: discoveryDocument.tokenEndpoint!,
-          credentials: clientCredentials,
+          credentials: credentials,
           client: httpClient,
           headers: settings.extraTokenHeaders,
           // clientSecret is intentionally NOT passed here: `credentials`
@@ -2201,9 +2345,9 @@ abstract class OidcUserManagerBase {
           // Basic header (see OidcEndpoints.token).
           request: OidcTokenRequest.refreshToken(
             refreshToken: event.refreshToken!,
-            clientId: clientCredentials.clientId,
+            clientId: credentials.clientId,
             extra: settings.extraTokenParameters,
-            scope: settings.scope,
+            scope: effectiveScope,
             resource: settings.resource,
           ),
           options: settings.options,
@@ -2531,11 +2675,12 @@ abstract class OidcUserManagerBase {
         'is no current access token.',
       );
     }
+    final credentials = clientCredentials;
     return (settings.hooks?.token).execute(
       request: OidcTokenHookRequest(
         metadata: discoveryDocument,
         tokenEndpoint: tokenEndpoint,
-        credentials: clientCredentials,
+        credentials: credentials,
         headers: {...?settings.extraTokenHeaders, ...?headers},
         client: httpClient,
         options: settings.options,
@@ -2553,7 +2698,7 @@ abstract class OidcUserManagerBase {
           audience: audience,
           resource: resource ?? settings.resource,
           scope: scope,
-          clientId: clientCredentials.clientId,
+          clientId: credentials.clientId,
           extra: extra,
         ),
       ),
@@ -2591,9 +2736,10 @@ abstract class OidcUserManagerBase {
         'current access token.',
       );
     }
+    final credentials = clientCredentials;
     return OidcEndpoints.introspect(
       introspectionEndpoint: introspectionEndpoint,
-      credentials: clientCredentials,
+      credentials: credentials,
       client: httpClient,
       headers: {...?settings.extraTokenHeaders, ...?headers},
       // clientSecret is intentionally NOT passed here: `credentials`
@@ -2604,7 +2750,7 @@ abstract class OidcUserManagerBase {
       request: OidcIntrospectionRequest(
         token: actualToken,
         tokenTypeHint: tokenTypeHint,
-        clientId: clientCredentials.clientId,
+        clientId: credentials.clientId,
         extra: extra,
       ),
     );
@@ -3082,18 +3228,34 @@ abstract class OidcUserManagerBase {
     return null;
   }
 
+  /// Removes every key of each namespace in [toDelete], except keys whose name
+  /// starts with one of [preserveKeyPrefixes].
+  ///
+  /// The opt-out exists because some entries in a namespace are NOT
+  /// user-scoped: the RFC 7591 client registration lives in
+  /// [OidcStoreNamespace.secureTokens] (it holds bearer-grade secrets) but
+  /// identifies the *app instance*, not the signed-in user, so [forgetUser]
+  /// must not destroy it.
   @protected
   Future<void> cleanUpStore({
     required Set<OidcStoreNamespace> toDelete,
+    Set<String> preserveKeyPrefixes = const {},
   }) async {
     for (final element in toDelete) {
       final keys = await store.getAllKeys(
         element,
         managerId: id,
       );
+      // `getAllKeys` may return an unmodifiable set, so filter into a copy.
+      final toRemove = preserveKeyPrefixes.isEmpty
+          ? keys
+          : keys.where((k) => !preserveKeyPrefixes.any(k.startsWith)).toSet();
+      if (toRemove.isEmpty) {
+        continue;
+      }
       await store.removeMany(
         element,
-        keys: keys,
+        keys: toRemove,
         managerId: id,
       );
     }
@@ -3120,6 +3282,876 @@ abstract class OidcUserManagerBase {
   /// `::oidc_jwks_fetched_at` pattern; cannot collide with a real discovery URL
   /// key.
   static const discoveryFetchedAtSuffix = '::oidc_discovery_fetched_at';
+
+  /// Key prefix under which the issued client registration is persisted in
+  /// [OidcStoreNamespace.secureTokens], following the `prefix.<id>` scheme of
+  /// the PKCE `code_verifier.<state>` entry.
+  static const clientRegistrationKeyPrefix = 'client_registration.';
+
+  /// The member of the persisted record holding the RFC 7591 §3.2.1
+  /// registration response exactly as the OP returned it.
+  static const _recordResponseMember = 'registration';
+
+  /// The member of the persisted record holding the staleness fingerprint of
+  /// the request the registration was ISSUED FOR.
+  ///
+  /// Deliberately stored INSIDE the same value rather than in a sidecar key:
+  /// [OidcStore] offers no atomicity across keys (`setMany` is not a
+  /// transaction), so two keys can disagree after a torn write and the record
+  /// would then claim to have been issued for metadata it was not. One key, one
+  /// immutable record — a torn write can only lose the whole thing, which
+  /// degrades to a cache miss.
+  static const _recordFingerprintMember = 'registered_for';
+
+  /// A loopback host per RFC 8252 §7.3 ("Loopback Interface Redirection").
+  static bool _isLoopbackHost(String host) =>
+      host == '127.0.0.1' || host == '::1' || host == 'localhost';
+
+  /// Canonicalizes a redirect uri for COMPARISON, erasing the loopback port.
+  ///
+  /// RFC 8252 §7.3: a native app's loopback redirect gets an ephemeral port at
+  /// runtime, and "the authorization server MUST allow any port to be specified
+  /// at the time of the request for loopback IP redirect URIs". So
+  /// `http://127.0.0.1:52341/cb` and `http://127.0.0.1:8912/cb` are the SAME
+  /// registered redirect; comparing them verbatim would mark the persisted
+  /// record stale on every desktop launch and mint one OP-side client per run,
+  /// forever.
+  ///
+  /// Only loopback `http` is normalized. Everything else — including a custom
+  /// scheme with an authority, and any `https` uri — compares byte-for-byte
+  /// (RFC 3986 §6.2.1 Simple String Comparison, which RFC 8252 §7.3 carves out
+  /// only for the port).
+  static String _canonicalRedirectUriForComparison(Uri uri) {
+    if (uri.scheme != 'http' || !_isLoopbackHost(uri.host)) {
+      return uri.toString();
+    }
+    return uri.replace(port: 0).toString();
+  }
+
+  /// The OpenID Connect Dynamic Client Registration 1.0 §2 `application_type`
+  /// implied by [redirectUris], or null when there are none to judge by.
+  ///
+  /// §2 states the rule as a client-side constraint, not a server-side one:
+  /// "Native Clients MUST only register `redirect_uris` using custom URI
+  /// schemes or loopback URLs using the `http` scheme", while Web Clients "MUST
+  /// only register URLs using the `https` scheme ... they MUST NOT use
+  /// `localhost` as the hostname". So the value is DERIVED from the uris rather
+  /// than from the host platform: an Android app whose redirect is an App Link
+  /// (`https://app.example.com/callback`) is a `web` application_type by this
+  /// rule, and declaring it `native` because it runs on a phone authors a
+  /// request a conformant OP must reject.
+  ///
+  /// §2 also makes `web` the default when the member is omitted, so the only
+  /// case that actually needs stating is `native`. It is still emitted
+  /// explicitly for both, because it is part of what the client is registered
+  /// for and therefore part of the staleness fingerprint.
+  static String? _applicationTypeFor(List<Uri> redirectUris) {
+    if (redirectUris.isEmpty) {
+      return null;
+    }
+    final allNative = redirectUris.every(
+      (uri) =>
+          (uri.scheme != 'http' && uri.scheme != 'https') ||
+          (uri.scheme == 'http' && _isLoopbackHost(uri.host)),
+    );
+    return allNative
+        ? OidcConstants_ApplicationType.native
+        : OidcConstants_ApplicationType.web;
+  }
+
+  /// Applies the manager-owned defaults to a registration request, in place.
+  ///
+  /// RFC 7591 §2: `redirect_uris` is REQUIRED for the flows this library
+  /// drives, a registration whose `scope` differs from what the manager asks
+  /// for fails at the authorization endpoint, and omitting `grant_types` /
+  /// `response_types` registers the client for `authorization_code` / `code`
+  /// ONLY — which would leave the manager's own auto-refresh presenting a
+  /// grant the client was never registered for. OpenID Connect RP-Initiated
+  /// Logout 1.0 §3 requires the same pre-registration for
+  /// `post_logout_redirect_uris`.
+  ///
+  /// Each default only fires when
+  /// [OidcDynamicClientRegistrationSettings.buildRequest] left the member null,
+  /// which is exactly why the staleness fingerprint below is computed from the
+  /// result of this rather than from [OidcUserManagerSettings]: for an app that
+  /// sets these itself, the settings never move.
+  static OidcClientRegistrationRequest _applyClientRegistrationDefaults(
+    OidcClientRegistrationRequest request,
+    OidcUserManagerSettings settings,
+    OidcDynamicClientRegistrationSettings dcr,
+  ) {
+    request
+      ..redirectUris ??= [settings.redirectUri]
+      ..scope ??= settings.scope
+      ..grantTypes ??= dcr.grantTypes
+      ..responseTypes ??= dcr.responseTypes;
+    final postLogoutRedirectUri = settings.postLogoutRedirectUri;
+    if (postLogoutRedirectUri != null) {
+      request.postLogoutRedirectUris ??= [postLogoutRedirectUri];
+    }
+    // DERIVED, not platform-keyed: see [_applicationTypeFor]. Runs after
+    // `redirect_uris` is filled so it judges the uris that will actually be
+    // registered.
+    request.applicationType ??= _applicationTypeFor(request.redirectUris ?? []);
+    return request;
+  }
+
+  /// The staleness fingerprint of an EFFECTIVE registration request (one the
+  /// manager's defaults have already been applied to).
+  ///
+  /// Persisted INSIDE the issued registration's record so a later launch can
+  /// tell whether the OP-side client still matches what this app build would
+  /// ask for. When it no longer does, re-registering beats authenticating as a
+  /// client whose OP-side metadata the OP will now reject.
+  ///
+  /// Members are restricted to the ones whose change makes the ISSUED client
+  /// wrong, and every list is sorted so a pure reordering is not mistaken for a
+  /// change:
+  ///
+  /// - `redirect_uris` — RFC 7591 §2: the OP binds the client to these, so a
+  ///   build that changes them turns every authorization request into
+  ///   `invalid_redirect_uri`. Compared through
+  ///   [_canonicalRedirectUriForComparison], so an RFC 8252 §7.3 loopback port
+  ///   that moves every launch is not mistaken for a metadata change.
+  /// - `application_type` — OpenID Connect Dynamic Client Registration 1.0 §2:
+  ///   it constrains which `redirect_uris` are legal, so a build that flips it
+  ///   is registering for something else. Normally it just follows the uris
+  ///   (see [_applicationTypeFor]); it is listed because
+  ///   [OidcDynamicClientRegistrationSettings.buildRequest] may set it
+  ///   explicitly.
+  /// - `post_logout_redirect_uris` — OpenID Connect RP-Initiated Logout 1.0 §3
+  ///   requires the value sent to the `end_session_endpoint` to have been
+  ///   registered.
+  /// - `scope` — RFC 7591 §2: an authorization request asking beyond the
+  ///   registered scope is refused.
+  /// - `grant_types` — RFC 7591 §2: a grant the client is not registered for is
+  ///   refused at the token endpoint; this is how a build that starts using the
+  ///   refresh or device-code grant reaches the OP.
+  /// - `response_types` — RFC 7591 §2 / OpenID Connect Dynamic Client
+  ///   Registration 1.0 §2: must stay consistent with `grant_types`.
+  ///
+  /// Deliberately EXCLUDED, because a change there must NOT orphan the OP-side
+  /// client and mint a replacement:
+  ///
+  /// - `software_statement` (RFC 7591 §2.3) and `jwks` — re-signed / rotated on
+  ///   their own schedule, frequently once per call; folding them in would
+  ///   re-register on every launch.
+  /// - `client_name`, `logo_uri`, `contacts`, `policy_uri`, `tos_uri` and every
+  ///   other purely descriptive member — RFC 7592 §2.2 update is the remedy for
+  ///   those, not re-registration.
+  /// - `token_endpoint_auth_method` — the OP's echoed value is what drives the
+  ///   credentials, and a response the manager cannot run as is already caught
+  ///   by the conversion check on the read path.
+  static String _clientRegistrationFingerprintOf(
+    OidcClientRegistrationRequest effectiveRequest,
+  ) {
+    final json = effectiveRequest.toMap();
+    List<String>? sorted(Iterable<Object?>? values) => values == null
+        ? null
+        : (values.map((e) => e.toString()).toList()..sort());
+    List<String>? sortedUris(Iterable<Object?>? values) => values == null
+        ? null
+        : (values
+              .map(
+                (e) => _canonicalRedirectUriForComparison(
+                  e is Uri ? e : Uri.parse(e.toString()),
+                ),
+              )
+              .toList()
+            ..sort());
+    return jsonEncode({
+      'redirect_uris': sortedUris(json['redirect_uris'] as List?),
+      'post_logout_redirect_uris': sortedUris(
+        json['post_logout_redirect_uris'] as List?,
+      ),
+      'scope': sorted(
+        (json[OidcConstants_AuthParameters.scope] as String?)?.split(' '),
+      ),
+      'grant_types': sorted(json['grant_types'] as List?),
+      'response_types': sorted(json['response_types'] as List?),
+      'application_type': json['application_type'] as String?,
+    });
+  }
+
+  /// The staleness fingerprint of the registration request this manager would
+  /// send to [metadata]'s provider right now.
+  ///
+  /// Invokes [OidcDynamicClientRegistrationSettings.buildRequest] exactly once;
+  /// the value it is compared against is not recomputed but read back from the
+  /// store, where it was written at registration time.
+  @visibleForTesting
+  static String buildClientRegistrationFingerprint(
+    OidcUserManagerSettings settings,
+    OidcProviderMetadata metadata,
+  ) {
+    final dcr = settings.dynamicClientRegistration;
+    if (dcr == null) {
+      throw const OidcException(
+        'Cannot fingerprint a client registration: '
+        '`OidcUserManagerSettings.dynamicClientRegistration` is null.',
+      );
+    }
+    return _clientRegistrationFingerprintOf(
+      _applyClientRegistrationDefaults(
+        dcr.buildRequest(metadata),
+        settings,
+        dcr,
+      ),
+    );
+  }
+
+  OidcClientRegistrationResponse? _clientRegistration;
+
+  /// The RFC 7591 §3.2.1 registration this manager is running as — restored
+  /// from the store or issued during [init]. Null when
+  /// [OidcUserManagerSettings.dynamicClientRegistration] is disabled.
+  ///
+  /// Carries `registration_client_uri` / `registration_access_token` for RFC
+  /// 7592 client management via [OidcEndpoints] — which is how an app performs
+  /// every operation [ensureClientRegistration] lists as a non-goal.
+  ///
+  /// It does not move once [init] has resolved it: this is the identity every
+  /// request the manager sends is built from, for the manager's whole life.
+  OidcClientRegistrationResponse? get clientRegistration => _clientRegistration;
+
+  @protected
+  String clientRegistrationStoreKey(Uri issuer) =>
+      '$clientRegistrationKeyPrefix$issuer';
+
+  /// The issuer the registration is keyed by. Throws when it cannot be
+  /// resolved, rather than risk cross-issuer credential reuse.
+  Uri _requireClientRegistrationIssuer() =>
+      currentDiscoveryDocument?.issuer ??
+      _clientRegistrationIssuerFromDiscoveryUri() ??
+      logAndThrow(
+        'Dynamic client registration is enabled but neither the discovery '
+        "document's `issuer` nor an issuer derivable from discoveryDocumentUri "
+        'is available to key the persisted registration by.',
+      );
+
+  /// RFC 7592 §3 members that are bearer credentials for the client
+  /// configuration endpoint, not protocol values.
+  static const _managementCredentialMembers = {
+    'registration_access_token',
+    'registration_client_uri',
+  };
+
+  /// The issuer implied by [discoveryDocumentUri], or null.
+  ///
+  /// The fallback must yield the ISSUER, never the discovery URL itself. The
+  /// write path always runs with [currentDiscoveryDocument] loaded, so it keys
+  /// on the issuer; a caller that runs before init -- [forgetClientRegistration]
+  /// is the one that matters -- would otherwise key on
+  /// `https://op/.well-known/openid-configuration` and address a record that
+  /// was never written there, removing nothing and reporting success.
+  ///
+  /// Returns null rather than guessing when the URL is not the §4.1 shape:
+  /// deleting under a key the write path would never produce is worse than
+  /// saying the issuer is unknown.
+  Uri? _clientRegistrationIssuerFromDiscoveryUri() {
+    final uri = discoveryDocumentUri;
+    if (uri == null) {
+      return null;
+    }
+    return OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(uri);
+  }
+
+  /// Swaps in the registered identity: sets [clientRegistration] and
+  /// [clientCredentials].
+  ///
+  /// Only ever called with credentials that were already derived by
+  /// [clientCredentialsForRegistration] — the conversion is a validation step
+  /// that must happen (and be able to fail) BEFORE anything is stored or
+  /// swapped, so it is not repeated here.
+  void _applyClientRegistration(
+    OidcClientRegistrationResponse response, {
+    required OidcClientAuthentication credentials,
+  }) {
+    clientCredentials = credentials;
+    _clientRegistration = response;
+  }
+
+  /// Converts a registration [response] into the credentials this manager would
+  /// run as, rejecting one this platform must not accept.
+  ///
+  /// On web the client MUST be public: `OidcStoreNamespace.secureTokens` has no
+  /// real secret-storage primitive in a browser (see `OidcDefaultStore`), so a
+  /// `client_secret` — and the long-lived RFC 7592 `registration_access_token`
+  /// beside it — would land in `localStorage`, readable by any injected script
+  /// (OAuth 2.0 for Browser-Based Apps §6.1: browser-based apps "are considered
+  /// public clients" and cannot keep a secret). Refusing loudly beats storing
+  /// it: the app can then register a public client, or move the confidential
+  /// client behind a backend.
+  @protected
+  OidcClientAuthentication clientCredentialsForRegistration(
+    OidcClientRegistrationResponse response,
+  ) {
+    if (isWeb && response.clientSecret != null) {
+      logAndThrow(
+        'The provider issued a client_secret to a web client. A browser app '
+        'cannot keep one: it would be persisted in localStorage, readable by '
+        'any injected script (OAuth 2.0 for Browser-Based Apps §6.1). Register '
+        'a public client instead (the manager already asks for '
+        'token_endpoint_auth_method "none" on web), or keep the confidential '
+        'client on a backend.',
+      );
+    }
+    return OidcClientAuthentication.fromRegistrationResponse(
+      response,
+      preferredMethod:
+          settings.dynamicClientRegistration?.preferredTokenEndpointAuthMethod,
+    );
+  }
+
+  /// Whether [response]'s issued `client_secret` is past its expiry.
+  ///
+  /// RFC 7591 §3.2.1: `client_secret_expires_at` of 0 means the secret NEVER
+  /// expires. [OidcClientRegistrationResponse.clientSecretExpiresAt] maps that
+  /// same 0 to the Unix epoch, which is always in the past — so the
+  /// never-expires case MUST be excluded before the comparison, or every such
+  /// client would look expired on every launch.
+  bool _clientSecretHasExpired(OidcClientRegistrationResponse response) {
+    if (response.clientSecretNeverExpires) {
+      return false;
+    }
+    final expiresAt = response.clientSecretExpiresAt;
+    return expiresAt != null && expiresAt.isBefore(clock.now().toUtc());
+  }
+
+  /// The scope this client is actually REGISTERED for, falling back to
+  /// [OidcUserManagerSettings.scope] when dynamic registration is off or the OP
+  /// echoed nothing back.
+  ///
+  /// RFC 7591 §3.2.1 lets the authorization server replace any requested
+  /// metadata with values it considers suitable and tells clients to check the
+  /// response, so a `scope` the OP narrowed at registration time is what later
+  /// requests must ask for — keep asking for the original set and the very
+  /// first authorization request fails.
+  @protected
+  List<String> get effectiveScope {
+    final registered = _clientRegistration?.scope;
+    if (registered == null) {
+      return settings.scope;
+    }
+    final values = registered.split(' ').where((e) => e.isNotEmpty).toList();
+    return values.isEmpty ? settings.scope : values;
+  }
+
+  /// The redirect uri this client is actually REGISTERED for (same RFC 7591
+  /// §3.2.1 substitution rule as [effectiveScope]).
+  ///
+  /// [OidcUserManagerSettings.redirectUri] wins whenever the OP registered it,
+  /// so apps that register several uris keep the one they configured; only a
+  /// server that substituted something else redirects this to its value.
+  ///
+  /// The match is RFC 8252 §7.3 loopback-port-insensitive: a desktop app whose
+  /// loopback listener binds an ephemeral port would otherwise never match the
+  /// port it registered with, and this would send the authorization request to
+  /// a port nothing is listening on. The uri returned is still the CONFIGURED
+  /// one, so the live port is what the OP redirects to — which §7.3 requires
+  /// the OP to allow.
+  @protected
+  Uri get effectiveRedirectUri {
+    final registered = _clientRegistration?.redirectUris;
+    if (registered == null || registered.isEmpty) {
+      return settings.redirectUri;
+    }
+    return _registersUri(registered, settings.redirectUri)
+        ? settings.redirectUri
+        : registered.first;
+  }
+
+  /// Whether [registered] contains [candidate], comparing loopback `http` uris
+  /// without their port (RFC 8252 §7.3) and everything else verbatim (RFC 3986
+  /// §6.2.1 Simple String Comparison).
+  static bool _registersUri(List<Uri> registered, Uri candidate) {
+    final wanted = _canonicalRedirectUriForComparison(candidate);
+    return registered.any(
+      (e) => _canonicalRedirectUriForComparison(e) == wanted,
+    );
+  }
+
+  /// The post-logout redirect uri this client is actually REGISTERED for (same
+  /// RFC 7591 §3.2.1 substitution rule as [effectiveRedirectUri]).
+  ///
+  /// OpenID Connect RP-Initiated Logout 1.0 §3 requires the
+  /// `post_logout_redirect_uri` sent to the `end_session_endpoint` to have been
+  /// registered, so an OP that normalised what it registered rejects every
+  /// end-session request built from the raw setting.
+  ///
+  /// Null stays null: RP-Initiated Logout 1.0 §2 makes the parameter OPTIONAL,
+  /// and an app that configured none is asking for no return trip — inventing
+  /// one from the registration would turn its logout into a state-carrying
+  /// flow that waits for a redirect back.
+  @protected
+  Uri? get effectivePostLogoutRedirectUri {
+    final configured = settings.postLogoutRedirectUri;
+    if (configured == null) {
+      return null;
+    }
+    final registered = _clientRegistration?.postLogoutRedirectUris;
+    if (registered == null || registered.isEmpty) {
+      return configured;
+    }
+    return _registersUri(registered, configured)
+        ? configured
+        : registered.first;
+  }
+
+  /// Reads + validates the persisted record for [issuer], returning it together
+  /// with why (if at all) it is stale, or null when there is nothing usable.
+  ///
+  /// This method NEVER mutates the store. Every failure — an unreadable store,
+  /// an unparseable value, a record with no `client_id`, one that cannot become
+  /// [OidcClientAuthentication] — degrades to the same thing: a CACHE MISS that
+  /// leaves the key exactly as it was. Three consequences, all deliberate:
+  ///
+  /// - An unreadable store is not an empty store. An Android
+  ///   `KeyPermanentlyInvalidatedException` after a biometric re-enrolment, or
+  ///   an iOS keychain still locked at a background launch, must not be
+  ///   answered by deleting the only copy of the `client_id` and of the RFC
+  ///   7592 §3 `registration_access_token`. That would permanently orphan the
+  ///   OP-side client to fix a condition that clears on its own.
+  /// - Deleting before a replacement exists turns one failed POST (an offline
+  ///   launch) into a permanently lost registration. The replacement overwrites
+  ///   the same key when — and only when — it arrives.
+  /// - It is what makes the ONE-remove-call-site invariant true: the only
+  ///   deletion in the whole DCR path is [forgetClientRegistration], which an
+  ///   app calls explicitly.
+  Future<_OidcCachedClientRegistration?> _readCachedClientRegistration(
+    Uri issuer,
+    OidcProviderMetadata metadata,
+  ) async {
+    final key = clientRegistrationStoreKey(issuer);
+    final String? raw;
+    try {
+      raw = await store.get(
+        OidcStoreNamespace.secureTokens,
+        key: key,
+        managerId: id,
+      );
+    } on Object catch (e, st) {
+      logger.warning(
+        'The client registration at key: $key could not be READ (a locked '
+        'keychain, an invalidated key). Treating it as a cache miss and '
+        'leaving the key untouched — an unreadable store is not an empty one.',
+        e,
+        st,
+      );
+      return null;
+    }
+    if (raw == null) {
+      return null;
+    }
+    final OidcClientRegistrationResponse response;
+    final String? issuedFor;
+    try {
+      final record = jsonDecode(raw) as Map<String, dynamic>;
+      response = OidcClientRegistrationResponse.fromJson(
+        record[_recordResponseMember] as Map<String, dynamic>,
+      );
+      issuedFor = record[_recordFingerprintMember] as String?;
+    } on Object catch (e, st) {
+      logger.warning(
+        'Found a client registration record at key: $key, but '
+        "couldn't parse it. Registering anew; the bad value is left in place "
+        'and will be overwritten by the replacement.',
+        e,
+        st,
+      );
+      return null;
+    }
+    if (response.clientId == null) {
+      logger.warning(
+        'The client registration record at key: $key has no client_id; '
+        'registering anew.',
+      );
+      return null;
+    }
+    final OidcClientAuthentication credentials;
+    try {
+      credentials = clientCredentialsForRegistration(response);
+    } on Object catch (e, st) {
+      logger.warning(
+        'The client registration record at key: $key cannot be converted into '
+        'client credentials; registering anew.',
+        e,
+        st,
+      );
+      return null;
+    }
+    if (_clientSecretHasExpired(response)) {
+      logger.info(
+        'The client registration record at key: $key has an expired '
+        'client_secret; registering anew.',
+      );
+      return (
+        response: response,
+        credentials: credentials,
+        staleness: _OidcClientRegistrationStaleness.secretExpired,
+      );
+    }
+    // The OP registered this client for the `redirect_uris` / `scope` (and the
+    // grant/response types, and the application_type) that were current when it
+    // was issued. An app update that changes any of them leaves this client
+    // authenticating against OP-side values it will now be rejected for — a
+    // permanent `invalid_redirect_uri` with no path back. Re-registering costs
+    // one POST; silently running as a stale client costs the whole login.
+    final expectedFingerprint = buildClientRegistrationFingerprint(
+      settings,
+      metadata,
+    );
+    if (issuedFor != expectedFingerprint) {
+      logger.info(
+        'The client registration record at key: $key was issued for different '
+        'metadata (redirect uris / post logout redirect uris / scope / grant '
+        'types / response types / application type); registering anew.',
+      );
+      return (
+        response: response,
+        credentials: credentials,
+        staleness: _OidcClientRegistrationStaleness.superseded,
+      );
+    }
+    return (
+      response: response,
+      credentials: credentials,
+      staleness: _OidcClientRegistrationStaleness.current,
+    );
+  }
+
+  /// Ensures [clientCredentials] are the dynamically-registered ones, reusing
+  /// the persisted record when one is still usable and registering at the
+  /// discovery document's `registration_endpoint` otherwise. No-op when DCR is
+  /// disabled. Requires [currentDiscoveryDocument] to be loaded.
+  ///
+  /// Runs at most ONCE per manager: [init] is memoized and this returns
+  /// immediately once a registration is applied. That is the whole lifecycle —
+  /// the identity resolved here is served verbatim to every later request and
+  /// is never re-derived.
+  ///
+  /// ## Non-goals
+  ///
+  /// Each of these is a capability the manager deliberately does not AUTOMATE.
+  /// None of them is unavailable to apps: the full RFC 7592 client-management
+  /// surface already ships as explicit calls on [OidcEndpoints], and
+  /// [clientRegistration] hands over the `registration_client_uri` and
+  /// `registration_access_token` they need.
+  ///
+  /// - **No mid-session `client_secret` rotation.** RFC 7592 App. A.1: "the
+  ///   authorization server decides the frequency of the credential rotation
+  ///   and not the client" — the §2.1 read is an OP-driven affordance, not a
+  ///   client obligation, and an OP that conformantly returns the registration
+  ///   verbatim leaves a client-driven rotation loop with nothing to make
+  ///   progress on. Against an OP that DOES rotate on a schedule the session
+  ///   breaks at expiry with a typed failure; the app's handler is
+  ///   [OidcEndpoints.readClientConfiguration], or [forgetClientRegistration]
+  ///   followed by a fresh `init()`.
+  /// - **No automatic re-registration when the OP disowns the client.** RFC
+  ///   6749 §5.2 makes `invalid_client` three-way ambiguous ("unknown client,
+  ///   no client authentication included, or unsupported authentication
+  ///   method") and OpenID Connect Registration §4.4 forbids the 404 that would
+  ///   disambiguate it, so there is no reliable trigger to automate on. The
+  ///   app's handler is `catch` → [forgetClientRegistration] → retry, or
+  ///   [OidcEndpoints.registerClient] driven directly.
+  /// - **No RFC 7592 `PUT`/`DELETE`, and no orphan tracking or reaping.** RFC
+  ///   7591 §5 assigns cleanup of registered-but-unused clients to the
+  ///   authorization server. An app that wants to edit or retire its own
+  ///   OP-side client calls [OidcEndpoints.updateClientConfiguration] (RFC 7592
+  ///   §2.2) or [OidcEndpoints.deleteClientConfiguration] (§2.3) before
+  ///   [forgetClientRegistration].
+  ///
+  /// Every one of those would need DURABLE control state — a retry budget, an
+  /// attempt counter, a rejection verdict, a generation number, a ledger of
+  /// minted clients — and every such measure can be destroyed or reset by the
+  /// very action it gates. There is none here: the store holds exactly one
+  /// immutable record per issuer and nothing else, which is what
+  /// `test/dcr_invariants_test.dart` counts.
+  ///
+  /// If a budget or guard is ever added, the SCOPE it is keyed on MUST be a
+  /// digest of the material the gated action would change, so that a
+  /// no-progress action yields the SAME scope and the guard stays armed. A
+  /// guard keyed on something the gated action rewrites is a live-lock.
+  @protected
+  Future<void> ensureClientRegistration() async {
+    final dcr = settings.dynamicClientRegistration;
+    if (dcr == null) {
+      return;
+    }
+    if (_clientRegistration != null) {
+      return;
+    }
+    final issuer = _requireClientRegistrationIssuer();
+    final metadata = _requireDiscoveryDocumentForRegistration();
+    final cached = await _readCachedClientRegistration(issuer, metadata);
+    if (cached != null &&
+        cached.staleness == _OidcClientRegistrationStaleness.current) {
+      _applyClientRegistration(
+        cached.response,
+        credentials: cached.credentials,
+      );
+      return;
+    }
+    await _registerClient(
+      dcr: dcr,
+      issuer: issuer,
+      metadata: metadata,
+      // A superseded registration is still a WORKING credential, so it is what
+      // this launch keeps running as if the replacement cannot be obtained. An
+      // expired secret is not (the OP retired it), so it is never a fallback.
+      fallback: cached?.staleness == _OidcClientRegistrationStaleness.superseded
+          ? cached
+          : null,
+    );
+  }
+
+  /// Registers a NEW client at the provider's `registration_endpoint` and makes
+  /// it this manager's identity, ignoring whatever is persisted.
+  ///
+  /// The three steps are deliberately distinct and ordered:
+  ///
+  /// 1. CONVERT — a response the manager cannot run as (no `client_id`,
+  ///    `private_key_jwt`, an unknown method, a `client_secret` on web) throws
+  ///    here, before anything is stored or swapped, so it can never become a
+  ///    poisoned cache entry that the next [init] replays.
+  /// 2. PERSIST — overwriting the previous entry at the same key, so there is
+  ///    no window in which neither the old nor the new registration exists.
+  /// 3. APPLY — only once the write landed. RFC 7591 registration is NOT
+  ///    idempotent: running as a client whose identity could not be written
+  ///    down means every later launch mints another one at the OP, unbounded
+  ///    and invisible. Failing loudly is the only honest outcome.
+  ///
+  /// [fallback] is the still-working registration this launch keeps using when
+  /// the POST itself cannot be completed (an offline launch, a 5xx). It covers
+  /// ONLY that transport failure: a response that arrives but cannot be
+  /// converted, or that cannot be persisted, is a real error and is thrown.
+  Future<void> _registerClient({
+    required OidcDynamicClientRegistrationSettings dcr,
+    required Uri issuer,
+    required OidcProviderMetadata metadata,
+    required _OidcCachedClientRegistration? fallback,
+  }) async {
+    // Deliberately NOT `OidcProviderMetadata.resolveEndpoint(...,
+    // useMtlsAliases: settings.useMtlsEndpointAliases)`: registration runs
+    // before the client has any mTLS identity to present.
+    final endpoint = metadata.registrationEndpoint;
+    if (endpoint == null) {
+      logAndThrow(
+        'Dynamic client registration is enabled but the provider at '
+        '"$issuer" advertises no `registration_endpoint` in its discovery '
+        'document. Either disable '
+        '`OidcUserManagerSettings.dynamicClientRegistration`, or supply the '
+        'endpoint via `OidcUserManagerSettings.metadataSeed`.',
+        extra: {
+          OidcConstants_Exception.discoveryDocumentUri: discoveryDocumentUri
+              ?.toString(),
+        },
+      );
+    }
+    final request = _applyClientRegistrationDefaults(
+      dcr.buildRequest(metadata),
+      settings,
+      dcr,
+    );
+    if (isWeb) {
+      // RFC 7591 §2: an omitted `token_endpoint_auth_method` means
+      // `client_secret_basic`, i.e. a CONFIDENTIAL client. A browser app is a
+      // public client (OAuth 2.0 for Browser-Based Apps §6.1) and has nowhere
+      // to keep a secret, so ask for `none` unless the app said otherwise.
+      request.tokenEndpointAuthMethod ??=
+          OidcConstants_ClientAuthenticationMethods.none;
+    }
+    // The fingerprint is taken from the request that is about to be SENT, not
+    // recomputed later: it must describe what the OP actually registered this
+    // client for.
+    final fingerprint = _clientRegistrationFingerprintOf(request);
+    final OidcClientRegistrationResponse response;
+    try {
+      response = await OidcEndpoints.registerClient(
+        registrationEndpoint: endpoint,
+        request: request,
+        initialAccessToken: dcr.initialAccessToken,
+        client: httpClient,
+        headers: dcr.extraHeaders,
+      );
+    } on Object catch (e, st) {
+      if (fallback == null) {
+        rethrow;
+      }
+      logger.warning(
+        'Registering a replacement client at "$endpoint" failed; keeping the '
+        'previously-issued registration (client_id '
+        '"${fallback.response.clientId}") for this session and retrying on a '
+        'later launch.',
+        e,
+        st,
+      );
+      _applyClientRegistration(
+        fallback.response,
+        credentials: fallback.credentials,
+      );
+      return;
+    }
+    final credentials = clientCredentialsForRegistration(response);
+    await _persistClientRegistration(
+      issuer,
+      response,
+      fingerprint: fingerprint,
+    );
+    _applyClientRegistration(response, credentials: credentials);
+  }
+
+  /// The resolved discovery document, which dynamic client registration always
+  /// needs (to build the request against, and to key the registration by).
+  OidcProviderMetadata _requireDiscoveryDocumentForRegistration() =>
+      currentDiscoveryDocument ??
+      logAndThrow(
+        'Dynamic client registration is enabled but the discovery document '
+        'has not been resolved yet; `ensureDiscoveryDocument()` must run '
+        'first.',
+      );
+
+  /// Serializes the ONE immutable record persisted per issuer: the RFC 7591
+  /// §3.2.1 response exactly as the OP returned it, plus the staleness
+  /// fingerprint of the request it was ISSUED FOR.
+  ///
+  /// Both members are written together, in one value, under one key, from
+  /// values already in hand — never merged onto, incremented from, or otherwise
+  /// derived from what the store currently holds. That is invariant 2 (no
+  /// read-modify-write), and it is why [OidcStore] having no compare-and-set
+  /// primitive is not a hazard here: a racing writer can only replace the whole
+  /// record with another whole record, and a torn write can only produce
+  /// garbage that the read path treats as a cache miss.
+  ///
+  /// Nothing else may join it. A counter, a latch, a rejection verdict, a
+  /// generation number or a ledger of minted clients would be durable control
+  /// state that the action it gates can reset — the defect this design exists
+  /// to make unstateable.
+  @visibleForTesting
+  static String encodeClientRegistrationRecord(
+    OidcClientRegistrationResponse response, {
+    required String fingerprint,
+    bool redactManagementCredentials = false,
+  }) => jsonEncode({
+    _recordResponseMember: redactManagementCredentials
+        ? (Map<String, dynamic>.of(response.src)
+            ..removeWhere((k, _) => _managementCredentialMembers.contains(k)))
+        : response.src,
+    _recordFingerprintMember: fingerprint,
+  });
+
+  /// Persists the record for [issuer]. THE ONLY WRITE of the registration key.
+  ///
+  /// A store that cannot take the write (a locked keychain, a full disk) throws
+  /// a typed [OidcException] rather than passing the raw platform error up: the
+  /// caller must not apply a registration it could not record. RFC 7591
+  /// registration is not idempotent, so running as an identity that was never
+  /// written down mints another OP-side client on every launch.
+  Future<void> _persistClientRegistration(
+    Uri issuer,
+    OidcClientRegistrationResponse response, {
+    required String fingerprint,
+  }) async {
+    final key = clientRegistrationStoreKey(issuer);
+    try {
+      await store.set(
+        OidcStoreNamespace.secureTokens,
+        key: key,
+        value: encodeClientRegistrationRecord(
+          response,
+          fingerprint: fingerprint,
+          // The web guard refuses an issued client_secret, but the RFC 7592
+          // members are bearer credentials for the same client and were being
+          // written whole via `response.src`. On web `secureTokens` is
+          // localStorage unless the app supplies FlutterSecureStorage, so any
+          // injected script could read them and take over the registration.
+          // Refusing them costs RFC 7592 management on web, which the manager
+          // does not automate anyway -- the app calls OidcEndpoints directly
+          // and can hold the token itself if it accepts that risk.
+          redactManagementCredentials: isWeb,
+        ),
+        managerId: id,
+      );
+    } on Object catch (e, st) {
+      logAndThrow(
+        'The client registration issued by "$issuer" (client_id '
+        '"${response.clientId}") could not be persisted at key: $key. It is '
+        'NOT applied: RFC 7591 registration is not idempotent, so continuing '
+        'with an identity that was never written down would mint another '
+        'OP-side client on every launch.',
+        error: e,
+        stackTrace: st,
+      );
+    }
+  }
+
+  /// Deletes the persisted client registration for the current issuer. THE ONLY
+  /// REMOVAL of the registration key.
+  ///
+  /// This is the app's escape hatch out of every non-goal listed on
+  /// [ensureClientRegistration]: an OP that rotated the `client_secret` on its
+  /// own schedule, one that deleted or disabled the client, one that re-issued
+  /// it under a new `client_id`. All of them surface as a typed failure from a
+  /// back-channel call; the handler is
+  ///
+  /// ```dart
+  /// // ... catch the OidcException, then:
+  /// await manager.forgetClientRegistration();
+  /// // build a new manager (init() is memoized) and init() it: the next
+  /// // init registers a fresh client.
+  /// ```
+  ///
+  /// Call [OidcEndpoints.deleteClientConfiguration] (RFC 7592 §2.3) with
+  /// [clientRegistration]'s `registration_client_uri` /
+  /// `registration_access_token` FIRST if the OP-side client should be retired
+  /// too — this only forgets it locally, and RFC 7591 §5 leaves cleanup of a
+  /// registered-but-unused client to the authorization server.
+  ///
+  /// Deliberately NOT called by [forgetUser]: the registration is app-instance
+  /// identity, not user identity.
+  ///
+  /// It touches the STORE only. The identity this manager is already running as
+  /// is left exactly as it is, because a manager whose `clientCredentials` were
+  /// swapped out mid-session would have no valid identity to fall back to —
+  /// [init] is memoized and the constructor seed is long gone. Forgetting is
+  /// therefore a decision about the NEXT launch, and that is the only state it
+  /// changes.
+  Future<void> forgetClientRegistration() async {
+    final key = clientRegistrationStoreKey(_requireClientRegistrationIssuer());
+    await store.remove(
+      OidcStoreNamespace.secureTokens,
+      key: key,
+      managerId: id,
+    );
+  }
+
+  /// Cache-only counterpart used by the [OidcInitMode.cacheFirst] path (no
+  /// network). Returns true when DCR is disabled or a usable persisted
+  /// registration was applied; false when the caller must fall back to the
+  /// blocking path.
+  ///
+  /// A stale entry answers false — replacing it needs the network, which this
+  /// path does not have — but it is left on disk, so the blocking path can
+  /// still fall back to it when the replacement cannot be issued.
+  Future<bool> _loadClientRegistrationFromCacheOnly() async {
+    if (settings.dynamicClientRegistration == null) {
+      return true;
+    }
+    if (_clientRegistration != null) {
+      return true;
+    }
+    final issuer = _requireClientRegistrationIssuer();
+    final cached = await _readCachedClientRegistration(
+      issuer,
+      _requireDiscoveryDocumentForRegistration(),
+    );
+    if (cached == null ||
+        cached.staleness != _OidcClientRegistrationStaleness.current) {
+      return false;
+    }
+    _applyClientRegistration(cached.response, credentials: cached.credentials);
+    return true;
+  }
 
   /// Merges [OidcUserManagerSettings.metadataSeed] UNDER [doc] (doc members
   /// override the seed),
@@ -3715,28 +4747,18 @@ abstract class OidcUserManagerBase {
     );
   }
 
-  /// Registers the id_token verification keys with [keyStore] from the current
-  /// [discoveryDocument]'s `jwks_uri` and (for HS* id_tokens) the client secret.
+  /// Registers the current [discoveryDocument]'s `jwks_uri` with [keyStore].
+  ///
+  /// The symmetric HS* key (RFC 7518 §3.2, the `client_secret` octets) is
+  /// deliberately NOT added here: [keyStore] derives it from the CURRENT
+  /// [clientCredentials] on every lookup instead. Adding it eagerly would leave
+  /// the pre-registration seed's secret able to verify id_tokens for the
+  /// manager's whole life, since [JsonWebKeyStore] cannot remove a key.
   @protected
   void setupKeyStore() {
     final jwksUri = currentDiscoveryDocument?.jwksUri;
     if (jwksUri != null) {
       keyStore.addKeySetUrl(jwksUri);
-    }
-    final clientSecret = clientCredentials.clientSecret;
-    if (clientSecret != null) {
-      // RFC 7518 §3.2 / OIDC Core §16.19: HS256/384/512 id_tokens are
-      // MAC-signed with the client_secret octets as the key. Register it as an
-      // `oct` key so symmetric id_token signatures can be verified. Without
-      // this, HS*-signed id_tokens were unverifiable. The extra key is inert
-      // for RS*/ES* tokens (those still verify via the jwks_uri keys above).
-      keyStore.addKey(
-        JsonWebKey.fromJson({
-          'kty': 'oct',
-          'k': base64Url.encode(utf8.encode(clientSecret)).replaceAll('=', ''),
-          'use': 'sig',
-        }),
-      );
     }
   }
 
@@ -3797,6 +4819,11 @@ abstract class OidcUserManagerBase {
       // Blocking / network path (the [OidcInitMode.blockingValidate] semantics,
       // also the fallback when cache-first has nothing to restore).
       await ensureDiscoveryDocument();
+      // Must precede `loadStateResult()` and `loadCachedTokens()`, which
+      // validate `aud` against `clientCredentials.clientId`. (The HS* `oct`
+      // verification key needs no ordering: [keyStore] derives it from the
+      // current credentials at lookup time.)
+      await ensureClientRegistration();
       setupKeyStore();
       await clearUnusedStates();
       if (!await loadLogoutRequests()) {
@@ -3836,6 +4863,16 @@ abstract class OidcUserManagerBase {
     // Need a locally-available discovery document (no network) to build the
     // user; otherwise fall back to the network path.
     if (!await _loadDiscoveryFromCacheOnly()) {
+      return false;
+    }
+    if (!await _loadClientRegistrationFromCacheOnly()) {
+      // Reset the cache-only document so the blocking path re-runs the full
+      // TTL/network discovery logic (`ensureDiscoveryDocument()` returns early
+      // when `currentDiscoveryDocument` is already set). Mirrors the
+      // `restored == null` handling below.
+      if (discoveryDocumentUri != null) {
+        currentDiscoveryDocument = null;
+      }
       return false;
     }
     setupKeyStore();

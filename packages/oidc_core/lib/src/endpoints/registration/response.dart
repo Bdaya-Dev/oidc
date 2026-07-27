@@ -59,6 +59,16 @@ class OidcClientRegistrationResponse extends JsonBasedResponse {
         : null;
   }
 
+  /// Registered post-logout redirection URIs (OpenID Connect RP-Initiated
+  /// Logout 1.0 §3, which requires the `post_logout_redirect_uri` sent to the
+  /// `end_session_endpoint` to appear here).
+  List<Uri>? get postLogoutRedirectUris {
+    final value = src['post_logout_redirect_uris'];
+    return value is List
+        ? value.map((e) => Uri.tryParse(e.toString())).whereType<Uri>().toList()
+        : null;
+  }
+
   /// Registered grant types.
   List<String>? get grantTypes => _stringList('grant_types');
 

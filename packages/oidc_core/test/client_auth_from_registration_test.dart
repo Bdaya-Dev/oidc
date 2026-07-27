@@ -98,6 +98,27 @@ void main() {
     });
 
     test(
+      'no issued client_secret and no server-stated method → a PUBLIC client '
+      '(none), not the client_secret_basic default',
+      () {
+        // RFC 7591 §3.2.1 makes `client_secret` OPTIONAL: an OP may issue a
+        // client_id alone. §2 defines `none` as exactly that case ("the client
+        // is a public client ... and does not have a client secret"), so the
+        // §2 `client_secret_basic` default only describes a client that WAS
+        // issued a secret.
+        final auth = OidcClientAuthentication.fromRegistrationResponse(_resp());
+        expect(
+          auth.location,
+          OidcConstants_ClientAuthenticationMethods.none,
+        );
+        expect(auth.clientId, 'reg-client');
+        expect(auth.clientSecret, isNull);
+        expect(auth.getAuthorizationHeader(), isNull);
+        expect(auth.getBodyParameters(), isNot(contains('client_secret')));
+      },
+    );
+
+    test(
       'preferredMethod overrides the response token_endpoint_auth_method',
       () {
         final auth = OidcClientAuthentication.fromRegistrationResponse(

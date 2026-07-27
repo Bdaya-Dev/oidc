@@ -67,6 +67,24 @@ class OidcConstants_ClientAuthenticationMethods {
   static const selfSignedTlsClientAuth = 'self_signed_tls_client_auth';
 }
 
+/// OpenID Connect Dynamic Client Registration 1.0 §2 `application_type`.
+///
+/// The value constrains which `redirect_uris` the client may register, so it
+/// follows from the uris rather than from the host platform.
+class OidcConstants_ApplicationType {
+  /// The default when `application_type` is omitted. Such a client "MUST only
+  /// register URLs using the `https` scheme as `redirect_uris`; they MUST NOT
+  /// use `localhost` as the hostname".
+  ///
+  /// This is the correct value for a mobile app whose redirect is an
+  /// https App Link / Universal Link, not just for browser apps.
+  static const web = 'web';
+
+  /// A client that "MUST only register `redirect_uris` using custom URI schemes
+  /// or loopback URLs using the `http` scheme".
+  static const native = 'native';
+}
+
 class OidcConstants_ClientAssertionTypes {
   static const jwtBearer =
       'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';

@@ -180,6 +180,7 @@ class OidcUserManagerSettings {
     this.extraRevocationParameters,
     this.extraRevocationHeaders,
     this.useMtlsEndpointAliases = false,
+    this.dynamicClientRegistration,
   });
 
   /// The default scopes
@@ -524,6 +525,16 @@ class OidcUserManagerSettings {
   /// by the platform HTTP layer and is out of scope for this setting, which
   /// only governs endpoint selection.
   final bool useMtlsEndpointAliases;
+
+  /// Enables + configures RFC 7591 Dynamic Client Registration.
+  ///
+  /// When non-null, `init()` registers the client at the discovery document's
+  /// `registration_endpoint` (reusing a previously-persisted registration when
+  /// one exists for this issuer) and swaps
+  /// [OidcUserManagerBase.clientCredentials] to the issued credentials before
+  /// any token/authorization request is built. Null (the default) disables DCR
+  /// and preserves today's behaviour exactly.
+  final OidcDynamicClientRegistrationSettings? dynamicClientRegistration;
 }
 
 ///

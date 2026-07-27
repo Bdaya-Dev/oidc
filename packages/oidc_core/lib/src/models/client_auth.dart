@@ -143,9 +143,14 @@ class OidcClientAuthentication {
   /// Registration response (RFC 7591 §3.2.1 / RFC 7592).
   ///
   /// The method is taken from [preferredMethod] when supplied, otherwise from
-  /// the response's `token_endpoint_auth_method`, otherwise it defaults to
-  /// `client_secret_basic` (RFC 7591 §2). The response's `client_secret` (when
-  /// present) supplies the credential:
+  /// the response's `token_endpoint_auth_method`. When the server states
+  /// neither, the fallback depends on whether a secret was issued: RFC 7591
+  /// §3.2.1 makes `client_secret` OPTIONAL, and §2 defines `none` as exactly
+  /// the no-secret case ("the client is a public client as defined in OAuth
+  /// 2.0, Section 2.1, and does not have a client secret"), so §2's
+  /// `client_secret_basic` default is only reachable for a client that WAS
+  /// issued one. The response's `client_secret` (when present) supplies the
+  /// credential:
   ///
   /// - `none` → [OidcClientAuthentication.none].
   /// - `client_secret_basic` → [OidcClientAuthentication.clientSecretBasic].
@@ -170,11 +175,19 @@ class OidcClientAuthentication {
         'no client_id.',
       );
     }
+    final secret = response.clientSecret;
+    // RFC 7591 §3.2.1 lists `client_secret` as OPTIONAL: an OP may legitimately
+    // issue a client_id alone, which per §2 IS the definition of `none` ("the
+    // client is a public client ... and does not have a client secret").
+    // Applying §2's `client_secret_basic` default to that response would demand
+    // a secret the server deliberately did not issue, so a perfectly valid
+    // public-client registration could never be used.
     final method =
         preferredMethod ??
         response.tokenEndpointAuthMethod ??
-        OidcConstants_ClientAuthenticationMethods.clientSecretBasic;
-    final secret = response.clientSecret;
+        (secret == null
+            ? OidcConstants_ClientAuthenticationMethods.none
+            : OidcConstants_ClientAuthenticationMethods.clientSecretBasic);
 
     String requireSecret() {
       if (secret == null) {

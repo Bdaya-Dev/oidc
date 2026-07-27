@@ -1,3 +1,4 @@
+export 'dynamic_client_registration_settings.dart';
 export 'front_channel_request_options.dart';
 export 'id_token_verification_options.dart';
 export 'platform_options.dart';

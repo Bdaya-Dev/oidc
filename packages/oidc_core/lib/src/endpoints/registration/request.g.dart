@@ -10,6 +10,9 @@ Map<String, dynamic> _$OidcClientRegistrationRequestToJson(
   OidcClientRegistrationRequest instance,
 ) => <String, dynamic>{
   'redirect_uris': ?instance.redirectUris?.map((e) => e.toString()).toList(),
+  'post_logout_redirect_uris': ?instance.postLogoutRedirectUris
+      ?.map((e) => e.toString())
+      .toList(),
   'response_types': ?instance.responseTypes,
   'grant_types': ?instance.grantTypes,
   'application_type': ?instance.applicationType,

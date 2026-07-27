@@ -19,6 +19,7 @@ class OidcClientRegistrationRequest extends JsonBasedRequest {
   ///
   OidcClientRegistrationRequest({
     this.redirectUris,
+    this.postLogoutRedirectUris,
     this.responseTypes,
     this.grantTypes,
     this.applicationType,
@@ -55,6 +56,12 @@ class OidcClientRegistrationRequest extends JsonBasedRequest {
   /// Redirection URI values used by the client.
   @JsonKey(name: 'redirect_uris')
   List<Uri>? redirectUris;
+
+  /// Post-logout redirection URI values used by the client (OpenID Connect
+  /// RP-Initiated Logout 1.0 §3), which requires the `post_logout_redirect_uri`
+  /// sent to the `end_session_endpoint` to have been registered here.
+  @JsonKey(name: 'post_logout_redirect_uris')
+  List<Uri>? postLogoutRedirectUris;
 
   /// OAuth 2.0 response types the client may use.
   @JsonKey(name: 'response_types')
