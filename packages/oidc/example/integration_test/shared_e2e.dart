@@ -449,7 +449,36 @@ Future<void> runOidcConformanceTest(
     logger
       ..info('Module starting. Variant: $variant')
       ..info('Test instance created: $testInstance')
-      ..info('Test Instance ID: $testInstanceId, URL: $url');
+      ..info('Test Instance ID: $testInstanceId, URL: $url')
+      ..info(
+        'Monitoring logs for test instance to wait for ready state: '
+        '$testInstanceId',
+      );
+    final setupStopwatch = Stopwatch()..start();
+    var pollCount = 0;
+    monitorLogsLoop:
+    await for (final logs in monitorTestLogs(
+      dio: dio,
+      instanceId: testInstanceId,
+    )) {
+      pollCount += 1;
+      if (pollCount % 5 == 0) {
+        logger.info(
+          'Still waiting for setup... polls=$pollCount, elapsed=${setupStopwatch.elapsed}.',
+        );
+      }
+      for (final log in logs) {
+        logger.fine('Log: $log');
+        if (log['msg'] == 'Setup Done') {
+          logger.info('Test instance setup done: $testInstanceId');
+          break monitorLogsLoop;
+        }
+      }
+    }
+    setupStopwatch.stop();
+    logger.info(
+      'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
+    );
 
     // The WebFinger modules do NOT issue at the URL above. The suite appends a
     // random per-run suffix to the issuer for exactly these two modules, and
@@ -459,6 +488,12 @@ Future<void> runOidcConformanceTest(
     // Resolved through the library rather than the harness's Dio on purpose.
     // These modules test whether the RELYING PARTY can do WebFinger; a lookup
     // written here would pass while package:oidc still could not.
+    //
+    // It runs AFTER the setup wait, not before: the suite's dispatcher refuses
+    // a WebFinger lookup for a test still in CREATED state ("Please wait for
+    // the test to be in WAITING state"), and every other suite request this
+    // loop makes is already gated behind the same wait -- the manager is lazy,
+    // so its discovery fetch happens at init() below.
     var issuer = url;
     final webFingerIdentifier = webFingerIdentifierFor(
       moduleName: moduleName,
@@ -489,36 +524,7 @@ Future<void> runOidcConformanceTest(
     app_state.managersRx.update((managers) => managers..add(manager));
     app_state.currentManagerRx.$ = manager;
 
-    logger.info(
-      'Monitoring logs for test instance to wait for ready state: $testInstanceId',
-    );
-    final setupStopwatch = Stopwatch()..start();
-    var pollCount = 0;
-    monitorLogsLoop:
-    await for (final logs in monitorTestLogs(
-      dio: dio,
-      instanceId: testInstanceId,
-    )) {
-      pollCount += 1;
-      if (pollCount % 5 == 0) {
-        logger.info(
-          'Still waiting for setup... polls=$pollCount, elapsed=${setupStopwatch.elapsed}.',
-        );
-      }
-      for (final log in logs) {
-        logger.fine('Log: $log');
-        if (log['msg'] == 'Setup Done') {
-          logger.info('Test instance setup done: $testInstanceId');
-          break monitorLogsLoop;
-        }
-      }
-    }
-    setupStopwatch.stop();
-    logger
-      ..info(
-        'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
-      )
-      ..info('Initializing manager for test instance: $testInstanceId');
+    logger.info('Initializing manager for test instance: $testInstanceId');
     await manager.init();
     expect(manager.didInit, true);
     logger.info('Manager initialized');

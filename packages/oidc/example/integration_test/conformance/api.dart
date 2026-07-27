@@ -282,6 +282,23 @@ Future<Map<String, dynamic>> createTestModuleInstance({
   try {
     response = await dio.postUri<Map<String, dynamic>>(uri);
   } on DioException catch (e) {
+    // `modifiedCount=0` from DBTestPlanService.updateTestPlanWithModule is the
+    // shape that matters here: it is a Mongo update that matched NOTHING, so
+    // the suite could not attach the module to the plan. That is not a
+    // validation complaint about a missing dimension -- it means the
+    // VariantSelection we sent is not the one the plan recorded for this
+    // module. Guessing which dimension differs has cost three CI round trips
+    // already, so on failure dump what the plan actually stored and compare.
+    var planDump = '(plan could not be read)';
+    try {
+      final plan = await getPlan(dio: dio, planId: planId);
+      final modules = plan['modules'];
+      planDump = const JsonEncoder.withIndent(
+        '  ',
+      ).convert({'planVariant': plan['variant'], 'modules': modules});
+    } on Object catch (inner) {
+      planDump = '(plan fetch threw: $inner)';
+    }
     throw StateError(
       'Creating a module instance for "$moduleName" failed with status '
       '${e.response?.statusCode}.\n'
@@ -291,7 +308,9 @@ Future<Map<String, dynamic>> createTestModuleInstance({
       'response_type=$responseType response_mode=$responseMode'
       '${extraVariant == null ? '' : ' extra=$extraVariant'}\n'
       'Note this endpoint takes the variant PER MODULE, and a plan that '
-      'rejects a dimension at plan level may reject it here too.',
+      'rejects a dimension at plan level may reject it here too.\n'
+      'PLAN AS STORED BY THE SUITE (compare its module variant to the one '
+      'sent above):\n$planDump',
     );
   }
   return response.data ?? {};
