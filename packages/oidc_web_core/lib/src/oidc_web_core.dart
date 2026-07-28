@@ -5,6 +5,7 @@ import 'dart:js_interop';
 
 import 'package:collection/collection.dart';
 import 'package:logging/logging.dart';
+import 'package:meta/meta.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:web/web.dart';
 
@@ -96,6 +97,42 @@ class OidcWebCore {
   }
 
   static const _webWindowKey = 'web_window';
+
+  /// Describes what the authorization window is actually doing, for the error
+  /// raised when a redirect never arrives.
+  ///
+  /// `flow_timeout` alone cannot tell a popup the browser refused to open from
+  /// one that opened and never navigated from a provider that rejected the
+  /// request -- three different bugs, one message. The same-origin policy
+  /// answers the first fork for free: reading `location.href` on a window that
+  /// navigated CROSS-ORIGIN throws, while one still sitting on `about:blank`
+  /// reads back fine and proves the navigation never happened.
+  ///
+  /// Never throws. It runs inside an error path, and a probe that can fail
+  /// would replace the diagnosis with a worse failure.
+  @visibleForTesting
+  static String describeAuthWindow(Window authWindow) {
+    try {
+      if (authWindow.closed) {
+        return 'the auth window is closed';
+      }
+      final href = authWindow.location.href;
+      if (href.isEmpty || href == 'about:blank') {
+        return 'the auth window never navigated (still at "$href") -- the '
+            'browser did not follow location.replace, so the provider was '
+            'never asked';
+      }
+      return 'the auth window is same-origin at "$href" -- it did not reach '
+          'the provider';
+    } on Object catch (e) {
+      // Reading location across origins throws, and that is the HEALTHY shape:
+      // the window did navigate to the provider, so the redirect back is what
+      // went missing.
+      return 'the auth window navigated cross-origin (its location is walled '
+          'off: $e) -- it reached the provider, and the redirect back is what '
+          'did not arrive';
+    }
+  }
 
   HTMLElement _getBody() => window.document.body!;
 
@@ -207,6 +244,14 @@ class OidcWebCore {
               'please prepare the window in $_webWindowKey parameter first.',
             );
           }
+          // Logged before the navigation, not after: if the browser refuses
+          // the popup or the tab goes nowhere, this is the only record that
+          // the request was even formed, and what it asked for. 75 conformance
+          // modules failed on this line's far side with no way to tell a
+          // malformed request from a refused one. An authorization request
+          // carries no credentials -- it is handed to the browser in the clear
+          // by construction -- so logging it whole costs nothing.
+          _logger.fine('Navigating the auth window to: $uri');
           preparedWindow.location.replace(uri.toString());
           preparedWindowClosedTimer = Timer.periodic(_windowCloseCheckInterval, (
             _,
@@ -251,11 +296,24 @@ class OidcWebCore {
                     // this library promises OidcException -- letting a bare
                     // TimeoutException out would slip past an app catching
                     // exactly what the docs tell it to catch.
-                    onTimeout: () => throw OidcException(
-                      'The authentication flow timed out after '
-                      '$flowTimeout seconds without a redirect.',
-                      extra: const {'reason': 'flow_timeout'},
-                    ),
+                    onTimeout: () {
+                      // Ask the window what it did. Without this the message
+                      // is identical whether the browser refused the popup,
+                      // the tab never navigated, the provider rejected the
+                      // request, or the user walked away -- four bugs, one
+                      // string, which is how 0/75 conformance modules failed
+                      // for a whole investigation without naming a cause.
+                      final windowState = describeAuthWindow(preparedWindow);
+                      throw OidcException(
+                        'The authentication flow timed out after '
+                        '$flowTimeout seconds without a redirect. '
+                        '$windowState.',
+                        extra: {
+                          'reason': 'flow_timeout',
+                          'auth_window': windowState,
+                        },
+                      );
+                    },
                   );
           } finally {
             // Also runs when the flow throws (window closed, or timed out).
