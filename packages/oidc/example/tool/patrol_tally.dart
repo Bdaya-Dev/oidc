@@ -74,8 +74,8 @@ class PatrolTallyResult {
 
   /// `successful + failed + skipped` -- the tests patrol actually placed in a
   /// bucket.
-  int? get accountedFor => (successful == null || failed == null ||
-          skipped == null)
+  int? get accountedFor =>
+      (successful == null || failed == null || skipped == null)
       ? null
       : successful! + failed! + skipped!;
 
@@ -168,10 +168,7 @@ PatrolTallyResult reconcilePatrolTally(
     }
     if (line.startsWith(_startMarker)) {
       started.add(
-        _normalizeName(
-          line.substring(_startMarker.length),
-          hasFileToken: true,
-        ),
+        _normalizeName(line.substring(_startMarker.length), hasFileToken: true),
       );
     } else if (line.startsWith(_successMarker)) {
       reported.add(
@@ -241,8 +238,8 @@ PatrolTallyResult reconcilePatrolTally(
       '(patrol_single_test_entry.dart:33), so it is invisible in the summary '
       'and `Failed: 0` masks it. Treated as a FAILURE here.'
       '${names.isEmpty ? ' patrol printed no lifecycle markers, so the '
-              'name(s) could not be recovered; re-run with the test '
-              'lifecycle visible.' : '\n  Lost: ${names.join('\n  Lost: ')}'}',
+                'name(s) could not be recovered; re-run with the test '
+                'lifecycle visible.' : '\n  Lost: ${names.join('\n  Lost: ')}'}',
     );
   } else if (residue < 0) {
     result.errors.add(
