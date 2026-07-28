@@ -1055,9 +1055,17 @@ void main() {
     );
 
     test(
-      'preferredTokenEndpointAuthMethod overrides the method the OP echoed '
-      'back',
+      'the REGISTERED method wins over preferredTokenEndpointAuthMethod — OIDC '
+      'Core §3.1.3.1 / §12.1 make it a MUST',
       () async {
+        // This asserted the opposite until the spec was read. OIDC Core
+        // §3.1.3.1: "If the Client is a Confidential Client, then it MUST
+        // authenticate to the Token Endpoint using the authentication method
+        // registered for its client_id", and §12.1 repeats it for refresh. A
+        // caller preference that overrode the registered method would
+        // authenticate one way against a client_id registered another way,
+        // which a conformant OP rejects. The knob still decides when the OP
+        // states nothing -- see the next test.
         final log = <_Rec>[];
         final store = await _seededStore();
         final manager = _manager(
@@ -1066,6 +1074,41 @@ void main() {
             log,
             registration: (hit, url) =>
                 _registrationBody(authMethod: 'client_secret_basic'),
+          ),
+          settings: _settings(
+            dcr: _dcr(preferredTokenEndpointAuthMethod: 'client_secret_post'),
+          ),
+        );
+
+        await manager.init();
+        expect(await manager.loginDeviceCodeFlow(), isNotNull);
+
+        final tokenReq = log.to('/token').single;
+        // client_secret_basic, as REGISTERED: credentials ride in the header
+        // and never in the form.
+        expect(
+          tokenReq.headers.keys.map((k) => k.toLowerCase()),
+          contains('authorization'),
+        );
+        expect(tokenReq.form.containsKey('client_secret'), isFalse);
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'preferredTokenEndpointAuthMethod still decides when the OP states no '
+      'token_endpoint_auth_method',
+      () async {
+        // RFC 7591 §2 would otherwise default an OP-silent registration to
+        // client_secret_basic unaided; the preference is the caller's say in
+        // exactly that gap, where nothing was registered to contradict it.
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(
+            log,
+            registration: (hit, url) => _registrationBody(authMethod: null),
           ),
           settings: _settings(
             dcr: _dcr(preferredTokenEndpointAuthMethod: 'client_secret_post'),

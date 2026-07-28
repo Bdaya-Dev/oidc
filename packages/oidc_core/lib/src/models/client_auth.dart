@@ -142,9 +142,14 @@ class OidcClientAuthentication {
   /// Derives a ready-to-use client authentication from a Dynamic Client
   /// Registration response (RFC 7591 §3.2.1 / RFC 7592).
   ///
-  /// The method is taken from [preferredMethod] when supplied, otherwise from
-  /// the response's `token_endpoint_auth_method`. When the server states
-  /// neither, the fallback depends on whether a secret was issued: RFC 7591
+  /// The method is the response's `token_endpoint_auth_method` whenever the
+  /// server states one. OIDC Core §3.1.3.1 and §12.1 both say a Client "MUST
+  /// authenticate to the Token Endpoint using the authentication method
+  /// registered for its `client_id`", so a local preference cannot override
+  /// what the OP registered — [preferredMethod] applies only when the response
+  /// states nothing, which is where RFC 7591 §2's default would otherwise
+  /// decide unaided. When neither is stated the fallback depends on whether a
+  /// secret was issued: RFC 7591
   /// §3.2.1 makes `client_secret` OPTIONAL, and §2 defines `none` as exactly
   /// the no-secret case ("the client is a public client as defined in OAuth
   /// 2.0, Section 2.1, and does not have a client secret"), so §2's
@@ -183,8 +188,13 @@ class OidcClientAuthentication {
     // a secret the server deliberately did not issue, so a perfectly valid
     // public-client registration could never be used.
     final method =
-        preferredMethod ??
+        // The REGISTERED method wins. OIDC Core §3.1.3.1 / §12.1: the client
+        // "MUST authenticate to the Token Endpoint using the authentication
+        // method registered for its client_id". Letting a caller preference
+        // override it authenticates one way against a client_id registered
+        // another way, which a conformant OP rejects.
         response.tokenEndpointAuthMethod ??
+        preferredMethod ??
         (secret == null
             ? OidcConstants_ClientAuthenticationMethods.none
             : OidcConstants_ClientAuthenticationMethods.clientSecretBasic);

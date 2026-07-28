@@ -119,8 +119,15 @@ void main() {
     );
 
     test(
-      'preferredMethod overrides the response token_endpoint_auth_method',
+      'the response token_endpoint_auth_method beats preferredMethod — OIDC '
+      'Core §3.1.3.1 makes the REGISTERED method a MUST',
       () {
+        // The inverse of what this asserted before. OIDC Core §3.1.3.1: "If
+        // the Client is a Confidential Client, then it MUST authenticate to
+        // the Token Endpoint using the authentication method registered for
+        // its client_id" (§12.1 repeats it for refresh). Honouring a local
+        // preference over the registered value authenticates one way against a
+        // client_id registered another, which a conformant OP rejects.
         final auth = OidcClientAuthentication.fromRegistrationResponse(
           _resp(
             clientSecret: 's3cr3t',
@@ -131,10 +138,25 @@ void main() {
         );
         expect(
           auth.location,
-          OidcConstants_ClientAuthenticationMethods.clientSecretPost,
+          OidcConstants_ClientAuthenticationMethods.clientSecretBasic,
         );
       },
     );
+
+    test('preferredMethod decides when the response states none', () {
+      // RFC 7591 §2 would otherwise default an OP-silent registration to
+      // client_secret_basic unaided. Nothing was registered to contradict the
+      // caller here, so the preference is not overriding anything.
+      final auth = OidcClientAuthentication.fromRegistrationResponse(
+        _resp(clientSecret: 's3cr3t'),
+        preferredMethod:
+            OidcConstants_ClientAuthenticationMethods.clientSecretPost,
+      );
+      expect(
+        auth.location,
+        OidcConstants_ClientAuthenticationMethods.clientSecretPost,
+      );
+    });
 
     test('throws when a secret-based method has no client_secret', () {
       expect(
