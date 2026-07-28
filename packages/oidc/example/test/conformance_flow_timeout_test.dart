@@ -97,24 +97,42 @@ void main() {
   // `successfulLogins > 0` assertion -- which names the plan and dumps the
   // per-module suite status -- instead of being killed with no output.
   group('the web budget lets the largest plan finish inside Playwright cap', () {
-    // patrol_plus/web_runner/playwright.config.ts:66.
-    const playwrightPerTestCapSeconds = 600;
+    // The cap the web job PASSES, not Playwright's 600s default
+    // (patrol_plus/web_runner/playwright.config.ts:66): the job runs
+    // `patrol test --web-timeout 900000`. Keep the two in step -- this
+    // constant is the only thing tying the arithmetic to that flag.
+    const playwrightPerTestCapSeconds = 900;
     // shared_e2e.dart:313-322 lists the module counts; Hybrid is the largest.
     const largestPlanModules = 48;
-    // Plan creation, per-module instance creation and the setup poll loop all
-    // run outside the browser flow, so the flow timeouts cannot be allowed to
-    // consume the whole cap.
-    const nonFlowOverheadSeconds = 60;
+    // Module-instance creation, the setup poll loop, the suite-status fetch and
+    // the per-module log fetch all run OUTSIDE the browser flow, and the
+    // harness pays them once PER MODULE -- not once per plan. Charging them
+    // once was the first version of this assertion, and it let 48 x 10 + 60 =
+    // 540 read as fitting while the real cost was 686s.
+    //
+    // 4.3s measured on the eight back-channel modules of
+    // oidcc-client-back-channel-logout-rp-basic (linux, commit 05b0c84): each
+    // took 34-35s wall against flowTimeoutSeconds: 30. Rounded UP, because
+    // web pays more than linux for the same work -- its suite traffic goes
+    // through a CORS proxy (shared_e2e.dart builds the Dio baseUrl through
+    // cors-proxy.bdaya-dev.workers.dev when kIsWeb).
+    const perModuleOverheadSeconds = 5;
+    // Plan creation and the final aggregate, paid once.
+    const perPlanOverheadSeconds = 20;
 
     test('a plan whose every module times out still fits', () {
       final webTimeout = options.web.flowTimeoutSeconds;
       expect(webTimeout, isNotNull);
+      final worstCase =
+          largestPlanModules * (webTimeout! + perModuleOverheadSeconds) +
+          perPlanOverheadSeconds;
       expect(
-        largestPlanModules * webTimeout! + nonFlowOverheadSeconds,
+        worstCase,
         lessThanOrEqualTo(playwrightPerTestCapSeconds),
         reason:
-            'web: $largestPlanModules modules x ${webTimeout}s = '
-            '${largestPlanModules * webTimeout}s exceeds the '
+            'web: $largestPlanModules modules x '
+            '(${webTimeout}s flow + ${perModuleOverheadSeconds}s overhead) + '
+            '${perPlanOverheadSeconds}s = ${worstCase}s exceeds the '
             '${playwrightPerTestCapSeconds}s Playwright per-test cap, so a '
             'plan in which the redirects do not arrive is KILLED mid-plan '
             'rather than failing. A killed test emits no closing patrol entry, '

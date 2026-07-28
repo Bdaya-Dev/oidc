@@ -684,7 +684,7 @@ jobs:
     continue-on-error: true
     # Patrol web runs through Playwright (patrol_cli activation + npx playwright
     # install + the web build + the live conformance flow). The healthy run is
-    # ~25m30s, so 30 left no room: with --web-timeout 600000 per test and
+    # ~25m30s, so 30 left no room: with --web-timeout 900000 per test and
     # --web-workers 1, two tests hitting the cap exceed the job budget and the
     # step is killed BEFORE the tally reconciler prints which tests vanished --
     # losing exactly the diagnosis it exists to produce. 45 keeps the
@@ -756,7 +756,7 @@ jobs:
             -d chrome \
             --web-headless true \
             --web-workers 1 \
-            --web-timeout 600000 \
+            --web-timeout 900000 \
             --show-flutter-logs \
             --verbose \
             --dart-define=CI=true \
