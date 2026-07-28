@@ -436,6 +436,44 @@ void main() {
   // naming authority for private-use URI scheme redirects, only a single slash
   // ('/') appears after the scheme component" -- so adding an authority to
   // satisfy the suite would break the BCP this package exists to conform to.
+  // The Dynamic plan pins request_type=request_uri for ALL of its modules, and
+  // the suite RESOLVES that by fetching the URI:
+  //
+  //   OIDCCClientDynamicTestPlan.java:41
+  //     new Variant(ClientRequestType.class, "request_uri")
+  //   AbstractOIDCCClientTest.java:1019
+  //     callAndStopOnFailure(FetchRequestUriAndExtractRequestObject.class, "OIDCC-6.2")
+  //
+  // ClientRequestType has exactly three values -- plain_http_request,
+  // request_object, request_uri -- and none of them is PAR, so a PAR-issued
+  // `urn:ietf:params:oauth:request_uri:...` is not what this profile exercises.
+  // The RP must HOST a signed request object at an https URL the suite fetches,
+  // which a CI runner behind NAT cannot serve. Same physical constraint as
+  // back-channel logout, and not a gap in the library: request objects by VALUE
+  // are supported.
+  group('the Dynamic plan needs an RP-hosted request_uri', () {
+    test('the dynamic plan is recognised', () {
+      expect(
+        planNeedsHostedRequestUri(
+          'oidcc-client-dynamic-certification-test-plan',
+        ),
+        isTrue,
+      );
+    });
+
+    test('no other plan pins request_uri', () {
+      for (final p in [
+        'oidcc-client-basic-certification-test-plan',
+        'oidcc-client-config-certification-test-plan',
+        'oidcc-client-hybrid-certification-test-plan',
+        'oidcc-client-implicit-certification-test-plan',
+        'oidcc-client-test-3rd-party-init-login-test-plan',
+      ]) {
+        expect(planNeedsHostedRequestUri(p), isFalse, reason: p);
+      }
+    });
+  });
+
   // Back-channel logout is the only profile with no browser in the loop: the OP
   // POSTs the logout token straight to the RP. A CI runner on loopback is not
   // reachable from the internet, so no backchannel_logout_uri value helps.

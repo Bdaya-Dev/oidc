@@ -94,6 +94,30 @@ bool canReceiveFragmentResponse(String platform) =>
 bool isThirdPartyInitPlan(String planName) =>
     planName.contains('3rd-party-init');
 
+/// Whether [planName] requires the RP to HOST a request object the suite
+/// fetches, rather than to send one.
+///
+/// The Dynamic plan pins `request_type=request_uri` at plan level for every one
+/// of its modules (`OIDCCClientDynamicTestPlan.java:41`), and the suite resolves
+/// it by fetching:
+///
+///   callAndStopOnFailure(FetchRequestUriAndExtractRequestObject.class,
+///                        "OIDCC-6.2")   -- AbstractOIDCCClientTest.java:1019
+///
+/// `ClientRequestType` has exactly three values -- `plain_http_request`,
+/// `request_object`, `request_uri` -- and none is PAR, so pushing a signed
+/// request object through the PAR endpoint does not satisfy it either. The RP
+/// must serve the object at an https URL the suite can reach, and a CI runner
+/// behind NAT cannot. That is the same inbound-reachability wall as
+/// [isBackChannelLogoutPlan], not a missing library feature: request objects
+/// BY VALUE are implemented (`oidc_core/lib/src/jar/`).
+///
+/// This gate is about the harness, not the library. `package:oidc` supports
+/// dynamic client registration -- the other half of this profile -- and it is
+/// exercised by the oidc_core suite.
+bool planNeedsHostedRequestUri(String planName) =>
+    planName == 'oidcc-client-dynamic-certification-test-plan';
+
 /// Whether [planName] is the Back-Channel Logout profile.
 ///
 /// Back-Channel Logout is the one logout profile with no browser in the loop:
@@ -374,6 +398,19 @@ Future<void> runOidcConformanceTest(
       '$planName returns tokens in the URL fragment, which a loopback HTTP '
       'listener cannot observe; $platform uses one. Runs on macOS/iOS/Android '
       '(full callback URL) and web (redirect.html reads location.hash).',
+    );
+    return;
+  }
+
+  if (planNeedsHostedRequestUri(planName)) {
+    markTestSkipped(
+      '$planName pins request_type=request_uri for every module and the suite '
+      'fetches that URI (FetchRequestUriAndExtractRequestObject, '
+      'AbstractOIDCCClientTest.java:1019). The RP would have to serve a signed '
+      'request object at an https URL reachable from '
+      'certification.openid.net, which a CI runner behind NAT cannot. PAR does '
+      'not substitute: ClientRequestType has no PAR value. Dynamic client '
+      'registration itself IS implemented and covered by the oidc_core suite.',
     );
     return;
   }
