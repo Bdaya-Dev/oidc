@@ -74,4 +74,70 @@ void main() {
       );
     }
   });
+
+  // Web was left out of the budget check above, and web is where the budget is
+  // tightest: it runs the LARGEST plans against the SHORTEST per-test cap.
+  //
+  //   * Hybrid RP is 48 modules and Implicit RP is 27 (shared_e2e.dart:313-322).
+  //   * Patrol drives web through Playwright, whose per-test cap defaults to
+  //     10 minutes (patrol_plus/web_runner/playwright.config.ts:66 --
+  //     `timeout: timeout ?? 10 * 60 * 1000`). The web job pins the same value
+  //     explicitly via `--web-timeout`.
+  //
+  // At 30s per module, one plan in which every module times out needs
+  // 48 x 30s = 1440s against a 600s cap. It cannot finish, so Playwright kills
+  // the test mid-plan -- and a killed test never emits a closing patrol entry,
+  // which is exactly the reporting hole that made the web job print
+  // "Total: 13, Successful: 11, Failed: 0" and exit 1 with no name attached
+  // (run 90178636000: Hybrid and Implicit each consumed ~629s and emitted
+  // nothing at all).
+  //
+  // The budget is what decides whether a broken plan REPORTS or VANISHES. Sized
+  // so the plan runs to completion and fails on its own
+  // `successfulLogins > 0` assertion -- which names the plan and dumps the
+  // per-module suite status -- instead of being killed with no output.
+  group('the web budget lets the largest plan finish inside Playwright cap', () {
+    // patrol_plus/web_runner/playwright.config.ts:66.
+    const playwrightPerTestCapSeconds = 600;
+    // shared_e2e.dart:313-322 lists the module counts; Hybrid is the largest.
+    const largestPlanModules = 48;
+    // Plan creation, per-module instance creation and the setup poll loop all
+    // run outside the browser flow, so the flow timeouts cannot be allowed to
+    // consume the whole cap.
+    const nonFlowOverheadSeconds = 60;
+
+    test('a plan whose every module times out still fits', () {
+      final webTimeout = options.web.flowTimeoutSeconds;
+      expect(webTimeout, isNotNull);
+      expect(
+        largestPlanModules * webTimeout! + nonFlowOverheadSeconds,
+        lessThanOrEqualTo(playwrightPerTestCapSeconds),
+        reason:
+            'web: $largestPlanModules modules x ${webTimeout}s = '
+            '${largestPlanModules * webTimeout}s exceeds the '
+            '${playwrightPerTestCapSeconds}s Playwright per-test cap, so a '
+            'plan in which the redirects do not arrive is KILLED mid-plan '
+            'rather than failing. A killed test emits no closing patrol entry, '
+            'so it is counted in Total and in none of '
+            'successful/failed/skipped, and the job exits 1 naming nothing. '
+            'Lower flowTimeoutSeconds for web in '
+            'integration_test/conformance/manager.dart, or raise '
+            '--web-timeout in the web job.',
+      );
+    });
+
+    test('but is still generous relative to a healthy web flow', () {
+      // A web module that succeeds completes well inside 2s end to end: the
+      // Basic RP plan ran all 14 of its modules in 26s of wall clock in the
+      // same job. The bound must fail a hang fast without being so tight that
+      // a slow-but-working redirect is cut off.
+      expect(
+        options.web.flowTimeoutSeconds,
+        greaterThanOrEqualTo(10),
+        reason:
+            'anything under 10s is within an order of magnitude of a healthy '
+            'flow and would start failing real redirects',
+      );
+    });
+  });
 }

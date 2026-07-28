@@ -220,6 +220,20 @@ jobs:
         run: melos run remove_dart_test_yaml
       - name: "[Verify step] Test Flutter packages"
         run: melos run test:flutter
+      - name: "[Verify step] Test the example's unit tests"
+        # melos `test:flutter` filters `ignore: ["*example*"]` (pubspec.yaml),
+        # and the only other thing CI runs out of packages/oidc/example is
+        # `flutter test integration_test/...` in the platform jobs. So every
+        # file under packages/oidc/example/test/ ran in NO job: the conformance
+        # variant rules, the plan gates, the flow-timeout budget and the patrol
+        # tally reconciler all passed locally and gated nothing. They are the
+        # guards for a harness that drives a live third-party server, which is
+        # exactly the code that cannot be re-verified cheaply after the fact.
+        #
+        # Scoped to this one example rather than lifting the ignore, because
+        # the other example packages are there to be built, not tested.
+        working-directory: packages/oidc/example
+        run: flutter test
       - name: "[Coverage] Format & print test coverage"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run coverage:combine
@@ -669,8 +683,13 @@ jobs:
     # expected to be green now, not masked-red.
     continue-on-error: true
     # Patrol web runs through Playwright (patrol_cli activation + npx playwright
-    # install + the web build + the live conformance flow); 30 min is headroom.
-    timeout-minutes: 30
+    # install + the web build + the live conformance flow). The healthy run is
+    # ~25m30s, so 30 left no room: with --web-timeout 600000 per test and
+    # --web-workers 1, two tests hitting the cap exceed the job budget and the
+    # step is killed BEFORE the tally reconciler prints which tests vanished --
+    # losing exactly the diagnosis it exists to produce. 45 keeps the
+    # reconciler reachable in the case it was written for.
+    timeout-minutes: 45
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -707,6 +726,27 @@ jobs:
           # OIDC redirect URI is hardcoded to (integration_test/helpers.dart:11),
           # so the IdP's redirect actually lands back on this app's origin. See
           # #337 for the full diagnosis of the hang this fixes.
+          #
+          # --show-flutter-logs is load-bearing, not verbosity. patrol_log_plus
+          # DROPS every stdout line that does not contain 'PATROL_LOG' unless
+          # this flag is set (patrol_log_reader.dart:92-119), and on web the
+          # harness's own diagnostics -- the per-module '[e2e] <module> ->
+          # authResult ...' line, the 'Suite status for <module>' dump that
+          # exists precisely to say WHY a module returned no user, and the
+          # 'PLAN_ID' listing -- all travel that path (print -> console ->
+          # Playwright stdout). Without it a failing profile reports nothing
+          # whatsoever: run 90178636000 logged ZERO occurrences of '[e2e]',
+          # 'PLAN_ID' and 'Suite status', including for the 11 tests that
+          # PASSED. --verbose does NOT cover this; it only raises the CLI's own
+          # logger level.
+          #
+          # --web-timeout states Playwright's per-test cap instead of inheriting
+          # it. 600000ms is playwright.config.ts:66's own default, pinned here
+          # because test/conformance_flow_timeout_test.dart asserts the
+          # conformance flow timeouts fit inside it (48 hybrid modules x 10s +
+          # setup < 600s). Inheriting a number a pub package can change would
+          # let that arithmetic silently stop holding.
+          set +e
           patrol_plus test \
             --target patrol_test/app_test.dart \
             --web-port 22433 \
@@ -716,14 +756,66 @@ jobs:
             -d chrome \
             --web-headless true \
             --web-workers 1 \
+            --web-timeout 600000 \
+            --show-flutter-logs \
             --verbose \
             --dart-define=CI=true \
-            --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
+            --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN \
+            2>&1 | tee patrol-web.log
+          PATROL_RC=${PIPESTATUS[0]}
+          set -e
+          echo "patrol exit status: $PATROL_RC"
+
           # Best-effort: web V8->lcov path differs from native; don't fail the
           # job if the file isn't produced.
           cp coverage/patrol_lcov.info coverage/web-coverage.info || \
             echo "No web lcov produced (V8 coverage may be unavailable)."
+
+          # A test that starts and never reports is counted in patrol's `Total`
+          # and in NONE of successful/failed/skipped, because an unclosed entry
+          # keeps `start` status and no counter matches it
+          # (patrol_single_test_entry.dart:33). That is how this job printed
+          # "Total: 13, Successful: 11, Failed: 0, Skipped: 0" and exited 1
+          # without naming either lost profile, and why the terminal message was
+          # the misleading "Playwright process exited unexpectedly with code 1"
+          # rather than "Some tests failed." (web_test_backend.dart:649-654
+          # keys on failedTestsCount > 0).
+          #
+          # Nothing in patrol asserts successful + failed + skipped == total.
+          # Do it here, over patrol's own output, so a vanished test is a NAMED
+          # failure. --minimum-tests 13 is the ratchet: patrol_test/app_test.dart
+          # declares 13 conformance tests, and patrol reports a run that
+          # executed nothing as a clean pass.
+          set +e
+          dart run tool/patrol_tally.dart patrol-web.log --minimum-tests 13
+          TALLY_RC=$?
+          set -e
+
+          # Deferred so the tally always runs and always names what it found.
+          if [ "$PATROL_RC" -ne 0 ]; then
+            echo "::error::patrol reported failure (exit $PATROL_RC); see the test output above."
+            exit "$PATROL_RC"
+          fi
+          exit "$TALLY_RC"
         shell: bash
+
+      # if: always() -- these exist to explain a FAILED run, so the step that
+      # uploads them must survive the failure. Without it the job went straight
+      # from "##[error]Process completed with exit code 1" to "Post job
+      # cleanup", and Playwright's own HTML report -- the one artifact that
+      # names the tests it killed on timeout, which patrol's summary cannot --
+      # died with the runner.
+      - name: Upload Web Test Diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-test-diagnostics
+          path: |
+            packages/oidc/example/patrol-web.log
+            packages/oidc/example/playwright-report
+            packages/oidc/example/test-results
+          include-hidden-files: true
+          if-no-files-found: warn
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v7

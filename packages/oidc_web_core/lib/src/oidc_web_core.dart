@@ -17,6 +17,8 @@ class OidcWebCore {
 
   static const _windowCloseCheckInterval = Duration(milliseconds: 250);
 
+  static final _logger = Logger('Oidc.OidcWebCore');
+
   /// Version of the structured redirect wire protocol understood by this
   /// consumer and emitted by the bundled `redirect.html` template.
   ///
@@ -149,13 +151,34 @@ class OidcWebCore {
       }
 
       if (state != null) {
-        final (
-          :parameters,
-          responseMode: _,
-        ) = OidcEndpoints.resolveAuthorizeResponseParameters(
-          responseUri: parsed,
-          resolveResponseModeByKey: OidcConstants_AuthParameters.state,
-        );
+        // The redirect channel is shared by every context on this origin, so
+        // this callback also receives messages it did not cause: a late
+        // redirect from a previous flow, a stray `redirect.html` tab, a
+        // post-logout redirect carrying no `state`.
+        //
+        // `resolveAuthorizeResponseParameters` THROWS when a Uri carries none
+        // of `state`/`error`/`response` in either the query or the fragment
+        // (oidc_core `facade.dart`). Unguarded, that throw escapes a JS event
+        // callback: it cannot fail the flow, so it surfaces as an uncaught
+        // browser error while the response `Completer` below is simply never
+        // completed -- the flow then waits out `flowTimeoutSeconds`, which
+        // defaults to `null`, i.e. forever.
+        //
+        // A message this flow cannot resolve is not this flow's message.
+        // Ignore it (as a state mismatch already is) and keep listening.
+        final Map<String, dynamic> parameters;
+        try {
+          parameters = OidcEndpoints.resolveAuthorizeResponseParameters(
+            responseUri: parsed,
+            resolveResponseModeByKey: OidcConstants_AuthParameters.state,
+          ).parameters;
+        } on OidcException catch (e) {
+          _logger.fine(
+            'Ignoring a message on the redirect channel that carries no '
+            'resolvable authorization response: $e',
+          );
+          return;
+        }
         final incomingState = parameters[OidcConstants_AuthParameters.state];
         //if we give it a state, we expect it to be returned.
         if (incomingState != state) {
@@ -373,7 +396,37 @@ class OidcWebCore {
     // Structured wire v2: acknowledge the processed logout redirect so the page
     // can render a truthful terminal state.
     _postRedirectAck(options.broadcastChannel, ok: true);
-    return OidcEndSessionResponse.fromJson(respUri.queryParameters);
+    return OidcEndSessionResponse.fromJson(_resolveResponseParameters(respUri));
+  }
+
+  /// Picks the parameter map an interactive response was actually delivered in,
+  /// applying the same query-then-fragment precedence
+  /// [OidcEndpoints.resolveAuthorizeResponseParameters] uses.
+  ///
+  /// [_getResponseUri] already gates a response with that resolver, so reading
+  /// `respUri.queryParameters` alone afterwards made the two halves of one call
+  /// disagree: a response delivered in the fragment passed the `state` check
+  /// and then parsed to an object with every field null.
+  ///
+  /// The mode is taken from the resolver but the parameters are re-read from
+  /// the Uri, so the synthetic `response_mode` key the resolver appends does
+  /// not leak into the response's `src`.
+  static Map<String, String> _resolveResponseParameters(Uri responseUri) {
+    final String mode;
+    try {
+      mode = OidcEndpoints.resolveAuthorizeResponseParameters(
+        responseUri: responseUri,
+        resolveResponseModeByKey: OidcConstants_AuthParameters.state,
+      ).responseMode;
+    } on OidcException {
+      // Neither location carries `state`/`error`/`response`, so there is
+      // nothing to disambiguate. OpenID Connect RP-Initiated Logout 1.0 §3
+      // defines the response on the query, so that is the answer.
+      return responseUri.queryParameters;
+    }
+    return mode == OidcConstants_AuthorizeRequest_ResponseMode.fragment
+        ? Uri(query: responseUri.fragment).queryParameters
+        : responseUri.queryParameters;
   }
 
   /// Listens to incoming front channel logout requests.

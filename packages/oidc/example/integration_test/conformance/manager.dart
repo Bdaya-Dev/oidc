@@ -57,7 +57,25 @@ OidcUserManager conformanceManager(
       // Web hung the same way and had no knob at all until now:
       // hiddenIframeTimeout bounds the silent-renew iframe, not the popup the
       // interactive flow actually uses.
-      web: OidcPlatformSpecificOptions_Web(flowTimeoutSeconds: 30),
+      //
+      // 10s, not the 30s every other platform uses, because web is the only
+      // platform whose runner imposes a PER-TEST cap: patrol drives it through
+      // Playwright, which kills a test at 600s
+      // (patrol_plus/web_runner/playwright.config.ts:66). Hybrid RP is 48
+      // modules, so 48 x 30s = 1440s could not fit -- a plan whose redirects
+      // never arrive was killed mid-plan instead of failing, and a killed test
+      // emits no closing patrol entry, so it landed in Total and in none of
+      // successful/failed/skipped. That is exactly how Hybrid RP and Implicit
+      // RP disappeared from the web job while it printed "Failed: 0"
+      // (run 90178636000; each consumed ~629s and emitted nothing).
+      //
+      // At 10s the worst case is 48 x 10s + setup = 540s, which fits, so the
+      // plan runs to completion and fails on its own `successfulLogins > 0`
+      // assertion -- naming the plan and dumping the per-module suite status --
+      // instead of vanishing. Still 5x the ~2s a healthy web module takes (the
+      // Basic RP plan ran 14 modules in 26s of wall clock in the same job).
+      // The arithmetic is asserted in test/conformance_flow_timeout_test.dart.
+      web: OidcPlatformSpecificOptions_Web(flowTimeoutSeconds: 10),
     ),
     scope: const [
       OidcConstants_Scopes.openid,
