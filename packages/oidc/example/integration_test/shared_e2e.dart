@@ -748,6 +748,35 @@ Future<void> runOidcConformanceTest(
       } on Object catch (e) {
         logger.warning('Could not read suite status for $moduleName: $e');
       }
+      // `status` says WHETHER the suite issued a response; its log says WHY it
+      // did not. The harness already fetches this endpoint via monitorTestLogs
+      // and stops at "Setup Done", so every entry the suite wrote DURING the
+      // module was retrieved and discarded -- which is how 75 web fragment
+      // modules failed with nothing but a client-side timeout to go on.
+      //
+      // Tail only: the head is the setup chatter already seen, and the
+      // refusal, when there is one, is the last thing written.
+      final suiteLog = await fetchTestLogs(
+        dio: dio,
+        instanceId: testInstanceId,
+      );
+      if (suiteLog.isEmpty) {
+        logger.info('Suite log for $moduleName: empty.');
+      } else {
+        final tail = suiteLog.length <= 12
+            ? suiteLog
+            : suiteLog.sublist(suiteLog.length - 12);
+        logger.info(
+          'Suite log tail for $moduleName (${tail.length} of '
+          '${suiteLog.length} entries):',
+        );
+        for (final entry in tail) {
+          logger.info(
+            '  [${entry['result'] ?? '-'}] ${entry['msg']}'
+            '${entry['error'] == null ? '' : ' | error: ${entry['error']}'}',
+          );
+        }
+      }
     }
     logger
       ..info(

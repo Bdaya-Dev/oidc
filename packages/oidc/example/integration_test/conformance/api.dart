@@ -456,6 +456,38 @@ Future<Map<String, dynamic>> getTestSummary({
   return response.data ?? {};
 }
 
+/// The suite's own log for [instanceId].
+///
+/// `public: false` is the authenticated view. The public one omits the entries
+/// that carry a failure reason, which is the only reason to fetch this at all.
+Uri testLogUri({required String instanceId, int? since}) => Uri(
+  path: 'api/log/$instanceId',
+  queryParameters: {'public': 'false', if (since != null) 'since': '$since'},
+);
+
+/// Reads the suite's log for [instanceId] once.
+///
+/// [monitorTestLogs] polls the same endpoint but stops at `Setup Done`, so
+/// everything the suite records DURING a module -- including why it refused a
+/// request -- is fetched and thrown away. When a module ends with no user the
+/// client can only report "no user"; this is the other half of that story.
+///
+/// Never throws: it runs on the failure path, where an exception would replace
+/// the diagnosis with a second failure.
+Future<List<Map<String, dynamic>>> fetchTestLogs({
+  required Dio dio,
+  required String instanceId,
+}) async {
+  try {
+    final response = await dio.getUri<List<dynamic>>(
+      testLogUri(instanceId: instanceId),
+    );
+    return (response.data ?? []).cast<Map<String, dynamic>>();
+  } on Object {
+    return const [];
+  }
+}
+
 Stream<List<Map<String, dynamic>>> monitorTestLogs({
   required Dio dio,
   required String instanceId,

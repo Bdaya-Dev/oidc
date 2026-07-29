@@ -436,6 +436,27 @@ void main() {
   // naming authority for private-use URI scheme redirects, only a single slash
   // ('/') appears after the scheme component" -- so adding an authority to
   // satisfy the suite would break the BCP this package exists to conform to.
+  // When a module returns no user, the client can only say "no user". The
+  // suite knows WHY -- it wrote the reason into its own log -- and the harness
+  // already polls that log, but stops reading at "Setup Done" and throws the
+  // rest away. That is why 75 web fragment modules failed with nothing but a
+  // timeout: the provider's side of the story was fetched and discarded.
+  group('the suite log can be re-read after a module fails', () {
+    test('the log uri targets the instance and asks for the private view', () {
+      final uri = testLogUri(instanceId: 'abc123');
+      expect(uri.path, 'api/log/abc123');
+      // `public: false` is the authenticated view; the public one omits the
+      // entries that carry the failure reason.
+      expect(uri.queryParameters['public'], 'false');
+      expect(uri.queryParameters.containsKey('since'), isFalse);
+    });
+
+    test('a since cursor is passed through when given', () {
+      final uri = testLogUri(instanceId: 'abc123', since: 1785233165171);
+      expect(uri.queryParameters['since'], '1785233165171');
+    });
+  });
+
   // The Dynamic plan pins request_type=request_uri for ALL of its modules, and
   // the suite RESOLVES that by fetching the URI:
   //
