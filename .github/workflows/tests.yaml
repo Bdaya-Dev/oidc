@@ -678,10 +678,19 @@ jobs:
     # timeout killed it (Total:1/Successful:0/Failed:0, not an assertion
     # failure). Fixed below by pinning --web-port 22433 to match; confirmed
     # green with conformance actually executing in run 28666114227 (web job:
-    # "OIDC Conformance Test" passed in 31s). continue-on-error stays on as a
-    # safety net (this is a live third-party IdP dependency), but the job is
-    # expected to be green now, not masked-red.
-    continue-on-error: true
+    # "OIDC Conformance Test" passed in 31s).
+    #
+    # `continue-on-error: true` used to sit here as a safety net for the live
+    # third-party IdP dependency, with a note that the job was "expected to be
+    # green now, not masked-red". It was masked-red. The workflow reported
+    # conclusion=success on 262bdfd, c34015a and 932fb6c while this job failed
+    # in every one of them, and Hybrid RP and Implicit RP had been failing on
+    # web since the day they were added -- for two runs not even failing, but
+    # vanishing from the tally entirely.
+    #
+    # A job that cannot fail the build cannot defend anything. The safety-net
+    # argument is real but it is served by the retries and timeouts inside the
+    # job, not by discarding its verdict.
     # Patrol web runs through Playwright (patrol_cli activation + npx playwright
     # install + the web build + the live conformance flow). The healthy run is
     # ~25m30s, so 30 left no room: with --web-timeout 900000 per test and
@@ -823,7 +832,10 @@ jobs:
           name: web-integration-coverage
           path: packages/oidc/example/coverage/web-coverage.info
           include-hidden-files: true
-          # web coverage is best-effort (continue-on-error job); don't fail.
+          # The artifact is absent whenever the run failed before coverage was
+          # written, which is a normal outcome of a failing conformance run --
+          # the job's verdict already carries that. Warn rather than add a
+          # second failure for the same cause.
           if-no-files-found: warn
 
   macos:
@@ -983,8 +995,10 @@ jobs:
 
   upload-coverage:
     runs-on: ubuntu-latest
-    # `web` is continue-on-error, so a web failure won't block this job; it's
-    # listed so its (best-effort) coverage artifact can be combined when present.
+    # `web` no longer carries continue-on-error, so a web FAILURE now skips
+    # this job rather than letting it run with a missing artifact. That is the
+    # intended trade: a run whose conformance job failed is red already, and a
+    # coverage upload from it would be partial anyway.
     needs: [unit_tests, android, ios, web, macos, linux, windows]
     steps:
       - name: Checkout Code
