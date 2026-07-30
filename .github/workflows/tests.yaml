@@ -717,18 +717,12 @@ jobs:
       # (flutter/flutter#181357) never applies. patrol_cli runs
       # `npx playwright install` itself; ubuntu-latest ships Node/npx.
       - name: Activate Patrol CLI (patrol_cli_plus)
-        # Pinned to a fork commit, NOT the published 5.4.1, because this job
-        # needs --web-hostname and --web-tls-cert-path/-key-path, which no
-        # release carries yet (Bdaya-Dev/patrol#44). Pinned by full SHA rather
-        # than by branch so the CLI under test cannot change under a re-run.
-        #
-        # Swap back to `dart pub global activate patrol_cli_plus` the moment a
-        # release includes #44; nothing else in this job depends on the fork.
-        run: |
-          dart pub global activate \
-            --source git https://github.com/Bdaya-Dev/patrol.git \
-            --git-ref 0be1c0b734b931eb552734ae88b3d0b8eb589b04 \
-            --git-path packages/patrol_cli_plus
+        # patrol_cli_plus >= 5.5.0 forwards --web-hostname and the
+        # --web-tls-cert-path/--web-tls-cert-key-path pair, and trusts the
+        # supplied certificate in its own Dart-side readiness probe
+        # (Bdaya-Dev/patrol#44). All three are needed to serve the RP at the
+        # conformant origin the step below builds; 5.4.1 has none of them.
+        run: dart pub global activate patrol_cli_plus
       # ubuntu-latest is 24.04, which restricts unprivileged user namespaces via
       # AppArmor; re-allow them so Playwright's Chromium sandbox can initialize.
       # https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
