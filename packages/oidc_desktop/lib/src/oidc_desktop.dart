@@ -48,6 +48,9 @@ mixin OidcDesktop on OidcPlatform {
       successfulPageResponse: platformOpts.successfulPageResponse,
       methodMismatchResponse: platformOpts.methodMismatchResponse,
       notFoundResponse: platformOpts.notFoundResponse,
+      // Only pay for the fragment relay when the response actually arrives in
+      // one. A code flow answers on the first request as it always has.
+      captureFragment: responseArrivesInFragment(requestParameters),
     );
     final serverCompleter = Completer<HttpServer>();
     final ts = platformOpts.flowTimeoutSeconds;
@@ -232,4 +235,39 @@ mixin OidcDesktop on OidcPlatform {
   }) {
     return const Stream.empty();
   }
+}
+
+/// Whether the authorization response for [requestParameters] will be
+/// delivered in the URI fragment rather than the query string.
+///
+/// OAuth 2.0 Multiple Response Type Encoding Practices, section 2: `code`
+/// alone defaults to the query encoding; every other response type defaults to
+/// the fragment encoding. An explicit `response_mode` overrides that default.
+///
+/// This matters on desktop because a fragment never reaches the loopback
+/// server -- the browser strips it before sending -- so hybrid and implicit
+/// responses are lost unless the listener runs its relay. The relay costs an
+/// extra round trip and needs JavaScript, so it is enabled only for the flows
+/// that cannot work without it.
+@visibleForTesting
+bool responseArrivesInFragment(Map<String, dynamic> requestParameters) {
+  final mode = requestParameters[OidcConstants_AuthParameters.responseMode];
+  if (mode is String && mode.isNotEmpty) {
+    return mode == OidcConstants_AuthorizeRequest_ResponseMode.fragment;
+  }
+  final rawType = requestParameters[OidcConstants_AuthParameters.responseType];
+  final types = switch (rawType) {
+    final String s => s.split(RegExp(r'\s+')),
+    final List<dynamic> l => l.map((e) => e.toString()),
+    _ => const <String>[],
+  }
+      .where((e) => e.isNotEmpty)
+      .toSet();
+
+  if (types.isEmpty) {
+    return false;
+  }
+  // `code` alone -> query. `none` alone -> nothing to capture either way.
+  return !(types.length == 1 &&
+      (types.contains('code') || types.contains('none')));
 }

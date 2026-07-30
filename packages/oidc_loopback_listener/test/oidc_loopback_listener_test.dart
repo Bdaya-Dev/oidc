@@ -27,6 +27,10 @@ Uri getTargetUriFromPort({
 void main() {
   group('OidcLoopbackListener', () {
     test('method mismatch', () async {
+      // PUT is not a way an authorization response is ever delivered, so it
+      // still gets the 405. POST is -- see the form_post group below. This
+      // test used to assert POST was rejected, which encoded the very
+      // limitation that made response_mode=form_post impossible to support.
       final listener = OidcLoopbackListener(methodMismatchResponse: 'hello');
       final serverCompleter = Completer<HttpServer>();
 
@@ -35,7 +39,7 @@ void main() {
       );
       final server = await serverCompleter.future;
       final targetUri = getTargetUriFromPort(port: server.port);
-      final resp = await http.post(targetUri, body: 'hello');
+      final resp = await http.put(targetUri, body: 'hello');
       expect(resp.statusCode, HttpStatus.methodNotAllowed);
       expect(resp.body, 'hello');
     });
@@ -104,6 +108,155 @@ void main() {
       expect(receivedUri, isNotNull);
       expect(receivedUri!.path, targetUri.path);
       expect(receivedUri.queryParameters, targetUri.queryParameters);
+    });
+  });
+
+  // OAuth 2.0 Form Post Response Mode: the OP returns the authorization
+  // response as an `application/x-www-form-urlencoded` POST body rather than in
+  // the URI. The listener answered 405 to every non-GET, so the response could
+  // never be captured on desktop -- and that 405 was asserted by a passing
+  // test, which is why nothing ever flagged it.
+  group('form_post response mode', () {
+    test('a form POST body is captured as query parameters', () async {
+      final listener = OidcLoopbackListener(successfulPageResponse: 'good');
+      final serverCompleter = Completer<HttpServer>();
+      final receivedUriFuture = listener.listenForSingleResponse(
+        serverCompleter: serverCompleter,
+      );
+      final server = await serverCompleter.future;
+
+      final resp = await http.post(
+        getTargetUriFromPort(port: server.port),
+        body: {'code': '123456', 'state': 'abc'},
+      );
+      expect(resp.statusCode, HttpStatus.ok);
+      expect(resp.body, 'good');
+
+      final receivedUri = await receivedUriFuture;
+      expect(receivedUri, isNotNull);
+      expect(receivedUri!.queryParameters['code'], '123456');
+      expect(receivedUri.queryParameters['state'], 'abc');
+    });
+
+    test(
+      'a POST body merges with query parameters already on the URI',
+      () async {
+        // An OP may put `iss` on the URI while form-posting the rest.
+        final listener = OidcLoopbackListener(successfulPageResponse: 'good');
+        final serverCompleter = Completer<HttpServer>();
+        final receivedUriFuture = listener.listenForSingleResponse(
+          serverCompleter: serverCompleter,
+        );
+        final server = await serverCompleter.future;
+
+        await http.post(
+          getTargetUriFromPort(
+            port: server.port,
+            queryParameters: {'iss': 'https://op.test'},
+          ),
+          body: {'code': '123456'},
+        );
+
+        final receivedUri = await receivedUriFuture;
+        expect(receivedUri!.queryParameters['iss'], 'https://op.test');
+        expect(receivedUri.queryParameters['code'], '123456');
+      },
+    );
+
+    test('a POST to the wrong path still 404s', () async {
+      final listener = OidcLoopbackListener(
+        path: 'secret',
+        notFoundResponse: 'not found',
+      );
+      final serverCompleter = Completer<HttpServer>();
+      unawaited(
+        listener.listenForSingleResponse(serverCompleter: serverCompleter),
+      );
+      final server = await serverCompleter.future;
+
+      final resp = await http.post(
+        getTargetUriFromPort(port: server.port, path: 'wrong'),
+        body: {'code': '123456'},
+      );
+      expect(resp.statusCode, HttpStatus.notFound);
+      expect(resp.body, 'not found');
+    });
+  });
+
+  // A fragment is never sent to a server -- the browser strips it before the
+  // request goes out. `code id_token` (hybrid) and `id_token` (implicit)
+  // default to response_mode=fragment, so a plain loopback listener observes an
+  // empty query and the tokens are simply gone. The fix is the trick CLI OAuth
+  // tools use: serve a page whose script reads location.hash and re-requests
+  // with it promoted to the query string.
+  group('fragment capture', () {
+    test('is off by default: the first request completes as before', () async {
+      final listener = OidcLoopbackListener(successfulPageResponse: 'good');
+      final serverCompleter = Completer<HttpServer>();
+      final receivedUriFuture = listener.listenForSingleResponse(
+        serverCompleter: serverCompleter,
+      );
+      final server = await serverCompleter.future;
+      await http.get(
+        getTargetUriFromPort(port: server.port, queryParameters: {'code': '1'}),
+      );
+      final receivedUri = await receivedUriFuture;
+      expect(receivedUri!.queryParameters['code'], '1');
+    });
+
+    test('serves a relay page rather than completing on the first hit',
+        () async {
+      final listener = OidcLoopbackListener(captureFragment: true);
+      final serverCompleter = Completer<HttpServer>();
+      unawaited(
+        listener.listenForSingleResponse(
+          serverCompleter: serverCompleter,
+          timeout: const Duration(seconds: 5),
+        ),
+      );
+      final server = await serverCompleter.future;
+
+      final resp = await http.get(getTargetUriFromPort(port: server.port));
+      expect(resp.statusCode, HttpStatus.ok);
+      // The page must carry the script that performs the relay, and the marker
+      // it uses to tag the follow-up request.
+      expect(resp.body, contains('location.hash'));
+      expect(resp.body, contains(kOidcFragmentRelayMarker));
+    });
+
+    test('completes on the relayed request, marker stripped', () async {
+      final listener = OidcLoopbackListener(captureFragment: true);
+      final serverCompleter = Completer<HttpServer>();
+      final receivedUriFuture = listener.listenForSingleResponse(
+        serverCompleter: serverCompleter,
+        timeout: const Duration(seconds: 5),
+      );
+      final server = await serverCompleter.future;
+
+      // First hit: the browser has stripped the fragment, query is empty.
+      await http.get(getTargetUriFromPort(port: server.port));
+      // What the relay script then does: fragment promoted to query.
+      await http.get(
+        getTargetUriFromPort(
+          port: server.port,
+          queryParameters: {
+            'id_token': 'eyJ.a.b',
+            'state': 'xyz',
+            kOidcFragmentRelayMarker: '1',
+          },
+        ),
+      );
+
+      final receivedUri = await receivedUriFuture;
+      expect(receivedUri, isNotNull);
+      expect(receivedUri!.queryParameters['id_token'], 'eyJ.a.b');
+      expect(receivedUri.queryParameters['state'], 'xyz');
+      // The marker is transport plumbing and must not leak into the response
+      // the manager parses.
+      expect(
+        receivedUri.queryParameters,
+        isNot(contains(kOidcFragmentRelayMarker)),
+      );
     });
   });
 
