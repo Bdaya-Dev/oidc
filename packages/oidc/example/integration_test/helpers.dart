@@ -32,6 +32,22 @@ Uri getPlatformRedirectUri() {
       : Uri();
 }
 
+/// The `frontchannel_logout_uri` registered with the conformance test plan.
+///
+/// Platform-branched for the same reason [getPlatformRedirectUri] is: only web
+/// has an http(s) origin to derive from. `Uri.base` is a `file://` URI on every
+/// other platform, and deriving a web URI from it throws before any test runs.
+///
+/// The non-web value is the fixed literal this harness has always sent. Front-
+/// channel logout needs a browser-reachable page, which a private-use scheme
+/// cannot provide, so there is no per-platform value to compute -- the logout
+/// profiles that depend on it are gated out on those platforms anyway.
+Uri getPlatformFrontChannelLogoutUri() => kIsWeb
+    ? webFrontChannelLogoutUri(base: Uri.base)
+    : Uri.parse(
+        'http://localhost:22433/redirect.html?requestType=front-channel-logout',
+      );
+
 String getPlatformName() {
   return kIsWeb
       ? 'Web'

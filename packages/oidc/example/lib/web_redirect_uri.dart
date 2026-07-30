@@ -48,6 +48,19 @@ Uri resolveWebRedirectUri(
     );
   }
 
+  if (!base.isScheme('http') && !base.isScheme('https')) {
+    // Uri.origin throws a bare StateError here, naming neither this function
+    // nor the caller. Every non-web platform has a file:// Uri.base, so the
+    // wrong caller is a realistic mistake and its failure has to be readable.
+    throw ArgumentError.value(
+      base,
+      'base',
+      'must be an http or https origin; a web redirect URI cannot be resolved '
+          'against a ${base.scheme}: base. On non-web platforms use the '
+          'platform redirect URI instead of deriving one from Uri.base',
+    );
+  }
+
   final origin = Uri.parse(base.origin);
 
   // Example:

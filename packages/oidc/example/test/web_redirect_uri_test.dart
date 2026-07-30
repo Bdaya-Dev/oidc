@@ -76,6 +76,32 @@ void main() {
       );
     });
 
+    test('a non-http base is rejected by name, not by StateError', () {
+      // On every non-web platform Uri.base is a file:// URI, and Uri.origin
+      // throws a bare "Bad state: Origin is only applicable schemes http and
+      // https" from dart:core -- a message that names neither this function nor
+      // the caller that passed the wrong base. That is exactly what reached CI:
+      // the front-channel logout URI was derived unconditionally, so all five
+      // native conformance jobs died inside dart:core with no indication that
+      // an origin-derived web URI was the cause.
+      //
+      // Resolving against a file:// base is never meaningful here, so refuse it
+      // where the caller can see why.
+      expect(
+        () => resolveWebRedirectUri(
+          'redirect.html',
+          base: Uri.parse('file:///home/runner/work/oidc/example'),
+        ),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.toString(),
+            'message',
+            allOf(contains('http'), contains('file')),
+          ),
+        ),
+      );
+    });
+
     test('an empty configured URI is rejected', () {
       expect(
         () => resolveWebRedirectUri('  ', base: conformantBase),

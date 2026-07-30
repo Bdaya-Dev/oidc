@@ -17,7 +17,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc/oidc.dart';
 import 'package:oidc_example/app_state.dart' as app_state;
-import 'package:oidc_example/web_redirect_uri.dart';
 
 import 'conformance/api.dart';
 import 'conformance/manager.dart';
@@ -475,7 +474,7 @@ Future<void> runOidcConformanceTest(
       ...extraPlanVariant,
     },
     postLogoutRedirectUri: redirectUri.toString(),
-    frontChannelLogoutUri: webFrontChannelLogoutUri(base: Uri.base).toString(),
+    frontChannelLogoutUri: getPlatformFrontChannelLogoutUri().toString(),
   );
   _testLogger.info('Submitting test plan request to $path...');
 
