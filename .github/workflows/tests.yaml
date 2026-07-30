@@ -670,15 +670,21 @@ jobs:
         working-directory: ["packages/oidc/example"]
     runs-on: ubuntu-latest
     # Root cause of past web-job flakiness (see #337): the OIDC redirect URI
-    # is hardcoded to localhost:22433 (integration_test/helpers.dart:11), but
-    # this job never pinned --web-port, so Flutter's web server bound to a
-    # random port. The IdP's redirect could never land back on the app's own
-    # origin, so OidcWebCore's response Completer never resolved -- the
-    # conformance test just hung until Playwright's 10-minute per-test
-    # timeout killed it (Total:1/Successful:0/Failed:0, not an assertion
-    # failure). Fixed below by pinning --web-port 22433 to match; confirmed
-    # green with conformance actually executing in run 28666114227 (web job:
-    # "OIDC Conformance Test" passed in 31s).
+    # was hardcoded to localhost:22433 while this job never pinned --web-port,
+    # so Flutter's web server bound to a random port. The IdP's redirect could
+    # never land back on the app's own origin, so OidcWebCore's response
+    # Completer never resolved -- the conformance test just hung until
+    # Playwright's 10-minute per-test timeout killed it
+    # (Total:1/Successful:0/Failed:0, not an assertion failure). Fixed by
+    # pinning --web-port; confirmed green with conformance actually executing
+    # in run 28666114227 (web job: "OIDC Conformance Test" passed in 31s).
+    #
+    # The hardcoding itself is gone now. Matching two literals by hand was only
+    # ever a coincidence waiting to break, and it broke again the moment the
+    # origin had to move to satisfy OIDC Registration section 2. Both the app
+    # and the conformance harness now derive the redirect URI from the origin
+    # being served (packages/oidc/example/lib/web_redirect_uri.dart), so the
+    # flags below are the only place it is stated.
     #
     # `continue-on-error: true` used to sit here as a safety net for the live
     # third-party IdP dependency, with a note that the job was "expected to be
@@ -711,12 +717,60 @@ jobs:
       # (flutter/flutter#181357) never applies. patrol_cli runs
       # `npx playwright install` itself; ubuntu-latest ships Node/npx.
       - name: Activate Patrol CLI (patrol_cli_plus)
-        run: dart pub global activate patrol_cli_plus
+        # Pinned to a fork commit, NOT the published 5.4.1, because this job
+        # needs --web-hostname and --web-tls-cert-path/-key-path, which no
+        # release carries yet (Bdaya-Dev/patrol#44). Pinned by full SHA rather
+        # than by branch so the CLI under test cannot change under a re-run.
+        #
+        # Swap back to `dart pub global activate patrol_cli_plus` the moment a
+        # release includes #44; nothing else in this job depends on the fork.
+        run: |
+          dart pub global activate \
+            --source git https://github.com/Bdaya-Dev/patrol.git \
+            --git-ref 0be1c0b734b931eb552734ae88b3d0b8eb589b04 \
+            --git-path packages/patrol_cli_plus
       # ubuntu-latest is 24.04, which restricts unprivileged user namespaces via
       # AppArmor; re-allow them so Playwright's Chromium sandbox can initialize.
       # https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
       - name: Allow Chromium sandbox (unprivileged userns)
         run: echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+      # An OIDC relying party running the implicit or hybrid flow may not be
+      # served at http, and may not be served at localhost. OpenID Connect
+      # Dynamic Client Registration 1.0 section 2:
+      #
+      #   Web Clients using the OAuth Implicit Grant Type MUST only register
+      #   URLs using the https scheme as redirect_uris; they MUST NOT use
+      #   localhost as the hostname.
+      #
+      # Both clauses bind, and violating the first is what produced exactly 75
+      # provider-side rejections in one run (48 Hybrid + 27 Implicit):
+      #
+      #   redirect_uri is one of the registered uris but uses http scheme which
+      #   is not allowed when application_type is web and response type is not
+      #   code
+      #
+      # The suite only checks the scheme today, so https://localhost would turn
+      # the job green while still violating the second clause. It is not worth
+      # certifying against a check the suite forgot to write, so this serves the
+      # app at a real name instead.
+      #
+      # .test is reserved by RFC 6761 and is guaranteed never to resolve
+      # publicly, so this name cannot collide with a real host.
+      - name: Serve the RP at a conformant origin (hosts + TLS)
+        working-directory: ${{ matrix.working-directory }}
+        run: |
+          set -euo pipefail
+          echo "127.0.0.1 rp.oidc.test" | sudo tee -a /etc/hosts
+          mkdir -p .ci/tls
+          # A self-signed leaf is enough: the only party that has to accept it
+          # is our own Playwright Chromium (below). The provider never connects
+          # to the RP -- the browser does the redirect.
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 2 \
+            -keyout .ci/tls/rp.key -out .ci/tls/rp.pem \
+            -subj "/CN=rp.oidc.test" \
+            -addext "subjectAltName=DNS:rp.oidc.test"
+          echo "--- serving origin: https://rp.oidc.test:22433 ---"
+          openssl x509 -in .ci/tls/rp.pem -noout -subject -ext subjectAltName
       - name: Run Web Integration Tests (Patrol + Playwright)
         working-directory: ${{ matrix.working-directory }}
         env:
@@ -731,10 +785,22 @@ jobs:
           # an lcov into ./coverage. Only patrol_test/app_test.dart is targeted
           # (the offline entrypoint imports dart:io, unavailable on web).
           #
-          # --web-port 22433 pins the Flutter web server to the same port the
-          # OIDC redirect URI is hardcoded to (integration_test/helpers.dart:11),
-          # so the IdP's redirect actually lands back on this app's origin. See
-          # #337 for the full diagnosis of the hang this fixes.
+          # --web-port 22433 pins the Flutter web server so the IdP's redirect
+          # lands back on this app's origin. See #337 for the full diagnosis of
+          # the hang this fixes. The redirect URI is no longer hardcoded to
+          # match: the app and the conformance harness both derive it from the
+          # origin actually being served (lib/web_redirect_uri.dart), so the
+          # port and hostname below are the single source of truth.
+          #
+          # --web-hostname + the TLS pair serve the RP at
+          # https://rp.oidc.test:22433, which is what OIDC Registration section
+          # 2 requires of a web client running the implicit or hybrid flow. See
+          # the origin step above for the full citation.
+          #
+          # --web-browser-args makes our own Chromium accept the self-signed
+          # cert from that step. It is scoped to this browser instance, which
+          # only ever loads the app under test and the provider's own https
+          # endpoints; nothing here weakens verification for anything else.
           #
           # --show-flutter-logs is load-bearing, not verbosity. patrol_log_plus
           # DROPS every stdout line that does not contain 'PATROL_LOG' unless
@@ -759,6 +825,10 @@ jobs:
           patrol_plus test \
             --target patrol_test/app_test.dart \
             --web-port 22433 \
+            --web-hostname rp.oidc.test \
+            --web-tls-cert-path "$PWD/.ci/tls/rp.pem" \
+            --web-tls-cert-key-path "$PWD/.ci/tls/rp.key" \
+            --web-browser-args '["--ignore-certificate-errors"]' \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-package oidc \

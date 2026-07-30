@@ -1,14 +1,21 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
+import 'package:oidc_example/web_redirect_uri.dart';
 
 Uri getPlatformRedirectUri() {
   return kIsWeb
       // this url must be an actual html page.
       // see the file in /web/redirect.html for an example.
       //
-      // for debugging in flutter, you must run this app with --web-port 22433
-      ? Uri.parse('http://localhost:22433/redirect.html')
+      // Derived from the origin the app is actually served from, via the same
+      // function app_state.dart uses. This is what gets registered with the
+      // conformance test plan, so a hardcoded origin here would register a
+      // redirect_uri the app does not send the moment it is served anywhere
+      // else -- and OIDC Registration section 2 requires it to be served
+      // somewhere else: https, and not localhost, for the implicit and hybrid
+      // flows.
+      ? harnessWebRedirectUri(base: Uri.base)
       : Platform.isIOS || Platform.isMacOS || Platform.isAndroid
       // scheme: reverse domain name notation of your package name.
       // path: anything.
