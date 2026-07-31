@@ -24,8 +24,10 @@ Duration? defaultRefreshBefore(OidcToken token) {
 ///   [OidcShouldRemoveInvalidTokenCallback]).
 /// - `null`  → apply the default policy (the current, unchanged behavior:
 ///   refresh when expired, then re-validate).
-typedef OidcIsLoadedTokenAcceptableCallback =
-    bool? Function(OidcUser user, List<Exception> validationErrors);
+typedef OidcIsLoadedTokenAcceptableCallback = bool? Function(
+  OidcUser user,
+  List<Exception> validationErrors,
+);
 
 /// The callback used by [OidcUserManagerSettings.shouldRemoveInvalidToken] to
 /// decide whether a loaded-but-invalid token is removed from the [OidcStore].
@@ -38,8 +40,10 @@ typedef OidcIsLoadedTokenAcceptableCallback =
 /// - `false` → keep the cached tokens (e.g. for a bespoke offline policy).
 /// - `null`  → apply the default policy, which removes the tokens unless
 ///   [OidcUserManagerSettings.supportOfflineAuth] is enabled.
-typedef OidcShouldRemoveInvalidTokenCallback =
-    bool? Function(OidcUser user, List<Exception> validationErrors);
+typedef OidcShouldRemoveInvalidTokenCallback = bool? Function(
+  OidcUser user,
+  List<Exception> validationErrors,
+);
 
 /// Controls how [OidcUserManagerBase.init] restores a previously-cached user.
 ///
@@ -89,10 +93,9 @@ enum OidcInitMode {
 }
 
 /// The callback used to determine the retry delay for offline mode refresh attempts.
-typedef OidcOfflineRefreshRetryDelayCallback =
-    Duration Function(
-      int consecutiveFailures,
-    );
+typedef OidcOfflineRefreshRetryDelayCallback = Duration Function(
+  int consecutiveFailures,
+);
 
 /// Default threshold for emitting repeat refresh failure warnings.
 
@@ -300,11 +303,21 @@ class OidcUserManagerSettings {
   /// tokens to that key. Null (the default) disables DPoP.
   final OidcDPoPSettings? dpop;
 
-  /// Additional audiences (beyond the `client_id`, which is always trusted)
-  /// that an id_token's `aud` claim is allowed to contain.
+  /// Optional strict allowlist for additional ID-token audiences.
   ///
-  /// OpenID Connect Core §3.1.3.7 requires rejecting an id_token whose `aud`
-  /// contains audiences not trusted by the client; this is the trust list.
+  /// The current client's `client_id` is always required to be present in the
+  /// ID token's `aud` claim.
+  ///
+  /// When this value is `null` (the default), additional audiences are allowed.
+  /// This follows OpenID Connect Core §3.1.3.7: an RP must verify that its own
+  /// `client_id` is in `aud`; a token may contain multiple audiences.
+  ///
+  /// When non-null, this enables a stricter deployment policy: every audience
+  /// in the ID token must be either this client's `client_id` or one of these
+  /// configured values.
+  ///
+  /// For multi-audience ID tokens, the manager also requires `azp` to be
+  /// present and equal to this client's `client_id`.
   final List<String>? allowedAudiences;
 
   /// RFC 8707 Resource Indicators: the protected resource(s) the issued tokens

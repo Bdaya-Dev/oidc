@@ -361,9 +361,7 @@ abstract class OidcUserManagerBase {
   @protected
   Map<String, dynamic> getSerializableOptions(
     OidcPlatformSpecificOptions options,
-  ) => {
-    if (isWeb) 'webLaunchMode': options.web.navigationMode.name,
-  };
+  ) => {if (isWeb) 'webLaunchMode': options.web.navigationMode.name};
 
   /// Returns the authorization response.
   /// may throw an [OidcException].
@@ -571,10 +569,7 @@ abstract class OidcUserManagerBase {
           extra: {...?settings.extraTokenParameters, ...?extraBodyFields},
         ),
         credentials: clientCredentials,
-        headers: {
-          ...?settings.extraTokenHeaders,
-          ...?extraTokenHeaders,
-        },
+        headers: {...?settings.extraTokenHeaders, ...?extraTokenHeaders},
         client: httpClient,
         options: settings.options,
       ),
@@ -669,10 +664,7 @@ abstract class OidcUserManagerBase {
               },
             ),
             credentials: clientCredentials,
-            headers: {
-              ...?settings.extraTokenHeaders,
-              ...?extraTokenHeaders,
-            },
+            headers: {...?settings.extraTokenHeaders, ...?extraTokenHeaders},
             client: httpClient,
             options: settings.options,
           ),
@@ -881,16 +873,10 @@ abstract class OidcUserManagerBase {
   /// NOTE: this is different than [logout], since this method doesn't initiate
   /// any logout flows.
   Future<void> forgetUser() async {
-    await cleanUpStore(
-      toDelete: {
-        OidcStoreNamespace.secureTokens,
-      },
-    );
+    await cleanUpStore(toDelete: {OidcStoreNamespace.secureTokens});
     final currentUser = this.currentUser;
     if (currentUser != null) {
-      emitEvent(
-        OidcPreLogoutEvent.now(currentUser: currentUser),
-      );
+      emitEvent(OidcPreLogoutEvent.now(currentUser: currentUser));
       userSubject.add(null);
     }
   }
@@ -963,18 +949,12 @@ abstract class OidcUserManagerBase {
         metadata: discoveryDocument,
         revocationEndpoint: revocationEndpoint,
         credentials: clientCredentials,
-        headers: {
-          ...?settings.extraRevocationHeaders,
-          ...?headers,
-        },
+        headers: {...?settings.extraRevocationHeaders, ...?headers},
         request: OidcRevocationRequest(
           token: token,
           tokenTypeHint:
               OidcConstants_RevocationParameters_TokenType.accessToken,
-          extra: {
-            ...?extraBodyFields,
-            ...?settings.extraRevocationParameters,
-          },
+          extra: {...?extraBodyFields, ...?settings.extraRevocationParameters},
         ),
         options: getPlatformOptions(options),
         client: httpClient,
@@ -1067,18 +1047,12 @@ abstract class OidcUserManagerBase {
         metadata: discoveryDocument,
         revocationEndpoint: revocationEndpoint,
         credentials: clientCredentials,
-        headers: {
-          ...?settings.extraRevocationHeaders,
-          ...?headers,
-        },
+        headers: {...?settings.extraRevocationHeaders, ...?headers},
         request: OidcRevocationRequest(
           token: token,
           tokenTypeHint:
               OidcConstants_RevocationParameters_TokenType.refreshToken,
-          extra: {
-            ...?extraBodyFields,
-            ...?settings.extraRevocationParameters,
-          },
+          extra: {...?extraBodyFields, ...?settings.extraRevocationParameters},
         ),
         options: getPlatformOptions(options),
         client: httpClient,
@@ -1325,9 +1299,7 @@ abstract class OidcUserManagerBase {
 
       final tokenEndpoint = metadata.tokenEndpoint;
       if (tokenEndpoint == null) {
-        logAndThrow(
-          "This provider doesn't provide a token endpoint",
-        );
+        logAndThrow("This provider doesn't provide a token endpoint");
       }
       // an authorization code flow MUST have a code as a response,
       // otherwise an OidcException should have been thrown before entering
@@ -1626,10 +1598,7 @@ abstract class OidcUserManagerBase {
     lastSuccessfulServerContact = clock.now();
     consecutiveRefreshFailures = 0;
     if (exitOffline && isInOfflineMode) {
-      exitOfflineMode(
-        networkRestored: true,
-        newToken: newToken,
-      );
+      exitOfflineMode(networkRestored: true, newToken: newToken);
     }
   }
 
@@ -1998,9 +1967,7 @@ abstract class OidcUserManagerBase {
 
   @protected
   Future<void> handleTokenExpiring(OidcToken event) async {
-    emitEvent(
-      OidcTokenExpiringEvent.now(currentToken: event),
-    );
+    emitEvent(OidcTokenExpiringEvent.now(currentToken: event));
     // Automatic refresh-on-expiry is gated on POSSESSION of a refresh_token, not
     // on the OP advertising `refresh_token` in grant_types_supported (OPTIONAL
     // metadata, RFC 8414 §2; refresh is tied to the token per RFC 6749 §6).
@@ -2122,12 +2089,7 @@ abstract class OidcUserManagerBase {
           'Auto-refresh succeeded after the manager was disposed; '
           'ignoring the new token.',
         );
-        return (
-          user: null,
-          failureKind: null,
-          error: null,
-          stackTrace: null,
-        );
+        return (user: null, failureKind: null, error: null, stackTrace: null);
       }
       newUser = await createUserFromToken(
         token: OidcToken.fromResponse(
@@ -2144,12 +2106,7 @@ abstract class OidcUserManagerBase {
       // Successful refresh - update last server contact and exit offline mode
       recordSuccessfulServerContact(newToken: newUser?.token);
       logger.fine('Refreshed a token and got a new user: ${newUser?.uid}');
-      return (
-        user: newUser,
-        failureKind: null,
-        error: null,
-        stackTrace: null,
-      );
+      return (user: newUser, failureKind: null, error: null, stackTrace: null);
     } on Object catch (e, st) {
       // Post-dispose safety: a refresh that FAILS after the manager was torn
       // down must also be a COMPLETE no-op — no failure event, no offline
@@ -2161,12 +2118,7 @@ abstract class OidcUserManagerBase {
           e,
           st,
         );
-        return (
-          user: null,
-          failureKind: null,
-          error: null,
-          stackTrace: null,
-        );
+        return (user: null, failureKind: null, error: null, stackTrace: null);
       }
       // #120: a transient failure that offline handling will absorb schedules a
       // retry; a terminal failure (e.g. invalid_grant) or a disabled offline
@@ -2310,9 +2262,7 @@ abstract class OidcUserManagerBase {
 
   @protected
   void handleTokenExpired(OidcToken event) {
-    emitEvent(
-      OidcTokenExpiredEvent.now(currentToken: event),
-    );
+    emitEvent(OidcTokenExpiredEvent.now(currentToken: event));
 
     if (!settings.supportOfflineAuth) {
       // #154: do NOT forget a still-refreshable session on expiry. On resume
@@ -2613,14 +2563,10 @@ abstract class OidcUserManagerBase {
       errors.removeWhere(_isJwtExpiredError);
     }
     if (claims.subject == null) {
-      errors.add(
-        JoseException('id token is missing a `sub` claim.'),
-      );
+      errors.add(JoseException('id token is missing a `sub` claim.'));
     }
     if (claims.issuedAt == null) {
-      errors.add(
-        JoseException('id token is missing an `iat` claim.'),
-      );
+      errors.add(JoseException('id token is missing an `iat` claim.'));
     }
 
     // Additional OpenID Connect Core §3.1.3.7 id_token checks not covered by
@@ -2660,23 +2606,52 @@ abstract class OidcUserManagerBase {
       );
     }
 
-    // aud strictness (§3.1.3.7): the client_id is always trusted, and
-    // `settings.allowedAudiences` extends the trust list. Any OTHER audience
-    // means the token was minted for someone else and MUST be rejected.
-    final trustedAudiences = <String>{
-      clientCredentials.clientId,
-      ...?settings.allowedAudiences,
-    };
-    final untrustedAudiences = audiences
-        .where((a) => !trustedAudiences.contains(a))
-        .toList();
-    if (untrustedAudiences.isNotEmpty) {
+    // OpenID Connect Core §3.1.3.7:
+    //
+    // The ID token MUST be intended for this relying party, meaning its `aud`
+    // claim MUST contain this manager's client_id.
+    //
+    // A token may legitimately have multiple audiences. Additional audiences
+    // do not invalidate the token for this RP as long as:
+    //
+    //   * this RP's client_id is present in `aud`; and
+    //   * when `azp` is present, it identifies this RP.
+    //
+    // `azp` validation is performed above.
+    if (!audiences.contains(clientCredentials.clientId)) {
       errors.add(
         JoseException(
-          'id token contains untrusted audience(s) $untrustedAudiences, not '
-          'in the client_id or settings.allowedAudiences.',
+          'id token `aud` does not contain this client_id '
+          '(`${clientCredentials.clientId}`).',
         ),
       );
+    }
+
+    // `allowedAudiences`, when explicitly configured, enables an additional
+    // stricter deployment policy: every audience must be known to this RP.
+    //
+    // Keep this optional. Requiring an RP to know every other audience in a
+    // valid multi-audience token is unnecessarily restrictive and makes
+    // independent applications coupled to one another.
+    final allowedAudiences = settings.allowedAudiences;
+    if (allowedAudiences != null) {
+      final trustedAudiences = <String>{
+        clientCredentials.clientId,
+        ...allowedAudiences,
+      };
+
+      final unexpectedAudiences = audiences
+          .where((audience) => !trustedAudiences.contains(audience))
+          .toList();
+
+      if (unexpectedAudiences.isNotEmpty) {
+        errors.add(
+          JoseException(
+            'id token contains audience(s) outside the configured strict '
+            'allowlist: $unexpectedAudiences.',
+          ),
+        );
+      }
     }
 
     // `at_hash` (§3.2.2.9): when present alongside an access_token, it MUST be
@@ -2927,10 +2902,7 @@ abstract class OidcUserManagerBase {
 
       // If validation passed with no errors and we were in offline mode, exit it
       if (errors.isEmpty && offlineModeStartedAt != null && !userInfoFailed) {
-        exitOfflineMode(
-          networkRestored: true,
-          newToken: actualUser.token,
-        );
+        exitOfflineMode(networkRestored: true, newToken: actualUser.token);
       }
 
       // Emit warning if token validation was skipped
@@ -2975,19 +2947,10 @@ abstract class OidcUserManagerBase {
   }
 
   @protected
-  Future<void> cleanUpStore({
-    required Set<OidcStoreNamespace> toDelete,
-  }) async {
+  Future<void> cleanUpStore({required Set<OidcStoreNamespace> toDelete}) async {
     for (final element in toDelete) {
-      final keys = await store.getAllKeys(
-        element,
-        managerId: id,
-      );
-      await store.removeMany(
-        element,
-        keys: keys,
-        managerId: id,
-      );
+      final keys = await store.getAllKeys(element, managerId: id);
+      await store.removeMany(element, keys: keys, managerId: id);
     }
   }
 
@@ -3152,9 +3115,7 @@ abstract class OidcUserManagerBase {
           "Couldn't fetch the discoveryDocument",
           error: e,
           stackTrace: st,
-          extra: {
-            OidcConstants_Exception.discoveryDocumentUri: uri,
-          },
+          extra: {OidcConstants_Exception.discoveryDocumentUri: uri},
         );
       }
       // Keep the cached document as an offline fallback (do NOT re-persist or
@@ -3196,9 +3157,7 @@ abstract class OidcUserManagerBase {
           '(RFC 8414 §2.1); refusing to use the document.',
           error: e,
           stackTrace: st,
-          extra: {
-            OidcConstants_Exception.discoveryDocumentUri: uri,
-          },
+          extra: {OidcConstants_Exception.discoveryDocumentUri: uri},
         );
       }
     }
@@ -3259,10 +3218,7 @@ abstract class OidcUserManagerBase {
       keys: {key, '$key$discoveryFetchedAtSuffix'},
       managerId: id,
     );
-    final cachedMetadata = await _parseCachedDiscovery(
-      key,
-      cachedValues[key],
-    );
+    final cachedMetadata = await _parseCachedDiscovery(key, cachedValues[key]);
     // Keep the cached document as the offline fallback for the network fetch.
     currentDiscoveryDocument = cachedMetadata;
 
@@ -3323,9 +3279,7 @@ abstract class OidcUserManagerBase {
         logAndThrow(
           'Discovery document is missing the required `issuer` member '
           '(OIDC Discovery §3 / RFC 8414 §2).',
-          extra: {
-            OidcConstants_Exception.discoveryDocumentUri: uri,
-          },
+          extra: {OidcConstants_Exception.discoveryDocumentUri: uri},
         );
       }
       logger.warning(
@@ -3342,9 +3296,7 @@ abstract class OidcUserManagerBase {
       logAndThrow(
         'Issuer mismatch (OIDC Discovery §4.3 / RFC 8414 §3.3): discovery '
         'issuer ($actual) != expected issuer ($expected).',
-        extra: {
-          OidcConstants_Exception.discoveryDocumentUri: uri,
-        },
+        extra: {OidcConstants_Exception.discoveryDocumentUri: uri},
       );
     }
     logger.warning(
@@ -3601,10 +3553,7 @@ abstract class OidcUserManagerBase {
 
   @protected
   Future<void> clearUnusedStates() async {
-    await OidcState.clearStaleState(
-      store: store,
-      age: const Duration(days: 1),
-    );
+    await OidcState.clearStaleState(store: store, age: const Duration(days: 1));
   }
 
   /// Registers the id_token verification keys with [keyStore] from the current

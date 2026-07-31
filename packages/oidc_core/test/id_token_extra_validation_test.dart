@@ -123,9 +123,7 @@ _ValidationManager _manager({
   OidcProviderMetadata? discoveryDocument,
 }) => _ValidationManager(
   discoveryDocument: discoveryDocument ?? _metadata,
-  clientCredentials: const OidcClientAuthentication.none(
-    clientId: 'client-1',
-  ),
+  clientCredentials: const OidcClientAuthentication.none(clientId: 'client-1'),
   store: OidcMemoryStore(),
   httpClient: httpClient,
   keyStore: keyStore,
@@ -198,32 +196,181 @@ void main() {
     });
   });
 
-  group('validateUser aud strictness (§3.1.3.7)', () {
-    test('rejects an untrusted extra audience', () async {
+  group('validateUser multi-audience ID tokens (§3.1.3.7)', () {
+    test(
+      'accepts additional audiences by default when aud contains this client '
+      'and azp identifies this client',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['client-1', 'other-rp'],
+          'azp': 'client-1',
+        });
+
+        final errors = _manager().run(user, _metadata);
+
+        expect(
+          errors.where(
+            (e) =>
+                e.toString().contains('aud') ||
+                e.toString().contains('audience') ||
+                e.toString().contains('azp'),
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test('rejects a token whose aud does not contain this client_id', () async {
       final user = await _user({
         ..._baseClaims(),
-        'aud': ['client-1', 'other-rp'],
+        'aud': ['other-rp', 'another-rp'],
+        'azp': 'other-rp',
       });
+
       final errors = _manager().run(user, _metadata);
+
       expect(
-        errors.any((e) => e.toString().contains('untrusted audience')),
+        errors.any(
+          (e) => e.toString().contains(
+            'id token `aud` does not contain this client_id',
+          ),
+        ),
         isTrue,
       );
     });
 
-    test('accepts an extra audience listed in allowedAudiences', () async {
-      final user = await _user({
+    test('rejects a multi-audience token without azp', () async {
+      final claims = {
         ..._baseClaims(),
-        'aud': ['client-1', 'trusted-api'],
-      });
-      final errors = _manager(
-        allowedAudiences: ['trusted-api'],
-      ).run(user, _metadata);
+        'aud': ['client-1', 'other-rp'],
+      }..remove('azp');
+
+      final user = await _user(claims);
+      final errors = _manager().run(user, _metadata);
+
       expect(
-        errors.any((e) => e.toString().contains('untrusted audience')),
-        isFalse,
+        errors.any(
+          (e) => e.toString().contains(
+            'multiple audiences but is missing the required `azp`',
+          ),
+        ),
+        isTrue,
       );
     });
+
+    test(
+      'rejects a multi-audience token whose azp identifies another client',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['client-1', 'other-rp'],
+          'azp': 'other-rp',
+        });
+
+        final errors = _manager().run(user, _metadata);
+
+        expect(
+          errors.any(
+            (e) => e.toString().contains(
+              'id token `azp` (`other-rp`) does not match the client_id',
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test('rejects a malformed non-string azp claim', () async {
+      final user = await _user({
+        ..._baseClaims(),
+        'aud': ['client-1', 'other-rp'],
+        'azp': 123,
+      });
+
+      final errors = _manager().run(user, _metadata);
+
+      expect(
+        errors.any(
+          (e) => e.toString().contains(
+            'id token `azp` must be a non-empty string when present',
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'strict allowedAudiences mode rejects an unknown additional audience',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['client-1', 'other-rp'],
+          'azp': 'client-1',
+        });
+
+        // Non-null empty list means strict mode with no extra audiences
+        // permitted.
+        final errors = _manager(allowedAudiences: const [])
+            .run(user, _metadata);
+
+        expect(
+          errors.any(
+            (e) => e.toString().contains(
+              'outside the configured strict allowlist',
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'strict allowedAudiences mode accepts a configured additional audience',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['client-1', 'trusted-api'],
+          'azp': 'client-1',
+        });
+
+        final errors = _manager(allowedAudiences: const ['trusted-api'])
+            .run(user, _metadata);
+
+        expect(
+          errors.where(
+            (e) =>
+                e.toString().contains('aud') ||
+                e.toString().contains('audience') ||
+                e.toString().contains('azp'),
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'strict allowedAudiences mode still requires this client_id in aud',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['trusted-api'],
+          'azp': 'client-1',
+        });
+
+        final errors = _manager(allowedAudiences: const ['trusted-api'])
+            .run(user, _metadata);
+
+        expect(
+          errors.any(
+            (e) => e.toString().contains(
+              'id token `aud` does not contain this client_id',
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 
   group('validateUser at_hash (§3.2.2.9)', () {
@@ -234,19 +381,19 @@ void main() {
       final atHash = base64Url
           .encode(full.sublist(0, full.length ~/ 2))
           .replaceAll('=', '');
-      final user = await _user(
-        {..._baseClaims(), 'at_hash': atHash},
-        accessToken: accessToken,
-      );
+      final user = await _user({
+        ..._baseClaims(),
+        'at_hash': atHash,
+      }, accessToken: accessToken);
       final errors = _manager().run(user, _metadata);
       expect(errors.any((e) => e.toString().contains('at_hash')), isFalse);
     });
 
     test('rejects a mismatched at_hash', () async {
-      final user = await _user(
-        {..._baseClaims(), 'at_hash': 'totally-wrong'},
-        accessToken: 'access-token-xyz',
-      );
+      final user = await _user({
+        ..._baseClaims(),
+        'at_hash': 'totally-wrong',
+      }, accessToken: 'access-token-xyz');
       final errors = _manager().run(user, _metadata);
       expect(errors.any((e) => e.toString().contains('at_hash')), isTrue);
     });
@@ -298,10 +445,7 @@ void main() {
           _metadata,
           maxAge: const Duration(minutes: 5),
         );
-        expect(
-          errors.any((e) => e.toString().contains('auth_time')),
-          isTrue,
-        );
+        expect(errors.any((e) => e.toString().contains('auth_time')), isTrue);
       },
     );
 
@@ -350,10 +494,7 @@ void main() {
         // Must not throw a raw TypeError out of validateUser; the missing `exp`
         // is collected as a normal validation error.
         final errors = _manager().run(user, _metadata);
-        expect(
-          errors.any((e) => e.toString().contains('exp')),
-          isTrue,
-        );
+        expect(errors.any((e) => e.toString().contains('exp')), isTrue);
       },
     );
   });
@@ -379,57 +520,46 @@ void main() {
       'passes when expectedIssuer pins the concrete tenant issuer',
       () async {
         final user = await concreteTenantUser();
-        final errors = _manager(
-          expectedIssuer: Uri.parse(concreteIssuer),
-        ).run(user, templateMetadata);
+        final errors = _manager(expectedIssuer: Uri.parse(concreteIssuer))
+            .run(user, templateMetadata);
         // The concrete `iss` now matches the pinned expectedIssuer, so the
         // otherwise-valid token produces no validation errors at all.
         expect(errors, isEmpty);
       },
     );
 
-    test(
-      'fails with an issuer mismatch when expectedIssuer is unset '
-      '(regression pin: default behavior is unchanged)',
-      () async {
-        final user = await concreteTenantUser();
-        // No expectedIssuer -> the advertised template `metadata.issuer` is used
-        // exactly as before, and the concrete `iss` fails the exact-match check.
-        final errors = _manager().run(user, templateMetadata);
-        expect(
-          errors.any((e) => e.toString().contains('Issuer does not match')),
-          isTrue,
-        );
-      },
-    );
+    test('fails with an issuer mismatch when expectedIssuer is unset '
+        '(regression pin: default behavior is unchanged)', () async {
+      final user = await concreteTenantUser();
+      // No expectedIssuer -> the advertised template `metadata.issuer` is used
+      // exactly as before, and the concrete `iss` fails the exact-match check.
+      final errors = _manager().run(user, templateMetadata);
+      expect(
+        errors.any((e) => e.toString().contains('Issuer does not match')),
+        isTrue,
+      );
+    });
 
-    test(
-      'rejects a DIFFERENT concrete tenant iss when expectedIssuer pins '
-      'tenant A (security pin: the pin is an exact match, not merely '
-      '"anything but the template")',
-      () async {
-        // expectedIssuer pins concrete tenant A; the token carries a DIFFERENT
-        // concrete tenant B (B != A, and B is not the template metadata issuer
-        // either). §3.1.3.7 demands an EXACT match, so pinning tenant A MUST
-        // still reject tenant B — the pin does not turn into "accept any
-        // non-template issuer". This is the negative counterpart the reviewer
-        // mutation-tested for.
-        const otherConcreteIssuer =
-            'https://login.microsoftonline.com/'
-            '99999999-0000-4000-8000-000000000000/v2.0';
-        final user = await _user({
-          ..._baseClaims(),
-          'iss': otherConcreteIssuer,
-        });
-        final errors = _manager(
-          expectedIssuer: Uri.parse(concreteIssuer),
-        ).run(user, templateMetadata);
-        expect(
-          errors.any((e) => e.toString().contains('Issuer does not match')),
-          isTrue,
-        );
-      },
-    );
+    test('rejects a DIFFERENT concrete tenant iss when expectedIssuer pins '
+        'tenant A (security pin: the pin is an exact match, not merely '
+        '"anything but the template")', () async {
+      // expectedIssuer pins concrete tenant A; the token carries a DIFFERENT
+      // concrete tenant B (B != A, and B is not the template metadata issuer
+      // either). §3.1.3.7 demands an EXACT match, so pinning tenant A MUST
+      // still reject tenant B — the pin does not turn into "accept any
+      // non-template issuer". This is the negative counterpart the reviewer
+      // mutation-tested for.
+      const otherConcreteIssuer =
+          'https://login.microsoftonline.com/'
+          '99999999-0000-4000-8000-000000000000/v2.0';
+      final user = await _user({..._baseClaims(), 'iss': otherConcreteIssuer});
+      final errors = _manager(expectedIssuer: Uri.parse(concreteIssuer))
+          .run(user, templateMetadata);
+      expect(
+        errors.any((e) => e.toString().contains('Issuer does not match')),
+        isTrue,
+      );
+    });
   });
 
   group('signed UserInfo iss uses resolveExpectedIssuer (#168 advisory, '
@@ -451,10 +581,8 @@ void main() {
 
     // A user whose id_token already carries the concrete tenant issuer and an
     // access token (so the UserInfo request is actually sent).
-    Future<OidcUser> concreteTenantUserWithAccessToken() => _user(
-      {..._baseClaims(), 'iss': concreteIssuer},
-      accessToken: 'at',
-    );
+    Future<OidcUser> concreteTenantUserWithAccessToken() =>
+        _user({..._baseClaims(), 'iss': concreteIssuer}, accessToken: 'at');
 
     int exp() =>
         clock.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/
@@ -493,37 +621,34 @@ void main() {
       },
     );
 
-    test(
-      'rejects (does not apply) a signed UserInfo whose iss is a WRONG '
-      'concrete issuer even when expectedIssuer is set',
-      () async {
-        const wrongConcreteIssuer =
-            'https://login.microsoftonline.com/'
-            '99999999-0000-4000-8000-000000000000/v2.0';
-        final fixture = _signedUserInfoFixture({
-          'sub': 'user-1',
-          'iss': wrongConcreteIssuer,
-          'aud': 'client-1',
-          'exp': exp(),
-          'name': 'from-userinfo',
-        });
-        final manager = _manager(
-          expectedIssuer: Uri.parse(concreteIssuer),
-          httpClient: fixture.client,
-          keyStore: fixture.keyStore,
-          discoveryDocument: templateMetadataWithUserInfo,
-        );
-        await manager.init();
-        final result = await manager.runValidateAndSave(
-          await concreteTenantUserWithAccessToken(),
-          templateMetadataWithUserInfo,
-        );
-        // The id_token itself is valid (its `iss` matches the pin), so a user is
-        // still returned — but the §5.3.4 iss mismatch means the forged UserInfo
-        // is rejected and never merged in, so its claim is absent.
-        expect(result, isNotNull);
-        expect(result!.userInfo.containsKey('name'), isFalse);
-      },
-    );
+    test('rejects (does not apply) a signed UserInfo whose iss is a WRONG '
+        'concrete issuer even when expectedIssuer is set', () async {
+      const wrongConcreteIssuer =
+          'https://login.microsoftonline.com/'
+          '99999999-0000-4000-8000-000000000000/v2.0';
+      final fixture = _signedUserInfoFixture({
+        'sub': 'user-1',
+        'iss': wrongConcreteIssuer,
+        'aud': 'client-1',
+        'exp': exp(),
+        'name': 'from-userinfo',
+      });
+      final manager = _manager(
+        expectedIssuer: Uri.parse(concreteIssuer),
+        httpClient: fixture.client,
+        keyStore: fixture.keyStore,
+        discoveryDocument: templateMetadataWithUserInfo,
+      );
+      await manager.init();
+      final result = await manager.runValidateAndSave(
+        await concreteTenantUserWithAccessToken(),
+        templateMetadataWithUserInfo,
+      );
+      // The id_token itself is valid (its `iss` matches the pin), so a user is
+      // still returned — but the §5.3.4 iss mismatch means the forged UserInfo
+      // is rejected and never merged in, so its claim is absent.
+      expect(result, isNotNull);
+      expect(result!.userInfo.containsKey('name'), isFalse);
+    });
   });
 }
