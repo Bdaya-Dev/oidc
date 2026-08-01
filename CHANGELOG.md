@@ -3,6 +3,97 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-08-01
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v4.0.0`](#oidc---v400)
+ - [`oidc_android` - `v3.0.0`](#oidc_android---v300)
+ - [`oidc_core` - `v3.0.0`](#oidc_core---v300)
+
+Packages with other changes:
+
+ - [`oidc_desktop` - `v1.1.0`](#oidc_desktop---v110)
+ - [`oidc_loopback_listener` - `v1.1.0`](#oidc_loopback_listener---v110)
+ - [`oidc_web_core` - `v1.2.0`](#oidc_web_core---v120)
+ - [`oidc_cli` - `v1.0.3`](#oidc_cli---v103)
+ - [`oidc_default_store` - `v1.1.2`](#oidc_default_store---v112)
+ - [`oidc_darwin` - `v1.1.2`](#oidc_darwin---v112)
+ - [`oidc_linux` - `v1.0.3`](#oidc_linux---v103)
+ - [`oidc_platform_interface` - `v1.0.3`](#oidc_platform_interface---v103)
+ - [`oidc_web` - `v1.0.3`](#oidc_web---v103)
+ - [`oidc_windows` - `v1.0.3`](#oidc_windows---v103)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_cli` - `v1.0.3`
+ - `oidc_default_store` - `v1.1.2`
+ - `oidc_darwin` - `v1.1.2`
+ - `oidc_linux` - `v1.0.3`
+ - `oidc_platform_interface` - `v1.0.3`
+ - `oidc_web` - `v1.0.3`
+ - `oidc_windows` - `v1.0.3`
+
+---
+
+#### `oidc` - `v4.0.0`
+
+ - **FIX**(example): keep the front-channel logout URI off Uri.base on native. ([be8a8968](https://github.com/Bdaya-Dev/oidc/commit/be8a896893bb78efcf7c9929368c2218a8d7e330))
+ - **FIX**(example): serve the web RP at a conformant https origin. ([e62500b0](https://github.com/Bdaya-Dev/oidc/commit/e62500b06442ddd2bda20c934d4c1843aedaf3c3))
+ - **FIX**(example): size the web per-test cap to the workload, not the reverse. ([932fb6ca](https://github.com/Bdaya-Dev/oidc/commit/932fb6caa9619af24ed37caf3ef31290b7a8eb57))
+ - **FIX**(example): web loses Hybrid/Implicit to a timeout budget, not a fragment bug. ([624a502e](https://github.com/Bdaya-Dev/oidc/commit/624a502e04ceae7ac26ec05f3d523fe1a870bd7a))
+ - **FIX**(example): gate Dynamic RP, which needs an RP-hosted request_uri. ([dda2caea](https://github.com/Bdaya-Dev/oidc/commit/dda2caea01f3a7e3bf89ac9c97a066aa72759bf1))
+ - **FIX**(example): gate the logout profiles the suite cannot run, and count logouts. ([bfa48dbd](https://github.com/Bdaya-Dev/oidc/commit/bfa48dbdfeac73da6ab9a46840fe3ce86761287b))
+ - **FIX**(example): let the suite supply Dynamic RP's module variant. ([05b0c847](https://github.com/Bdaya-Dev/oidc/commit/05b0c84730d198fd7795692d4e38165733190a06))
+ - **FIX**(example): resolve WebFinger after setup, and dump the plan on a 500. ([3406f070](https://github.com/Bdaya-Dev/oidc/commit/3406f0705e73bc6afe8d4be553d483259d8ab0f8))
+ - **FIX**(oidc_android): forward Map-valued raw intent extras instead of dropping them. ([7ffda6a7](https://github.com/Bdaya-Dev/oidc/commit/7ffda6a74f07aeaba3a077a1d879a615b3dfbe77))
+ - **FEAT**(oidc_core): manager-level dynamic client registration (RFC 7591). ([fe4b4c4e](https://github.com/Bdaya-Dev/oidc/commit/fe4b4c4e30b1c97db06407dc32f7d4b1106e21ca))
+ - **FEAT**(oidc_core): implement WebFinger issuer discovery (OIDC Discovery §2, RFC 7033). ([213657b8](https://github.com/Bdaya-Dev/oidc/commit/213657b8dad13d62a1c58d069c801cf26b995439))
+ - **FEAT**(oidc_core,oidc_web_core): bound the interactive web flow with flowTimeoutSeconds. ([7282efa0](https://github.com/Bdaya-Dev/oidc/commit/7282efa09d406fa3eb012688fbbc091836d8ba2e))
+ - **BREAKING** **FIX**(oidc_core): the REGISTERED token_endpoint_auth_method wins over the caller's. ([262bdfd4](https://github.com/Bdaya-Dev/oidc/commit/262bdfd4f0c1fac0f29c65be23bb3c061adb8310))
+ - **BREAKING** **FIX**(oidc_android): report the options the Auth Tab path cannot apply. ([8b7226ce](https://github.com/Bdaya-Dev/oidc/commit/8b7226ced748e953e8b3ea95ba3c711d8976dd8d))
+
+#### `oidc_android` - `v3.0.0`
+
+ - **FIX**(oidc_web_core): surface the flow timeout as OidcException, not TimeoutException. ([be6a5316](https://github.com/Bdaya-Dev/oidc/commit/be6a5316df6cc83ee90807c4f88f4d37d5cd144d))
+ - **FIX**(oidc_android): forward Map-valued raw intent extras instead of dropping them. ([7ffda6a7](https://github.com/Bdaya-Dev/oidc/commit/7ffda6a74f07aeaba3a077a1d879a615b3dfbe77))
+ - **FIX**(oidc_android): dismiss the Custom Tab after the intent-filter redirect. ([34a83693](https://github.com/Bdaya-Dev/oidc/commit/34a836933563e3fe37dc7121b87272676554a331))
+ - **DOCS**(test): state the wiring guard's single-layer scope. ([e25e04b8](https://github.com/Bdaya-Dev/oidc/commit/e25e04b89711cd526919f73ed7c9a8faf5c386cb))
+ - **BREAKING** **FIX**(oidc_android): report the options the Auth Tab path cannot apply. ([8b7226ce](https://github.com/Bdaya-Dev/oidc/commit/8b7226ced748e953e8b3ea95ba3c711d8976dd8d))
+ - **BREAKING** **FIX**(oidc_android): apply the documented Custom Tabs options natively. ([9e83a10b](https://github.com/Bdaya-Dev/oidc/commit/9e83a10ba732611ec4ef9d11c8cbe3a68ca8a7b9))
+
+#### `oidc_core` - `v3.0.0`
+
+ - **FIX**(oidc_core): reject `code`-only in loginHybridFlow, and stop overclaiming front-channel safety. ([cedaf1af](https://github.com/Bdaya-Dev/oidc/commit/cedaf1af4de3ac496b7286fb791600e500120e62))
+ - **FEAT**(oidc_core): manager-level dynamic client registration (RFC 7591). ([fe4b4c4e](https://github.com/Bdaya-Dev/oidc/commit/fe4b4c4e30b1c97db06407dc32f7d4b1106e21ca))
+ - **FEAT**(oidc_core): implement WebFinger issuer discovery (OIDC Discovery §2, RFC 7033). ([213657b8](https://github.com/Bdaya-Dev/oidc/commit/213657b8dad13d62a1c58d069c801cf26b995439))
+ - **FEAT**(oidc_core): add loginHybridFlow (OIDC Core §3.3). ([9afa3159](https://github.com/Bdaya-Dev/oidc/commit/9afa31591756c97b54527b7edcd2b094e0273c42))
+ - **FEAT**(oidc_core,oidc_web_core): bound the interactive web flow with flowTimeoutSeconds. ([7282efa0](https://github.com/Bdaya-Dev/oidc/commit/7282efa09d406fa3eb012688fbbc091836d8ba2e))
+ - **BREAKING** **FIX**(oidc_core): the REGISTERED token_endpoint_auth_method wins over the caller's. ([262bdfd4](https://github.com/Bdaya-Dev/oidc/commit/262bdfd4f0c1fac0f29c65be23bb3c061adb8310))
+ - **BREAKING** **FIX**(oidc_android): report the options the Auth Tab path cannot apply. ([8b7226ce](https://github.com/Bdaya-Dev/oidc/commit/8b7226ced748e953e8b3ea95ba3c711d8976dd8d))
+
+#### `oidc_desktop` - `v1.1.0`
+
+ - **FEAT**(oidc_loopback_listener): capture form_post bodies and fragments. ([3bc512c3](https://github.com/Bdaya-Dev/oidc/commit/3bc512c3b0fa9377635083707ecc5d7f7886fdea))
+
+#### `oidc_loopback_listener` - `v1.1.0`
+
+ - **FEAT**(oidc_loopback_listener): capture form_post bodies and fragments. ([3bc512c3](https://github.com/Bdaya-Dev/oidc/commit/3bc512c3b0fa9377635083707ecc5d7f7886fdea))
+
+#### `oidc_web_core` - `v1.2.0`
+
+ - **FIX**(oidc_web_core): say what the auth window did when a flow times out. ([63532065](https://github.com/Bdaya-Dev/oidc/commit/635320654250d2338fde2cade4ea93b88f7fbb5a))
+ - **FIX**(example): web loses Hybrid/Implicit to a timeout budget, not a fragment bug. ([624a502e](https://github.com/Bdaya-Dev/oidc/commit/624a502e04ceae7ac26ec05f3d523fe1a870bd7a))
+ - **FIX**(oidc_web_core): surface the flow timeout as OidcException, not TimeoutException. ([be6a5316](https://github.com/Bdaya-Dev/oidc/commit/be6a5316df6cc83ee90807c4f88f4d37d5cd144d))
+ - **FEAT**(oidc_core,oidc_web_core): bound the interactive web flow with flowTimeoutSeconds. ([7282efa0](https://github.com/Bdaya-Dev/oidc/commit/7282efa09d406fa3eb012688fbbc091836d8ba2e))
+
+
 ## 2026-07-26
 
 ### Changes
