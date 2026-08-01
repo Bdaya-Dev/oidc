@@ -43,40 +43,14 @@ final Logger _testLogger = Logger('oidc.conformance');
 bool isLogoutConformancePlan(String planName) =>
     planName.contains('-logout-') || planName.contains('-session-management-');
 
-/// Whether [planName] returns tokens in the URL FRAGMENT.
-///
-/// `code id_token` (hybrid) and `id_token`/`id_token token` (implicit) default
-/// to `response_mode=fragment`.
-/// A formpost plan is NOT one of these even though its id contains `-hybrid-`
-/// or `-implicit-`: `response_mode=form_post` overrides the default, so the
-/// response arrives as a POST body, not a fragment.
-bool isFragmentResponsePlan(String planName) =>
-    !isFormPostConformancePlan(planName) &&
-    (planName.contains('-hybrid-') || planName.contains('-implicit-'));
-
-/// Whether a response delivered in the URL fragment can reach the app on
-/// [platform].
-///
-/// A fragment is never sent to a server -- the browser strips it before the
-/// request goes out. So a bare loopback HTTP listener cannot observe one:
-///   * custom scheme (iOS/macOS/Android) -- ASWebAuthenticationSession and
-///     Custom Tabs hand back the WHOLE callback URL, fragment included. OK.
-///   * web (`http://localhost:.../redirect.html`) -- the page reads
-///     `location.hash` in JS and relays it over the BroadcastChannel. OK.
-///   * loopback (`http://localhost:<port>` on linux/windows) --
-///     `OidcLoopbackListener` is a plain HTTP server with no page script, so
-///     the fragment never arrives. NOT OK.
-///
-/// Observed: the hybrid plan's 48 modules pass on macOS in ~2.5 min total and
-/// time out at ~31.5s EACH on linux, which is `flowTimeoutSeconds` firing
-/// because no redirect the listener can see ever arrives.
-///
-/// This is a real library limitation, not a test artifact. Supporting it would
-/// mean the loopback listener serving a page that reads `location.hash` and
-/// posts it back to itself -- the trick CLI OAuth tools use -- which is a
-/// change to `oidc_loopback_listener`, not to this harness.
-bool canReceiveFragmentResponse(String platform) =>
-    !(platform == 'linux' || platform == 'windows');
+// There is deliberately no fragment gate any more. A fragment never reaches a
+// server, so a bare loopback listener could not observe one and linux/windows
+// skipped the hybrid and implicit plans. oidc_loopback_listener 1.1.0 serves a
+// relay page that promotes `location.hash` into the query string -- the trick
+// CLI OAuth tools use -- and oidc_desktop 1.1.0 turns it on exactly when the
+// flow's response mode calls for it (responseArrivesInFragment). Every
+// platform can now receive a fragment response, and a universally-true gate is
+// dead code.
 
 /// Whether [planName] is the third-party-initiated login profile.
 ///
@@ -165,42 +139,32 @@ bool canGenerateSessionState(Uri redirectUri) => redirectUri.host.isNotEmpty;
 bool isFormPostConformancePlan(String planName) =>
     planName.contains('-formpost-');
 
-/// Whether an authorization response can be delivered to [redirectUri] as a
-/// form POST.
+/// Whether an authorization response can be delivered as a form POST to
+/// [redirectUri] on [platform].
 ///
-/// `response_mode=form_post` has the OP deliver the response as an HTTP POST
-/// body to the redirect URI. A custom scheme -- `com.bdayadev.oidc.example:/`
-/// on iOS/macOS/Android -- is not an HTTP endpoint at all, so no browser can
-/// POST to it. The formpost plans are therefore not merely failing on those
-/// platforms; they cannot be delivered there by construction, whatever the
-/// library does.
+/// `response_mode=form_post` has the browser deliver the response as an HTTP
+/// POST body to the redirect URI. Per transport:
+///   * loopback (linux/windows) -- YES since oidc_loopback_listener 1.1.0,
+///     which reads an application/x-www-form-urlencoded body and folds it into
+///     the returned Uri's query parameters. Earlier versions answered 405 to
+///     every non-GET, and an earlier version of this predicate returned false
+///     everywhere because of it.
+///   * custom scheme (iOS/macOS/Android) -- NO: not an HTTP endpoint at all,
+///     so no browser can POST to it. Caught by the scheme check.
+///   * web -- NO: redirect.html reads location.hash/search in JS, and a page
+///     script has no access to the request body that delivered it. This is why
+///     [platform] is a parameter: the web page and the desktop listener are
+///     both http(s), so the URI alone cannot tell them apart.
 ///
-/// This is NOT the loopback listener's 405-on-non-GET
-/// (`oidc_loopback_listener.dart`). That one is real and does block form_post
-/// on desktop, but macOS never reaches it: it redirects to a custom scheme via
-/// ASWebAuthenticationSession. Chasing the 405 first was a wrong lead.
-bool canReceiveFormPost(Uri redirectUri) {
-  // No transport this example has can receive one today:
-  //   * custom scheme (iOS/macOS/Android) -- not an HTTP endpoint, so nothing
-  //     can POST to it.
-  //   * loopback (linux/windows) -- OidcLoopbackListener answers 405 to every
-  //     non-GET (oidc_loopback_listener.dart), so the POST never becomes a
-  //     captured redirect.
-  //   * web -- redirect.html reads location.hash/search in JS; a POST body is
-  //     not readable from the page.
-  //
-  // The first version returned `scheme == http || https`, which made this
-  // answer true on loopback and web. That was the implementation asserted back
-  // at itself: an http scheme says nothing about whether the receiver handles
-  // POST. The consequence was concrete -- the three formpost plans ran on
-  // linux/windows, hit the 405, burned the full flowTimeoutSeconds on every
-  // module, and failed with an Android-specific "check the OidcRedirectActivity
-  // intent-filter" message on a platform that has no such thing.
-  //
-  // Flip this to a real capability check when the loopback listener learns to
-  // accept POST and parse the form body; that is a change to
-  // oidc_loopback_listener, not to this harness.
-  return false;
+/// The predicate stays a real capability statement rather than
+/// `scheme == http`: that earlier shortcut ran the formpost plans into the
+/// listener's 405, burned flowTimeoutSeconds per module, and reported an
+/// Android-specific failure message on Linux.
+bool canReceiveFormPost(Uri redirectUri, String platform) {
+  if (platform.toLowerCase() == 'web') {
+    return false;
+  }
+  return redirectUri.isScheme('http') || redirectUri.isScheme('https');
 }
 
 bool _planIdsLogged = false;
@@ -392,16 +356,6 @@ Future<void> runOidcConformanceTest(
     return;
   }
 
-  if (isFragmentResponsePlan(planName) &&
-      !canReceiveFragmentResponse(platform)) {
-    markTestSkipped(
-      '$planName returns tokens in the URL fragment, which a loopback HTTP '
-      'listener cannot observe; $platform uses one. Runs on macOS/iOS/Android '
-      '(full callback URL) and web (redirect.html reads location.hash).',
-    );
-    return;
-  }
-
   if (planNeedsHostedRequestUri(planName)) {
     markTestSkipped(
       '$planName pins request_type=request_uri for every module and the suite '
@@ -443,12 +397,17 @@ Future<void> runOidcConformanceTest(
   }
 
   if (isFormPostConformancePlan(planName) &&
-      !canReceiveFormPost(getPlatformRedirectUri())) {
-    // Not a skipped failure: the OP cannot POST to a custom scheme, so there is
-    // no outcome to observe on this platform.
+      !canReceiveFormPost(getPlatformRedirectUri(), platform)) {
+    // Not a skipped failure: nothing on this platform can observe a POST body,
+    // so there is no outcome to test. Two distinct reasons share this gate:
+    // a custom scheme is not an HTTP endpoint (no browser can POST to it), and
+    // a web page script cannot read the request body that delivered it.
     markTestSkipped(
-      '$planName needs an http(s) redirect to receive a form POST; '
-      '$platform redirects to ${getPlatformRedirectUri().scheme}: scheme.',
+      '$planName delivers the response as a form POST, which $platform cannot '
+      'receive: ${platform.toLowerCase() == 'web' ? 'redirect.html reads '
+                'location.hash/search, and a page script has no access to a '
+                'POST body' : '${getPlatformRedirectUri().scheme}: is not an '
+                'HTTP endpoint, so no browser can POST to it'}.',
     );
     return;
   }
