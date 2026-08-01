@@ -14,7 +14,6 @@ class OidcAuthorizeState extends OidcState {
   ///
   OidcAuthorizeState({
     required this.redirectUri,
-    required this.codeVerifier,
     required this.codeChallenge,
     required this.originalUri,
     required this.nonce,
@@ -49,11 +48,6 @@ class OidcAuthorizeState extends OidcState {
   /// via PKCE.
   @JsonKey(name: OidcConstants_AuthParameters.codeChallenge)
   String? codeChallenge;
-
-  /// The same code_verifier that was used to obtain the authorization_code
-  /// via PKCE.
-  @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
-  String? codeVerifier;
 
   /// The redirectUri that was passed.
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)

@@ -190,7 +190,6 @@ class OidcEndpoints {
     final stateData = OidcAuthorizeState(
       id: const Uuid().v4(),
       createdAt: clock.now(),
-      codeVerifier: codeVerifier,
       codeChallenge: codeChallenge,
       redirectUri: input.redirectUri,
       clientId: input.clientId,
@@ -210,15 +209,12 @@ class OidcEndpoints {
       // exchange (RFC 7636 §1) — so it must not sit in the plaintext `state`
       // namespace. Persist it in the `secureTokens` namespace (encrypted at
       // rest on web, secure-storage-backed on mobile/desktop) keyed by the
-      // state id, and strip it from the state payload before persisting.
-      // `handleSuccessfulAuthResponse` reads it back from there, falling back
-      // to the in-payload value for one release so any flow already in flight
-      // across an app upgrade still completes.
+      // state id; `handleSuccessfulAuthResponse` reads it back from there, and
+      // from nowhere else.
       await store.setStateCodeVerifier(
         state: stateData.id,
         codeVerifier: codeVerifier,
       );
-      stateData.codeVerifier = null;
       await store.setStateData(
         state: stateData.id,
         stateData: stateData.toStorageString(),
@@ -308,7 +304,6 @@ class OidcEndpoints {
     final stateData = OidcAuthorizeState(
       id: const Uuid().v4(),
       createdAt: clock.now(),
-      codeVerifier: null,
       codeChallenge: null,
       redirectUri: input.redirectUri,
       clientId: input.clientId,

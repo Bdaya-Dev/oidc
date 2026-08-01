@@ -1606,12 +1606,16 @@ abstract class OidcUserManagerBase {
         );
       }
 
-      // #324 item 20: the PKCE `code_verifier` now lives in the `secureTokens`
-      // namespace (encrypted / secure-storage-backed) keyed by the state id,
-      // not in the plaintext `state` payload. Fall back to the value embedded
-      // in the payload for a flow that was started by a version which still
-      // wrote it there — a one-release compatibility window so in-flight logins
-      // survive an app upgrade.
+      // #324 item 20: the PKCE `code_verifier` lives in the `secureTokens`
+      // namespace (encrypted / secure-storage-backed) keyed by the state id.
+      // #404: that is its only source. Neither the plaintext `state` payload
+      // nor the authorization response may supply it — the response arrives as
+      // redirect parameters, so honoring one there would let whoever shaped the
+      // redirect pick the verifier that completes the exchange, which is the
+      // binding PKCE exists to enforce (RFC 7636 §1). Absent (a flow started
+      // before 2.0.0 and still inside the stale-state window) means no
+      // `code_verifier` is sent and the OP answers `invalid_grant`, which
+      // surfaces as a clean re-login.
       final storedCodeVerifier = await store.getStateCodeVerifier(
         receivedStateKey,
       );
@@ -1626,10 +1630,7 @@ abstract class OidcUserManagerBase {
           headers: stateData.extraTokenHeaders,
           request: OidcTokenRequest.authorizationCode(
             redirectUri: response.redirectUri ?? stateData.redirectUri,
-            codeVerifier:
-                response.codeVerifier ??
-                storedCodeVerifier ??
-                stateData.codeVerifier,
+            codeVerifier: storedCodeVerifier,
             extra: stateData.extraTokenParams,
             clientId: credentials.clientId,
             code: code,
