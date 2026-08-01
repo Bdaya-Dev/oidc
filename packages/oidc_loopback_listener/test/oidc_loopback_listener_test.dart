@@ -204,25 +204,27 @@ void main() {
       expect(receivedUri!.queryParameters['code'], '1');
     });
 
-    test('serves a relay page rather than completing on the first hit',
-        () async {
-      final listener = OidcLoopbackListener(captureFragment: true);
-      final serverCompleter = Completer<HttpServer>();
-      unawaited(
-        listener.listenForSingleResponse(
-          serverCompleter: serverCompleter,
-          timeout: const Duration(seconds: 5),
-        ),
-      );
-      final server = await serverCompleter.future;
+    test(
+      'serves a relay page rather than completing on the first hit',
+      () async {
+        final listener = OidcLoopbackListener(captureFragment: true);
+        final serverCompleter = Completer<HttpServer>();
+        unawaited(
+          listener.listenForSingleResponse(
+            serverCompleter: serverCompleter,
+            timeout: const Duration(seconds: 5),
+          ),
+        );
+        final server = await serverCompleter.future;
 
-      final resp = await http.get(getTargetUriFromPort(port: server.port));
-      expect(resp.statusCode, HttpStatus.ok);
-      // The page must carry the script that performs the relay, and the marker
-      // it uses to tag the follow-up request.
-      expect(resp.body, contains('location.hash'));
-      expect(resp.body, contains(kOidcFragmentRelayMarker));
-    });
+        final resp = await http.get(getTargetUriFromPort(port: server.port));
+        expect(resp.statusCode, HttpStatus.ok);
+        // The page must carry the script that performs the relay, and the marker
+        // it uses to tag the follow-up request.
+        expect(resp.body, contains('location.hash'));
+        expect(resp.body, contains(kOidcFragmentRelayMarker));
+      },
+    );
 
     test('completes on the relayed request, marker stripped', () async {
       final listener = OidcLoopbackListener(captureFragment: true);
