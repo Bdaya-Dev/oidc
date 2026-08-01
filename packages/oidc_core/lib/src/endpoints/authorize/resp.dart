@@ -19,7 +19,6 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   ///
   OidcAuthorizeResponse({
     required super.src,
-    this.codeVerifier,
     this.redirectUri,
     this.code,
     this.sessionState,
@@ -65,8 +64,6 @@ class OidcAuthorizeResponse extends JsonBasedResponse {
   /// The client MUST NOT use the authorization code
   @JsonKey(name: OidcConstants_AuthParameters.code)
   String? code;
-  @JsonKey(name: OidcConstants_AuthParameters.codeVerifier)
-  String? codeVerifier;
   @JsonKey(name: OidcConstants_AuthParameters.nonce)
   String? nonce;
   @JsonKey(name: OidcConstants_AuthParameters.redirectUri)

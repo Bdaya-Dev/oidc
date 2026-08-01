@@ -31,6 +31,11 @@ class _CodeFlowManager extends OidcUserManagerBase {
 
   OidcAuthorizeRequest? lastAuthRequest;
 
+  /// Extra parameters folded into the simulated authorization response, so a
+  /// test can model an OP — or anyone able to shape the redirect — putting a
+  /// `code_verifier` on the response.
+  Map<String, dynamic> extraResponseParams = const {};
+
   @override
   bool get isWeb => false;
 
@@ -45,6 +50,7 @@ class _CodeFlowManager extends OidcUserManagerBase {
     return OidcAuthorizeResponse.fromJson({
       'code': 'auth-code-1',
       'state': request.state,
+      ...extraResponseParams,
     });
   }
 
@@ -183,6 +189,36 @@ void main() {
         expect(body['code_verifier'], isNotNull);
         // The verifier that reached the token endpoint is the one behind the
         // challenge that went out on the authorization request.
+        expect(
+          OidcPkcePair.generateS256Challenge(body['code_verifier']!),
+          manager.lastAuthRequest!.codeChallenge,
+        );
+      },
+    );
+
+    test(
+      'a code_verifier on the authorization response never outranks the '
+      'stored one',
+      () async {
+        final posts = <http.Request>[];
+        final manager = await build(posts)
+          // The authorization response arrives over redirect parameters, so
+          // its contents are attacker-influenced. A `code_verifier` there must
+          // not be able to displace the one this client generated and stored.
+          ..extraResponseParams = const {
+            'code_verifier': 'response-supplied-verifier',
+          };
+        try {
+          await manager.loginAuthorizationCodeFlow();
+        } on Object {
+          // User creation fails (no id_token); see above.
+        }
+
+        expect(posts, hasLength(1));
+        final body = Uri.splitQueryString(posts.single.body);
+        expect(body['code_verifier'], isNot('response-supplied-verifier'));
+        // What went out is still the verifier behind the challenge this client
+        // put on the authorization request.
         expect(
           OidcPkcePair.generateS256Challenge(body['code_verifier']!),
           manager.lastAuthRequest!.codeChallenge,

@@ -10,7 +10,6 @@ OidcAuthorizeResponse _$OidcAuthorizeResponseFromJson(
   Map<String, dynamic> json,
 ) => OidcAuthorizeResponse(
   src: readSrcMap(json, '') as Map<String, dynamic>,
-  codeVerifier: json['code_verifier'] as String?,
   redirectUri: json['redirect_uri'] == null
       ? null
       : Uri.parse(json['redirect_uri'] as String),
