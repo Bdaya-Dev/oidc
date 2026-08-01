@@ -1,3 +1,10 @@
+## 1.2.0
+
+ - **FIX**(oidc_web_core): say what the auth window did when a flow times out. ([63532065](https://github.com/Bdaya-Dev/oidc/commit/635320654250d2338fde2cade4ea93b88f7fbb5a))
+ - **FIX**(example): web loses Hybrid/Implicit to a timeout budget, not a fragment bug. ([624a502e](https://github.com/Bdaya-Dev/oidc/commit/624a502e04ceae7ac26ec05f3d523fe1a870bd7a))
+ - **FIX**(oidc_web_core): surface the flow timeout as OidcException, not TimeoutException. ([be6a5316](https://github.com/Bdaya-Dev/oidc/commit/be6a5316df6cc83ee90807c4f88f4d37d5cd144d))
+ - **FEAT**(oidc_core,oidc_web_core): bound the interactive web flow with flowTimeoutSeconds. ([7282efa0](https://github.com/Bdaya-Dev/oidc/commit/7282efa09d406fa3eb012688fbbc091836d8ba2e))
+
 ## 1.1.1
 
  - Update a dependency to the latest release.
