@@ -2,10 +2,11 @@
 library;
 
 // Audit #324 item 20: the PKCE `code_verifier` must not be persisted in the
-// plaintext `state` namespace. It now lives in the `secureTokens` namespace
+// plaintext `state` namespace. It lives in the `secureTokens` namespace
 // (encrypted at rest on web, secure-storage-backed on mobile/desktop) keyed by
-// the state id, with a one-release read fallback to the (legacy) in-payload
-// value so flows already in flight across an app upgrade still complete.
+// the state id, and that is now the ONLY place it is read from (#404): the
+// legacy in-payload fallback is gone, so a plaintext `state` payload can no
+// longer supply the secret that completes a token exchange.
 
 import 'dart:convert';
 
@@ -208,10 +209,10 @@ void main() {
     );
   });
 
-  group('backward compatibility (legacy in-payload code_verifier)', () {
+  group('legacy in-payload code_verifier (#404, no longer read)', () {
     test(
-      'a flow whose code_verifier is still embedded in the state payload '
-      '(no secureTokens entry) completes via the fallback',
+      'a state payload that still embeds code_verifier does not feed the '
+      'token request',
       () async {
         final posts = <http.Request>[];
         final client = MockClient((req) async {
@@ -239,32 +240,33 @@ void main() {
         );
         await manager.init();
 
-        // Simulate a state written by a version that still embedded the
-        // code_verifier in the (plaintext) state payload, with nothing in
-        // secureTokens — an in-flight flow captured mid app-upgrade.
-        final legacyState = OidcAuthorizeState(
-          id: 'legacy-state-1',
-          codeVerifier: 'legacy-verifier',
-          codeChallenge: OidcPkcePair.generateS256Challenge('legacy-verifier'),
-          redirectUri: Uri.parse('com.example.app://cb'),
-          clientId: 'client-1',
-          nonce: 'hashed-nonce',
-          originalUri: null,
-          extraTokenParams: null,
-          extraTokenHeaders: null,
-          options: null,
-        );
+        // A state payload exactly as a pre-2.0.0 version wrote it: the
+        // code_verifier sitting in the plaintext `state` namespace, nothing in
+        // secureTokens. Hand-built rather than via OidcAuthorizeState so it
+        // keeps describing the old on-disk shape after the field is dropped.
+        const legacyStateId = 'legacy-state-1';
         await store.setStateData(
-          state: legacyState.id,
-          stateData: legacyState.toStorageString(),
+          state: legacyStateId,
+          stateData: jsonEncode({
+            'id': legacyStateId,
+            'operationDiscriminator':
+                OidcConstants_OperationDiscriminators.authorize,
+            'code_verifier': 'legacy-verifier',
+            'code_challenge': OidcPkcePair.generateS256Challenge(
+              'legacy-verifier',
+            ),
+            'redirect_uri': 'com.example.app://cb',
+            'client_id': 'client-1',
+            'nonce': 'hashed-nonce',
+          }),
         );
-        expect(await store.getStateCodeVerifier(legacyState.id), isNull);
+        expect(await store.getStateCodeVerifier(legacyStateId), isNull);
 
         try {
           await manager.exposeHandleSuccess(
             OidcAuthorizeResponse.fromJson({
               'code': 'auth-code-1',
-              'state': legacyState.id,
+              'state': legacyStateId,
             }),
             _metadata(),
           );
@@ -274,8 +276,10 @@ void main() {
 
         expect(posts, hasLength(1));
         final body = Uri.splitQueryString(posts.single.body);
-        // The token exchange used the embedded (legacy) verifier.
-        expect(body['code_verifier'], 'legacy-verifier');
+        // The plaintext payload is not a source of the secret any more, so the
+        // request carries no code_verifier at all (the token model omits a null
+        // one). The OP answers invalid_grant and the app re-logs in.
+        expect(body.containsKey('code_verifier'), isFalse);
       },
     );
   });

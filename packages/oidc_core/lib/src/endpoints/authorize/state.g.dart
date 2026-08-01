@@ -9,7 +9,6 @@ part of 'state.dart';
 OidcAuthorizeState _$OidcAuthorizeStateFromJson(Map<String, dynamic> json) =>
     OidcAuthorizeState(
       redirectUri: Uri.parse(json['redirect_uri'] as String),
-      codeVerifier: json['code_verifier'] as String?,
       codeChallenge: json['code_challenge'] as String?,
       originalUri: json['original_uri'] == null
           ? null
@@ -44,7 +43,6 @@ Map<String, dynamic> _$OidcAuthorizeStateToJson(OidcAuthorizeState instance) =>
       'extraTokenParams': instance.extraTokenParams,
       'options': instance.options,
       'code_challenge': instance.codeChallenge,
-      'code_verifier': instance.codeVerifier,
       'redirect_uri': instance.redirectUri.toString(),
       'client_id': instance.clientId,
       'original_uri': instance.originalUri?.toString(),

@@ -107,11 +107,13 @@ extension OidcReadOnlyStoreExt on OidcReadOnlyStore {
   /// Gets the PKCE `code_verifier` for an in-flight authorization [state] from
   /// the [OidcStoreNamespace.secureTokens] namespace.
   ///
-  /// Returns null when absent — e.g. for a flow that was started by a version
-  /// which still embedded the `code_verifier` inside the (plaintext)
-  /// [OidcStoreNamespace.state] payload. Callers must fall back to that
-  /// embedded value for one release; see [OidcStoreExt.setStateCodeVerifier]
-  /// for the rationale and the compatibility window.
+  /// Returns null when absent — an unknown state, a flow whose verifier was
+  /// already consumed, or one started by a pre-2.0.0 version that embedded it
+  /// in the (plaintext) [OidcStoreNamespace.state] payload instead. Callers
+  /// MUST NOT substitute that embedded value: reading the secret back out of
+  /// the namespace it was deliberately moved off of undoes the protection
+  /// [OidcStoreExt.setStateCodeVerifier] documents. Null simply means no
+  /// `code_verifier` goes on the token request.
   Future<String?> getStateCodeVerifier(String state) => get(
     OidcStoreNamespace.secureTokens,
     key: _stateCodeVerifierKey(state),
