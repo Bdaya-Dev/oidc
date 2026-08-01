@@ -241,6 +241,48 @@ void main() {
     });
   });
 
+  group('the registered client declares its application_type', () {
+    // Registration 1.0 section 2: application_type "The default, if omitted,
+    // is web". A desktop RP registering http://localhost with hybrid/implicit
+    // response types is therefore judged as a WEB client and refused:
+    //
+    //   [FAILURE] redirect_uri is one of the registered uris but uses http
+    //   scheme which is not allowed when application_type is web and response
+    //   type is not code
+    //
+    // 36 of those on the first live linux run (PR #447), one per fragment-mode
+    // module. The same section sanctions our exact shape for native clients:
+    // "Native Clients MUST only register redirect_uris using custom URI
+    // schemes or loopback URLs using the http scheme; loopback URLs use
+    // localhost or the IP loopback literals". The fix is telling the truth:
+    // every non-web platform here IS a native client.
+    test('the plan request carries application_type when given', () {
+      final (_, body) = prepareTestPlanRequest(
+        planName: basicPlan,
+        description: 'test',
+        clientId: 'my_client',
+        redirectUri: 'http://localhost:22434',
+        requestType: 'plain_http_request',
+        clientRegistration: 'static_client',
+        applicationType: 'native',
+      );
+      expect((body['client']! as Map)['application_type'], 'native');
+    });
+
+    test('omitted means absent, not defaulted here', () {
+      // The suite owns the default; the harness must not invent one silently.
+      final (_, body) = build(basicPlan);
+      expect((body['client']! as Map).containsKey('application_type'), isFalse);
+    });
+
+    test('every non-web platform is native; web is web', () {
+      for (final p in ['linux', 'windows', 'macos', 'ios', 'android']) {
+        expect(applicationTypeForPlatform(p), 'native', reason: p);
+      }
+      expect(applicationTypeForPlatform('Web'), 'web');
+    });
+  });
+
   // The fragment gate (canReceiveFragmentResponse) is gone, deliberately.
   // oidc_loopback_listener 1.1.0 recovers a fragment via its JS relay page and
   // oidc_desktop 1.1.0 enables it exactly when the flow's response mode needs

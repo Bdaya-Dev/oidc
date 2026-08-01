@@ -135,6 +135,25 @@ bool isBackChannelLogoutPlan(String planName) =>
 /// origin for `session_state` to be computed from in the first place.
 bool canGenerateSessionState(Uri redirectUri) => redirectUri.host.isNotEmpty;
 
+/// The OIDC Registration 1.0 section 2 `application_type` this platform's RP
+/// truthfully is.
+///
+/// The suite defaults an omitted value to `web`, and a web client "using the
+/// OAuth Implicit Grant Type MUST only register URLs using the https scheme as
+/// redirect_uris; they MUST NOT use localhost as the hostname" -- which is how
+/// the first live run of the hybrid and implicit plans on linux produced 36
+/// suite-side rejections of the loopback redirect before any browser was
+/// involved.
+///
+/// Every non-web platform here is a native client, and the same section
+/// sanctions exactly their redirect shapes: "Native Clients MUST only register
+/// redirect_uris using custom URI schemes or loopback URLs using the http
+/// scheme; loopback URLs use localhost or the IP loopback literals". Declaring
+/// `native` is not a workaround for the check; it is the metadata that was
+/// always true and simply never sent.
+String applicationTypeForPlatform(String platform) =>
+    platform.toLowerCase() == 'web' ? 'web' : 'native';
+
 /// Whether [planName] uses `response_mode=form_post`.
 bool isFormPostConformancePlan(String planName) =>
     planName.contains('-formpost-');
@@ -428,6 +447,7 @@ Future<void> runOidcConformanceTest(
     redirectUri: redirectUri.toString(),
     requestType: requestType,
     clientRegistration: clientRegistration,
+    applicationType: applicationTypeForPlatform(platform),
     extraVariant: {
       if (clientAuthType != null) 'client_auth_type': clientAuthType,
       ...extraPlanVariant,
