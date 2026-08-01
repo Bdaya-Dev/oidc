@@ -34,6 +34,213 @@ const String oidcConformanceToken = String.fromEnvironment(
 
 final Logger _testLogger = Logger('oidc.conformance');
 
+/// Whether [planName] is one of the four logout profiles.
+///
+/// Matched on substring rather than an enumerated list: the logout plans also
+/// ship `-rp-hybrid` and `-rp-implicit` variants that are not wired yet, and a
+/// list would silently drive those as login-only when they are added -- the
+/// same failure this predicate exists to remove.
+bool isLogoutConformancePlan(String planName) =>
+    planName.contains('-logout-') || planName.contains('-session-management-');
+
+/// Whether [planName] returns tokens in the URL FRAGMENT.
+///
+/// `code id_token` (hybrid) and `id_token`/`id_token token` (implicit) default
+/// to `response_mode=fragment`.
+/// A formpost plan is NOT one of these even though its id contains `-hybrid-`
+/// or `-implicit-`: `response_mode=form_post` overrides the default, so the
+/// response arrives as a POST body, not a fragment.
+bool isFragmentResponsePlan(String planName) =>
+    !isFormPostConformancePlan(planName) &&
+    (planName.contains('-hybrid-') || planName.contains('-implicit-'));
+
+/// Whether a response delivered in the URL fragment can reach the app on
+/// [platform].
+///
+/// A fragment is never sent to a server -- the browser strips it before the
+/// request goes out. So a bare loopback HTTP listener cannot observe one:
+///   * custom scheme (iOS/macOS/Android) -- ASWebAuthenticationSession and
+///     Custom Tabs hand back the WHOLE callback URL, fragment included. OK.
+///   * web (`http://localhost:.../redirect.html`) -- the page reads
+///     `location.hash` in JS and relays it over the BroadcastChannel. OK.
+///   * loopback (`http://localhost:<port>` on linux/windows) --
+///     `OidcLoopbackListener` is a plain HTTP server with no page script, so
+///     the fragment never arrives. NOT OK.
+///
+/// Observed: the hybrid plan's 48 modules pass on macOS in ~2.5 min total and
+/// time out at ~31.5s EACH on linux, which is `flowTimeoutSeconds` firing
+/// because no redirect the listener can see ever arrives.
+///
+/// This is a real library limitation, not a test artifact. Supporting it would
+/// mean the loopback listener serving a page that reads `location.hash` and
+/// posts it back to itself -- the trick CLI OAuth tools use -- which is a
+/// change to `oidc_loopback_listener`, not to this harness.
+bool canReceiveFragmentResponse(String platform) =>
+    !(platform == 'linux' || platform == 'windows');
+
+/// Whether [planName] is the third-party-initiated login profile.
+///
+/// In that flow the OP starts the login by calling the RP's
+/// `initiate_login_uri` (OIDC Core §4). The RP must therefore HOST an endpoint
+/// the OP can reach and act on. This example is a Flutter app -- it has no
+/// server, and `redirect.html` on web only receives a redirect, it cannot be
+/// invoked to begin one. So the module waits for the app to react to a call it
+/// never receives.
+///
+/// Observed on linux at de71aa7: the plan created 1 module and the job log
+/// simply ends there, with `dynamic` and `config` never reaching the runner --
+/// this module consumed the remaining job budget. Everything before it passed
+/// or skipped correctly.
+bool isThirdPartyInitPlan(String planName) =>
+    planName.contains('3rd-party-init');
+
+/// Whether [planName] requires the RP to HOST a request object the suite
+/// fetches, rather than to send one.
+///
+/// The Dynamic plan pins `request_type=request_uri` at plan level for every one
+/// of its modules (`OIDCCClientDynamicTestPlan.java:41`), and the suite resolves
+/// it by fetching:
+///
+///   callAndStopOnFailure(FetchRequestUriAndExtractRequestObject.class,
+///                        "OIDCC-6.2")   -- AbstractOIDCCClientTest.java:1019
+///
+/// `ClientRequestType` has exactly three values -- `plain_http_request`,
+/// `request_object`, `request_uri` -- and none is PAR, so pushing a signed
+/// request object through the PAR endpoint does not satisfy it either. The RP
+/// must serve the object at an https URL the suite can reach, and a CI runner
+/// behind NAT cannot. That is the same inbound-reachability wall as
+/// [isBackChannelLogoutPlan], not a missing library feature: request objects
+/// BY VALUE are implemented (`oidc_core/lib/src/jar/`).
+///
+/// This gate is about the harness, not the library. `package:oidc` supports
+/// dynamic client registration -- the other half of this profile -- and it is
+/// exercised by the oidc_core suite.
+bool planNeedsHostedRequestUri(String planName) =>
+    planName == 'oidcc-client-dynamic-certification-test-plan';
+
+/// Whether [planName] is the Back-Channel Logout profile.
+///
+/// Back-Channel Logout is the one logout profile with no browser in the loop:
+/// the OP POSTs a logout token DIRECTLY to the RP's `backchannel_logout_uri`
+/// (OpenID Connect Back-Channel Logout 1.0 section 2.5). That makes it the only
+/// profile here whose transport runs inbound, from the public internet to the
+/// RP.
+///
+/// A CI runner's RP listens on loopback behind NAT, so certification.openid.net
+/// cannot reach it, and no `backchannel_logout_uri` value fixes that -- the URI
+/// is missing from the plan request because there is no reachable value to put
+/// there, not the other way round. On linux all eight of its modules therefore
+/// ended in "The end session flow timed out after 30 seconds", while the plan
+/// still reported success because the aggregate counted logins only.
+///
+/// Running it would need a publicly reachable tunnel to the runner. Until then
+/// this is stated rather than scored.
+bool isBackChannelLogoutPlan(String planName) =>
+    planName.contains('back-channel-logout');
+
+/// Whether the suite can compute a `session_state` for [redirectUri].
+///
+/// OpenID Connect Session Management derives `session_state` from the Client's
+/// ORIGIN, and the suite builds that origin as `scheme://host` taken from
+/// `redirect_uri` (`GenerateSessionState.java:69`). Every logout plan inherits
+/// that condition through
+/// `AbstractOIDCCClientLogoutTest.validateAuthorizationEndpointRequestParameters`,
+/// so it runs on the AUTHORIZATION request, before any redirect is issued.
+///
+/// A private-use URI scheme has no authority, so `URI.getHost()` returns null
+/// and the suite throws an NPE it does not catch (its handler covers only
+/// `URISyntaxException`). The module then never redirects, the client waits out
+/// `flowTimeoutSeconds`, and the plan reports zero logins.
+///
+/// The redirect URI is NOT the thing to change. RFC 8252 section 7.1: "as there
+/// is no naming authority for private-use URI scheme redirects, only a single
+/// slash ('/') appears after the scheme component". Giving it an authority to
+/// please the suite would break the BCP this package exists to conform to, on
+/// every native plan, to work around an upstream defect. It is also consistent
+/// with README.md scoping Session Management as web-only: a native app has no
+/// origin for `session_state` to be computed from in the first place.
+bool canGenerateSessionState(Uri redirectUri) => redirectUri.host.isNotEmpty;
+
+/// Whether [planName] uses `response_mode=form_post`.
+bool isFormPostConformancePlan(String planName) =>
+    planName.contains('-formpost-');
+
+/// Whether an authorization response can be delivered to [redirectUri] as a
+/// form POST.
+///
+/// `response_mode=form_post` has the OP deliver the response as an HTTP POST
+/// body to the redirect URI. A custom scheme -- `com.bdayadev.oidc.example:/`
+/// on iOS/macOS/Android -- is not an HTTP endpoint at all, so no browser can
+/// POST to it. The formpost plans are therefore not merely failing on those
+/// platforms; they cannot be delivered there by construction, whatever the
+/// library does.
+///
+/// This is NOT the loopback listener's 405-on-non-GET
+/// (`oidc_loopback_listener.dart`). That one is real and does block form_post
+/// on desktop, but macOS never reaches it: it redirects to a custom scheme via
+/// ASWebAuthenticationSession. Chasing the 405 first was a wrong lead.
+bool canReceiveFormPost(Uri redirectUri) {
+  // No transport this example has can receive one today:
+  //   * custom scheme (iOS/macOS/Android) -- not an HTTP endpoint, so nothing
+  //     can POST to it.
+  //   * loopback (linux/windows) -- OidcLoopbackListener answers 405 to every
+  //     non-GET (oidc_loopback_listener.dart), so the POST never becomes a
+  //     captured redirect.
+  //   * web -- redirect.html reads location.hash/search in JS; a POST body is
+  //     not readable from the page.
+  //
+  // The first version returned `scheme == http || https`, which made this
+  // answer true on loopback and web. That was the implementation asserted back
+  // at itself: an http scheme says nothing about whether the receiver handles
+  // POST. The consequence was concrete -- the three formpost plans ran on
+  // linux/windows, hit the 405, burned the full flowTimeoutSeconds on every
+  // module, and failed with an Android-specific "check the OidcRedirectActivity
+  // intent-filter" message on a platform that has no such thing.
+  //
+  // Flip this to a real capability check when the loopback listener learns to
+  // accept POST and parse the form body; that is a change to
+  // oidc_loopback_listener, not to this harness.
+  return false;
+}
+
+bool _planIdsLogged = false;
+
+/// Logs every RP plan id the suite actually publishes, once per run.
+///
+/// Plan ids have been the single biggest source of wasted CI round trips here:
+/// a wrong one is an HTTP 400 at creation, and the logout profiles could not be
+/// wired at all because their ids were never found in any public document --
+/// openid.net names the four logout PROFILES but not their plan ids, and the
+/// only concrete name findable elsewhere turned out to be an OP-side plan.
+///
+/// Guessing was refused, and that was right; but "unverifiable" was wrong. The
+/// suite will simply list them, and CI holds the token that makes it answer.
+/// Read the ids out of the CI log rather than searching for them again.
+Future<void> _logAvailableClientPlanIds(Dio dio) async {
+  if (_planIdsLogged) {
+    return;
+  }
+  _planIdsLogged = true;
+  try {
+    final resp = await dio.get<List<dynamic>>('api/plan/available');
+    final names =
+        (resp.data ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map((e) => e['planName'] as String?)
+            .whereType<String>()
+            .where((e) => e.contains('client'))
+            .toList()
+          ..sort();
+    _testLogger.info('Available RP plan ids (${names.length}):');
+    for (final name in names) {
+      _testLogger.info('  PLAN_ID $name');
+    }
+  } on Object catch (e) {
+    // Never fail a conformance run over a diagnostic.
+    _testLogger.warning('Could not list available plans: $e');
+  }
+}
+
 bool _loggingConfigured = false;
 
 /// Configures hierarchical logging once, printing every record.
@@ -103,16 +310,23 @@ Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
 /// test case rather than looped here, so a failure names the profile that broke
 /// and one profile's outage cannot mask another's.
 ///
-/// Plan ids. Only the basic plan is confirmed to RUN here — the others are
-/// transcribed from openid.net and panva/openid-client-certification-suite,
-/// which is not the same thing and was already wrong once:
-///   oidcc-client-basic-certification-test-plan    - runs green, the certified
+/// Plan ids, all four confirmed green against the live suite:
+///   oidcc-client-basic-certification-test-plan    - 14 modules; the certified
 ///                                                   profile
-///   oidcc-client-config-certification-test-plan   - OP config from
-///                                                   .well-known; needs an
-///                                                   explicit clientAuthType
-///   oidcc-client-implicit-certification-test-plan - not implemented here
-///   oidcc-client-hybrid-certification-test-plan   - README: "no hybrid flow yet"
+///   oidcc-client-hybrid-certification-test-plan   - 48 modules; includes the
+///                                                   invalid/missing c_hash
+///                                                   negatives
+///   oidcc-client-implicit-certification-test-plan - 27 modules
+///   oidcc-client-config-certification-test-plan   -  6 modules; OP config
+///                                                   from .well-known
+///
+/// The flow each module needs is read from that module's own `response_type`
+/// variant rather than assumed, so hybrid and implicit need no special driving
+/// here -- only their plan id.
+///
+/// The logout profiles ARE wired now, and they are two-step: log in, then
+/// logout. See [isLogoutConformancePlan] -- driving only the login leaves every
+/// module waiting for an end-session request that never arrives.
 ///
 /// [clientRegistration], [requestType] and [clientAuthType] are the plan's
 /// variant dimensions, and which ones a plan REQUIRES is not uniform. The
@@ -127,9 +341,10 @@ Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
 Future<void> runOidcConformanceTest(
   LaunchApp launchApp, {
   String planName = 'oidcc-client-basic-certification-test-plan',
-  String clientRegistration = 'static_client',
-  String requestType = 'plain_http_request',
+  String? clientRegistration = 'static_client',
+  String? requestType = 'plain_http_request',
   String? clientAuthType,
+  Map<String, String> extraPlanVariant = const {},
 }) async {
   _testLogger.info('Running OIDC conformance plan: $planName');
   await launchApp();
@@ -163,8 +378,80 @@ Future<void> runOidcConformanceTest(
   _testLogger.info('Current user OK (status ${currentUser.statusCode}).');
   expect(currentUser.statusCode, 200);
 
+  await _logAvailableClientPlanIds(dio);
+
   final platform = getPlatformName();
   _testLogger.info('Detected platform: $platform');
+
+  if (isThirdPartyInitPlan(planName)) {
+    markTestSkipped(
+      '$planName needs the RP to host an initiate_login_uri the OP can call '
+      '(OIDC Core §4). This example app hosts no such endpoint on any '
+      'platform, so the module waits for a call that never arrives.',
+    );
+    return;
+  }
+
+  if (isFragmentResponsePlan(planName) &&
+      !canReceiveFragmentResponse(platform)) {
+    markTestSkipped(
+      '$planName returns tokens in the URL fragment, which a loopback HTTP '
+      'listener cannot observe; $platform uses one. Runs on macOS/iOS/Android '
+      '(full callback URL) and web (redirect.html reads location.hash).',
+    );
+    return;
+  }
+
+  if (planNeedsHostedRequestUri(planName)) {
+    markTestSkipped(
+      '$planName pins request_type=request_uri for every module and the suite '
+      'fetches that URI (FetchRequestUriAndExtractRequestObject, '
+      'AbstractOIDCCClientTest.java:1019). The RP would have to serve a signed '
+      'request object at an https URL reachable from '
+      'certification.openid.net, which a CI runner behind NAT cannot. PAR does '
+      'not substitute: ClientRequestType has no PAR value. Dynamic client '
+      'registration itself IS implemented and covered by the oidc_core suite.',
+    );
+    return;
+  }
+
+  if (isBackChannelLogoutPlan(planName)) {
+    markTestSkipped(
+      '$planName needs the OP to POST a logout token directly to the RP, and a '
+      'CI runner listening on loopback is not reachable from '
+      'certification.openid.net. Every module timed out waiting for that POST '
+      'while the plan reported success, because the aggregate counted logins '
+      'only. Unskip once the runner is publicly reachable.',
+    );
+    return;
+  }
+
+  if (isLogoutConformancePlan(planName) &&
+      !canGenerateSessionState(getPlatformRedirectUri())) {
+    // Not a client defect and not a skipped failure: the suite aborts before it
+    // ever issues a redirect, so there is no client behaviour to observe.
+    markTestSkipped(
+      '$planName runs GenerateSessionState on the AUTHORIZATION request, which '
+      'builds an origin as scheme://host from redirect_uri '
+      '(GenerateSessionState.java:69). $platform redirects to '
+      '${getPlatformRedirectUri()}, a private-use scheme with no authority, so '
+      'getHost() is null and the suite throws before issuing any redirect. '
+      'RFC 8252 section 7.1 requires that shape, so the redirect URI is correct '
+      'and the suite cannot run these modules against it.',
+    );
+    return;
+  }
+
+  if (isFormPostConformancePlan(planName) &&
+      !canReceiveFormPost(getPlatformRedirectUri())) {
+    // Not a skipped failure: the OP cannot POST to a custom scheme, so there is
+    // no outcome to observe on this platform.
+    markTestSkipped(
+      '$planName needs an http(s) redirect to receive a form POST; '
+      '$platform redirects to ${getPlatformRedirectUri().scheme}: scheme.',
+    );
+    return;
+  }
 
   const clientId = 'my_client';
   const clientSecret = 'my_client_secret';
@@ -176,15 +463,18 @@ Future<void> runOidcConformanceTest(
     clientSecret: clientSecret,
     planName: planName,
     description: 'package:oidc $planName on $platform',
+    alias: planNeedsAlias(planName)
+        ? conformanceAlias(planName: planName, platform: platform)
+        : null,
     redirectUri: redirectUri.toString(),
     requestType: requestType,
     clientRegistration: clientRegistration,
     extraVariant: {
       if (clientAuthType != null) 'client_auth_type': clientAuthType,
+      ...extraPlanVariant,
     },
     postLogoutRedirectUri: redirectUri.toString(),
-    frontChannelLogoutUri:
-        'http://localhost:22433/redirect.html?requestType=front-channel-logout',
+    frontChannelLogoutUri: getPlatformFrontChannelLogoutUri().toString(),
   );
   _testLogger.info('Submitting test plan request to $path...');
 
@@ -206,9 +496,13 @@ Future<void> runOidcConformanceTest(
       '${response?.statusCode}.\n'
       'Conformance suite response: ${response?.data}\n'
       'Request path: $path\n'
-      'If this names a variant dimension, the plan does not accept the '
-      'variant this test sends; pass the right one via `clientRegistration` '
-      'or `requestType`.',
+      'If this names a variant dimension, the plan disagrees with what this '
+      'test sent: pass or drop it via `clientAuthType`, `clientRegistration`, '
+      '`requestType`, or `extraPlanVariant`.\n'
+      'Note the local guard in api.dart only checks that a dimension is '
+      'PRESENT or ABSENT, never that its VALUE is one the plan accepts, so a '
+      '4xx can still come from a wrong clientAuthType even when the guard is '
+      'satisfied.',
     );
   }
   _testLogger.info('Test plan response status ${testPlanResponse.statusCode}.');
@@ -228,6 +522,12 @@ Future<void> runOidcConformanceTest(
   // response and a null result is the correct outcome. No single module can be
   // required to succeed, so the aggregate is asserted after the loop instead.
   var successfulLogins = 0;
+  // Counted separately because counting logins alone made the logout plans
+  // report success while every one of their logout calls threw: on linux all
+  // eight back-channel modules ended with "The end session flow timed out after
+  // 30 seconds", and the plan still passed. An assertion that cannot observe
+  // the thing the plan exists to test is not a test of it.
+  var successfulLogouts = 0;
 
   for (final testPlanModule
       in testPlanModules.whereType<Map<String, dynamic>>()) {
@@ -244,6 +544,13 @@ Future<void> runOidcConformanceTest(
           variant['client_auth_type'] as String? ?? 'client_secret_basic',
       responseType: variant['response_type'] as String? ?? 'code',
       responseMode: variant['response_mode'] as String? ?? 'default',
+      // Dynamic RP sends no variant at all: every dimension stated here becomes
+      // an equality the plan's stored module entry must satisfy, and one it
+      // recorded differently makes the attach match nothing.
+      variantFromPlan: moduleVariantComesFromPlan(planName),
+      // Module-level variants are NOT the same as plan-level ones. Dynamic RP
+      // rejects client_registration at api/plan and requires it at api/runner.
+      extraVariant: moduleVariantFor(planName),
     );
 
     final testInstanceId = testInstance['id'] as String;
@@ -258,22 +565,11 @@ Future<void> runOidcConformanceTest(
     logger
       ..info('Module starting. Variant: $variant')
       ..info('Test instance created: $testInstance')
-      ..info('Test Instance ID: $testInstanceId, URL: $url');
-
-    final manager = conformanceManager(
-      url,
-      clientId: clientId,
-      clientSecret: clientSecret,
-      redirectUri: redirectUri,
-      postLogoutRedirectUri: redirectUri,
-      frontChannelLogoutUri: Uri(path: 'redirect.html'),
-    );
-    app_state.managersRx.update((managers) => managers..add(manager));
-    app_state.currentManagerRx.$ = manager;
-
-    logger.info(
-      'Monitoring logs for test instance to wait for ready state: $testInstanceId',
-    );
+      ..info('Test Instance ID: $testInstanceId, URL: $url')
+      ..info(
+        'Monitoring logs for test instance to wait for ready state: '
+        '$testInstanceId',
+      );
     final setupStopwatch = Stopwatch()..start();
     var pollCount = 0;
     monitorLogsLoop:
@@ -296,11 +592,55 @@ Future<void> runOidcConformanceTest(
       }
     }
     setupStopwatch.stop();
-    logger
-      ..info(
-        'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
-      )
-      ..info('Initializing manager for test instance: $testInstanceId');
+    logger.info(
+      'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
+    );
+
+    // The WebFinger modules do NOT issue at the URL above. The suite appends a
+    // random per-run suffix to the issuer for exactly these two modules, and
+    // hands the result out only through the WebFinger response -- so this
+    // lookup is load-bearing: skip it and discovery goes to the wrong issuer.
+    //
+    // Resolved through the library rather than the harness's Dio on purpose.
+    // These modules test whether the RELYING PARTY can do WebFinger; a lookup
+    // written here would pass while package:oidc still could not.
+    //
+    // It runs AFTER the setup wait, not before: the suite's dispatcher refuses
+    // a WebFinger lookup for a test still in CREATED state ("Please wait for
+    // the test to be in WAITING state"), and every other suite request this
+    // loop makes is already gated behind the same wait -- the manager is lazy,
+    // so its discovery fetch happens at init() below.
+    var issuer = url;
+    final webFingerIdentifier = webFingerIdentifierFor(
+      moduleName: moduleName,
+      alias: conformanceAlias(planName: planName, platform: platform),
+      host: Uri.parse(baseUrl).host,
+    );
+    if (webFingerIdentifier != null) {
+      logger.info('Resolving issuer via WebFinger: $webFingerIdentifier');
+      // The suite is a live third party and this Dio carries no timeout, so an
+      // unbounded lookup would hang the job rather than fail it -- the exact
+      // failure mode manager.dart's flowTimeoutSeconds exists to prevent, but
+      // that bounds the browser flow only, not a bare GET.
+      final resolved = await OidcEndpoints.getIssuerViaWebFinger(
+        webFingerIdentifier,
+      ).timeout(const Duration(seconds: 30));
+      issuer = resolved.toString();
+      logger.info('WebFinger resolved issuer: $issuer');
+    }
+
+    final manager = conformanceManager(
+      issuer,
+      clientId: clientId,
+      clientSecret: clientSecret,
+      redirectUri: redirectUri,
+      postLogoutRedirectUri: redirectUri,
+      frontChannelLogoutUri: Uri(path: 'redirect.html'),
+    );
+    app_state.managersRx.update((managers) => managers..add(manager));
+    app_state.currentManagerRx.$ = manager;
+
+    logger.info('Initializing manager for test instance: $testInstanceId');
     await manager.init();
     expect(manager.didInit, true);
     logger.info('Manager initialized');
@@ -313,9 +653,37 @@ Future<void> runOidcConformanceTest(
     // Recorded rather than discarded: swallowing the result here would let the
     // suite pass whether or not the browser can capture a redirect at all. Not
     // asserted per-module, since a negative module ends with no user by design.
-    logger.info('Starting login authorization code flow...');
+    // Which flow to drive is the module's decision, not ours: the suite states
+    // it in the variant, and the Basic/Config plans simply always say `code`.
+    // Hardcoding the code flow is why the hybrid and implicit plans could not
+    // be run at all -- every module would have been driven with the wrong
+    // response_type and failed for a reason that had nothing to do with the
+    // library.
+    final responseTypes = (variant['response_type'] as String? ?? 'code')
+        .split(' ')
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final hasCode = responseTypes.contains('code');
+    final hasFrontChannelToken =
+        responseTypes.contains('id_token') || responseTypes.contains('token');
+    final flowName = hasCode
+        ? (hasFrontChannelToken ? 'hybrid' : 'authorization code')
+        : 'implicit';
+    logger.info(
+      'Starting login $flowName flow (${responseTypes.join(' ')})...',
+    );
     final authResult = await () async {
       try {
+        if (!hasCode) {
+          // No code comes back, so there is nothing to exchange. Deprecated in
+          // the library and by the OAuth Security BCP, but the Implicit RP
+          // profile is defined in terms of it.
+          // ignore: deprecated_member_use
+          return await manager.loginImplicitFlow(responseType: responseTypes);
+        }
+        if (hasFrontChannelToken) {
+          return await manager.loginHybridFlow(responseType: responseTypes);
+        }
         return await manager.loginAuthorizationCodeFlow();
       } catch (e, stackTrace) {
         // Expected for the negative modules, whose broken responses the client
@@ -326,12 +694,89 @@ Future<void> runOidcConformanceTest(
     }();
     if (authResult != null) {
       successfulLogins++;
+      // The logout profiles are two-step: log in, THEN initiate logout, and the
+      // module only completes once it observes the end-session request. This
+      // harness drove the login and stopped, so every logout module sat waiting
+      // for a logout that never came, timed out at flowTimeoutSeconds, and
+      // reported no user -- four plans failing for one missing call, not four
+      // separate defects.
+      //
+      // postLogoutRedirectUri and frontChannelLogoutUri were already configured
+      // on the plan request, which is exactly why this looked wired.
+      if (isLogoutConformancePlan(planName)) {
+        logger.info('Logout profile: initiating RP-initiated logout...');
+        try {
+          await manager.logout();
+          successfulLogouts++;
+          logger.info('Logout completed.');
+        } catch (e, stackTrace) {
+          // Some logout modules deliberately break the end-session response;
+          // record it rather than failing the whole plan here, matching how the
+          // login step treats its own negative modules.
+          logger.severe('Logout threw for $moduleName', e, stackTrace);
+        }
+      }
     }
     // print(), not logger: logger output goes into the certification archive
     // rather than CI stdout. patrol also drops test stdout unless --verbose.
     print(
       '[e2e] $moduleName -> authResult ${authResult == null ? 'NULL' : 'ok'}',
     );
+    if (authResult == null) {
+      // "No user returned" is all the client can say, and it is not enough: a
+      // login that silently timed out and a negative module the client
+      // correctly rejected produce the identical line. The suite knows which
+      // happened -- ask it, rather than inferring from the client side.
+      //
+      // This is what the logout modules needed: each spent ~33s in
+      // loginAuthorizationCodeFlow and returned nothing, with no exception, so
+      // there was no way to tell whether the OP was waiting on the client or
+      // the client was waiting on the OP.
+      try {
+        final status = await getTestStatus(
+          dio: dio,
+          instanceId: testInstanceId,
+        );
+        // Log the WHOLE payload. The first version of this read
+        // status['status'] and status['result'] -- key names invented rather
+        // than looked up -- and printed "status=null result=null" for every
+        // module. A diagnostic added to stop guessing that was itself a guess.
+        // Print what the endpoint actually returns, then read real keys off a
+        // real response.
+        logger.info('Suite status for $moduleName: $status');
+      } on Object catch (e) {
+        logger.warning('Could not read suite status for $moduleName: $e');
+      }
+      // `status` says WHETHER the suite issued a response; its log says WHY it
+      // did not. The harness already fetches this endpoint via monitorTestLogs
+      // and stops at "Setup Done", so every entry the suite wrote DURING the
+      // module was retrieved and discarded -- which is how 75 web fragment
+      // modules failed with nothing but a client-side timeout to go on.
+      //
+      // Tail only: the head is the setup chatter already seen, and the
+      // refusal, when there is one, is the last thing written.
+      final suiteLog = await fetchTestLogs(
+        dio: dio,
+        instanceId: testInstanceId,
+      );
+      if (suiteLog.isEmpty) {
+        logger.info('Suite log for $moduleName: empty.');
+      } else {
+        final tail = suiteLog.length <= 12
+            ? suiteLog
+            : suiteLog.sublist(suiteLog.length - 12);
+        logger.info(
+          'Suite log tail for $moduleName (${tail.length} of '
+          '${suiteLog.length} entries):',
+        );
+        for (final entry in tail) {
+          logger.info(
+            '  [${entry['result'] ?? '-'}] ${entry['msg']}'
+            '${entry['error'] == null ? '' : ' | error: ${entry['error']}'}',
+          );
+        }
+      }
+    }
     logger
       ..info(
         authResult == null
@@ -358,11 +803,36 @@ Future<void> runOidcConformanceTest(
     successfulLogins,
     greaterThan(0),
     reason:
-        'no module of $planName completed a login on ${getPlatformName()}, so '
-        'the browser redirect is not reaching the app. On Android, check that '
-        "the OidcRedirectActivity intent-filter is registered for the app's "
-        'redirect scheme.',
+        'no module of $planName completed a login on ${getPlatformName()}. '
+        'Two very different causes produce this, and the per-module suite '
+        'status dumped above distinguishes them: either the redirect never '
+        'reached the app, or the suite aborted before issuing one (a module '
+        'whose status carries an error stack and no '
+        'authorization_endpoint_response_redirect never redirected at all). '
+        'Do not assume the former -- this message previously blamed the '
+        "Android intent-filter, and the real cause was the suite's "
+        'GenerateSessionState throwing on a host-less redirect_uri, on macOS '
+        'as much as on Android.',
   );
+
+  // The logout plans exist to exercise logout, so a login-only gate cannot
+  // report on them. Kept separate from the login gate above so a failure says
+  // which half broke.
+  if (isLogoutConformancePlan(planName)) {
+    print(
+      '[e2e] successful logouts: $successfulLogouts / ${testPlanModules.length}',
+    );
+    expect(
+      successfulLogouts,
+      greaterThan(0),
+      reason:
+          'every logout in $planName threw on ${getPlatformName()}, so the '
+          'plan proves nothing about logout even though its logins succeeded. '
+          'Check the end-session redirect: back-channel modules need a '
+          'backchannel_logout_uri the OP can reach, and front-channel modules '
+          'need a frontchannel_logout_uri this platform can actually serve.',
+    );
+  }
 
   if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
     try {

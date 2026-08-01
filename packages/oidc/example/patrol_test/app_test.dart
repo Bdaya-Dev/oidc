@@ -58,6 +58,109 @@ void main() {
     // (OpenID Connect Discovery). Only the Basic plan was ever run, so that
     // claim has never been verified by the suite. A separate test so a Config
     // failure names itself instead of surfacing as a Basic regression.
+    // Hybrid and Implicit exercise response types the Basic/Config plans never
+    // request. The flow is chosen per-module from the suite's own variant, so
+    // these need no special driving -- only the plan id.
+    patrolTest('OIDC Conformance: Hybrid RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-hybrid-certification-test-plan',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Implicit RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-implicit-certification-test-plan',
+      );
+    });
+
+    // The four logout profiles, discovered from the suite's own api/plan/available
+    // rather than guessed. Note the shape: they do NOT use the
+    // `-certification-test-plan` suffix the other profiles use, which is why no
+    // amount of searching produced them and why every guessed id would have
+    // 400ed. Each is pinned to the `-rp-basic` variant, matching the profile
+    // this library is certified against.
+    patrolTest('OIDC Conformance: RP-Initiated Logout', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-rp-initiated-logout-rp-basic',
+        clientAuthType: 'client_secret_basic',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Front-Channel Logout', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-front-channel-logout-rp-basic',
+        clientAuthType: 'client_secret_basic',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Back-Channel Logout', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-back-channel-logout-rp-basic',
+        clientAuthType: 'client_secret_basic',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Session Management', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-rp-session-management-rp-basic',
+        clientAuthType: 'client_secret_basic',
+      );
+    });
+
+    // Form Post and 3rd-party-init, from the suite's published list. Variant
+    // rules are unknown for these; they omit clientAuthType, matching the
+    // plans they most resemble. A wrong choice is named by the plan-creation
+    // diagnostic and pinned in api.dart, not rediscovered.
+    patrolTest('OIDC Conformance: Form Post Basic RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-formpost-basic-certification-test-plan',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Form Post Hybrid RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-formpost-hybrid-certification-test-plan',
+      );
+    });
+
+    patrolTest('OIDC Conformance: Form Post Implicit RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-formpost-implicit-certification-test-plan',
+      );
+    });
+
+    patrolTest('OIDC Conformance: 3rd Party-Init Login RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-test-3rd-party-init-login-test-plan',
+        extraPlanVariant: {'response_type': 'code'},
+        clientAuthType: 'client_secret_basic',
+      );
+    });
+
+    // Dynamic RP: the client registers itself at the OP rather than being
+    // pre-provisioned, so this is the one plan that does NOT take
+    // static_client. `dynamic_client` is the documented counterpart already
+    // named in the harness's own variant comment, not a guess at a new value.
+    patrolTest('OIDC Conformance: Dynamic RP', ($) async {
+      await runOidcConformanceTest(
+        () => _launch($),
+        planName: 'oidcc-client-dynamic-certification-test-plan',
+        clientRegistration: null,
+        clientAuthType: 'client_secret_basic',
+        requestType: null,
+      );
+    });
+
     patrolTest('OIDC Conformance: Config RP', ($) async {
       await runOidcConformanceTest(
         () => _launch($),

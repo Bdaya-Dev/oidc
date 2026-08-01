@@ -22,6 +22,183 @@ import 'package:dio/dio.dart';
 /// entry turns that network round trip into an immediate local error.
 const _requiredExtraVariants = <String, List<String>>{
   'oidcc-client-config-certification-test-plan': ['client_auth_type'],
+  // All four logout plans demand it too, like config and unlike hybrid and
+  // implicit, which reject it. Five plans, three answers, one dimension.
+  'oidcc-client-rp-initiated-logout-rp-basic': ['client_auth_type'],
+  'oidcc-client-front-channel-logout-rp-basic': ['client_auth_type'],
+  'oidcc-client-back-channel-logout-rp-basic': ['client_auth_type'],
+  'oidcc-client-rp-session-management-rp-basic': ['client_auth_type'],
+  'oidcc-client-test-3rd-party-init-login-test-plan': [
+    'client_auth_type',
+    'response_type',
+  ],
+  // Dynamic RP is the fourth distinct combination for the same three
+  // dimensions: FORBIDS request_type and client_registration (below), and
+  // REQUIRES client_auth_type. Its webfinger module said so:
+  //   TestModule 'oidcc-client-test-discovery-webfinger-acct' requires a
+  //   value for variant 'client_auth_type'
+  'oidcc-client-dynamic-certification-test-plan': ['client_auth_type'],
+};
+
+/// Variant dimensions a plan sets ITSELF, and rejects the caller for setting.
+///
+/// The exact inverse of [_requiredExtraVariants], for the same dimension:
+///
+///   Variant 'client_auth_type' has been set by user, but test plan already
+///   sets this variant for module 'oidcc-client-test'
+///
+/// So `client_auth_type` is optional on the basic plan, mandatory on the
+/// config plan, and forbidden on these two. Three rules for one dimension,
+/// none of them derivable from the plan name -- each cost an HTTP 400 to
+/// learn, which is precisely why both directions are recorded here instead of
+/// being rediscovered from CI.
+const _forbiddenExtraVariants = <String, List<String>>{
+  'oidcc-client-hybrid-certification-test-plan': ['client_auth_type'],
+  'oidcc-client-implicit-certification-test-plan': ['client_auth_type'],
+  // A SECOND dimension with per-plan rules. Dynamic RP sets request_type
+  // itself, so the plain_http_request every other plan needs is rejected here.
+  // request_type is therefore nullable below: "always send it" was an
+  // assumption, not a requirement.
+  // Dynamic RP sets BOTH itself. Passing client_registration: dynamic_client
+  // looked like the obvious counterpart to static_client and was rejected --
+  // the plan is "dynamic" precisely because it owns that dimension.
+  'oidcc-client-dynamic-certification-test-plan': [
+    'request_type',
+    'client_registration',
+  ],
+};
+
+/// Extra variant dimensions a plan needs at the MODULE endpoint
+/// (`api/runner`), which are NOT the same as the ones it needs at the PLAN
+/// endpoint (`api/plan`).
+///
+/// Dynamic RP is the case that forced this to exist, and it is the sharpest
+/// rule in the whole set because the two endpoints disagree:
+///
+///   api/plan    Variant 'client_registration' has been set by user, but test
+///               plan already sets this variant
+///   api/runner  createTestModule failed: Missing value for required variant
+///               parameter: client_registration
+///
+/// Forbidden on one, required on the other, same dimension, same plan. The
+/// plan endpoint chooses the value and the module endpoint makes you restate
+/// it.
+///
+/// No plan needs an entry today. Dynamic RP had one -- client_registration
+/// and request_type -- and it was the wrong answer to the right complaint:
+/// stating them silenced "Missing value for required variant parameter" and
+/// replaced it with a 500 carrying "modifiedCount=0". See
+/// [moduleVariantComesFromPlan] for why restating a dimension the plan owns
+/// cannot work. The map stays because the plan endpoint's asymmetry is real
+/// and the next plan may genuinely need it.
+const _extraModuleVariants = <String, Map<String, String>>{};
+
+/// Plans whose module instances are created with NO `variant` at all, letting
+/// the suite fill it in from the plan.
+///
+/// The suite attaches a module instance to its plan with a Mongo arrayFilter
+/// assembled from the variant the caller sent
+/// (`DBTestPlanService.updateTestPlanWithModule`):
+///
+///   variant.getVariant().forEach((name, value) ->
+///       updateCriteria.and("module.variant." + name).is(value));
+///   updateCriteria.and("module.testModule").is(testName);
+///
+/// Each dimension sent is one more equality the STORED module entry has to
+/// satisfy. Send a dimension the plan recorded differently -- or did not
+/// record -- and the filter matches no array element, the update reports
+/// `modifiedCount=1 != 0`, and the whole request 500s with a Java stack trace
+/// that names neither the dimension nor the value.
+///
+/// Sending nothing is the path the suite is built for: `TestRunner` reaches
+/// `getFixedVariantIfOnlyOneMatchingModuleInPlan` -- which hands back the
+/// module's own stored variant -- only when no variant arrived from the API.
+/// That value satisfies the filter by construction, so this works without the
+/// harness ever knowing what the plan chose.
+///
+/// Scoped to the one plan that needs it. The other twelve pass while stating
+/// their variant, which means theirs already matches what the plan stored.
+const _moduleVariantFromPlan = <String>{
+  'oidcc-client-dynamic-certification-test-plan',
+};
+
+/// Whether [planName]'s module instances omit the `variant` parameter.
+bool moduleVariantComesFromPlan(String planName) =>
+    _moduleVariantFromPlan.contains(planName);
+
+/// The `api/runner` URL that creates a module instance, with `variant` present
+/// only when [variant] is non-null.
+Uri moduleInstanceUri({
+  required String planId,
+  required String moduleName,
+  Map<String, dynamic>? variant,
+}) => Uri(
+  path: 'api/runner',
+  queryParameters: {
+    'plan': planId,
+    'test': moduleName,
+    if (variant != null) 'variant': jsonEncode(variant),
+  },
+);
+
+/// The extra module-level variant [planName] requires, empty when it needs none.
+Map<String, String> moduleVariantFor(String planName) =>
+    _extraModuleVariants[planName] ?? const {};
+
+/// Whether [planName] contains modules that address the running test through
+/// the suite's `alias` rather than through the URL `api/runner` hands back.
+///
+/// Only the Dynamic RP plan does. Its WebFinger modules expect the RP to look
+/// up `acct:<alias>.oidcc-client-test-discovery-webfinger-acct@<host>`, and the
+/// suite resolves that alias to the running test -- there is no other way to
+/// name it. Every other plan reads its test URL straight out of the
+/// module-instance response, so they are deliberately left alone: sending an
+/// alias changes the URL shape the suite issues, and twelve currently-passing
+/// profiles are not worth risking for a field they never read.
+bool planNeedsAlias(String planName) =>
+    planName == 'oidcc-client-dynamic-certification-test-plan';
+
+/// An alias that survives the suite dispatcher's parse.
+///
+/// The dispatcher splits a WebFinger `acct:` resource with
+/// `^acct:([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_-]+)@.*$`, so a dot inside the alias
+/// would be read as the alias/test-name separator and the lookup would resolve
+/// to neither. Every character outside that class is folded to `_`.
+///
+/// Both [platform] and [planName] are in the key because the CI matrix runs
+/// platforms as parallel jobs against one shared suite instance: an alias
+/// another job already registered would resolve to that job's test.
+String conformanceAlias({required String planName, required String platform}) =>
+    'oidc_${platform}_$planName'.replaceAll(RegExp('[^a-zA-Z0-9_-]'), '_');
+
+/// The WebFinger identifier [moduleName] expects the RP to start discovery
+/// from, or null when the module resolves its issuer the ordinary way.
+///
+/// Only two modules use WebFinger, and they demand different syntaxes. Each
+/// validates the scheme of the resource it was queried with, so the shapes are
+/// not interchangeable:
+///
+///   acct  acct:<alias>.<moduleName>@<host>
+///   url   https://<host>/<alias>/<moduleName>
+///
+/// The `<alias>.<moduleName>` pair is how the suite finds the running test --
+/// its dispatcher splits on the first dot -- which is why [conformanceAlias]
+/// must never produce one.
+///
+/// This returns the identifier only. Resolving it is the library's job, via
+/// `OidcEndpoints.getIssuerViaWebFinger`: the module under test is a test of
+/// the RP, so a lookup performed by the harness would prove nothing about
+/// package:oidc.
+String? webFingerIdentifierFor({
+  required String moduleName,
+  required String alias,
+  required String host,
+}) => switch (moduleName) {
+  'oidcc-client-test-discovery-webfinger-acct' =>
+    'acct:$alias.$moduleName@$host',
+  'oidcc-client-test-discovery-webfinger-url' =>
+    'https://$host/$alias/$moduleName',
+  _ => null,
 };
 
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
@@ -31,8 +208,8 @@ const _requiredExtraVariants = <String, List<String>>{
   required String clientId,
   required String redirectUri,
   // {"request_type":"plain_http_request","client_registration":"static_client"}
-  required String requestType,
-  required String clientRegistration,
+  String? clientRegistration,
+  String? requestType,
   String? alias,
   String? clientSecret,
   String? postLogoutRedirectUri,
@@ -41,8 +218,8 @@ const _requiredExtraVariants = <String, List<String>>{
   String publish = 'everything',
 }) {
   final variant = {
-    'request_type': requestType,
-    'client_registration': clientRegistration,
+    if (requestType != null) 'request_type': requestType,
+    if (clientRegistration != null) 'client_registration': clientRegistration,
     ...?extraVariant,
   };
   final missing = (_requiredExtraVariants[planName] ?? const <String>[])
@@ -54,6 +231,16 @@ const _requiredExtraVariants = <String, List<String>>{
       '${missing.join(', ')}. The conformance suite enforces this at plan '
       'creation and answers HTTP 400, so pass them via extraVariant rather '
       'than discovering it from CI.',
+    );
+  }
+  final forbidden = (_forbiddenExtraVariants[planName] ?? const <String>[])
+      .where(variant.containsKey)
+      .toList();
+  if (forbidden.isNotEmpty) {
+    throw ArgumentError(
+      'The "$planName" plan sets the variant dimension(s) '
+      '${forbidden.join(', ')} itself and rejects a caller-supplied value '
+      'with HTTP 400. Drop them rather than discovering it from CI.',
     );
   }
   final uri = Uri(
@@ -113,24 +300,63 @@ Future<Map<String, dynamic>> createTestModuleInstance({
   String responseType = 'code',
   String responseMode = 'default',
   Map<String, dynamic>? extraVariant,
+  bool variantFromPlan = false,
 }) async {
   /*
   {"client_auth_type":"client_secret_basic","response_type":"code","response_mode":"default"}
    */
-  final uri = Uri(
-    path: 'api/runner',
-    queryParameters: {
-      'plan': planId,
-      'test': moduleName,
-      'variant': jsonEncode({
-        'client_auth_type': clientAuthType,
-        'response_type': responseType,
-        'response_mode': responseMode,
-        ...?extraVariant,
-      }),
-    },
+  final variant = variantFromPlan
+      ? null
+      : <String, dynamic>{
+          'client_auth_type': clientAuthType,
+          'response_type': responseType,
+          'response_mode': responseMode,
+          ...?extraVariant,
+        };
+  final uri = moduleInstanceUri(
+    planId: planId,
+    moduleName: moduleName,
+    variant: variant,
   );
-  final response = await dio.postUri<Map<String, dynamic>>(uri);
+  // Same treatment prepareTestPlanRequest already gets, for the same reason.
+  // Dio reports only the status code, and a bare "500" from this endpoint says
+  // nothing about WHICH of the three dimensions below the suite objected to.
+  // Dynamic RP fails here, and three earlier mysteries at the plan endpoint
+  // each turned into a one-line fix the moment the server's own words were
+  // printed instead of guessed at.
+  final Response<Map<String, dynamic>> response;
+  try {
+    response = await dio.postUri<Map<String, dynamic>>(uri);
+  } on DioException catch (e) {
+    // `modifiedCount=0` from DBTestPlanService.updateTestPlanWithModule is the
+    // shape that matters here: it is a Mongo update that matched NOTHING, so
+    // the suite could not attach the module to the plan. That is not a
+    // validation complaint about a missing dimension -- it means the
+    // VariantSelection we sent is not the one the plan recorded for this
+    // module. Guessing which dimension differs has cost three CI round trips
+    // already, so on failure dump what the plan actually stored and compare.
+    var planDump = '(plan could not be read)';
+    try {
+      final plan = await getPlan(dio: dio, planId: planId);
+      final modules = plan['modules'];
+      planDump = const JsonEncoder.withIndent(
+        '  ',
+      ).convert({'planVariant': plan['variant'], 'modules': modules});
+    } on Object catch (inner) {
+      planDump = '(plan fetch threw: $inner)';
+    }
+    throw StateError(
+      'Creating a module instance for "$moduleName" failed with status '
+      '${e.response?.statusCode}.\n'
+      'Conformance suite response: ${e.response?.data}\n'
+      'Request path: $uri\n'
+      '${variant == null ? 'Variant sent: none (supplied by the plan).\n' : 'Variant sent: $variant\n'}'
+      'Note this endpoint takes the variant PER MODULE, and a plan that '
+      'rejects a dimension at plan level may reject it here too.\n'
+      'PLAN AS STORED BY THE SUITE (compare its module variant to the one '
+      'sent above):\n$planDump',
+    );
+  }
   return response.data ?? {};
 }
 
@@ -228,6 +454,38 @@ Future<Map<String, dynamic>> getTestSummary({
   final uri = Uri(path: 'api/info/$instanceId');
   final response = await dio.getUri<Map<String, dynamic>>(uri);
   return response.data ?? {};
+}
+
+/// The suite's own log for [instanceId].
+///
+/// `public: false` is the authenticated view. The public one omits the entries
+/// that carry a failure reason, which is the only reason to fetch this at all.
+Uri testLogUri({required String instanceId, int? since}) => Uri(
+  path: 'api/log/$instanceId',
+  queryParameters: {'public': 'false', if (since != null) 'since': '$since'},
+);
+
+/// Reads the suite's log for [instanceId] once.
+///
+/// [monitorTestLogs] polls the same endpoint but stops at `Setup Done`, so
+/// everything the suite records DURING a module -- including why it refused a
+/// request -- is fetched and thrown away. When a module ends with no user the
+/// client can only report "no user"; this is the other half of that story.
+///
+/// Never throws: it runs on the failure path, where an exception would replace
+/// the diagnosis with a second failure.
+Future<List<Map<String, dynamic>>> fetchTestLogs({
+  required Dio dio,
+  required String instanceId,
+}) async {
+  try {
+    final response = await dio.getUri<List<dynamic>>(
+      testLogUri(instanceId: instanceId),
+    );
+    return (response.data ?? []).cast<Map<String, dynamic>>();
+  } on Object {
+    return const [];
+  }
 }
 
 Stream<List<Map<String, dynamic>>> monitorTestLogs({

@@ -380,6 +380,200 @@ class OidcEndpoints {
     );
   }
 
+  /// RFC 7033 §4.2: redirect statuses that carry a `Location` header.
+  static const _webFingerRedirectStatusCodes = <int>{301, 302, 303, 307, 308};
+
+  /// Headers dropped when a redirect crosses origins, lowercased for matching.
+  static const _webFingerCredentialHeaders = <String>{
+    'authorization',
+    'cookie',
+    'proxy-authorization',
+  };
+
+  /// Matches `package:http`'s own `maxRedirects` default.
+  static const _webFingerMaxRedirects = 5;
+
+  /// Issues a raw RFC 7033 WebFinger `GET` against an already-built
+  /// [webFingerUri] (see [OidcUtils.getWebFingerUri]) and returns the JRD.
+  ///
+  /// Enforces RFC 7033 §4.2/§9.1 transport rules: [webFingerUri] MUST be
+  /// `https` (else [OidcException]); redirects are followed MANUALLY with
+  /// `followRedirects = false` and every hop MUST resolve to an `https` URI
+  /// ("A WebFinger resource MAY redirect the client; if it does, the
+  /// redirection MUST only be to an 'https' URI"); at most
+  /// [_webFingerMaxRedirects] hops. There is never a fallback to plain HTTP —
+  /// §4.2 requires the client to "accept that the WebFinger query has failed".
+  ///
+  /// The manual loop exists because `package:http` otherwise follows a 302 to
+  /// `http://` silently. NOTE: on Flutter web `BrowserClient` ignores
+  /// `followRedirects` — the browser follows redirects itself, so there the
+  /// https-only guarantee falls to the browser and CORS. Certificate validation
+  /// (§9.1) is likewise delegated to the platform HTTP stack.
+  ///
+  /// Sends `Accept: application/jrd+json, application/json;q=0.9` unless
+  /// [headers] overrides it. The declared response `Content-Type` is NOT
+  /// enforced (many real deployments serve `application/json`), so the body is
+  /// JSON-decoded regardless. When [client] is null a client is created for the
+  /// whole call (including every redirect hop) and closed in a `finally`.
+  static Future<OidcWebFingerResponse> webFinger(
+    Uri webFingerUri, {
+    Map<String, String>? headers,
+    http.Client? client,
+  }) async {
+    if (webFingerUri.scheme != OidcConstants_WebFinger.httpsScheme) {
+      throw OidcException(
+        'RFC 7033 §4.2 requires WebFinger queries to use HTTPS only; got: '
+        '$webFingerUri',
+      );
+    }
+    final effectiveHeaders = <String, String>{
+      // The JRD media type is preferred, but §4.2's `application/json` is
+      // accepted too since that is what many deployments actually serve.
+      'Accept':
+          '${OidcConstants_WebFinger.jrdContentType}, '
+          'application/json;q=0.9',
+      ...?headers,
+    };
+
+    final shouldDispose = client == null;
+    // Always hand `sendWithClient` a NON-null client so it never disposes the
+    // caller's client, nor the one shared across redirect hops.
+    final effectiveClient = client ?? http.Client();
+    try {
+      var currentUri = webFingerUri;
+      var currentHeaders = effectiveHeaders;
+      for (var redirects = 0; ; redirects++) {
+        // A finalized `http.Request` cannot be re-sent, so every hop needs a
+        // fresh one.
+        final req = _prepareRequest(
+          method: OidcConstants_RequestMethod.get,
+          uri: currentUri,
+          headers: currentHeaders,
+        )..followRedirects = false;
+        final resp = await OidcInternalUtilities.sendWithClient(
+          client: effectiveClient,
+          request: req,
+        );
+
+        if (!_webFingerRedirectStatusCodes.contains(resp.statusCode)) {
+          // Must come after the redirect branch: `_handleResponseRaw` treats
+          // any status < 400 as success, so a 3xx would otherwise be decoded
+          // as if it were the JRD. That applies to the WHOLE 3xx range, not
+          // just the five followable ones -- a 304 with an empty body decodes
+          // to an empty JRD and reports success.
+          if (resp.statusCode >= 300 && resp.statusCode < 400) {
+            throw OidcException(
+              'The WebFinger resource answered ${resp.statusCode}, which is '
+              'neither a JRD nor a redirect this client can follow: '
+              '$currentUri',
+              rawRequest: req,
+              rawResponse: resp,
+            );
+          }
+          return _handleResponse(
+            mapper: OidcWebFingerResponse.fromJson,
+            request: req,
+            response: resp,
+          );
+        }
+
+        final location = resp.headers['location'];
+        final locationUri = location == null || location.isEmpty
+            ? null
+            : OidcInternalUtilities.tryParseUri(location);
+        if (locationUri == null) {
+          throw OidcException(
+            'The WebFinger resource answered ${resp.statusCode} with a '
+            'missing or unparseable Location header: $currentUri',
+            rawRequest: req,
+            rawResponse: resp,
+          );
+        }
+        if (redirects >= _webFingerMaxRedirects) {
+          throw OidcException(
+            'The WebFinger request exceeded $_webFingerMaxRedirects '
+            'redirects: $webFingerUri',
+            rawRequest: req,
+            rawResponse: resp,
+          );
+        }
+        final next = currentUri.resolveUri(locationUri);
+        if (next.scheme != OidcConstants_WebFinger.httpsScheme) {
+          throw OidcException(
+            'RFC 7033 §4.2 requires a WebFinger redirect to target an https '
+            'URI; got: $next',
+            rawRequest: req,
+            rawResponse: resp,
+          );
+        }
+        // Browsers drop credentials when a redirect crosses origins, and this
+        // loop replaced `package:http`'s redirect handling precisely to be
+        // stricter than the default -- so re-sending a caller's Authorization
+        // to whatever host the previous one names would be a hole in the same
+        // hardening. Only the credential headers are dropped; Accept and the
+        // rest still apply.
+        if (next.origin != currentUri.origin) {
+          currentHeaders = {
+            for (final entry in currentHeaders.entries)
+              if (!_webFingerCredentialHeaders.contains(
+                entry.key.toLowerCase(),
+              ))
+                entry.key: entry.value,
+          };
+        }
+        currentUri = next;
+      }
+    } finally {
+      if (shouldDispose) {
+        effectiveClient.close();
+      }
+    }
+  }
+
+  /// The complete OpenID Connect Discovery 1.0 §2 "OpenID Provider Issuer
+  /// Discovery" flow: normalize [identifier] (§2.1), build the WebFinger URL
+  /// (RFC 7033 §4), GET it, filter `links` by [rel] CLIENT-SIDE (§4.3), and
+  /// return the first valid Issuer location (§2).
+  ///
+  /// The returned Issuer is an UNTRUSTED HINT — §2 warns that "no relationship
+  /// can be assumed between the user input Identifier string and the resulting
+  /// Issuer location". The caller MUST still fetch
+  /// [OidcUtils.getOpenIdConfigWellKnownUri] for it and require the discovery
+  /// document's `issuer` to satisfy [OidcUtils.issuersAreIdentical]: §3 makes
+  /// that equality ("this value MUST be identical to the issuer value returned
+  /// by WebFinger") the actual security boundary. `OidcUserManager` already
+  /// performs that check.
+  ///
+  /// Throws [OidcException] when normalization fails, when the transport rules
+  /// are violated, on a non-2xx/3xx response, or when the JRD carries no
+  /// `links` entry with rel [rel] and a valid `https` `href`.
+  static Future<Uri> getIssuerViaWebFinger(
+    String identifier, {
+    String rel = OidcConstants_WebFinger.relOpenIdIssuer,
+    Map<String, String>? headers,
+    http.Client? client,
+  }) async {
+    final normalized = OidcUtils.normalizeWebFingerIdentifier(identifier);
+    final response = await webFinger(
+      OidcUtils.getWebFingerUri(
+        host: normalized.host,
+        resource: normalized.resource,
+        rel: [rel],
+      ),
+      headers: headers,
+      client: client,
+    );
+    final issuer = response.getIssuer(rel: rel);
+    if (issuer == null) {
+      throw OidcException(
+        'The WebFinger response for resource "${normalized.resource}" from '
+        'host "${normalized.host}" (subject: ${response.subject}) contains no '
+        'link with rel "$rel" and a valid https Issuer location.',
+      );
+    }
+    return issuer;
+  }
+
   /// Verifies the RFC 8414 §2.1 `signed_metadata` JWT (if present) carried by a
   /// discovery document and merges its verified claims over the plain JSON
   /// members (RFC 8414 §3.2: signed metadata takes precedence).

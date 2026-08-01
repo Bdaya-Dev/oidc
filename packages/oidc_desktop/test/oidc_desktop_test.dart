@@ -181,7 +181,7 @@ void main() {
 
     test(
       'the loopback listener responds 405 with the configured mismatch '
-      'body to a non-GET request, then still completes the flow on a '
+      'body to an unsupported method, then still completes the flow on a '
       'subsequent matching GET',
       () async {
         int? mismatchStatusCode;
@@ -193,11 +193,15 @@ void main() {
             final redirectUri = Uri.parse(uri.queryParameters['redirect_uri']!);
             final client = HttpClient();
             try {
-              // First: send a POST, which the listener should reject.
-              final postRequest = await client.postUrl(redirectUri);
-              final postResponse = await postRequest.close();
-              mismatchStatusCode = postResponse.statusCode;
-              mismatchBody = await postResponse.transform(utf8.decoder).join();
+              // First: send a PUT, which the listener should reject. This
+              // used to be a POST, but POST is how a form_post authorization
+              // response is delivered -- asserting a 405 for it encoded the
+              // very limitation that made response_mode=form_post unusable on
+              // desktop. PUT is genuinely unsupported, so it still 405s.
+              final putRequest = await client.putUrl(redirectUri);
+              final putResponse = await putRequest.close();
+              mismatchStatusCode = putResponse.statusCode;
+              mismatchBody = await putResponse.transform(utf8.decoder).join();
 
               // Then: send the matching GET so the flow can complete.
               final callbackUri = redirectUri.replace(

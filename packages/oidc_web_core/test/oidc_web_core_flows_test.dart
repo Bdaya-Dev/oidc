@@ -323,7 +323,20 @@ void main() {
 
       // Nothing is ever posted on the channel and the window is left open,
       // so the timeout is the only thing that can resolve this.
-      await expectLater(future, throwsA(isA<TimeoutException>()));
+      // Wrapped, not raw. The sibling window_closed path throws OidcException,
+      // and every documented failure contract in this library promises
+      // OidcException -- a bare TimeoutException slips past an app that
+      // catches exactly what the docs tell it to catch.
+      await expectLater(
+        future,
+        throwsA(
+          isA<OidcException>().having(
+            (e) => e.extra['reason'],
+            'extra.reason',
+            'flow_timeout',
+          ),
+        ),
+      );
       // The flow must also clean up after itself on the timeout path, not
       // just the success path.
       expect(

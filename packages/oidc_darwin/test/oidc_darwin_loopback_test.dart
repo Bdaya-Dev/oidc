@@ -159,7 +159,7 @@ void main() {
 
     test(
       'the loopback listener responds 405 with the configured mismatch body '
-      'to a non-GET request, then still completes on a subsequent GET',
+      'to an unsupported method, then still completes on a subsequent GET',
       () async {
         int? mismatchStatusCode;
         String? mismatchBody;
@@ -177,11 +177,16 @@ void main() {
                 );
                 final client = HttpClient();
                 try {
-                  // First: a POST, which the listener rejects with 405.
-                  final postRequest = await client.postUrl(redirectUri);
-                  final postResponse = await postRequest.close();
-                  mismatchStatusCode = postResponse.statusCode;
-                  mismatchBody = await postResponse
+                  // First: a PUT, which the listener rejects with 405. This
+                  // was a POST until the listener learned form_post delivery
+                  // (OAuth 2.0 Form Post Response Mode) -- a POST is now a
+                  // captured authorization response, not a mismatch, so
+                  // asserting 405 for it would re-encode the very limitation
+                  // that made form_post undeliverable.
+                  final putRequest = await client.putUrl(redirectUri);
+                  final putResponse = await putRequest.close();
+                  mismatchStatusCode = putResponse.statusCode;
+                  mismatchBody = await putResponse
                       .transform(utf8.decoder)
                       .join();
 

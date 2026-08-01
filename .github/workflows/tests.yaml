@@ -220,6 +220,20 @@ jobs:
         run: melos run remove_dart_test_yaml
       - name: "[Verify step] Test Flutter packages"
         run: melos run test:flutter
+      - name: "[Verify step] Test the example's unit tests"
+        # melos `test:flutter` filters `ignore: ["*example*"]` (pubspec.yaml),
+        # and the only other thing CI runs out of packages/oidc/example is
+        # `flutter test integration_test/...` in the platform jobs. So every
+        # file under packages/oidc/example/test/ ran in NO job: the conformance
+        # variant rules, the plan gates, the flow-timeout budget and the patrol
+        # tally reconciler all passed locally and gated nothing. They are the
+        # guards for a harness that drives a live third-party server, which is
+        # exactly the code that cannot be re-verified cheaply after the fact.
+        #
+        # Scoped to this one example rather than lifting the ignore, because
+        # the other example packages are there to be built, not tested.
+        working-directory: packages/oidc/example
+        run: flutter test
       - name: "[Coverage] Format & print test coverage"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run coverage:combine
@@ -656,21 +670,41 @@ jobs:
         working-directory: ["packages/oidc/example"]
     runs-on: ubuntu-latest
     # Root cause of past web-job flakiness (see #337): the OIDC redirect URI
-    # is hardcoded to localhost:22433 (integration_test/helpers.dart:11), but
-    # this job never pinned --web-port, so Flutter's web server bound to a
-    # random port. The IdP's redirect could never land back on the app's own
-    # origin, so OidcWebCore's response Completer never resolved -- the
-    # conformance test just hung until Playwright's 10-minute per-test
-    # timeout killed it (Total:1/Successful:0/Failed:0, not an assertion
-    # failure). Fixed below by pinning --web-port 22433 to match; confirmed
-    # green with conformance actually executing in run 28666114227 (web job:
-    # "OIDC Conformance Test" passed in 31s). continue-on-error stays on as a
-    # safety net (this is a live third-party IdP dependency), but the job is
-    # expected to be green now, not masked-red.
-    continue-on-error: true
+    # was hardcoded to localhost:22433 while this job never pinned --web-port,
+    # so Flutter's web server bound to a random port. The IdP's redirect could
+    # never land back on the app's own origin, so OidcWebCore's response
+    # Completer never resolved -- the conformance test just hung until
+    # Playwright's 10-minute per-test timeout killed it
+    # (Total:1/Successful:0/Failed:0, not an assertion failure). Fixed by
+    # pinning --web-port; confirmed green with conformance actually executing
+    # in run 28666114227 (web job: "OIDC Conformance Test" passed in 31s).
+    #
+    # The hardcoding itself is gone now. Matching two literals by hand was only
+    # ever a coincidence waiting to break, and it broke again the moment the
+    # origin had to move to satisfy OIDC Registration section 2. Both the app
+    # and the conformance harness now derive the redirect URI from the origin
+    # being served (packages/oidc/example/lib/web_redirect_uri.dart), so the
+    # flags below are the only place it is stated.
+    #
+    # `continue-on-error: true` used to sit here as a safety net for the live
+    # third-party IdP dependency, with a note that the job was "expected to be
+    # green now, not masked-red". It was masked-red. The workflow reported
+    # conclusion=success on 262bdfd, c34015a and 932fb6c while this job failed
+    # in every one of them, and Hybrid RP and Implicit RP had been failing on
+    # web since the day they were added -- for two runs not even failing, but
+    # vanishing from the tally entirely.
+    #
+    # A job that cannot fail the build cannot defend anything. The safety-net
+    # argument is real but it is served by the retries and timeouts inside the
+    # job, not by discarding its verdict.
     # Patrol web runs through Playwright (patrol_cli activation + npx playwright
-    # install + the web build + the live conformance flow); 30 min is headroom.
-    timeout-minutes: 30
+    # install + the web build + the live conformance flow). The healthy run is
+    # ~25m30s, so 30 left no room: with --web-timeout 900000 per test and
+    # --web-workers 1, two tests hitting the cap exceed the job budget and the
+    # step is killed BEFORE the tally reconciler prints which tests vanished --
+    # losing exactly the diagnosis it exists to produce. 45 keeps the
+    # reconciler reachable in the case it was written for.
+    timeout-minutes: 45
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -683,12 +717,54 @@ jobs:
       # (flutter/flutter#181357) never applies. patrol_cli runs
       # `npx playwright install` itself; ubuntu-latest ships Node/npx.
       - name: Activate Patrol CLI (patrol_cli_plus)
+        # patrol_cli_plus >= 5.5.0 forwards --web-hostname and the
+        # --web-tls-cert-path/--web-tls-cert-key-path pair, and trusts the
+        # supplied certificate in its own Dart-side readiness probe
+        # (Bdaya-Dev/patrol#44). All three are needed to serve the RP at the
+        # conformant origin the step below builds; 5.4.1 has none of them.
         run: dart pub global activate patrol_cli_plus
       # ubuntu-latest is 24.04, which restricts unprivileged user namespaces via
       # AppArmor; re-allow them so Playwright's Chromium sandbox can initialize.
       # https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
       - name: Allow Chromium sandbox (unprivileged userns)
         run: echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns
+      # An OIDC relying party running the implicit or hybrid flow may not be
+      # served at http, and may not be served at localhost. OpenID Connect
+      # Dynamic Client Registration 1.0 section 2:
+      #
+      #   Web Clients using the OAuth Implicit Grant Type MUST only register
+      #   URLs using the https scheme as redirect_uris; they MUST NOT use
+      #   localhost as the hostname.
+      #
+      # Both clauses bind, and violating the first is what produced exactly 75
+      # provider-side rejections in one run (48 Hybrid + 27 Implicit):
+      #
+      #   redirect_uri is one of the registered uris but uses http scheme which
+      #   is not allowed when application_type is web and response type is not
+      #   code
+      #
+      # The suite only checks the scheme today, so https://localhost would turn
+      # the job green while still violating the second clause. It is not worth
+      # certifying against a check the suite forgot to write, so this serves the
+      # app at a real name instead.
+      #
+      # .test is reserved by RFC 6761 and is guaranteed never to resolve
+      # publicly, so this name cannot collide with a real host.
+      - name: Serve the RP at a conformant origin (hosts + TLS)
+        working-directory: ${{ matrix.working-directory }}
+        run: |
+          set -euo pipefail
+          echo "127.0.0.1 rp.oidc.test" | sudo tee -a /etc/hosts
+          mkdir -p .ci/tls
+          # A self-signed leaf is enough: the only party that has to accept it
+          # is our own Playwright Chromium (below). The provider never connects
+          # to the RP -- the browser does the redirect.
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 2 \
+            -keyout .ci/tls/rp.key -out .ci/tls/rp.pem \
+            -subj "/CN=rp.oidc.test" \
+            -addext "subjectAltName=DNS:rp.oidc.test"
+          echo "--- serving origin: https://rp.oidc.test:22433 ---"
+          openssl x509 -in .ci/tls/rp.pem -noout -subject -ext subjectAltName
       - name: Run Web Integration Tests (Patrol + Playwright)
         working-directory: ${{ matrix.working-directory }}
         env:
@@ -703,27 +779,116 @@ jobs:
           # an lcov into ./coverage. Only patrol_test/app_test.dart is targeted
           # (the offline entrypoint imports dart:io, unavailable on web).
           #
-          # --web-port 22433 pins the Flutter web server to the same port the
-          # OIDC redirect URI is hardcoded to (integration_test/helpers.dart:11),
-          # so the IdP's redirect actually lands back on this app's origin. See
-          # #337 for the full diagnosis of the hang this fixes.
+          # --web-port 22433 pins the Flutter web server so the IdP's redirect
+          # lands back on this app's origin. See #337 for the full diagnosis of
+          # the hang this fixes. The redirect URI is no longer hardcoded to
+          # match: the app and the conformance harness both derive it from the
+          # origin actually being served (lib/web_redirect_uri.dart), so the
+          # port and hostname below are the single source of truth.
+          #
+          # --web-hostname + the TLS pair serve the RP at
+          # https://rp.oidc.test:22433, which is what OIDC Registration section
+          # 2 requires of a web client running the implicit or hybrid flow. See
+          # the origin step above for the full citation.
+          #
+          # --web-browser-args makes our own Chromium accept the self-signed
+          # cert from that step. It is scoped to this browser instance, which
+          # only ever loads the app under test and the provider's own https
+          # endpoints; nothing here weakens verification for anything else.
+          #
+          # --show-flutter-logs is load-bearing, not verbosity. patrol_log_plus
+          # DROPS every stdout line that does not contain 'PATROL_LOG' unless
+          # this flag is set (patrol_log_reader.dart:92-119), and on web the
+          # harness's own diagnostics -- the per-module '[e2e] <module> ->
+          # authResult ...' line, the 'Suite status for <module>' dump that
+          # exists precisely to say WHY a module returned no user, and the
+          # 'PLAN_ID' listing -- all travel that path (print -> console ->
+          # Playwright stdout). Without it a failing profile reports nothing
+          # whatsoever: run 90178636000 logged ZERO occurrences of '[e2e]',
+          # 'PLAN_ID' and 'Suite status', including for the 11 tests that
+          # PASSED. --verbose does NOT cover this; it only raises the CLI's own
+          # logger level.
+          #
+          # --web-timeout states Playwright's per-test cap instead of inheriting
+          # it. 600000ms is playwright.config.ts:66's own default, pinned here
+          # because test/conformance_flow_timeout_test.dart asserts the
+          # conformance flow timeouts fit inside it (48 hybrid modules x 10s +
+          # setup < 600s). Inheriting a number a pub package can change would
+          # let that arithmetic silently stop holding.
+          set +e
           patrol_plus test \
             --target patrol_test/app_test.dart \
             --web-port 22433 \
+            --web-hostname rp.oidc.test \
+            --web-tls-cert-path "$PWD/.ci/tls/rp.pem" \
+            --web-tls-cert-key-path "$PWD/.ci/tls/rp.key" \
+            --web-browser-args '["--ignore-certificate-errors"]' \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
             --coverage-package oidc \
             -d chrome \
             --web-headless true \
             --web-workers 1 \
+            --web-timeout 900000 \
+            --show-flutter-logs \
             --verbose \
             --dart-define=CI=true \
-            --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
+            --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN \
+            2>&1 | tee patrol-web.log
+          PATROL_RC=${PIPESTATUS[0]}
+          set -e
+          echo "patrol exit status: $PATROL_RC"
+
           # Best-effort: web V8->lcov path differs from native; don't fail the
           # job if the file isn't produced.
           cp coverage/patrol_lcov.info coverage/web-coverage.info || \
             echo "No web lcov produced (V8 coverage may be unavailable)."
+
+          # A test that starts and never reports is counted in patrol's `Total`
+          # and in NONE of successful/failed/skipped, because an unclosed entry
+          # keeps `start` status and no counter matches it
+          # (patrol_single_test_entry.dart:33). That is how this job printed
+          # "Total: 13, Successful: 11, Failed: 0, Skipped: 0" and exited 1
+          # without naming either lost profile, and why the terminal message was
+          # the misleading "Playwright process exited unexpectedly with code 1"
+          # rather than "Some tests failed." (web_test_backend.dart:649-654
+          # keys on failedTestsCount > 0).
+          #
+          # Nothing in patrol asserts successful + failed + skipped == total.
+          # Do it here, over patrol's own output, so a vanished test is a NAMED
+          # failure. --minimum-tests 13 is the ratchet: patrol_test/app_test.dart
+          # declares 13 conformance tests, and patrol reports a run that
+          # executed nothing as a clean pass.
+          set +e
+          dart run tool/patrol_tally.dart patrol-web.log --minimum-tests 13
+          TALLY_RC=$?
+          set -e
+
+          # Deferred so the tally always runs and always names what it found.
+          if [ "$PATROL_RC" -ne 0 ]; then
+            echo "::error::patrol reported failure (exit $PATROL_RC); see the test output above."
+            exit "$PATROL_RC"
+          fi
+          exit "$TALLY_RC"
         shell: bash
+
+      # if: always() -- these exist to explain a FAILED run, so the step that
+      # uploads them must survive the failure. Without it the job went straight
+      # from "##[error]Process completed with exit code 1" to "Post job
+      # cleanup", and Playwright's own HTML report -- the one artifact that
+      # names the tests it killed on timeout, which patrol's summary cannot --
+      # died with the runner.
+      - name: Upload Web Test Diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-test-diagnostics
+          path: |
+            packages/oidc/example/patrol-web.log
+            packages/oidc/example/playwright-report
+            packages/oidc/example/test-results
+          include-hidden-files: true
+          if-no-files-found: warn
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v7
@@ -731,7 +896,10 @@ jobs:
           name: web-integration-coverage
           path: packages/oidc/example/coverage/web-coverage.info
           include-hidden-files: true
-          # web coverage is best-effort (continue-on-error job); don't fail.
+          # The artifact is absent whenever the run failed before coverage was
+          # written, which is a normal outcome of a failing conformance run --
+          # the job's verdict already carries that. Warn rather than add a
+          # second failure for the same cause.
           if-no-files-found: warn
 
   macos:
@@ -891,8 +1059,10 @@ jobs:
 
   upload-coverage:
     runs-on: ubuntu-latest
-    # `web` is continue-on-error, so a web failure won't block this job; it's
-    # listed so its (best-effort) coverage artifact can be combined when present.
+    # `web` no longer carries continue-on-error, so a web FAILURE now skips
+    # this job rather than letting it run with a missing artifact. That is the
+    # intended trade: a run whose conformance job failed is red already, and a
+    # coverage upload from it would be partial anyway.
     needs: [unit_tests, android, ios, web, macos, linux, windows]
     steps:
       - name: Checkout Code

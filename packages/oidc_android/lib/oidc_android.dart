@@ -59,10 +59,18 @@ class OidcAndroid extends OidcPlatform {
         url.toString(),
         request.redirectUri.toString(),
         request.redirectUri.scheme,
-        // Serialized Custom Tabs options. Every field the model documents as
-        // working is applied natively; the two marked "Reserved" in the dartdoc
-        // are not yet, and `native_option_wiring_test.dart` fails if that set
-        // ever grows silently.
+        // Serialized Custom Tabs options. PATH-DEPENDENT: the Custom Tabs path
+        // applies all of them, but the Auth Tab path -- the DEFAULT on a
+        // ComponentActivity host such as FlutterFragmentActivity -- supports
+        // only ephemeralBrowsing and flowTimeoutSeconds. AuthTabIntent.Builder
+        // has no equivalent for title visibility, URL-bar hiding, share state,
+        // close-button position, colour schemes, partial heights or raw
+        // extras; those are reported as `optionIgnoredOnAuthTab` events rather
+        // than dropped in silence.
+        //
+        // `native_option_wiring_test.dart` checks only that an option is
+        // REFERENCED in OidcPlugin.kt, not which launch path reaches it, so it
+        // cannot catch this.
         options.android.toJson(),
       ),
     );
