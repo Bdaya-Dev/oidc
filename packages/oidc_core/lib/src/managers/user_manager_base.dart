@@ -3087,12 +3087,30 @@ abstract class OidcUserManagerBase {
             exitOffline: false,
           );
         } on Object catch (e, st) {
-          logger.severe('UserInfo endpoint threw an exception!', e, st);
+          // #432: classify the error BEFORE logging so a plain offline hiccup
+          // (device offline, DNS failure, request timeout, or a transient
+          // 5xx) — all recoverable and expected once offline auth support
+          // exists — doesn't get logged as SEVERE. Reserve SEVERE for errors
+          // that indicate an actual auth/client/TLS problem or something this
+          // handler can't classify. This is the same classification the
+          // offline-mode block below reacts to, computed once and reused
+          // there instead of calling `categorizeError` twice.
+          final errorType = OidcOfflineAuthErrorHandler.categorizeError(e);
+          switch (errorType) {
+            case OfflineAuthErrorType.networkUnavailable:
+            case OfflineAuthErrorType.networkTimeout:
+            case OfflineAuthErrorType.serverError:
+              logger.warning('UserInfo endpoint threw an exception!', e, st);
+            case OfflineAuthErrorType.sslError:
+            case OfflineAuthErrorType.authenticationError:
+            case OfflineAuthErrorType.clientError:
+            case OfflineAuthErrorType.unknown:
+              logger.severe('UserInfo endpoint threw an exception!', e, st);
+          }
           userInfoFailed = true;
 
           // Check if this is a network/server error that should enter offline mode
           if (settings.supportOfflineAuth) {
-            final errorType = OidcOfflineAuthErrorHandler.categorizeError(e);
             if (errorType == OfflineAuthErrorType.networkUnavailable ||
                 errorType == OfflineAuthErrorType.networkTimeout) {
               enterOfflineMode(
