@@ -268,6 +268,41 @@ void main() {
         isNot(contains(kOidcFragmentRelayMarker)),
       );
     });
+
+    test(
+      'a form POST completes immediately even with captureFragment on',
+      () async {
+        // Observed live (oidc PR #447): for form_post hybrid/implicit the
+        // client did not explicitly request response_mode=form_post, so the
+        // desktop wiring armed the relay -- and the relay branch DISCARDED the
+        // folded POST body and served the relay page, whose re-request carries
+        // only location.search/hash, never a request body. Every module died
+        // with "Couldn't resolve the response mode, make sure the key (state)
+        // exists in the Uri". A fragment can only ride a GET navigation, so a
+        // POST must never take the relay hop: its body IS the response.
+        final listener = OidcLoopbackListener(
+          captureFragment: true,
+          successfulPageResponse: 'good',
+        );
+        final serverCompleter = Completer<HttpServer>();
+        final receivedUriFuture = listener.listenForSingleResponse(
+          serverCompleter: serverCompleter,
+          timeout: const Duration(seconds: 5),
+        );
+        final server = await serverCompleter.future;
+
+        final resp = await http.post(
+          getTargetUriFromPort(port: server.port),
+          body: {'code': 'abc', 'id_token': 'eyJ.a.b', 'state': 'xyz'},
+        );
+        expect(resp.statusCode, HttpStatus.ok);
+        expect(resp.body, 'good');
+
+        final receivedUri = await receivedUriFuture;
+        expect(receivedUri!.queryParameters['state'], 'xyz');
+        expect(receivedUri.queryParameters['id_token'], 'eyJ.a.b');
+      },
+    );
   });
 
   group('timeout & socket cleanup', () {
