@@ -209,20 +209,28 @@ void main() {
       () async {
         final listener = OidcLoopbackListener(captureFragment: true);
         final serverCompleter = Completer<HttpServer>();
-        unawaited(
-          listener.listenForSingleResponse(
-            serverCompleter: serverCompleter,
-            timeout: const Duration(seconds: 5),
-          ),
+        final responseUriFuture = listener.listenForSingleResponse(
+          serverCompleter: serverCompleter,
+          timeout: const Duration(milliseconds: 500),
         );
         final server = await serverCompleter.future;
 
         final resp = await http.get(getTargetUriFromPort(port: server.port));
         expect(resp.statusCode, HttpStatus.ok);
-        // The page must carry the script that performs the relay, and the marker
-        // it uses to tag the follow-up request.
+        // The page must carry the script that performs the relay, and the
+        // marker it uses to tag the follow-up request.
         expect(resp.body, contains('location.hash'));
         expect(resp.body, contains(kOidcFragmentRelayMarker));
+
+        // No relayed second request ever arrives, so the listener must time
+        // out rather than complete -- which IS the "did not complete on the
+        // first hit" assertion. Awaited, not fire-and-forget: the first
+        // version left this future unawaited with a 5s timer, and the
+        // TimeoutException landed as an unhandled error AFTER the test ended.
+        // Locally the process exited before the timer fired, so the suite was
+        // green; on a slower CI runner it was still alive, and the error was
+        // attributed to the completed test ("failed after test completion").
+        await expectLater(responseUriFuture, throwsA(isA<TimeoutException>()));
       },
     );
 
