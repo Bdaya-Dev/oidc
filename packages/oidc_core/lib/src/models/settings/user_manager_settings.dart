@@ -301,11 +301,21 @@ class OidcUserManagerSettings {
   /// tokens to that key. Null (the default) disables DPoP.
   final OidcDPoPSettings? dpop;
 
-  /// Additional audiences (beyond the `client_id`, which is always trusted)
-  /// that an id_token's `aud` claim is allowed to contain.
+  /// Optional strict allowlist for additional ID-token audiences.
   ///
-  /// OpenID Connect Core §3.1.3.7 requires rejecting an id_token whose `aud`
-  /// contains audiences not trusted by the client; this is the trust list.
+  /// The current client's `client_id` is always required to be present in the
+  /// ID token's `aud` claim.
+  ///
+  /// When this value is `null` (the default), additional audiences are allowed.
+  /// This follows OpenID Connect Core §3.1.3.7: an RP must verify that its own
+  /// `client_id` is in `aud`; a token may contain multiple audiences.
+  ///
+  /// When non-null, this enables a stricter deployment policy: every audience
+  /// in the ID token must be either this client's `client_id` or one of these
+  /// configured values.
+  ///
+  /// For multi-audience ID tokens, the manager also requires `azp` to be
+  /// present and equal to this client's `client_id`.
   final List<String>? allowedAudiences;
 
   /// RFC 8707 Resource Indicators: the protected resource(s) the issued tokens

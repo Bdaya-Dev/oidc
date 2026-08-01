@@ -198,32 +198,184 @@ void main() {
     });
   });
 
-  group('validateUser aud strictness (§3.1.3.7)', () {
-    test('rejects an untrusted extra audience', () async {
+  group('validateUser multi-audience ID tokens (§3.1.3.7)', () {
+    test(
+      'accepts additional audiences by default when aud contains this client '
+      'and azp identifies this client',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['client-1', 'other-rp'],
+          'azp': 'client-1',
+        });
+
+        final errors = _manager().run(user, _metadata);
+
+        expect(
+          errors.where(
+            (e) =>
+                e.toString().contains('aud') ||
+                e.toString().contains('audience') ||
+                e.toString().contains('azp'),
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test('rejects a token whose aud does not contain this client_id', () async {
       final user = await _user({
         ..._baseClaims(),
-        'aud': ['client-1', 'other-rp'],
+        'aud': ['other-rp', 'another-rp'],
+        'azp': 'other-rp',
       });
+
       final errors = _manager().run(user, _metadata);
+
       expect(
-        errors.any((e) => e.toString().contains('untrusted audience')),
+        errors.any(
+          (e) => e.toString().contains(
+            'id token `aud` does not contain this client_id',
+          ),
+        ),
         isTrue,
       );
     });
 
-    test('accepts an extra audience listed in allowedAudiences', () async {
-      final user = await _user({
+    test('rejects a multi-audience token without azp', () async {
+      final claims = {
         ..._baseClaims(),
-        'aud': ['client-1', 'trusted-api'],
-      });
-      final errors = _manager(
-        allowedAudiences: ['trusted-api'],
-      ).run(user, _metadata);
+        'aud': ['client-1', 'other-rp'],
+      }..remove('azp');
+
+      final user = await _user(claims);
+      final errors = _manager().run(user, _metadata);
+
       expect(
-        errors.any((e) => e.toString().contains('untrusted audience')),
-        isFalse,
+        errors.any(
+          (e) => e.toString().contains(
+            'multiple audiences but is missing the required `azp`',
+          ),
+        ),
+        isTrue,
       );
     });
+
+    test(
+      'rejects a multi-audience token whose azp identifies another client',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['client-1', 'other-rp'],
+          'azp': 'other-rp',
+        });
+
+        final errors = _manager().run(user, _metadata);
+
+        expect(
+          errors.any(
+            (e) => e.toString().contains(
+              'id token `azp` (`other-rp`) does not match the client_id',
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test('rejects a malformed non-string azp claim', () async {
+      final user = await _user({
+        ..._baseClaims(),
+        'aud': ['client-1', 'other-rp'],
+        'azp': 123,
+      });
+
+      final errors = _manager().run(user, _metadata);
+
+      expect(
+        errors.any(
+          (e) => e.toString().contains(
+            'id token `azp` must be a non-empty string when present',
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'strict allowedAudiences mode rejects an unknown additional audience',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['client-1', 'other-rp'],
+          'azp': 'client-1',
+        });
+
+        // Non-null empty list means strict mode with no extra audiences
+        // permitted.
+        final errors = _manager(
+          allowedAudiences: const [],
+        ).run(user, _metadata);
+
+        expect(
+          errors.any(
+            (e) => e.toString().contains(
+              'outside the configured strict allowlist',
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'strict allowedAudiences mode accepts a configured additional audience',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['client-1', 'trusted-api'],
+          'azp': 'client-1',
+        });
+
+        final errors = _manager(
+          allowedAudiences: const ['trusted-api'],
+        ).run(user, _metadata);
+
+        expect(
+          errors.where(
+            (e) =>
+                e.toString().contains('aud') ||
+                e.toString().contains('audience') ||
+                e.toString().contains('azp'),
+          ),
+          isEmpty,
+        );
+      },
+    );
+
+    test(
+      'strict allowedAudiences mode still requires this client_id in aud',
+      () async {
+        final user = await _user({
+          ..._baseClaims(),
+          'aud': ['trusted-api'],
+          'azp': 'client-1',
+        });
+
+        final errors = _manager(
+          allowedAudiences: const ['trusted-api'],
+        ).run(user, _metadata);
+
+        expect(
+          errors.any(
+            (e) => e.toString().contains(
+              'id token `aud` does not contain this client_id',
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 
   group('validateUser at_hash (§3.2.2.9)', () {

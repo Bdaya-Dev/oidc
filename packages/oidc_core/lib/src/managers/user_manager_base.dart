@@ -2884,13 +2884,24 @@ abstract class OidcUserManagerBase {
     // the id_token carries more than one audience, `azp` is REQUIRED.
     final azp = claims['azp'];
     final audiences = claims.audience ?? const <String>[];
-    if (azp != null && azp != clientCredentials.clientId) {
-      errors.add(
-        JoseException(
-          'id token `azp` (`$azp`) does not match the client_id '
-          '(`${clientCredentials.clientId}`).',
-        ),
-      );
+    if (azp != null) {
+      if (azp is! String || azp.isEmpty) {
+        // A malformed `azp` cannot identify any party, so it can never satisfy
+        // the match below; reject it on its own terms rather than reporting a
+        // confusing "does not match the client_id" for a non-identifier value.
+        errors.add(
+          JoseException(
+            'id token `azp` must be a non-empty string when present.',
+          ),
+        );
+      } else if (azp != clientCredentials.clientId) {
+        errors.add(
+          JoseException(
+            'id token `azp` (`$azp`) does not match the client_id '
+            '(`${clientCredentials.clientId}`).',
+          ),
+        );
+      }
     }
     if (audiences.length > 1 && azp == null) {
       errors.add(
@@ -2914,23 +2925,47 @@ abstract class OidcUserManagerBase {
       );
     }
 
-    // aud strictness (§3.1.3.7): the client_id is always trusted, and
-    // `settings.allowedAudiences` extends the trust list. Any OTHER audience
-    // means the token was minted for someone else and MUST be rejected.
-    final trustedAudiences = <String>{
-      clientCredentials.clientId,
-      ...?settings.allowedAudiences,
-    };
-    final untrustedAudiences = audiences
-        .where((a) => !trustedAudiences.contains(a))
-        .toList();
-    if (untrustedAudiences.isNotEmpty) {
+    // `aud` (§3.1.3.7): the token MUST be intended for this RP, so `aud` MUST
+    // contain this client_id. Additional audiences do NOT invalidate it: a
+    // token may legitimately be minted for several parties at once. What keeps
+    // token substitution closed is the `azp` rule above — a multi-audience
+    // token is rejected unless `azp` is present AND identifies this client, so
+    // a token minted for someone else can never be replayed here.
+    //
+    // This repeats the check jose_plus already performs in `validate()`
+    // (jose_plus-1.0.0 lib/src/jwt.dart:89) on purpose: `validate()` is skipped
+    // entirely on the missing-`exp` early-return path above, and dropping the
+    // audience check there would leave a malformed token unvalidated for `aud`.
+    if (!audiences.contains(clientCredentials.clientId)) {
       errors.add(
         JoseException(
-          'id token contains untrusted audience(s) $untrustedAudiences, not '
-          'in the client_id or settings.allowedAudiences.',
+          'id token `aud` does not contain this client_id '
+          '(`${clientCredentials.clientId}`).',
         ),
       );
+    }
+
+    // `allowedAudiences` is an OPT-IN stricter deployment policy: when it is
+    // non-null, every audience must be one this RP was told about. It stays
+    // opt-in because demanding an RP enumerate every other audience of an
+    // otherwise-valid token couples independent applications together.
+    final allowedAudiences = settings.allowedAudiences;
+    if (allowedAudiences != null) {
+      final trustedAudiences = <String>{
+        clientCredentials.clientId,
+        ...allowedAudiences,
+      };
+      final unexpectedAudiences = audiences
+          .where((audience) => !trustedAudiences.contains(audience))
+          .toList();
+      if (unexpectedAudiences.isNotEmpty) {
+        errors.add(
+          JoseException(
+            'id token contains audience(s) outside the configured strict '
+            'allowlist: $unexpectedAudiences.',
+          ),
+        );
+      }
     }
 
     // `at_hash` (§3.2.2.9): when present alongside an access_token, it MUST be
