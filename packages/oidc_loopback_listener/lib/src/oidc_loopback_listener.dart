@@ -135,7 +135,16 @@ class OidcLoopbackListener {
         // the way in, so the first request cannot carry it. Answer with the
         // relay page and keep listening; the script re-requests with the
         // fragment promoted to the query string and tagged with the marker.
+        //
+        // GET only. A fragment can only ride a GET navigation -- a form POST's
+        // response is in its BODY, already folded into `res` above, and the
+        // relay page's re-request carries location.search/hash but never a
+        // request body. Relaying a POST therefore destroys the very response
+        // it is trying to recover: observed live as every form_post
+        // hybrid/implicit module failing with "Couldn't resolve the response
+        // mode" because `state` arrived in the POST body and was dropped.
         if (captureFragment &&
+            request.method == 'GET' &&
             !res.queryParameters.containsKey(kOidcFragmentRelayMarker)) {
           request.response.write(oidcFragmentRelayHtmlPage);
           await request.response.close();
