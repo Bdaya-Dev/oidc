@@ -273,4 +273,149 @@ void main() {
       expect(claimsJson, contains('John Doe'));
     });
   });
+
+  group('ECDH-ES with apu/apv (RFC 7518 4.6.1.2/4.6.1.3)', () {
+    // `apu`/`apv` are OPTIONAL, but when present in the header they are part
+    // of the Concat KDF OtherInfo (PartyUInfo/PartyVInfo, RFC 7518 4.6.2).
+    String b64(String s) =>
+        base64Url.encode(utf8.encode(s)).replaceAll('=', '');
+
+    Map<String, dynamic> protectedHeaderOf(String compact) => json.decode(utf8
+        .decode(base64Url.decode(base64Url.normalize(compact.split('.')[0]))));
+
+    for (final enc in ['A128GCM', 'A256GCM', 'A128CBC-HS256']) {
+      test('ECDH-ES roundtrip with apu and apv ($enc)', () async {
+        final ecKey = JsonWebKey.generate('ECDH-ES');
+
+        final builder = JsonWebEncryptionBuilder()
+          ..encryptionAlgorithm = enc
+          ..setProtectedHeader('apu', b64('Alice'))
+          ..setProtectedHeader('apv', b64('Bob'))
+          ..addRecipient(ecKey, algorithm: 'ECDH-ES')
+          ..stringContent = 'agreement info matters';
+
+        final compact = builder.build().toCompactSerialization();
+
+        final parsed = JsonWebEncryption.fromCompactSerialization(compact);
+        final keyStore = JsonWebKeyStore()..addKey(ecKey);
+        final payload = await parsed.getPayload(keyStore);
+        expect(payload.stringContent, 'agreement info matters');
+      });
+    }
+
+    test('ECDH-ES+A128KW roundtrip with apu and apv', () async {
+      final ecKey = JsonWebKey.generate('ECDH-ES+A128KW');
+
+      final builder = JsonWebEncryptionBuilder()
+        ..encryptionAlgorithm = 'A128GCM'
+        ..setProtectedHeader('apu', b64('Alice'))
+        ..setProtectedHeader('apv', b64('Bob'))
+        ..addRecipient(ecKey, algorithm: 'ECDH-ES+A128KW')
+        ..stringContent = 'key wrapping with agreement info';
+
+      final compact = builder.build().toCompactSerialization();
+
+      final parsed = JsonWebEncryption.fromCompactSerialization(compact);
+      final keyStore = JsonWebKeyStore()..addKey(ecKey);
+      final payload = await parsed.getPayload(keyStore);
+      expect(payload.stringContent, 'key wrapping with agreement info');
+    });
+
+    test('roundtrip with only apu', () async {
+      final ecKey = JsonWebKey.generate('ECDH-ES');
+
+      final builder = JsonWebEncryptionBuilder()
+        ..encryptionAlgorithm = 'A128GCM'
+        ..setProtectedHeader('apu', b64('Alice'))
+        ..addRecipient(ecKey, algorithm: 'ECDH-ES')
+        ..stringContent = 'only apu';
+
+      final compact = builder.build().toCompactSerialization();
+      final header = protectedHeaderOf(compact);
+      expect(header['apu'], b64('Alice'));
+      expect(header.containsKey('apv'), isFalse);
+
+      final parsed = JsonWebEncryption.fromCompactSerialization(compact);
+      final payload = await parsed.getPayload(JsonWebKeyStore()..addKey(ecKey));
+      expect(payload.stringContent, 'only apu');
+    });
+
+    test('roundtrip with only apv', () async {
+      final ecKey = JsonWebKey.generate('ECDH-ES');
+
+      final builder = JsonWebEncryptionBuilder()
+        ..encryptionAlgorithm = 'A128GCM'
+        ..setProtectedHeader('apv', b64('Bob'))
+        ..addRecipient(ecKey, algorithm: 'ECDH-ES')
+        ..stringContent = 'only apv';
+
+      final compact = builder.build().toCompactSerialization();
+      final header = protectedHeaderOf(compact);
+      expect(header['apv'], b64('Bob'));
+      expect(header.containsKey('apu'), isFalse);
+
+      final parsed = JsonWebEncryption.fromCompactSerialization(compact);
+      final payload = await parsed.getPayload(JsonWebKeyStore()..addKey(ecKey));
+      expect(payload.stringContent, 'only apv');
+    });
+
+    test('apu and apv survive into the protected header unchanged', () {
+      final ecKey = JsonWebKey.generate('ECDH-ES');
+
+      final builder = JsonWebEncryptionBuilder()
+        ..encryptionAlgorithm = 'A128GCM'
+        ..setProtectedHeader('apu', b64('Alice'))
+        ..setProtectedHeader('apv', b64('Bob'))
+        ..addRecipient(ecKey, algorithm: 'ECDH-ES')
+        ..stringContent = 'test';
+
+      final compact = builder.build().toCompactSerialization();
+      final header = protectedHeaderOf(compact);
+
+      expect(header['apu'], b64('Alice'));
+      expect(header['apv'], b64('Bob'));
+      expect(utf8.decode(base64Url.decode(base64Url.normalize(header['apu']))),
+          'Alice');
+      expect(utf8.decode(base64Url.decode(base64Url.normalize(header['apv']))),
+          'Bob');
+      // apu/apv are integrity protected, never in an unprotected header
+      expect(builder.build().toJson().containsKey('unprotected'), isFalse);
+    });
+
+    test('apu/apv are honoured on the non-compact path too', () async {
+      // Setting `aad` forces the JSON serialization branch, where the
+      // protected header is not merged with the per-recipient parameters.
+      final ecKey = JsonWebKey.generate('ECDH-ES');
+
+      final builder = JsonWebEncryptionBuilder()
+        ..encryptionAlgorithm = 'A128GCM'
+        ..additionalAuthenticatedData = utf8.encode('extra aad')
+        ..setProtectedHeader('apu', b64('Alice'))
+        ..setProtectedHeader('apv', b64('Bob'))
+        ..addRecipient(ecKey, algorithm: 'ECDH-ES')
+        ..stringContent = 'non-compact with agreement info';
+
+      final parsed = JsonWebEncryption.fromJson(builder.build().toJson());
+      final payload = await parsed.getPayload(JsonWebKeyStore()..addKey(ecKey));
+      expect(payload.stringContent, 'non-compact with agreement info');
+    });
+
+    test('absent apu/apv keep the previous behaviour', () async {
+      final ecKey = JsonWebKey.generate('ECDH-ES');
+
+      final builder = JsonWebEncryptionBuilder()
+        ..encryptionAlgorithm = 'A128GCM'
+        ..addRecipient(ecKey, algorithm: 'ECDH-ES')
+        ..stringContent = 'no agreement info';
+
+      final compact = builder.build().toCompactSerialization();
+      final header = protectedHeaderOf(compact);
+      expect(header.containsKey('apu'), isFalse);
+      expect(header.containsKey('apv'), isFalse);
+
+      final parsed = JsonWebEncryption.fromCompactSerialization(compact);
+      final payload = await parsed.getPayload(JsonWebKeyStore()..addKey(ecKey));
+      expect(payload.stringContent, 'no agreement info');
+    });
+  });
 }
