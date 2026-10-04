@@ -238,6 +238,14 @@ Future<List<Object>> _runGuarded(Future<void> Function() body) async {
   return uncaught;
 }
 
+/// A fresh error zone whose uncaught errors are appended to [uncaught]; run
+/// code in it later with [Zone.run].
+Zone _errorZone(List<Object> uncaught) {
+  late Zone zone;
+  runZonedGuarded(() => zone = Zone.current, (e, st) => uncaught.add(e));
+  return zone;
+}
+
 void main() {
   group('userChangesAfterInit (#453)', () {
     test(
@@ -440,8 +448,8 @@ void main() {
     // hold a WeakReference to every callback a subscribe/cancel round
     // registers and require (almost) all of them to be garbage-collectable
     // once the round is over. With N rounds, a per-round leak leaves ~N (or
-    // 2N) survivors; the fixed implementation leaves only the manager's
-    // single initFuture attachment (2 callbacks) at most.
+    // 2N) survivors; the fixed implementation attaches nothing per listener,
+    // so only a handful of shared/incidental callbacks may survive.
     const rounds = 50;
     const allowedSurvivors = 4;
 
@@ -607,6 +615,111 @@ void main() {
     // error zone (it is reported as uncaught in the future's own zone). An app
     // that subscribes inside runZonedGuarded but calls init() outside it must
     // still see the failure on the stream, not as an uncaught error.
+    // The manager's AsyncMemoizer (and so initFuture) is created in the zone
+    // the manager is CONSTRUCTED in. Once initFuture has failed, any handler
+    // attached to it from another error zone never sees the error — Dart
+    // reports it as uncaught in the construction zone instead. Late
+    // subscribers must still get the failure, wherever each zone lives.
+    test(
+      'init() failure reaches late subscribers when the manager was built, '
+      'init() was run, and each listener subscribed in different zones',
+      () async {
+        final store = await _store();
+        final inC = <Object>[];
+        final inA = <Object>[];
+        final inB = <Object>[];
+        final zoneC = _errorZone(inC);
+        final zoneA = _errorZone(inA);
+        final zoneB = _errorZone(inB);
+
+        final manager = zoneC.run(
+          () => _manager(store: store, client: _client(failDiscovery: true)),
+        );
+        var initThrew = false;
+        await zoneA.run(() async {
+          try {
+            await manager.init();
+          } on Object catch (_) {
+            initThrew = true;
+          }
+        });
+        expect(initThrew, isTrue);
+
+        final eventsA = <String>[];
+        final eventsB = <String>[];
+        final doneA = Completer<void>();
+        final doneB = Completer<void>();
+        void subscribe(Zone zone, List<String> events, Completer<void> done) {
+          zone.run(
+            () => manager.userChangesAfterInit().listen(
+              (_) => events.add('data'),
+              onError: (Object _) => events.add('error'),
+              onDone: () {
+                events.add('done');
+                done.complete();
+              },
+            ),
+          );
+        }
+
+        subscribe(zoneA, eventsA, doneA);
+        subscribe(zoneB, eventsB, doneB);
+        await Future.wait([
+          doneA.future,
+          doneB.future,
+        ]).timeout(const Duration(seconds: 2), onTimeout: () => const []);
+        await pumpEventQueue();
+
+        expect(eventsA, ['error', 'done']);
+        expect(eventsB, ['error', 'done']);
+        expect(inC, isEmpty, reason: 'construction zone');
+        expect(inA, isEmpty, reason: 'init() zone');
+        expect(inB, isEmpty, reason: 'other subscriber zone');
+        expect(manager.debugPendingUserChangesAfterInitListenerCount, 0);
+        await manager.dispose();
+      },
+    );
+
+    // Observing init() on behalf of userChangesAfterInit() must not mark a
+    // failed init() as handled: an un-awaited init() that fails is still
+    // reported as an uncaught error, exactly as it is without this API —
+    // also when a listener subscribed during init() and then cancelled.
+    for (final withCancelledListener in [false, true]) {
+      test(
+        'a failed, un-awaited init() is still reported uncaught '
+        '(${withCancelledListener ? 'listener subscribed then cancelled' : 'no listener'})',
+        () async {
+          final gate = Completer<void>();
+          final manager = _manager(
+            store: await _store(),
+            client: _client(discoveryGate: gate.future, failDiscovery: true),
+          );
+          final uncaught = <Object>[];
+          _errorZone(uncaught).run(() => unawaited(manager.init()));
+          await pumpEventQueue();
+
+          if (withCancelledListener) {
+            final sub = manager.userChangesAfterInit().listen(
+              (_) {},
+              onError: (Object _) {},
+            );
+            await pumpEventQueue();
+            await sub.cancel();
+          }
+
+          gate.complete();
+          for (var i = 0; i < 50 && uncaught.isEmpty; i++) {
+            await pumpEventQueue();
+          }
+          await pumpEventQueue();
+
+          expect(uncaught, hasLength(1));
+          expect(uncaught.single, isA<OidcException>());
+          await manager.dispose();
+        },
+      );
+    }
+
     test(
       'init() failure reaches a listener subscribed in another error zone',
       () async {

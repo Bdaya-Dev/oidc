@@ -548,76 +548,45 @@ abstract class OidcUserManagerBase {
       return;
     }
     _userChangesAfterInitWaiters.add(waiter);
-    _attachUserChangesAfterInitToInitFuture();
   });
 
   /// [userChangesAfterInit] listeners still waiting on [initFuture].
   ///
   /// This set is the ONLY place a waiting listener (and the controller its
-  /// callbacks close over) is referenced from. The manager attaches a single
-  /// callback pair to [initFuture], once (see
-  /// [_attachUserChangesAfterInitToInitFuture]); it captures nothing but the
-  /// manager itself. A listener that cancels is removed here and becomes
-  /// garbage straight away, even if [init] never runs or never settles; when
-  /// [initFuture] settles, or the manager is disposed, every waiter still
-  /// here is drained and released.
+  /// callbacks close over) is referenced from: nothing is attached to
+  /// [initFuture] on a listener's behalf. A listener that cancels is removed
+  /// here and becomes garbage straight away, even if [init] never runs or
+  /// never settles. [init]'s own memoized body drains the set when it
+  /// finishes (see [_settleUserChangesAfterInitWaiters]), and [dispose]
+  /// drains whatever is left.
   ///
-  /// Earlier revisions attached a per-listener callback to a long-lived
-  /// future — first `Future.any([initFuture, <a future completed only by
-  /// dispose>])`, then `initFuture` itself — so a cancelled listener stayed
-  /// reachable from that future until it completed: for the manager's whole
-  /// lifetime, or for as long as [init] had not run.
+  /// Earlier revisions attached callbacks to a long-lived future — first a
+  /// per-listener `Future.any([initFuture, <a future completed only by
+  /// dispose>])`, then a per-listener `initFuture.then`, then a single
+  /// manager-owned `initFuture.then`. The per-listener ones kept a cancelled
+  /// listener reachable until that future completed (for the manager's whole
+  /// lifetime, or for as long as [init] had not run). Any of them can lose an
+  /// [init] failure: [initFuture] belongs to the zone the manager was
+  /// constructed in, and a future's error is never delivered to a handler
+  /// registered in a different error zone (it is reported as uncaught in the
+  /// future's zone instead). And attaching an error handler at all would mark
+  /// a failed, un-awaited [init] as handled. Settling from inside [init]
+  /// avoids every one of these: the error is caught where it is thrown, then
+  /// rethrown untouched.
   final Set<_UserChangesAfterInitWaiter> _userChangesAfterInitWaiters = {};
 
-  /// Whether [_attachUserChangesAfterInitToInitFuture] has attached its
-  /// callback pair to [initFuture].
-  bool _userChangesAfterInitAttached = false;
-
-  /// The zone [init] was first called in; `null` until then.
-  Zone? _initZone;
-
-  /// Whether [initFuture] has settled, as observed by the manager's own
-  /// attachment. Once `true`, new [userChangesAfterInit] listeners are
-  /// answered straight away from this outcome instead of waiting.
+  /// Whether [init]'s memoized body has finished. Once `true`, new
+  /// [userChangesAfterInit] listeners are answered straight away from the
+  /// recorded outcome instead of waiting.
   bool _initSettledForUserChangesAfterInit = false;
   Object? _initErrorForUserChangesAfterInit;
   StackTrace? _initErrorStackTraceForUserChangesAfterInit;
 
-  /// Attaches the manager's one [initFuture] callback pair, once, as soon as
-  /// both a waiting listener exists and [init] has been called.
+  /// Records [init]'s outcome and drains [_userChangesAfterInitWaiters].
   ///
-  /// Lazy on both counts on purpose:
-  /// - without a waiter there is nobody to deliver to, and attaching an error
-  ///   handler anyway would silently mark a failed, un-awaited [init] as
-  ///   handled instead of letting it surface as an uncaught error;
-  /// - the callbacks are registered in the zone [init] ran in ([_initZone]),
-  ///   never in whichever zone a listener happened to subscribe from: a
-  ///   future's error is not delivered to a handler registered in a different
-  ///   error zone (it is reported as uncaught in the future's own zone), so an
-  ///   app subscribing inside `runZonedGuarded` while calling [init] outside
-  ///   it would otherwise get an uncaught error instead of a stream error.
-  void _attachUserChangesAfterInitToInitFuture() {
-    final initZone = _initZone;
-    if (_userChangesAfterInitAttached ||
-        initZone == null ||
-        _userChangesAfterInitWaiters.isEmpty) {
-      return;
-    }
-    _userChangesAfterInitAttached = true;
-    initZone.run(
-      () => unawaited(
-        initFuture.then(
-          (_) => _settleUserChangesAfterInitWaiters(null, null),
-          onError: _settleUserChangesAfterInitWaiters,
-        ),
-      ),
-    );
-  }
-
-  /// Records [initFuture]'s outcome and drains [_userChangesAfterInitWaiters].
-  ///
-  /// Tolerates an empty set (every waiter cancelled, or [dispose] already
-  /// drained them) and a disposed manager.
+  /// Called exactly once, from inside [init]'s memoized body, just before
+  /// [initFuture] completes. Tolerates an empty set (every waiter cancelled,
+  /// or [dispose] already drained them) and a disposed manager.
   void _settleUserChangesAfterInitWaiters(Object? error, StackTrace? st) {
     _initSettledForUserChangesAfterInit = true;
     _initErrorForUserChangesAfterInit = error;
@@ -5063,38 +5032,48 @@ abstract class OidcUserManagerBase {
   ///   combined with `discoveryDocumentMaxAge: Duration.zero` (the discovery
   ///   document is otherwise served from its TTL cache).
   Future<void> init() {
-    final future = initMemoizer.runOnce(() async {
-      await store.init();
-      if (settings.initMode == OidcInitMode.cacheFirst &&
-          await _tryCacheFirstInit()) {
-        attachLifecycleListeners();
-        return;
+    return initMemoizer.runOnce(() async {
+      // Settle [userChangesAfterInit] listeners from in here rather than by
+      // listening to [initFuture] (see [_userChangesAfterInitWaiters]): the
+      // outcome is observed where it happens, and a failure is rethrown
+      // unchanged so callers (and the zone, if nobody awaits) see it as
+      // before.
+      try {
+        await _runInit();
+      } on Object catch (e, st) {
+        _settleUserChangesAfterInitWaiters(e, st);
+        rethrow;
       }
-      // Blocking / network path (the [OidcInitMode.blockingValidate] semantics,
-      // also the fallback when cache-first has nothing to restore).
-      await ensureDiscoveryDocument();
-      // Must precede `loadStateResult()` and `loadCachedTokens()`, which
-      // validate `aud` against `clientCredentials.clientId`. (The HS* `oct`
-      // verification key needs no ordering: [keyStore] derives it from the
-      // current credentials at lookup time.)
-      await ensureClientRegistration();
-      setupKeyStore();
-      await clearUnusedStates();
-      if (!await loadLogoutRequests()) {
-        //no logout requests.
-        if (!await loadStateResult()) {
-          //no state results.
-          await loadCachedTokens();
-        }
-      }
-      attachLifecycleListeners();
+      _settleUserChangesAfterInitWaiters(null, null);
     });
-    // Remember the zone init() runs in, and attach now if a
-    // [userChangesAfterInit] listener is already waiting (see
-    // [_attachUserChangesAfterInitToInitFuture]).
-    _initZone ??= Zone.current;
-    _attachUserChangesAfterInitToInitFuture();
-    return future;
+  }
+
+  /// The body of [init], run once by [initMemoizer].
+  Future<void> _runInit() async {
+    await store.init();
+    if (settings.initMode == OidcInitMode.cacheFirst &&
+        await _tryCacheFirstInit()) {
+      attachLifecycleListeners();
+      return;
+    }
+    // Blocking / network path (the [OidcInitMode.blockingValidate] semantics,
+    // also the fallback when cache-first has nothing to restore).
+    await ensureDiscoveryDocument();
+    // Must precede `loadStateResult()` and `loadCachedTokens()`, which
+    // validate `aud` against `clientCredentials.clientId`. (The HS* `oct`
+    // verification key needs no ordering: [keyStore] derives it from the
+    // current credentials at lookup time.)
+    await ensureClientRegistration();
+    setupKeyStore();
+    await clearUnusedStates();
+    if (!await loadLogoutRequests()) {
+      //no logout requests.
+      if (!await loadStateResult()) {
+        //no state results.
+        await loadCachedTokens();
+      }
+    }
+    attachLifecycleListeners();
   }
 
   /// Attempts the [OidcInitMode.cacheFirst] restore: deserialize the cached user
