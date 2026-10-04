@@ -442,7 +442,71 @@ abstract class OidcUserManagerBase {
   Logger get logger => _logger;
 
   /// Gets a stream that reflects the current data of the user.
+  ///
+  /// It replays [currentUser] to every new listener, including BEFORE [init]
+  /// completes, when [currentUser] is still the initial `null`. A listener
+  /// attached that early therefore cannot tell "not initialized yet" from
+  /// "signed out"; use [userChangesAfterInit] when that distinction matters.
   Stream<OidcUser?> userChanges() => userSubject.stream;
+
+  /// Like [userChanges], but holds its first emission until [init] has
+  /// completed, so every `null` it emits means "signed out" rather than "not
+  /// initialized yet".
+  ///
+  /// Safe to subscribe before calling [init] — for example alongside
+  /// [events], which must be subscribed before [init] to observe a failure
+  /// (such as an `invalid_grant`) while the cached session is restored. Each
+  /// listener then receives:
+  ///
+  /// 1. nothing while [init] is in flight (intermediate values set during
+  ///    [init] are not replayed);
+  /// 2. [currentUser] as it stands once [init] completes;
+  /// 3. every subsequent change, exactly like [userChanges].
+  ///
+  /// A listener that subscribes after [init] has completed gets [currentUser]
+  /// immediately. If [init] fails, the error is emitted and the stream closes.
+  /// If the manager is disposed before [init] completes, the stream closes
+  /// without emitting. Like [userChanges], the returned stream can be listened
+  /// to more than once.
+  Stream<OidcUser?> userChangesAfterInit() => Stream<OidcUser?>.multi((
+    controller,
+  ) {
+    StreamSubscription<OidcUser?>? sub;
+    var cancelled = false;
+    controller.onCancel = () {
+      cancelled = true;
+      return sub?.cancel();
+    };
+    unawaited(
+      Future.any([initFuture, _disposeSignal.future]).then(
+        (_) {
+          if (cancelled) {
+            return;
+          }
+          if (_isDisposed) {
+            unawaited(controller.close());
+            return;
+          }
+          sub = userSubject.stream.listen(
+            controller.add,
+            onError: controller.addError,
+            onDone: controller.close,
+          );
+        },
+        onError: (Object e, StackTrace st) {
+          if (cancelled) {
+            return;
+          }
+          controller.addError(e, st);
+          unawaited(controller.close());
+        },
+      ),
+    );
+  });
+
+  /// Completes when [dispose] is called, so [userChangesAfterInit] listeners
+  /// waiting on an [init] that will never run are released.
+  final Completer<void> _disposeSignal = Completer<void>();
 
   /// Gets a stream of events related to the current manager.
   Stream<OidcEvent> events() => eventsController.stream;
@@ -5090,6 +5154,9 @@ abstract class OidcUserManagerBase {
     // auto-refresh whose response lands mid-dispose observes it and no-ops
     // (see [isDisposed] / [_performAutoRefresh]).
     _isDisposed = true;
+    if (!_disposeSignal.isCompleted) {
+      _disposeSignal.complete();
+    }
     // The shared in-flight auto-refresh already swallows its own outcome once
     // disposed, but latch onto it here too so its settling can never surface an
     // unhandled error into the zone after teardown. Mirrors how the other
