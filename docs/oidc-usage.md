@@ -96,6 +96,41 @@ an `OidcClientAuthentication` describes [how the client authenticates with the i
 how you create/obtain the jwt is outside the scope of this package.
 you can use [![package:jose_plus][jose_plus_image]][jose_plus_link] to help you.
 
+6. `.tlsClientAuth` / `.selfSignedTlsClientAuth`: mutual-TLS client authentication ([RFC 8705](https://www.rfc-editor.org/rfc/rfc8705)), using a CA-issued (§2.1) or a self-signed (§2.2) client certificate. Only `client_id` goes into the request; the proof is the certificate on the TLS connection.
+
+    The certificate lives in the **transport**, never in `OidcClientAuthentication`. Build a cert-bearing client with `OidcMtls.createHttpClient` and pass it as the manager's [`httpClient`](#httpclient):
+
+    ```dart
+    final mtlsClient = OidcMtls.createHttpClient(
+      certificate: OidcMtlsClientCertificate(
+        certificateChain: File('client.pem').readAsBytesSync(), // leaf first
+        privateKey: File('client.key').readAsBytesSync(),
+        // password: '...', // for an encrypted key / PKCS#12 bundle
+      ),
+      // Optional: trust a private CA for the SERVER's certificate.
+      // trustedCertificates: File('ca.pem').readAsBytesSync(),
+    );
+
+    final manager = OidcUserManager.lazy(
+      discoveryDocumentUri: discoveryUri,
+      clientCredentials: const OidcClientAuthentication.tlsClientAuth(
+        clientId: 'my_client_id',
+      ),
+      httpClient: mtlsClient,
+      store: OidcDefaultStore(),
+      settings: OidcUserManagerSettings(
+        redirectUri: redirectUri,
+        // Use the provider's `mtls_endpoint_aliases` when it publishes them.
+        useMtlsEndpointAliases: true,
+      ),
+    );
+    ```
+
+    - **Endpoint aliases (RFC 8705 §5).** With `useMtlsEndpointAliases: true`, every request the client makes directly to the provider — token (all grants), UserInfo, revocation, introspection, PAR, device authorization and dynamic client registration — goes to the alias in `mtls_endpoint_aliases` when the provider publishes one, and to the normal endpoint otherwise. The setting is opt-in and never inferred from the auth method. The authorization, end-session and check-session endpoints are visited by the browser, not called by the client, so their aliases are ignored as §5 requires. `jwks_uri` always uses the top-level value: it is a public read that needs no client certificate.
+    - **Certificate-bound access tokens (RFC 8705 §3).** The RP has two jobs here: present the certificate at the token endpoint, and present the same certificate when it uses the token. Because the manager sends UserInfo through the same `httpClient`, that is already covered. Call your resource servers with the same `mtlsClient` as well. Checking the token's `cnf` / `x5t#S256` is the resource server's job, not this library's.
+    - **Dynamic client registration.** A registration response with `token_endpoint_auth_method` set to `tls_client_auth` or `self_signed_tls_client_auth` becomes the matching mTLS credentials. The certificate still comes from `httpClient`.
+    - **Platforms.** VM, Android, iOS, macOS, Windows and Linux are supported through `dart:io`'s `SecurityContext`. If you already have a `SecurityContext`, you can pass `IOClient(HttpClient(context: context))` directly. **Web is not supported:** browsers give `fetch`/XHR no way to present a client certificate. On web, `OidcMtls.isSupported` is `false`, `OidcMtls.createHttpClient` throws an `UnsupportedError`, and `init()` throws an `UnsupportedError` before any network call when the manager is configured with an mTLS method (or a registration hands it one).
+
 
 #### store
 
@@ -310,6 +345,8 @@ These are [parameters that you send with the auth request](https://openid.net/sp
 #### httpClient
 
 We depend on [![package:http][http_image]][http_link], and you can provide your own http client which will let you intercept and modify request/response behavior.
+
+This is also where mutual-TLS gets its client certificate: pass the client from `OidcMtls.createHttpClient` (see [clientCredentials](#clientcredentials), item 6).
 
 #### keyStore
 

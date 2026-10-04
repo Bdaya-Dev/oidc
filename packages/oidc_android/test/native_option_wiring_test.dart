@@ -37,13 +37,13 @@ import 'package:flutter_test/flutter_test.dart';
 const _exempt = <String, String>{
   'preferredBrowserPackages':
       'dartdoc: "Reserved - not yet wired natively"; the launch does not pin a '
-          'package via setPackage yet.',
+      'package via setPackage yet.',
   'warmup':
       'dartdoc: "Reserved - not yet wired natively"; no service binding or '
-          'mayLaunchUrl is performed yet.',
+      'mayLaunchUrl is performed yet.',
   'allowInsecureConnections':
       'dartdoc: "No effect on the default Custom Tabs transport" - the browser, '
-          'not the app, governs TLS, so it cannot be honoured there.',
+      'not the app, governs TLS, so it cannot be honoured there.',
 };
 
 File _repoFile(String relative) {
@@ -70,9 +70,7 @@ Map<String, String> _declaredAndroidOptions() {
     r'((?:[ \t]*///[^\n]*\n)+)[ \t]*final\s+[\w<>?,\s]+?\s+(\w+);',
     multiLine: true,
   );
-  return {
-    for (final m in pattern.allMatches(body)) m.group(2)!: m.group(1)!,
-  };
+  return {for (final m in pattern.allMatches(body)) m.group(2)!: m.group(1)!};
 }
 
 void main() {
@@ -113,25 +111,29 @@ void main() {
     },
   );
 
-  test('every exemption names a real option that still discloses its limit',
-      () {
-    final declared = _declaredAndroidOptions();
+  test(
+    'every exemption names a real option that still discloses its limit',
+    () {
+      final declared = _declaredAndroidOptions();
 
-    for (final name in _exempt.keys) {
-      expect(
-        declared,
-        contains(name),
-        reason: 'stale exemption: $name is no longer an option on '
-            'OidcNativeOptionsAndroid. Remove it from _exempt.',
-      );
-      // The dartdoc must still tell a reader the option does nothing. If the
-      // disclosure is dropped, the exemption is silently lying on its behalf.
-      expect(
-        declared[name],
-        anyOf(contains('Reserved'), contains('No effect')),
-        reason: '$name is exempt here but its dartdoc no longer discloses the '
-            'limitation, so the public API now reads as if it works.',
-      );
-    }
-  });
+      for (final name in _exempt.keys) {
+        expect(
+          declared,
+          contains(name),
+          reason:
+              'stale exemption: $name is no longer an option on '
+              'OidcNativeOptionsAndroid. Remove it from _exempt.',
+        );
+        // The dartdoc must still tell a reader the option does nothing. If the
+        // disclosure is dropped, the exemption is silently lying on its behalf.
+        expect(
+          declared[name],
+          anyOf(contains('Reserved'), contains('No effect')),
+          reason:
+              '$name is exempt here but its dartdoc no longer discloses the '
+              'limitation, so the public API now reads as if it works.',
+        );
+      }
+    },
+  );
 }

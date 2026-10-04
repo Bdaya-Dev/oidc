@@ -11,13 +11,19 @@ readonly CHROME_EXECUTABLE="/usr/bin/google-chrome"
 mkdir -p "${LOCAL_DESKTOP_FILE_DIR}"
 readonly DESKTOP_FILE_NAME=cipd-chrome.desktop
 readonly CIPD_CHROME_DESKTOP_FILE="${LOCAL_DESKTOP_FILE_DIR}/${DESKTOP_FILE_NAME}"
+# Every authorization/end-session request launches its own headless Chrome,
+# and a headless Chrome given a URL never exits on its own. The conformance
+# run opens well over a hundred of them; left alive they exhaust the runner,
+# which then dies with "received a shutdown signal" (exit 143). A redirect
+# lands within seconds and the client's flow timeout is 30s, so 60s is ample.
+readonly BROWSER_LIFETIME_SECONDS=60
 cat << EOF > "${CIPD_CHROME_DESKTOP_FILE}"
 [Desktop Entry]
 Version=1.0
 Name=Google Chrome
 GenericName=Web Browser
 Comment=Access the Internet
-Exec=${CHROME_EXECUTABLE} --headless %U
+Exec=/usr/bin/timeout -k 5 ${BROWSER_LIFETIME_SECONDS} ${CHROME_EXECUTABLE} --headless %U
 StartupNotify=true
 Terminal=false
 Icon=google-chrome

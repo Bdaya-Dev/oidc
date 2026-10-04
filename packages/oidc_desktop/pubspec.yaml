@@ -21,5 +21,4 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  mocktail: ^1.0.3
   very_good_analysis: ^10.0.0
