@@ -500,6 +500,15 @@ class OidcProviderMetadata extends JsonBasedResponse {
   bool get tlsClientCertificateBoundAccessTokensOrDefault =>
       tlsClientCertificateBoundAccessTokens ?? false;
 
+  /// The endpoint metadata keys the user-agent navigates to (front channel),
+  /// as opposed to endpoints the client requests directly. RFC 8705 §5 aliases
+  /// apply only to direct requests, so [resolveEndpoint] never aliases these.
+  static const Set<String> frontChannelEndpoints = {
+    OidcConstants_ProviderMetadata.authorizationEndpoint,
+    OidcConstants_ProviderMetadata.endSessionEndpoint,
+    OidcConstants_ProviderMetadata.checkSessionIframe,
+  };
+
   /// Resolves the endpoint stored under [endpointName] (one of the
   /// `OidcConstants_ProviderMetadata` endpoint keys), applying the RFC 8705 §5
   /// mTLS alias rule.
@@ -509,16 +518,42 @@ class OidcProviderMetadata extends JsonBasedResponse {
   /// conventional (top-level) endpoint is returned. Returns `null` when neither
   /// is present or parseable. This is the single choke point through which mTLS
   /// alias routing is applied.
+  ///
+  /// An alias for a front-channel endpoint ([frontChannelEndpoints]: the
+  /// authorization, end-session and check-session endpoints, which the
+  /// user-agent visits rather than the client calling directly) is always
+  /// ignored: RFC 8705 §5 says such members "have no meaning and SHOULD be
+  /// ignored".
   Uri? resolveEndpoint(
     String endpointName, {
     bool useMtlsAliases = false,
   }) {
-    if (useMtlsAliases) {
+    if (useMtlsAliases && !frontChannelEndpoints.contains(endpointName)) {
       final alias = mtlsEndpointAliases?.getEndpoint(endpointName);
       if (alias != null) {
         return alias;
       }
     }
-    return OidcInternalUtilities.tryParseUri(src[endpointName]);
+    return _conventionalEndpoint(endpointName);
   }
+
+  /// The top-level endpoint for [endpointName]: the typed field when this class
+  /// has one (so a `copyWith`-overridden endpoint is honoured even though
+  /// `copyWith` keeps the original [src]), else the raw [src] value.
+  Uri? _conventionalEndpoint(String endpointName) => switch (endpointName) {
+    OidcConstants_ProviderMetadata.authorizationEndpoint =>
+      authorizationEndpoint,
+    OidcConstants_ProviderMetadata.tokenEndpoint => tokenEndpoint,
+    OidcConstants_ProviderMetadata.userinfoEndpoint => userinfoEndpoint,
+    OidcConstants_ProviderMetadata.jwksUri => jwksUri,
+    OidcConstants_ProviderMetadata.registrationEndpoint => registrationEndpoint,
+    OidcConstants_ProviderMetadata.checkSessionIframe => checkSessionIframe,
+    OidcConstants_ProviderMetadata.endSessionEndpoint => endSessionEndpoint,
+    OidcConstants_ProviderMetadata.revocationEndpoint => revocationEndpoint,
+    OidcConstants_ProviderMetadata.introspectionEndpoint =>
+      introspectionEndpoint,
+    OidcConstants_ProviderMetadata.pushedAuthorizationRequestEndpoint =>
+      pushedAuthorizationRequestEndpoint,
+    _ => OidcInternalUtilities.tryParseUri(src[endpointName]),
+  };
 }

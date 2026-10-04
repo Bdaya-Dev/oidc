@@ -68,9 +68,11 @@ class OidcClientAuthentication {
   ///
   /// No secret or assertion is placed in the request; the client is
   /// authenticated by the certificate presented on the TLS connection, so the
-  /// only body parameter emitted is `client_id` (RFC 8705 §2.1). Establishing
-  /// the certificate-bearing TLS transport is the responsibility of the native
-  /// HTTP layer and is out of scope for this (platform-agnostic) model.
+  /// only body parameter emitted is `client_id` (RFC 8705 §2.1). The
+  /// certificate lives in the transport: pass a cert-bearing `http.Client`
+  /// (e.g. from [OidcMtls.createHttpClient]) as the manager's `httpClient`.
+  /// Not supported on web, where the manager's `init()` throws an
+  /// [UnsupportedError].
   const OidcClientAuthentication.tlsClientAuth({
     required this.clientId,
   }) : location = OidcConstants_ClientAuthenticationMethods.tlsClientAuth,
@@ -87,8 +89,8 @@ class OidcClientAuthentication {
   /// As with [OidcClientAuthentication.tlsClientAuth], no secret or assertion
   /// is sent; the client is authenticated by matching the presented
   /// certificate against a registered public key, so the only body parameter
-  /// emitted is `client_id`. The certificate-bearing TLS transport is provided
-  /// by the native HTTP layer.
+  /// emitted is `client_id`. The certificate is presented by the cert-bearing
+  /// `http.Client` (e.g. from [OidcMtls.createHttpClient]).
   const OidcClientAuthentication.selfSignedTlsClientAuth({
     required this.clientId,
   }) : location =
@@ -162,6 +164,11 @@ class OidcClientAuthentication {
   /// - `client_secret_post` → [OidcClientAuthentication.clientSecretPost].
   /// - `client_secret_jwt` → [OidcClientAuthentication.clientSecretJwtGenerated]
   ///   (assertions are minted per request from the issued secret).
+  /// - `tls_client_auth` → [OidcClientAuthentication.tlsClientAuth] and
+  ///   `self_signed_tls_client_auth` →
+  ///   [OidcClientAuthentication.selfSignedTlsClientAuth] (RFC 8705 §2; the
+  ///   certificate is supplied by the cert-bearing `http.Client`, e.g. one
+  ///   from [OidcMtls.createHttpClient]).
   ///
   /// Throws an [OidcException] when the response carries no `client_id`, when a
   /// secret-based method is selected but no `client_secret` was issued, when
@@ -226,6 +233,14 @@ class OidcClientAuthentication {
         return OidcClientAuthentication.clientSecretJwtGenerated(
           clientId: clientId,
           clientSecret: requireSecret(),
+        );
+      // RFC 8705 §2: the proof is the certificate on the TLS connection (held
+      // by the cert-bearing http.Client), so only the client_id is needed.
+      case OidcConstants_ClientAuthenticationMethods.tlsClientAuth:
+        return OidcClientAuthentication.tlsClientAuth(clientId: clientId);
+      case OidcConstants_ClientAuthenticationMethods.selfSignedTlsClientAuth:
+        return OidcClientAuthentication.selfSignedTlsClientAuth(
+          clientId: clientId,
         );
       case OidcConstants_ClientAuthenticationMethods.privateKeyJwt:
         throw const OidcException(

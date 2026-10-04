@@ -7,6 +7,7 @@ export 'jar/_exports.dart';
 export 'managers/_exports.dart';
 export 'memory_state_store.dart';
 export 'models/_exports.dart';
+export 'mtls/mtls_http_client.dart';
 export 'pkce.dart';
 export 'state_store.dart';
 export 'utils.dart';
