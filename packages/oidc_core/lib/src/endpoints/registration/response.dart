@@ -111,7 +111,10 @@ class OidcClientRegistrationResponse extends JsonBasedResponse {
   /// rotated credentials supersede the previous ones — read them from the
   /// returned [OidcClientRegistrationResponse] (via [clientSecret] /
   /// [registrationAccessToken]) and use them for subsequent requests; the old
-  /// values may no longer be valid.
+  /// values may no longer be valid. For a client registered by an
+  /// `OidcUserManager` (`OidcUserManagerSettings.dynamicClientRegistration`),
+  /// use `OidcUserManagerBase.updateClientRegistration`, which does this and
+  /// persists the rotated credentials.
   OidcClientRegistrationRequest toUpdateRequest() {
     final extra = <String, dynamic>{
       for (final entry in src.entries)
