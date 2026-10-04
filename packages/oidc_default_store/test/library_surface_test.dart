@@ -9,23 +9,17 @@ import 'package:oidc_default_store/oidc_default_store.dart';
 // doc-commented contract of the barrel this test imports.
 void main() {
   group('oidc_default_store library surface', () {
-    test(
-      "storagePrefix defaults to 'oidc' when not overridden",
-      () {
-        final store = OidcDefaultStore();
-        expect(store.storagePrefix, 'oidc');
-      },
-    );
+    test("storagePrefix defaults to 'oidc' when not overridden", () {
+      final store = OidcDefaultStore();
+      expect(store.storagePrefix, 'oidc');
+    });
 
-    test(
-      'recommendedAndroidOptions is the flutter_secure_storage default '
-      '(no removed encryptedSharedPreferences)',
-      () {
-        expect(
-          OidcDefaultStore.recommendedAndroidOptions,
-          AndroidOptions.defaultOptions,
-        );
-      },
-    );
+    test('recommendedAndroidOptions is the flutter_secure_storage default '
+        '(no removed encryptedSharedPreferences)', () {
+      expect(
+        OidcDefaultStore.recommendedAndroidOptions,
+        AndroidOptions.defaultOptions,
+      );
+    });
   });
 }
