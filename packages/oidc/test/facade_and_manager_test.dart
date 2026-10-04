@@ -138,6 +138,70 @@ void main() {
       },
     );
 
+    // Regression test for unawaited_return_in_try_block: `thenThrow` above
+    // makes the mock throw SYNCHRONOUSLY, which the surrounding try/catch
+    // already caught even without an `await` on the returned future -- it
+    // never actually exercised the bug. A platform channel failure is a
+    // genuine asynchronous rejection (the Future completes with an error on
+    // a later microtask, via `thenAnswer`), which `return` (without
+    // `await`) lets escape the local try/catch entirely, propagating the
+    // raw, unwrapped error straight to the caller instead of the typed
+    // `OidcException('Failed to authorize user', ...)` this method
+    // documents. This must stay wrapped.
+    test('getPlatformAuthorizationResponse wraps a non-OidcException failure '
+        'that rejects asynchronously', () async {
+      final original = StateError('boom async');
+      when(
+        () => oidcPlatform.getAuthorizationResponse(
+          doc,
+          authorizeRequest,
+          platformOptions,
+          const {},
+        ),
+      ).thenAnswer((_) async => throw original);
+
+      await expectLater(
+        () => OidcFlutter.getPlatformAuthorizationResponse(
+          metadata: doc,
+          request: authorizeRequest,
+        ),
+        throwsA(
+          isA<OidcException>()
+              .having((e) => e.message, 'message', 'Failed to authorize user')
+              .having(
+                (e) => e.internalException,
+                'internalException',
+                same(original),
+              ),
+        ),
+      );
+    });
+
+    // Same asynchronous-rejection regression, but for the `on OidcException`
+    // branch: an OidcException that rejects asynchronously must still come
+    // out unwrapped (rethrown as-is), not escape raw and not get
+    // double-wrapped.
+    test('getPlatformAuthorizationResponse rethrows an OidcException that '
+        'rejects asynchronously, unchanged', () async {
+      const original = OidcException('native failure async');
+      when(
+        () => oidcPlatform.getAuthorizationResponse(
+          doc,
+          authorizeRequest,
+          platformOptions,
+          const {},
+        ),
+      ).thenAnswer((_) async => throw original);
+
+      await expectLater(
+        () => OidcFlutter.getPlatformAuthorizationResponse(
+          metadata: doc,
+          request: authorizeRequest,
+        ),
+        throwsA(same(original)),
+      );
+    });
+
     test(
       'getPlatformEndSessionResponse returns the platform response',
       () async {
@@ -196,6 +260,43 @@ void main() {
         );
       },
     );
+
+    // Regression test for unawaited_return_in_try_block, mirroring the
+    // getPlatformAuthorizationResponse case above: `thenThrow` is a
+    // SYNCHRONOUS throw that the try/catch already caught regardless of
+    // `await`. A genuinely asynchronous rejection (`thenAnswer`) is what
+    // previously escaped the local catch and reached the caller as the raw,
+    // unwrapped error instead of the documented `OidcException('Failed to
+    // end user session', ...)`.
+    test('getPlatformEndSessionResponse wraps a failure that rejects '
+        'asynchronously into an OidcException', () async {
+      final original = StateError('logout boom async');
+      when(
+        () => oidcPlatform.getEndSessionResponse(
+          doc,
+          endSessionRequest,
+          platformOptions,
+          const {},
+        ),
+      ).thenAnswer((_) async => throw original);
+
+      await expectLater(
+        () => OidcFlutter.getPlatformEndSessionResponse(
+          metadata: doc,
+          request: endSessionRequest,
+          preparationResult: const {},
+        ),
+        throwsA(
+          isA<OidcException>()
+              .having((e) => e.message, 'message', 'Failed to end user session')
+              .having(
+                (e) => e.internalException,
+                'internalException',
+                same(original),
+              ),
+        ),
+      );
+    });
 
     test(
       'listenToFrontChannelLogoutRequests streams events from the platform',
