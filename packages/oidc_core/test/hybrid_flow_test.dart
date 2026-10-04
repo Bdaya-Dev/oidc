@@ -164,6 +164,67 @@ void main() {
       );
     });
 
+    // §3.3.2.11: an id_token issued from the authorization endpoint with a
+    // code MUST carry c_hash, and one issued with an access_token MUST carry
+    // at_hash. Conformance: oidcc-client-test-missing-chash / -missing-athash.
+    test('rejects a front-channel id_token without c_hash', () async {
+      final idToken = await _signIdToken(claims());
+      final m = await _manager();
+      await expectLater(
+        m.validateFrontChannel(
+          idToken: idToken,
+          code: 'auth-code-1',
+          nonce: 'nonce-1',
+        ),
+        throwsA(
+          isA<OidcException>().having(
+            (e) => e.toString(),
+            'message',
+            contains('c_hash'),
+          ),
+        ),
+      );
+    });
+
+    test(
+      'rejects a front-channel id_token without at_hash when an access_token '
+      'was returned alongside it',
+      () async {
+        const code = 'auth-code-1';
+        final idToken = await _signIdToken(claims(cHash: _hash(code)));
+        final m = await _manager();
+        await expectLater(
+          m.validateFrontChannel(
+            idToken: idToken,
+            accessToken: 'fc-access-token',
+            code: code,
+            nonce: 'nonce-1',
+          ),
+          throwsA(
+            isA<OidcException>().having(
+              (e) => e.toString(),
+              'message',
+              contains('at_hash'),
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'does not require at_hash when no access_token was returned',
+      () async {
+        const code = 'auth-code-1';
+        final idToken = await _signIdToken(claims(cHash: _hash(code)));
+        final m = await _manager();
+        await m.validateFrontChannel(
+          idToken: idToken,
+          code: code,
+          nonce: 'nonce-1',
+        );
+      },
+    );
+
     test('rejects a wrong nonce (replay)', () async {
       final idToken = await _signIdToken(
         claims(nonce: 'attacker-nonce', cHash: _hash('auth-code-1')),
