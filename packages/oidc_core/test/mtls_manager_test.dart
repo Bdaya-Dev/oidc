@@ -50,6 +50,13 @@ class _Manager extends OidcUserManagerBase {
   @override
   final bool isWeb;
 
+  /// When set, [getAuthorizationResponse] echoes back this code (with the
+  /// request's own `state`) instead of short-circuiting with `null`, so
+  /// [loginAuthorizationCodeFlow] drives a real code -> token exchange.
+  /// `null` (the default) preserves the original "stop at the front channel"
+  /// behavior the PAR-only scenarios rely on.
+  String? codeToReturn;
+
   Future<OidcTokenResponse> exchangeTokenTest() =>
       exchangeToken(subjectToken: 'subject-token');
 
@@ -62,7 +69,16 @@ class _Manager extends OidcUserManagerBase {
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
     Map<String, dynamic> preparationResult,
-  ) async => null;
+  ) async {
+    final code = codeToReturn;
+    if (code == null) {
+      return null;
+    }
+    return OidcAuthorizeResponse.fromJson({
+      'code': code,
+      'state': request.state,
+    });
+  }
 
   @override
   Future<OidcEndSessionResponse?> getEndSessionResponse(
@@ -184,13 +200,25 @@ Future<_Manager> _build({
   return manager;
 }
 
-/// Drives every back-channel request the manager makes.
+/// Drives every back-channel request the manager makes — specifically every
+/// call site that resolves `token_endpoint` (and the other back-channel
+/// endpoints) through the `resolveEndpoint` choke point. There are THREE
+/// distinct `token_endpoint` call sites exercised below (manual
+/// `refreshToken()`, the authorization-code exchange, and the timer-shared
+/// auto-refresh path via `getAccessToken(forceRefresh: true)`), plus the
+/// password grant and RFC 8693 token exchange; a mutation that bypasses
+/// `resolveEndpoint` at any ONE of them must turn this (or the caller's)
+/// assertions RED, even though the others would still "cover" the
+/// `token_endpoint` string.
 Future<void> _exerciseEveryBackChannelEndpoint(_Manager manager) async {
   // token (password grant) + userinfo
   final user = await manager.loginPassword(username: 'u', password: 'p');
   expect(user, isNotNull);
-  // token (refresh_token grant)
+  // token (refresh_token grant) -- the manual `_refreshToken` call site.
   expect(await manager.refreshToken(), isNotNull);
+  // token (auto-refresh) -- the separate `_performAutoRefresh` call site,
+  // shared with the timer-driven expiry path.
+  expect(await manager.getAccessToken(forceRefresh: true), isNotNull);
   // token (RFC 8693 token exchange)
   await manager.exchangeTokenTest();
   // introspection
@@ -198,8 +226,17 @@ Future<void> _exerciseEveryBackChannelEndpoint(_Manager manager) async {
   // revocation
   await manager.revokeAccessToken(forgetUser: false);
   await manager.revokeRefreshToken(forgetUser: false);
-  // PAR (the front channel then goes to the authorization endpoint)
-  await manager.loginAuthorizationCodeFlow();
+  // PAR (the front channel then goes to the authorization endpoint) +
+  // the authorization-code -> token exchange (`handleSuccessfulAuthResponse`).
+  // The OP's id_token in this fixture carries no `nonce` claim, so
+  // `createUserFromToken` rejects it as a possible replay right after the
+  // back-channel call completes -- by then the exchange (and its
+  // `resolveEndpoint` choke point) has already been exercised.
+  manager.codeToReturn = 'auth-code-1';
+  await expectLater(
+    manager.loginAuthorizationCodeFlow(),
+    throwsA(isA<OidcException>()),
+  );
   // device authorization (the token poll is refused, ending the flow)
   expect(await manager.loginDeviceCodeFlow(), isNull);
 }
@@ -331,6 +368,35 @@ void main() {
         expect(requests, isEmpty, reason: 'fails before any network call');
       });
     }
+
+    test(
+      'useMtlsEndpointAliases: true throws UnsupportedError at init on web, '
+      'even with a non-mTLS client authentication method',
+      () async {
+        final requests = <Uri>[];
+        final manager = await _build(
+          client: _op(requests),
+          useMtlsEndpointAliases: true,
+          clientCredentials: const OidcClientAuthentication.none(
+            clientId: 'client-1',
+          ),
+          isWeb: true,
+          init: false,
+        );
+
+        await expectLater(
+          manager.init(),
+          throwsA(
+            isA<UnsupportedError>().having(
+              (e) => e.message,
+              'message',
+              allOf(contains('useMtlsEndpointAliases'), contains('RFC 8705')),
+            ),
+          ),
+        );
+        expect(requests, isEmpty, reason: 'fails before any network call');
+      },
+    );
 
     test('a non-mTLS method still initializes on web', () async {
       final manager = await _build(

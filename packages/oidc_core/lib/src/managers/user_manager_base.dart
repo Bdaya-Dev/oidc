@@ -4871,6 +4871,32 @@ abstract class OidcUserManagerBase {
     }
   }
 
+  /// Throws an [UnsupportedError] when
+  /// [OidcUserManagerSettings.useMtlsEndpointAliases] is enabled on web.
+  ///
+  /// This is independent of [ensureClientAuthenticationSupported] / the
+  /// chosen client authentication method: RFC 8705 §5 `mtls_endpoint_aliases`
+  /// exist for authorization servers that expect a client certificate on
+  /// those alias hosts, so a browser following them -- even while
+  /// authenticating with e.g. `client_secret_basic` or `none` -- would send
+  /// every back-channel request to a host it can never complete the expected
+  /// TLS handshake with. Without this guard that misconfiguration would only
+  /// surface as an opaque connection/handshake failure at the first
+  /// back-channel request instead of loudly at [init].
+  @protected
+  void ensureMtlsEndpointAliasesSupportedOnWeb() {
+    if (isWeb && settings.useMtlsEndpointAliases) {
+      throw UnsupportedError(
+        '`useMtlsEndpointAliases: true` (RFC 8705 §5) is not supported on '
+        'web: browsers expose no API for fetch/XHR to present a client '
+        'certificate, so the mTLS alias hosts it would route back-channel '
+        'requests to can never complete the TLS handshake the server expects '
+        'there. Disable `useMtlsEndpointAliases` on web, or perform the '
+        'mTLS-authenticated requests from a backend.',
+      );
+    }
+  }
+
   /// The single choke point every back-channel endpoint read in this manager
   /// goes through: returns the endpoint stored under [endpointName] (an
   /// `OidcConstants_ProviderMetadata` endpoint key) in [metadata], applying the
@@ -4953,6 +4979,7 @@ abstract class OidcUserManagerBase {
   Future<void> init() {
     return initMemoizer.runOnce(() async {
       ensureClientAuthenticationSupported(clientCredentials);
+      ensureMtlsEndpointAliasesSupportedOnWeb();
       await store.init();
       if (settings.initMode == OidcInitMode.cacheFirst &&
           await _tryCacheFirstInit()) {
