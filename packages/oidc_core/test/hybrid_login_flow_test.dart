@@ -152,18 +152,22 @@ void main() {
       keyStore: JsonWebKeyStore()..addKey(_signingKey),
       httpClient: client,
       cannedResponse: (request) async {
-        // A conforming OP echoes the nonce it was sent and binds the code with
-        // c_hash. Both have to be minted HERE, because the nonce is generated
-        // per-request and is not known before the request is built -- signing a
-        // token up front with a stand-in nonce is exactly the replay the
-        // validator rejects.
+        // A conforming OP echoes the nonce it was sent, binds the code with
+        // c_hash and the front-channel access_token with at_hash. All have to
+        // be minted HERE, because the nonce is generated per-request and is
+        // not known before the request is built -- signing a token up front
+        // with a stand-in nonce is exactly the replay the validator rejects.
         _capturedNonce = request.nonce!;
         const code = 'the-code';
         return OidcAuthorizeResponse.fromJson({
           'state': request.state,
           'code': code,
           'id_token': await _signIdToken(
-            _claims(nonce: request.nonce!, cHash: _hash(code)),
+            _claims(
+              nonce: request.nonce!,
+              cHash: _hash(code),
+              atHash: _hash('FROM-FRONT-CHANNEL'),
+            ),
           ),
           'access_token': 'FROM-FRONT-CHANNEL',
         });

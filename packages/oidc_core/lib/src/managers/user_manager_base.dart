@@ -963,9 +963,9 @@ abstract class OidcUserManagerBase {
   ///
   /// The authorization endpoint returns an id_token in the front channel
   /// ALONGSIDE the code. That id_token is validated before the exchange --
-  /// `nonce` must match, `c_hash` must bind the returned code, and `at_hash`
-  /// (when present) must bind the front-channel access_token -- and only then
-  /// is the code redeemed. The user is built from the TOKEN ENDPOINT response;
+  /// `nonce` must match, `c_hash` must be present and bind the returned code,
+  /// and `at_hash` must be present and bind the front-channel access_token
+  /// whenever one was returned -- and only then is the code redeemed. The user is built from the TOKEN ENDPOINT response;
   /// the front-channel tokens are a binding check, never the final credentials.
   ///
   /// This is not the implicit flow and is not deprecated: the code exchange
@@ -975,8 +975,8 @@ abstract class OidcUserManagerBase {
   /// That is not the same as "no token crosses the front channel". `code
   /// token` and `code id_token token` put an access token in the redirect by
   /// definition (§3.3.2.1), where it can reach browser history, `Referer`
-  /// headers and proxy logs. `at_hash` binding is enforced when it is present,
-  /// but if you want nothing but the code in the front channel, use
+  /// headers and proxy logs. `at_hash` binding is enforced for `code id_token
+  /// token`, but if you want nothing but the code in the front channel, use
   /// `code id_token` -- the default here. [loginImplicitFlow] by contrast keeps
   /// the front-channel tokens and never calls the token endpoint.
   ///
@@ -1591,9 +1591,9 @@ abstract class OidcUserManagerBase {
 
       // OpenID Connect Core §3.3.2 (Hybrid flow): when the authorization
       // endpoint ALSO returned an id_token in the front channel, validate it
-      // before exchanging the code — `nonce` must match, `c_hash` must bind the
-      // returned `code`, and `at_hash` (when present) must bind the
-      // front-channel access_token.
+      // before exchanging the code — `nonce` must match, `c_hash` must be
+      // present and bind the returned `code`, and `at_hash` must be present and
+      // bind the front-channel access_token whenever one was returned.
       final frontChannelIdToken = response.idToken;
       if (frontChannelIdToken != null) {
         await validateFrontChannelIdToken(
@@ -2759,8 +2759,9 @@ abstract class OidcUserManagerBase {
 
   /// Validates the front-channel id_token returned by the authorization
   /// endpoint in the OpenID Connect Hybrid flow (OpenID Connect Core §3.3.2):
-  /// signature, `nonce`, `c_hash` (binding [code]) and `at_hash` (binding the
-  /// front-channel [accessToken], when present). Throws on any failure.
+  /// signature, `nonce`, `c_hash` (REQUIRED, binding [code]) and `at_hash`
+  /// (REQUIRED when [accessToken] is non-null, binding it). Throws on any
+  /// failure.
   ///
   /// This is an additional security gate run BEFORE the code is exchanged; the
   /// logged-in user is still built from the token-endpoint response.
@@ -2808,6 +2809,27 @@ abstract class OidcUserManagerBase {
       authorizationCode: code,
       maxAge: maxAge,
     );
+    // §3.3.2.11: validateUser only checks these hashes when present, but an
+    // id_token issued from the authorization endpoint with a code MUST carry
+    // `c_hash`, and one issued with an access_token MUST carry `at_hash`.
+    // Without them the front-channel tokens are not bound to this id_token.
+    final frontChannelClaims = frontChannelUser.parsedIdToken.claims;
+    if (frontChannelClaims['c_hash'] is! String) {
+      errors.add(
+        JoseException(
+          'id token issued with an authorization code is missing the '
+          'required `c_hash` claim.',
+        ),
+      );
+    }
+    if (accessToken != null && frontChannelClaims['at_hash'] is! String) {
+      errors.add(
+        JoseException(
+          'id token issued with an access_token is missing the required '
+          '`at_hash` claim.',
+        ),
+      );
+    }
     if (errors.isNotEmpty) {
       for (final error in errors) {
         logger.warning(
