@@ -24,14 +24,12 @@ class _MissingPluginHostApi extends OidcAndroidHostApi {
 }
 
 OidcAuthorizeRequest _authRequest() => OidcAuthorizeRequest(
-      clientId: 'client-1',
-      redirectUri: Uri.parse('com.example.app://callback'),
-      responseType: const [
-        OidcConstants_AuthorizationEndpoint_ResponseType.code,
-      ],
-      scope: const ['openid'],
-      state: 'state-1',
-    );
+  clientId: 'client-1',
+  redirectUri: Uri.parse('com.example.app://callback'),
+  responseType: const [OidcConstants_AuthorizationEndpoint_ResponseType.code],
+  scope: const ['openid'],
+  state: 'state-1',
+);
 
 /// Base Pigeon channel name for [OidcAndroidHostApi] (must match the native
 /// Kotlin `OidcAndroidHostApi.setUp` registration).
@@ -84,63 +82,66 @@ void main() {
     expect(OidcPlatform.instance, isA<OidcAndroid>());
   });
 
-  test('forwards serialized Custom Tabs options over the Pigeon channel',
-      () async {
-    List<Object?>? received;
-    mockHostApi('authorize', (args) async {
-      received = args;
-      return 'com.example.app://callback?code=c&state=state-1';
-    });
+  test(
+    'forwards serialized Custom Tabs options over the Pigeon channel',
+    () async {
+      List<Object?>? received;
+      mockHostApi('authorize', (args) async {
+        received = args;
+        return 'com.example.app://callback?code=c&state=state-1';
+      });
 
-    await OidcAndroid().getAuthorizationResponse(
-      metadata,
-      _authRequest(),
-      const OidcPlatformSpecificOptions(
-        android: OidcNativeOptionsAndroid(
-          showTitle: false,
-          urlBarHidingEnabled: true,
-          ephemeralBrowsing: true,
-          shareState: OidcCustomTabsShareState.off,
-          colorSchemes: OidcCustomTabsColorSchemes(
-            colorScheme: OidcColorScheme.dark,
-            defaultParams: OidcColorSchemeParams(toolbarColor: 0xFF2196F3),
-          ),
-        ),
-      ),
-      const {},
-    );
-
-    // Pigeon authorize args: [url, redirectUri, callbackScheme, options].
-    final opts = received![3]! as Map<Object?, Object?>;
-    expect(opts['showTitle'], false);
-    expect(opts['urlBarHidingEnabled'], true);
-    expect(opts['ephemeralBrowsing'], true);
-    // Enums serialize by name; colors as ARGB ints; nested objects as maps.
-    expect(opts['shareState'], 'off');
-    final schemes = opts['colorSchemes']! as Map<Object?, Object?>;
-    expect(schemes['colorScheme'], 'dark');
-    final params = schemes['defaultParams']! as Map<Object?, Object?>;
-    expect(params['toolbarColor'], 0xFF2196F3);
-  });
-
-  test('wraps a missing native plugin (channel-error) as OidcException',
-      () async {
-    // With no mock handler registered, the Pigeon channel send returns a null
-    // reply, which surfaces as a `channel-error` PlatformException; the code
-    // must translate that into a clear OidcException.
-    await expectLater(
-      OidcAndroid().getAuthorizationResponse(
+      await OidcAndroid().getAuthorizationResponse(
         metadata,
         _authRequest(),
-        const OidcPlatformSpecificOptions(),
+        const OidcPlatformSpecificOptions(
+          android: OidcNativeOptionsAndroid(
+            showTitle: false,
+            urlBarHidingEnabled: true,
+            ephemeralBrowsing: true,
+            shareState: OidcCustomTabsShareState.off,
+            colorSchemes: OidcCustomTabsColorSchemes(
+              colorScheme: OidcColorScheme.dark,
+              defaultParams: OidcColorSchemeParams(toolbarColor: 0xFF2196F3),
+            ),
+          ),
+        ),
         const {},
-      ),
-      throwsA(isA<OidcException>()),
-    );
-  });
+      );
+
+      // Pigeon authorize args: [url, redirectUri, callbackScheme, options].
+      final opts = received![3]! as Map<Object?, Object?>;
+      expect(opts['showTitle'], false);
+      expect(opts['urlBarHidingEnabled'], true);
+      expect(opts['ephemeralBrowsing'], true);
+      // Enums serialize by name; colors as ARGB ints; nested objects as maps.
+      expect(opts['shareState'], 'off');
+      final schemes = opts['colorSchemes']! as Map<Object?, Object?>;
+      expect(schemes['colorScheme'], 'dark');
+      final params = schemes['defaultParams']! as Map<Object?, Object?>;
+      expect(params['toolbarColor'], 0xFF2196F3);
+    },
+  );
 
   test(
-      'getAuthorizationResponse builds the URL in Dart and parses the native '
+    'wraps a missing native plugin (channel-error) as OidcException',
+    () async {
+      // With no mock handler registered, the Pigeon channel send returns a null
+      // reply, which surfaces as a `channel-error` PlatformException; the code
+      // must translate that into a clear OidcException.
+      await expectLater(
+        OidcAndroid().getAuthorizationResponse(
+          metadata,
+          _authRequest(),
+          const OidcPlatformSpecificOptions(),
+          const {},
+        ),
+        throwsA(isA<OidcException>()),
+      );
+    },
+  );
+
+  test('getAuthorizationResponse builds the URL in Dart and parses the native '
       'redirect (the Custom Tabs primitive only opens the URL)', () async {
     List<Object?>? received;
     mockHostApi('authorize', (args) async {
@@ -181,8 +182,7 @@ void main() {
     expect(resp, isNull);
   });
 
-  test(
-      'getAuthorizationResponse rethrows other native errors as '
+  test('getAuthorizationResponse rethrows other native errors as '
       'OidcException', () async {
     mockHostApi('authorize', (args) async {
       throw PlatformException(code: 'PLATFORM_ERROR', message: 'boom');
@@ -218,8 +218,7 @@ void main() {
     expect(resp!.state, 'logout-state');
   });
 
-  test(
-      'wraps a raw MissingPluginException (no plugin registered) as '
+  test('wraps a raw MissingPluginException (no plugin registered) as '
       'OidcException', () async {
     await expectLater(
       OidcAndroid(hostApi: _MissingPluginHostApi()).getAuthorizationResponse(
@@ -246,18 +245,14 @@ void main() {
 
     tearDown(() => messenger.setMockStreamHandler(eventChannel, null));
 
-    test(
-        'maps native event maps into typed OidcNativeBrowserEvents, dropping '
+    test('maps native event maps into typed OidcNativeBrowserEvents, dropping '
         'unrecognized event types', () async {
       messenger.setMockStreamHandler(
         eventChannel,
         MockStreamHandler.inline(
           onListen: (arguments, events) {
             events
-              ..success({
-                'type': 'cancelled',
-                'flowId': 'flow-1',
-              })
+              ..success({'type': 'cancelled', 'flowId': 'flow-1'})
               // Forward-compatibility: an unrecognized type must be
               // dropped, not surfaced or thrown.
               ..success({'type': 'some-future-event-type'})
