@@ -28,7 +28,15 @@ import 'package:pigeon/pigeon.dart';
 abstract class OidcAndroidHostApi {
   /// Opens the authorization URL and returns the captured redirect URI string
   /// (null when the user cancelled).
-  @async
+  ///
+  /// Uses `@asyncCallback` (not the now-default `@async`): since pigeon
+  /// 28.0.0, `@async` generates `suspend`/coroutine-based native interfaces.
+  /// The hand-written Kotlin implementation (`OidcPlugin.kt`) resolves this
+  /// from an `onActivityResult`-style callback, not a coroutine continuation,
+  /// so `@asyncCallback` keeps generating the pre-28 callback signature
+  /// (`callback: (Result<String?>) -> Unit`) and avoids an unrelated rewrite
+  /// of that native glue.
+  @asyncCallback
   String? authorize(
     String url,
     String? redirectUri,
@@ -37,7 +45,7 @@ abstract class OidcAndroidHostApi {
   );
 
   /// Opens the end-session URL and returns the captured redirect URI string.
-  @async
+  @asyncCallback
   String? endSession(
     String url,
     String? redirectUri,
@@ -54,7 +62,10 @@ abstract class OidcAndroidHostApi {
 /// macOS share the API channel name).
 @HostApi()
 abstract class OidcAppleHostApi {
-  @async
+  // See the `@asyncCallback` note on `OidcAndroidHostApi.authorize` above:
+  // the hand-written Swift implementation (`OidcPlugin.swift`) also uses a
+  // completion-handler shape, not `async`/`await`.
+  @asyncCallback
   String? authorizeApple(
     String url,
     String? redirectUri,
@@ -63,7 +74,7 @@ abstract class OidcAppleHostApi {
     Map<String, Object?> options,
   );
 
-  @async
+  @asyncCallback
   String? endSessionApple(
     String url,
     String? redirectUri,

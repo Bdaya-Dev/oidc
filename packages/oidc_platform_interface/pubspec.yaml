@@ -23,5 +23,13 @@ dev_dependencies:
   # the v1 toolchain bump (copy_with_extension_gen 15 / json_serializable 6.14)
   # now allows in the workspace, so it can be a normal dev-dependency (no global
   # tool). Regenerate with `melos run generate:native`.
-  pigeon: ^26.3.4
+  #
+  # ^29.0.6 (not ^26): the `flutter_test` SDK package on the beta channel pins
+  # `test_api` to a version that only resolves with `test >=1.31.2`, which in
+  # turn needs `analyzer >=13.0.0 <15.0.0`. Pigeon 26.3.4 constrained analyzer
+  # to `>=10.0.0 <13.0.0`, a disjoint window, so beta's workspace
+  # `flutter pub get` failed to solve. Pigeon 27.3.1 moved the whole window to
+  # `>=13.0.0 <15.0.0` (29.x keeps the same range), which overlaps `test`'s
+  # requirement on both stable and beta.
+  pigeon: ^29.0.6
   very_good_analysis: ^10.0.0
