@@ -268,6 +268,42 @@ String _describeToken(OidcToken token) {
       'scope=${token.scope?.join(' ')}';
 }
 
+/// Appends a failure line to [moduleFailures] when [verdict] (from
+/// [pollConformanceModuleVerdict]) is not one this harness accepts for
+/// [moduleName], and always logs what the suite reported.
+///
+/// [authDescription] is purely descriptive context for the log/failure
+/// message (what the CLIENT observed -- logged in, no user, or not driven at
+/// all for the discovery-only module) and plays no part in the verdict: the
+/// decision is the suite's own `result`, not what package:oidc returned.
+void _recordModuleVerdict({
+  required List<String> moduleFailures,
+  required Logger logger,
+  required String moduleName,
+  required Map<String, dynamic> verdict,
+  required String authDescription,
+}) {
+  final status = verdict['status'] as String?;
+  final result = verdict['result'] as String?;
+  logger.info(
+    'Suite verdict for $moduleName: status=$status result=$result '
+    '(client: $authDescription).',
+  );
+  if (!isTerminalConformanceStatus(status)) {
+    moduleFailures.add(
+      '$moduleName: suite status never reached FINISHED/INTERRUPTED within '
+      'the poll timeout (last status=$status, result=$result; client: '
+      '$authDescription).',
+    );
+  } else if (!isAcceptableConformanceResult(result)) {
+    moduleFailures.add(
+      '$moduleName: suite result was $result (status=$status; client: '
+      '$authDescription). Acceptable results are PASSED, WARNING, REVIEW, '
+      'SKIPPED.',
+    );
+  }
+}
+
 /// Smoke path used when no conformance token is supplied: just initialize the
 /// example's default manager.
 Future<void> runManagerSmokeTest(LaunchApp launchApp) async {
@@ -507,6 +543,14 @@ Future<void> runOidcConformanceTest(
   // 30 seconds", and the plan still passed. An assertion that cannot observe
   // the thing the plan exists to test is not a test of it.
   var successfulLogouts = 0;
+  // Per-module suite verdicts this harness rejects, collected across the
+  // whole plan rather than failing at the first one. Neither aggregate above
+  // can see this: a negative module that WRONGLY logs in still increments
+  // successfulLogins, so the plan stayed green through #447's CI even though
+  // oidcc-client-test-missing-athash should have ended with no user (#467).
+  // Asking the suite itself for each module's result (not just login/no-login
+  // on the client side) is what catches that.
+  final moduleFailures = <String>[];
 
   for (final testPlanModule
       in testPlanModules.whereType<Map<String, dynamic>>()) {
@@ -624,6 +668,17 @@ Future<void> runOidcConformanceTest(
     expect(manager.didInit, true);
     logger.info('Manager initialized');
     if (moduleName == 'oidcc-client-test-discovery-openid-config') {
+      final verdict = await pollConformanceModuleVerdict(
+        dio: dio,
+        instanceId: testInstanceId,
+      );
+      _recordModuleVerdict(
+        moduleFailures: moduleFailures,
+        logger: logger,
+        moduleName: moduleName,
+        verdict: verdict,
+        authDescription: 'not driven (discovery-only module)',
+      );
       app_state.currentManagerRx.$ = app_state.managersRx.$.first;
       app_state.managersRx.update((managers) => managers..remove(manager));
       await sub.cancel();
@@ -756,6 +811,24 @@ Future<void> runOidcConformanceTest(
         }
       }
     }
+    // Ask the suite itself whether THIS module is one it considers passed,
+    // regardless of what the client observed. authResult alone cannot tell a
+    // negative module that correctly saw no user from one that WRONGLY logged
+    // in -- successfulLogins only counts the latter case as a win -- and a
+    // module that is supposed to log in could still fail a suite-side check
+    // (e.g. a required requirement) after the client's own flow looked clean.
+    // See #467.
+    final verdict = await pollConformanceModuleVerdict(
+      dio: dio,
+      instanceId: testInstanceId,
+    );
+    _recordModuleVerdict(
+      moduleFailures: moduleFailures,
+      logger: logger,
+      moduleName: moduleName,
+      verdict: verdict,
+      authDescription: authResult == null ? 'no user' : 'logged in',
+    );
     logger
       ..info(
         authResult == null
@@ -792,6 +865,24 @@ Future<void> runOidcConformanceTest(
         "Android intent-filter, and the real cause was the suite's "
         'GenerateSessionState throwing on a host-less redirect_uri, on macOS '
         'as much as on Android.',
+  );
+
+  // The per-module gate the aggregate above cannot be: successfulLogins only
+  // ever moves in the direction a negative module must NOT move, so a
+  // negative module that wrongly logs in stays invisible to it as long as any
+  // other module in the plan still passes. Asking the suite for each module's
+  // own result closes that gap (#467) -- including for the implicit-flow
+  // oidcc-client-test-missing-athash module that PR #447's CI let through.
+  expect(
+    moduleFailures,
+    isEmpty,
+    reason:
+        'The conformance suite itself rejected these $planName modules on '
+        '${getPlatformName()} (status/result read from GET api/info/{id}; '
+        'acceptable results are PASSED, WARNING, REVIEW, SKIPPED -- the same '
+        'set certification.openid.net itself accepts -- FAILED and a '
+        'non-terminal status after the poll timeout are not):\n'
+        '${moduleFailures.join('\n')}',
   );
 
   // The logout plans exist to exercise logout, so a login-only gate cannot

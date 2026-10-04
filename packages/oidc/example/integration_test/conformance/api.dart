@@ -461,6 +461,80 @@ Future<Map<String, dynamic>> getTestSummary({
   return response.data ?? {};
 }
 
+/// `TestModule.Result` values (the suite's own source,
+/// `net.openid.conformance.testmodule.TestModule`) this harness accepts for
+/// ANY module, positive or negative.
+///
+/// PASSED is the obvious case. WARNING, REVIEW and SKIPPED are accepted too,
+/// matching what certification itself accepts: a profile can be certified
+/// with PASSED, REVIEW, WARNING or SKIPPED results, and cannot be certified
+/// with FAILED or INTERRUPTED. REVIEW usually asks a human to confirm
+/// something like a screenshot; this harness runs unattended and cannot act
+/// on it, so treating it as a failure would fail module categories the suite
+/// itself does not consider broken. SKIPPED means the suite decided the
+/// module could not run against this configuration (e.g. a server-side
+/// feature the plan variant does not exercise), not a client defect.
+const acceptableConformanceResults = {'PASSED', 'WARNING', 'REVIEW', 'SKIPPED'};
+
+/// `TestModule.Status` values after which `TestModule.Result` is final --
+/// the module will not take any further RP-observable step.
+///
+/// `TestModule.Status` also has `NOT_YET_CREATED`, `CREATED`, `CONFIGURED`,
+/// `RUNNING` and `WAITING`, all non-terminal: the suite can still change its
+/// mind about the result while a module is in any of those.
+const terminalConformanceStatuses = {'FINISHED', 'INTERRUPTED'};
+
+/// Whether the suite's own verdict for a module is one this harness accepts.
+///
+/// `null` is never accepted: either the field was absent, or the module's
+/// result is still the suite's own `UNKNOWN` ("not yet known, probably still
+/// running"), neither of which is a verdict.
+bool isAcceptableConformanceResult(String? result) =>
+    result != null && acceptableConformanceResults.contains(result);
+
+/// Whether [status] is one of `TestModule.Status` after which the module's
+/// result will not change further. See [terminalConformanceStatuses].
+bool isTerminalConformanceStatus(String? status) =>
+    status != null && terminalConformanceStatuses.contains(status);
+
+/// Polls `GET api/info/{id}` ([getTestSummary]) until the suite reports a
+/// terminal `TestModule.Status` ([isTerminalConformanceStatus]) or [timeout]
+/// elapses, returning whatever the last poll read either way.
+///
+/// This is `api/info`, deliberately NOT `api/runner` ([getTestStatus]):
+/// confirmed against real CI output (oidc#467) that `api/runner/{id}` --
+/// which this harness already called for null-result diagnostics below --
+/// returns only the TestRunner's live browser-interaction state (`owner`,
+/// `created`, `browser`, `name`, `exposed`, `id`, `error`, `updated`), with
+/// no `status` or `result` key at all; that is why an earlier version of this
+/// harness read `status['status']`/`status['result']` and got `null` for
+/// every module, a payload-shape guess that was never corrected. The suite's
+/// own OpenAPI document (`frontend/src/api/openapi.json` in
+/// openid/conformance-suite) says outright: "Read the outcome from GET
+/// /api/info/{id} (status and result)". `TestInfoResponse.status`/`.result`
+/// there enumerate exactly `TestModule.Status`/`TestModule.Result`.
+///
+/// [timeout] defaults to 15s. `AbstractOIDCCClientTest.waitTimeoutSeconds`
+/// defaults to 5s in the suite's own source -- the longest a module
+/// legitimately waits on purpose, for a negative module expecting the RP to
+/// detect a problem and go silent -- so 15s leaves a 3x margin for
+/// network/poll jitter without masking a module that is genuinely stuck.
+Future<Map<String, dynamic>> pollConformanceModuleVerdict({
+  required Dio dio,
+  required String instanceId,
+  Duration timeout = const Duration(seconds: 15),
+  Duration interval = const Duration(seconds: 1),
+}) async {
+  final stopwatch = Stopwatch()..start();
+  var summary = await getTestSummary(dio: dio, instanceId: instanceId);
+  while (!isTerminalConformanceStatus(summary['status'] as String?) &&
+      stopwatch.elapsed < timeout) {
+    await Future<void>.delayed(interval);
+    summary = await getTestSummary(dio: dio, instanceId: instanceId);
+  }
+  return summary;
+}
+
 /// The suite's own log for [instanceId].
 ///
 /// `public: false` is the authenticated view. The public one omits the entries
