@@ -659,7 +659,10 @@ abstract class OidcUserManagerBase {
     // already persisted by prepareAuthorizationCodeFlowRequest above, so local
     // validation is unchanged (RFC 9126 §6).
     if (shouldPushAuthorizationRequest) {
-      final parEndpoint = discoveryDocument.pushedAuthorizationRequestEndpoint;
+      final parEndpoint = resolveEndpoint(
+        discoveryDocument,
+        OidcConstants_ProviderMetadata.pushedAuthorizationRequestEndpoint,
+      );
       if (parEndpoint == null) {
         logAndThrow(
           'Pushed Authorization Requests are required/enabled but the '
@@ -707,7 +710,10 @@ abstract class OidcUserManagerBase {
     final tokenResp = await (settings.hooks?.token).execute(
       request: OidcTokenHookRequest(
         metadata: discoveryDocument,
-        tokenEndpoint: discoveryDocument.tokenEndpoint!,
+        tokenEndpoint: resolveEndpoint(
+          discoveryDocument,
+          OidcConstants_ProviderMetadata.tokenEndpoint,
+        )!,
         request: OidcTokenRequest.password(
           username: username,
           password: password,
@@ -765,21 +771,23 @@ abstract class OidcUserManagerBase {
     ensureInit();
 
     final metadata = discoveryDocumentOverride ?? discoveryDocument;
-    final tokenEndpoint = metadata.tokenEndpoint;
+    final tokenEndpoint = resolveEndpoint(
+      metadata,
+      OidcConstants_ProviderMetadata.tokenEndpoint,
+    );
     if (tokenEndpoint == null) {
       logAndThrow("This provider doesn't provide a token endpoint");
     }
 
-    final deviceAuthEndpointValue = metadata
-        .src[OidcConstants_ProviderMetadata.deviceAuthorizationEndpoint];
-    if (deviceAuthEndpointValue == null) {
+    final deviceAuthorizationEndpoint = resolveEndpoint(
+      metadata,
+      OidcConstants_ProviderMetadata.deviceAuthorizationEndpoint,
+    );
+    if (deviceAuthorizationEndpoint == null) {
       logAndThrow(
         "This provider doesn't provide the device_authorization_endpoint",
       );
     }
-    final deviceAuthorizationEndpoint = Uri.parse(
-      deviceAuthEndpointValue.toString(),
-    );
 
     final credentials = clientCredentials;
     final deviceResp = await OidcEndpoints.deviceAuthorization(
@@ -1201,7 +1209,11 @@ abstract class OidcUserManagerBase {
         discoveryDocumentOverride ?? this.discoveryDocument;
 
     final revocationEndpoint =
-        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+        revocationEndpointOverride ??
+        resolveEndpoint(
+          discoveryDocument,
+          OidcConstants_ProviderMetadata.revocationEndpoint,
+        );
     if (revocationEndpoint == null) {
       return; // no revocation endpoint, nothing to do.
     }
@@ -1306,7 +1318,11 @@ abstract class OidcUserManagerBase {
         discoveryDocumentOverride ?? this.discoveryDocument;
 
     final revocationEndpoint =
-        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+        revocationEndpointOverride ??
+        resolveEndpoint(
+          discoveryDocument,
+          OidcConstants_ProviderMetadata.revocationEndpoint,
+        );
     if (revocationEndpoint == null) {
       return; // no revocation endpoint, nothing to do.
     }
@@ -1573,7 +1589,10 @@ abstract class OidcUserManagerBase {
         }
       }
 
-      final tokenEndpoint = metadata.tokenEndpoint;
+      final tokenEndpoint = resolveEndpoint(
+        metadata,
+        OidcConstants_ProviderMetadata.tokenEndpoint,
+      );
       if (tokenEndpoint == null) {
         logAndThrow(
           "This provider doesn't provide a token endpoint",
@@ -2152,7 +2171,10 @@ abstract class OidcUserManagerBase {
       final tokenResponse = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
           metadata: discoveryDocument,
-          tokenEndpoint: discoveryDocument.tokenEndpoint!,
+          tokenEndpoint: resolveEndpoint(
+            discoveryDocument,
+            OidcConstants_ProviderMetadata.tokenEndpoint,
+          )!,
           // clientSecret is intentionally NOT passed here: `credentials`
           // below is the single source of client authentication (RFC 6749
           // §2.3). Also setting it on the request would duplicate it into
@@ -2335,7 +2357,10 @@ abstract class OidcUserManagerBase {
       final tokenResponse = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
           metadata: discoveryDocument,
-          tokenEndpoint: discoveryDocument.tokenEndpoint!,
+          tokenEndpoint: resolveEndpoint(
+            discoveryDocument,
+            OidcConstants_ProviderMetadata.tokenEndpoint,
+          )!,
           credentials: credentials,
           client: httpClient,
           headers: settings.extraTokenHeaders,
@@ -2665,7 +2690,10 @@ abstract class OidcUserManagerBase {
     Map<String, String>? headers,
     Map<String, dynamic>? extra,
   }) async {
-    final tokenEndpoint = discoveryDocument.tokenEndpoint;
+    final tokenEndpoint = resolveEndpoint(
+      discoveryDocument,
+      OidcConstants_ProviderMetadata.tokenEndpoint,
+    );
     if (tokenEndpoint == null) {
       logAndThrow("This provider doesn't provide a token endpoint.");
     }
@@ -2726,7 +2754,10 @@ abstract class OidcUserManagerBase {
     Map<String, String>? headers,
     Map<String, dynamic>? extra,
   }) async {
-    final introspectionEndpoint = discoveryDocument.introspectionEndpoint;
+    final introspectionEndpoint = resolveEndpoint(
+      discoveryDocument,
+      OidcConstants_ProviderMetadata.introspectionEndpoint,
+    );
     if (introspectionEndpoint == null) {
       logAndThrow("This provider doesn't provide an introspection endpoint.");
     }
@@ -3071,7 +3102,10 @@ abstract class OidcUserManagerBase {
     var userInfoFailed = false;
 
     if (errors.isEmpty) {
-      final userInfoEP = metadata.userinfoEndpoint;
+      final userInfoEP = resolveEndpoint(
+        metadata,
+        OidcConstants_ProviderMetadata.userinfoEndpoint,
+      );
 
       if (settings.userInfoSettings.sendUserInfoRequest && userInfoEP != null) {
         try {
@@ -3650,11 +3684,15 @@ abstract class OidcUserManagerBase {
         'client on a backend.',
       );
     }
-    return OidcClientAuthentication.fromRegistrationResponse(
+    final credentials = OidcClientAuthentication.fromRegistrationResponse(
       response,
       preferredMethod:
           settings.dynamicClientRegistration?.preferredTokenEndpointAuthMethod,
     );
+    // A registration the OP answered with an mTLS method is just as unusable
+    // in a browser as a configured one (see the check at the top of [init]).
+    ensureClientAuthenticationSupported(credentials);
+    return credentials;
   }
 
   /// Whether [response]'s issued `client_secret` is past its expiry.
@@ -3985,10 +4023,14 @@ abstract class OidcUserManagerBase {
     required OidcProviderMetadata metadata,
     required _OidcCachedClientRegistration? fallback,
   }) async {
-    // Deliberately NOT `OidcProviderMetadata.resolveEndpoint(...,
-    // useMtlsAliases: settings.useMtlsEndpointAliases)`: registration runs
-    // before the client has any mTLS identity to present.
-    final endpoint = metadata.registrationEndpoint;
+    // Routed through the mTLS alias choke point like every other direct
+    // request: the client certificate lives in [httpClient], which this POST
+    // also uses, so an OP that aliases `registration_endpoint` (e.g. FAPI /
+    // open-banking DCR, which requires mTLS there) gets it on the alias host.
+    final endpoint = resolveEndpoint(
+      metadata,
+      OidcConstants_ProviderMetadata.registrationEndpoint,
+    );
     if (endpoint == null) {
       logAndThrow(
         'Dynamic client registration is enabled but the provider at '
@@ -4801,6 +4843,52 @@ abstract class OidcUserManagerBase {
     );
   }
 
+  /// Throws an [UnsupportedError] when [credentials] uses an RFC 8705 mutual
+  /// TLS method (`tls_client_auth` / `self_signed_tls_client_auth`) on web.
+  ///
+  /// A browser exposes no API for `fetch`/XHR to present a client certificate
+  /// (certificates are OS/browser-managed), so such a client could never
+  /// authenticate. Failing at [init], before any request, beats an opaque
+  /// `invalid_client` at the first token request.
+  @protected
+  void ensureClientAuthenticationSupported(
+    OidcClientAuthentication credentials,
+  ) {
+    if (!isWeb) {
+      return;
+    }
+    final method = credentials.location;
+    if (method == OidcConstants_ClientAuthenticationMethods.tlsClientAuth ||
+        method ==
+            OidcConstants_ClientAuthenticationMethods.selfSignedTlsClientAuth) {
+      throw UnsupportedError(
+        'The "$method" client authentication method (mutual TLS, RFC 8705) is '
+        'not supported on web: browsers expose no API for fetch/XHR to '
+        'present a client certificate. Use a different '
+        'OidcClientAuthentication on web, or perform the mTLS-authenticated '
+        'requests from a backend.',
+      );
+    }
+  }
+
+  /// The single choke point every back-channel endpoint read in this manager
+  /// goes through: returns the endpoint stored under [endpointName] (an
+  /// `OidcConstants_ProviderMetadata` endpoint key) in [metadata], applying the
+  /// RFC 8705 §5 `mtls_endpoint_aliases` alias-or-fallback rule when
+  /// [OidcUserManagerSettings.useMtlsEndpointAliases] is on.
+  ///
+  /// Front-channel endpoints are never aliased (see
+  /// [OidcProviderMetadata.frontChannelEndpoints]). `jwks_uri` is not routed
+  /// here either: it is an unauthenticated public read that the id_token and
+  /// UserInfo verifiers each resolve from [OidcProviderMetadata.jwksUri], and
+  /// splitting it would key the JWKS cache under two URLs.
+  @protected
+  Uri? resolveEndpoint(OidcProviderMetadata metadata, String endpointName) =>
+      metadata.resolveEndpoint(
+        endpointName,
+        useMtlsAliases: settings.useMtlsEndpointAliases,
+      );
+
   /// Registers the current [discoveryDocument]'s `jwks_uri` with [keyStore].
   ///
   /// The symmetric HS* key (RFC 7518 §3.2, the `client_secret` octets) is
@@ -4864,6 +4952,7 @@ abstract class OidcUserManagerBase {
   ///   document is otherwise served from its TTL cache).
   Future<void> init() {
     return initMemoizer.runOnce(() async {
+      ensureClientAuthenticationSupported(clientCredentials);
       await store.init();
       if (settings.initMode == OidcInitMode.cacheFirst &&
           await _tryCacheFirstInit()) {
