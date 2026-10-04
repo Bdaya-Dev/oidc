@@ -1,3 +1,19 @@
+## 3.0.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**(oidc_core): allow valid multi-audience ID tokens by default ([#441](https://github.com/Bdaya-Dev/oidc/issues/441)). ([f50cd755](https://github.com/Bdaya-Dev/oidc/commit/f50cd7551c5827f84368ed59f159d30c217948ec))
+ - **FIX**(oidc_core): log offline userinfo failures as WARNING, not SEVERE ([#440](https://github.com/Bdaya-Dev/oidc/issues/440)). ([c3b01b73](https://github.com/Bdaya-Dev/oidc/commit/c3b01b73f78737eaa57e819cb86682dd94133819))
+ - **FIX**(oidc_core): reject `code`-only in loginHybridFlow, and stop overclaiming front-channel safety. ([cedaf1af](https://github.com/Bdaya-Dev/oidc/commit/cedaf1af4de3ac496b7286fb791600e500120e62))
+ - **FEAT**(oidc_core): manager-level dynamic client registration (RFC 7591). ([fe4b4c4e](https://github.com/Bdaya-Dev/oidc/commit/fe4b4c4e30b1c97db06407dc32f7d4b1106e21ca))
+ - **FEAT**(oidc_core): implement WebFinger issuer discovery (OIDC Discovery §2, RFC 7033). ([213657b8](https://github.com/Bdaya-Dev/oidc/commit/213657b8dad13d62a1c58d069c801cf26b995439))
+ - **FEAT**(oidc_core): add loginHybridFlow (OIDC Core §3.3). ([9afa3159](https://github.com/Bdaya-Dev/oidc/commit/9afa31591756c97b54527b7edcd2b094e0273c42))
+ - **FEAT**(oidc_core,oidc_web_core): bound the interactive web flow with flowTimeoutSeconds. ([7282efa0](https://github.com/Bdaya-Dev/oidc/commit/7282efa09d406fa3eb012688fbbc091836d8ba2e))
+ - **BREAKING** **FIX**(oidc_core): never take the PKCE code_verifier from the authorization response ([#404](https://github.com/Bdaya-Dev/oidc/issues/404)). ([9a6006e0](https://github.com/Bdaya-Dev/oidc/commit/9a6006e089d49deaa79e73218a7c757dd2ed1a88))
+ - **BREAKING** **FIX**(oidc_core): drop the legacy in-payload code_verifier fallback ([#404](https://github.com/Bdaya-Dev/oidc/issues/404)). ([a0c991c5](https://github.com/Bdaya-Dev/oidc/commit/a0c991c56684fa48469487728516bfad38fbb681))
+ - **BREAKING** **FIX**(oidc_core): the REGISTERED token_endpoint_auth_method wins over the caller's. ([262bdfd4](https://github.com/Bdaya-Dev/oidc/commit/262bdfd4f0c1fac0f29c65be23bb3c061adb8310))
+ - **BREAKING** **FIX**(oidc_android): report the options the Auth Tab path cannot apply. ([8b7226ce](https://github.com/Bdaya-Dev/oidc/commit/8b7226ced748e953e8b3ea95ba3c711d8976dd8d))
+
 ## 2.1.0
 
  - **FEAT**(oidc_core): silent-acquisition API at the manager/app boundary ([#421](https://github.com/Bdaya-Dev/oidc/issues/421), [#422](https://github.com/Bdaya-Dev/oidc/issues/422), [#423](https://github.com/Bdaya-Dev/oidc/issues/423), [#424](https://github.com/Bdaya-Dev/oidc/issues/424)) ([#425](https://github.com/Bdaya-Dev/oidc/issues/425)). ([97ac60e6](https://github.com/Bdaya-Dev/oidc/commit/97ac60e697ef3f82dfec32e6d1a3b143440a61b9))

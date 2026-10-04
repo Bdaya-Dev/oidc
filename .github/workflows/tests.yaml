@@ -856,11 +856,25 @@ jobs:
           #
           # Nothing in patrol asserts successful + failed + skipped == total.
           # Do it here, over patrol's own output, so a vanished test is a NAMED
-          # failure. --minimum-tests 13 is the ratchet: patrol_test/app_test.dart
-          # declares 13 conformance tests, and patrol reports a run that
-          # executed nothing as a clean pass.
+          # failure. The floor depends on which path the harness took:
+          #   * token present  -> 13: patrol_test/app_test.dart declares 13
+          #     conformance tests, and patrol reports a run that executed
+          #     nothing as a clean pass.
+          #   * token absent   -> 1: the harness runs its smoke path ("Running
+          #     smoke test path (no OIDC token supplied)"). This is the only
+          #     path a dependabot-triggered run can take: dependabot PRs get a
+          #     separate secret store ("Secret source: Dependabot") that does
+          #     not contain OIDC_CONFORMANCE_TOKEN, so demanding 13 made every
+          #     dependabot PR structurally red here. The floor stays POSITIVE
+          #     (never 0): a smoke run that executed nothing still fails.
+          if [ -n "$OIDC_CONFORMANCE_TOKEN" ]; then
+            MIN_TESTS=13
+          else
+            MIN_TESTS=1
+            echo "::notice::OIDC_CONFORMANCE_TOKEN is not available in this trigger context (e.g. a dependabot PR). Live conformance did not run; the harness ran its smoke path and the tally floor is $MIN_TESTS."
+          fi
           set +e
-          dart run tool/patrol_tally.dart patrol-web.log --minimum-tests 13
+          dart run tool/patrol_tally.dart patrol-web.log --minimum-tests "$MIN_TESTS"
           TALLY_RC=$?
           set -e
 
