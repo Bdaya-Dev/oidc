@@ -12,6 +12,9 @@ coverage/
 
 Podfile.lock
 Pods/
+# Swift Package Manager artifacts
+.build/
+.swiftpm/
 .symlinks/
 **/Flutter/App.framework/
 **/Flutter/ephemeral/
