@@ -1569,6 +1569,13 @@ abstract class OidcUserManagerBase {
             // `c_hash`; null for a pure implicit response.
             authorizationCode: response.code,
             maxAge: stateData.maxAge,
+            // OIDC Core §3.2.2.10: this id_token comes straight from the
+            // authorization endpoint (never the token endpoint), so when it is
+            // paired with an access_token (`id_token token`) `at_hash` is
+            // REQUIRED, not merely checked for a match if present. A pure
+            // `id_token` implicit response has no access_token, so the
+            // requirement is a no-op for it, matching "not used" in the spec.
+            requireAtHashWithAccessToken: true,
           );
         }
       }
@@ -1720,6 +1727,10 @@ abstract class OidcUserManagerBase {
     // existing [currentUser]. Used by cache-first background revalidation, whose
     // locally-restored user was deserialized WITHOUT verification.
     bool ignoreCurrentUser = false,
+    // Forwarded to [validateUser] via [validateAndSaveUser]: see its doc for
+    // why only the implicit-flow branch of [handleSuccessfulAuthResponse]
+    // passes true.
+    bool requireAtHashWithAccessToken = false,
   }) async {
     final currentUser = ignoreCurrentUser
         ? null
@@ -1796,6 +1807,7 @@ abstract class OidcUserManagerBase {
         metadata: metadata,
         authorizationCode: authorizationCode,
         maxAge: maxAge,
+        requireAtHashWithAccessToken: requireAtHashWithAccessToken,
       );
     } else {
       return newUser;
@@ -2866,6 +2878,16 @@ abstract class OidcUserManagerBase {
     required OidcProviderMetadata metadata,
     String? authorizationCode,
     Duration? maxAge,
+    // OpenID Connect Core §3.2.2.10 (Implicit ID Token): when the id_token is
+    // issued from the authorization endpoint together with an access_token
+    // (implicit `id_token token`), `at_hash` is REQUIRED, not merely checked
+    // for a match if present. It is "not used" for `id_token` alone, and
+    // stays OPTIONAL for a token-endpoint-issued id_token (code flow,
+    // refresh -- §3.1.3.6 / §3.3.3.6), so this defaults to false and is only
+    // set by the implicit-flow caller in [handleSuccessfulAuthResponse]. The
+    // hybrid flow enforces its own equivalent requirement separately in
+    // [validateFrontChannelIdToken].
+    bool requireAtHashWithAccessToken = false,
   }) {
     final claims = user.parsedIdToken.claims;
     // `exp` is REQUIRED (OIDC Core §2). jose's `validate()` force-unwraps the
@@ -3008,6 +3030,19 @@ abstract class OidcUserManagerBase {
           JoseException('id token `at_hash` does not match the access_token.'),
         );
       }
+    } else if (requireAtHashWithAccessToken &&
+        accessToken != null &&
+        atHash is! String) {
+      // §3.2.2.10: an id_token issued from the authorization endpoint
+      // alongside an access_token (implicit `id_token token`) MUST carry
+      // `at_hash` -- unlike the generic check above, its absence here is
+      // itself the failure, not merely a skipped match.
+      errors.add(
+        JoseException(
+          'id token issued with an access_token is missing the required '
+          '`at_hash` claim.',
+        ),
+      );
     }
 
     // `c_hash` (§3.3.2.11): when an id_token returned from the authorization
@@ -3081,6 +3116,7 @@ abstract class OidcUserManagerBase {
     String? authorizationCode,
     Duration? maxAge,
     bool reactToUserInfoUnauthorized = false,
+    bool requireAtHashWithAccessToken = false,
   }) async {
     var actualUser = user;
     final errors = validateUser(
@@ -3088,6 +3124,7 @@ abstract class OidcUserManagerBase {
       metadata: metadata,
       authorizationCode: authorizationCode,
       maxAge: maxAge,
+      requireAtHashWithAccessToken: requireAtHashWithAccessToken,
     );
     OidcUserInfoResponse? userInfoResp;
     var userInfoFailed = false;

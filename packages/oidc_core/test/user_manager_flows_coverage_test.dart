@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:clock/clock.dart';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:jose_plus/jose.dart';
@@ -15,9 +16,19 @@ import 'package:test/test.dart';
 const _issuer = 'https://op.example.com';
 final _signingKey = JsonWebKey.generate('RS256');
 
+/// base64url left-half SHA-256 hash (RS256 id_token), OIDC Core §3.2.2.9 --
+/// used to mint a conforming `at_hash` for the implicit-flow test below.
+String _hash(String value) {
+  final full = sha256.convert(ascii.encode(value)).bytes;
+  return base64Url
+      .encode(full.sublist(0, full.length ~/ 2))
+      .replaceAll('=', '');
+}
+
 String _signIdToken({
   String subject = 'user-1',
   String? nonce,
+  String? atHash,
   Duration expiresIn = const Duration(hours: 1),
   String issuer = _issuer,
 }) {
@@ -30,6 +41,7 @@ String _signIdToken({
           'exp': now + expiresIn.inSeconds,
           'iat': now,
           'nonce': ?nonce,
+          'at_hash': ?atHash,
         }
         ..addRecipient(_signingKey, algorithm: 'RS256'))
       .build()
@@ -184,6 +196,7 @@ void main() {
 
   group('loginImplicitFlow (deprecated)', () {
     test('builds a user from a front-channel implicit response', () async {
+      const accessToken = 'at-implicit';
       final client = MockClient((req) async => http.Response('{}', 404));
       final manager = await _build(
         client: client,
@@ -194,9 +207,15 @@ void main() {
         }),
         onAuthorize: (request) async => OidcAuthorizeResponse.fromJson({
           'state': request.state,
-          'access_token': 'at-implicit',
+          'access_token': accessToken,
           'token_type': 'Bearer',
-          'id_token': _signIdToken(nonce: request.nonce),
+          // `id_token token` requires `at_hash` (OIDC Core §3.2.2.10); see
+          // implicit_at_hash_test.dart for the dedicated coverage of that
+          // requirement, including the rejection cases.
+          'id_token': _signIdToken(
+            nonce: request.nonce,
+            atHash: _hash(accessToken),
+          ),
           'expires_in': '3600',
         }),
       );
