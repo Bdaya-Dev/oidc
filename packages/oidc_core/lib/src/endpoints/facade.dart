@@ -465,7 +465,7 @@ class OidcEndpoints {
               rawResponse: resp,
             );
           }
-          return _handleResponse(
+          return await _handleResponse(
             mapper: OidcWebFingerResponse.fromJson,
             request: req,
             response: resp,

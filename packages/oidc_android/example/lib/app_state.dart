@@ -2,6 +2,7 @@ import 'package:async/async.dart';
 import 'package:logging/logging.dart';
 import 'package:oidc_android/oidc_android.dart';
 import 'package:oidc_platform_interface/oidc_platform_interface.dart';
+
 //This file represents a global state, which is bad
 //in a production app (since you can't test it).
 
