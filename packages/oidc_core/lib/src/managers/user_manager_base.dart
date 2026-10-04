@@ -471,106 +471,178 @@ abstract class OidcUserManagerBase {
   Stream<OidcUser?> userChangesAfterInit() => Stream<OidcUser?>.multi((
     controller,
   ) {
-    StreamSubscription<OidcUser?>? sub;
-    var cancelled = false;
-
-    // The closer this listener registered in
-    // [_pendingUserChangesAfterInitClosers] while waiting on [initFuture], so
-    // [dispose] can release it if it never gets to settle on its own. Set
-    // back to `null` the moment it is removed (on cancel, or once
-    // [initFuture] settles) so it is never invoked twice and never lingers in
-    // the set past the point this listener stopped needing it.
-    void Function()? pendingCloser;
-
-    void unregisterPendingCloser() {
-      final closer = pendingCloser;
-      if (closer != null) {
-        pendingCloser = null;
-        _pendingUserChangesAfterInitClosers.remove(closer);
-      }
-    }
-
-    controller.onCancel = () {
-      cancelled = true;
-      unregisterPendingCloser();
-      return sub?.cancel();
-    };
-
     if (_isDisposed) {
       // Already disposed before this listener even attached: [dispose] will
-      // never run again to release a pending closer, so settle immediately
-      // instead of registering one.
+      // never run again to release it, so settle immediately instead of
+      // registering a waiter.
       unawaited(controller.close());
       return;
     }
 
-    pendingCloser = () {
-      unregisterPendingCloser();
-      if (!cancelled) {
-        unawaited(controller.close());
-      }
-    };
-    _pendingUserChangesAfterInitClosers.add(pendingCloser!);
-
-    unawaited(
-      initFuture.then(
-        (_) {
-          unregisterPendingCloser();
-          if (cancelled) {
-            return;
-          }
-          if (_isDisposed) {
-            unawaited(controller.close());
-            return;
-          }
-          sub = userSubject.stream.listen(
-            controller.add,
-            onError: controller.addError,
-            onDone: controller.close,
-          );
-        },
-        onError: (Object e, StackTrace st) {
-          unregisterPendingCloser();
-          if (cancelled) {
-            return;
-          }
-          controller.addError(e, st);
+    // Every add/addError/close below is guarded on `controller.isClosed`:
+    // [dispose] closes a waiting controller synchronously, but the listener
+    // only observes that (as a done event) later — or never, while paused —
+    // so nothing else may touch the controller once it is closed.
+    StreamSubscription<OidcUser?>? forwarding;
+    final waiter = _UserChangesAfterInitWaiter(
+      onInitDone: () {
+        if (controller.isClosed) {
+          return;
+        }
+        if (_isDisposed) {
           unawaited(controller.close());
-        },
-      ),
+          return;
+        }
+        forwarding = userSubject.stream.listen(
+          (user) {
+            if (!controller.isClosed) {
+              controller.add(user);
+            }
+          },
+          onError: (Object e, StackTrace st) {
+            if (!controller.isClosed) {
+              controller.addError(e, st);
+            }
+          },
+          onDone: () {
+            if (!controller.isClosed) {
+              unawaited(controller.close());
+            }
+          },
+        );
+      },
+      onInitFailed: (e, st) {
+        if (controller.isClosed) {
+          return;
+        }
+        controller.addError(e, st);
+        unawaited(controller.close());
+      },
+      onDisposed: () {
+        if (!controller.isClosed) {
+          unawaited(controller.close());
+        }
+      },
     );
+
+    controller.onCancel = () {
+      // Dropping the waiter is all it takes to release this listener: the
+      // manager's single [initFuture] attachment only reaches listeners
+      // through [_userChangesAfterInitWaiters].
+      _userChangesAfterInitWaiters.remove(waiter);
+      return forwarding?.cancel();
+    };
+
+    if (_initSettledForUserChangesAfterInit) {
+      // [init] already settled: nothing to wait for, so this listener never
+      // enters [_userChangesAfterInitWaiters] at all.
+      final error = _initErrorForUserChangesAfterInit;
+      if (error != null) {
+        waiter.onInitFailed(
+          error,
+          _initErrorStackTraceForUserChangesAfterInit ?? StackTrace.empty,
+        );
+      } else {
+        waiter.onInitDone();
+      }
+      return;
+    }
+    _userChangesAfterInitWaiters.add(waiter);
+    _attachUserChangesAfterInitToInitFuture();
   });
 
-  /// Pending [userChangesAfterInit] listeners still waiting on [initFuture],
-  /// keyed by the closer callback each one registers for [dispose] to invoke.
+  /// [userChangesAfterInit] listeners still waiting on [initFuture].
   ///
-  /// The previous approach raced `initFuture` against a shared
-  /// `_disposeSignal.future` that only ever completed inside [dispose] (via
-  /// `Future.any`). Because that future stayed pending for the manager's
-  /// entire lifetime, every listener's `.then` callback — and the
-  /// [StreamController] it captured — stayed attached to it too, even after
-  /// the listener cancelled or [initFuture] had long since settled. A caller
-  /// that repeatedly subscribed to and cancelled [userChangesAfterInit] (for
-  /// example re-subscribing on every widget rebuild) therefore leaked one
-  /// closure, and the controller it closed over, per subscription until
-  /// [dispose] finally ran.
+  /// This set is the ONLY place a waiting listener (and the controller its
+  /// callbacks close over) is referenced from. The manager attaches a single
+  /// callback pair to [initFuture], once (see
+  /// [_attachUserChangesAfterInitToInitFuture]); it captures nothing but the
+  /// manager itself. A listener that cancels is removed here and becomes
+  /// garbage straight away, even if [init] never runs or never settles; when
+  /// [initFuture] settles, or the manager is disposed, every waiter still
+  /// here is drained and released.
   ///
-  /// Each listener now adds its own closer here and removes it the moment it
-  /// no longer needs one — on cancel, or as soon as [initFuture] settles —
-  /// instead of pinning it to a future that may not complete for a long time.
-  /// [dispose] invokes whatever is left (listeners disposed-before- or
-  /// disposed-mid-init) and clears the set.
-  final Set<void Function()> _pendingUserChangesAfterInitClosers = {};
+  /// Earlier revisions attached a per-listener callback to a long-lived
+  /// future — first `Future.any([initFuture, <a future completed only by
+  /// dispose>])`, then `initFuture` itself — so a cancelled listener stayed
+  /// reachable from that future until it completed: for the manager's whole
+  /// lifetime, or for as long as [init] had not run.
+  final Set<_UserChangesAfterInitWaiter> _userChangesAfterInitWaiters = {};
+
+  /// Whether [_attachUserChangesAfterInitToInitFuture] has attached its
+  /// callback pair to [initFuture].
+  bool _userChangesAfterInitAttached = false;
+
+  /// The zone [init] was first called in; `null` until then.
+  Zone? _initZone;
+
+  /// Whether [initFuture] has settled, as observed by the manager's own
+  /// attachment. Once `true`, new [userChangesAfterInit] listeners are
+  /// answered straight away from this outcome instead of waiting.
+  bool _initSettledForUserChangesAfterInit = false;
+  Object? _initErrorForUserChangesAfterInit;
+  StackTrace? _initErrorStackTraceForUserChangesAfterInit;
+
+  /// Attaches the manager's one [initFuture] callback pair, once, as soon as
+  /// both a waiting listener exists and [init] has been called.
+  ///
+  /// Lazy on both counts on purpose:
+  /// - without a waiter there is nobody to deliver to, and attaching an error
+  ///   handler anyway would silently mark a failed, un-awaited [init] as
+  ///   handled instead of letting it surface as an uncaught error;
+  /// - the callbacks are registered in the zone [init] ran in ([_initZone]),
+  ///   never in whichever zone a listener happened to subscribe from: a
+  ///   future's error is not delivered to a handler registered in a different
+  ///   error zone (it is reported as uncaught in the future's own zone), so an
+  ///   app subscribing inside `runZonedGuarded` while calling [init] outside
+  ///   it would otherwise get an uncaught error instead of a stream error.
+  void _attachUserChangesAfterInitToInitFuture() {
+    final initZone = _initZone;
+    if (_userChangesAfterInitAttached ||
+        initZone == null ||
+        _userChangesAfterInitWaiters.isEmpty) {
+      return;
+    }
+    _userChangesAfterInitAttached = true;
+    initZone.run(
+      () => unawaited(
+        initFuture.then(
+          (_) => _settleUserChangesAfterInitWaiters(null, null),
+          onError: _settleUserChangesAfterInitWaiters,
+        ),
+      ),
+    );
+  }
+
+  /// Records [initFuture]'s outcome and drains [_userChangesAfterInitWaiters].
+  ///
+  /// Tolerates an empty set (every waiter cancelled, or [dispose] already
+  /// drained them) and a disposed manager.
+  void _settleUserChangesAfterInitWaiters(Object? error, StackTrace? st) {
+    _initSettledForUserChangesAfterInit = true;
+    _initErrorForUserChangesAfterInit = error;
+    _initErrorStackTraceForUserChangesAfterInit = st;
+    for (final waiter in _userChangesAfterInitWaiters.toList()) {
+      // Skip a waiter removed (cancelled) by an earlier one's callbacks.
+      if (!_userChangesAfterInitWaiters.remove(waiter)) {
+        continue;
+      }
+      if (error != null) {
+        waiter.onInitFailed(error, st ?? StackTrace.empty);
+      } else {
+        waiter.onInitDone();
+      }
+    }
+  }
 
   /// The number of [userChangesAfterInit] listeners currently waiting on
-  /// [initFuture], i.e. with a pending entry in
-  /// [_pendingUserChangesAfterInitClosers].
+  /// [initFuture].
   ///
   /// Exposed only for tests, to assert this returns to 0 once listeners
   /// settle or cancel instead of being retained for the manager's lifetime.
   @visibleForTesting
   int get debugPendingUserChangesAfterInitListenerCount =>
-      _pendingUserChangesAfterInitClosers.length;
+      _userChangesAfterInitWaiters.length;
 
   /// Gets a stream of events related to the current manager.
   Stream<OidcEvent> events() => eventsController.stream;
@@ -4991,7 +5063,7 @@ abstract class OidcUserManagerBase {
   ///   combined with `discoveryDocumentMaxAge: Duration.zero` (the discovery
   ///   document is otherwise served from its TTL cache).
   Future<void> init() {
-    return initMemoizer.runOnce(() async {
+    final future = initMemoizer.runOnce(() async {
       await store.init();
       if (settings.initMode == OidcInitMode.cacheFirst &&
           await _tryCacheFirstInit()) {
@@ -5017,6 +5089,12 @@ abstract class OidcUserManagerBase {
       }
       attachLifecycleListeners();
     });
+    // Remember the zone init() runs in, and attach now if a
+    // [userChangesAfterInit] listener is already waiting (see
+    // [_attachUserChangesAfterInitToInitFuture]).
+    _initZone ??= Zone.current;
+    _attachUserChangesAfterInitToInitFuture();
+    return future;
   }
 
   /// Attempts the [OidcInitMode.cacheFirst] restore: deserialize the cached user
@@ -5219,13 +5297,16 @@ abstract class OidcUserManagerBase {
     // (see [isDisposed] / [_performAutoRefresh]).
     _isDisposed = true;
     // Release every [userChangesAfterInit] listener still waiting on
-    // [initFuture] (dispose-before-init / dispose-mid-init); listeners that
-    // already settled or cancelled have already removed themselves from this
-    // set, so this never re-closes a controller that moved on.
-    for (final closer in _pendingUserChangesAfterInitClosers.toList()) {
-      closer();
+    // [initFuture] (dispose-before-init / dispose-mid-init). Listeners that
+    // already settled or cancelled are no longer in the set. Draining it here
+    // also leaves the single pending [initFuture] attachment (if any) with
+    // nothing to deliver, so a late init failure can never reach a controller
+    // this just closed.
+    for (final waiter in _userChangesAfterInitWaiters.toList()) {
+      if (_userChangesAfterInitWaiters.remove(waiter)) {
+        waiter.onDisposed();
+      }
     }
-    _pendingUserChangesAfterInitClosers.clear();
     // The shared in-flight auto-refresh already swallows its own outcome once
     // disposed, but latch onto it here too so its settling can never surface an
     // unhandled error into the zone after teardown. Mirrors how the other
@@ -5461,4 +5542,19 @@ abstract class OidcUserManagerBase {
       rethrow;
     }
   }
+}
+
+/// A [OidcUserManagerBase.userChangesAfterInit] listener waiting on
+/// [OidcUserManagerBase.initFuture], as held by the manager until init
+/// settles, the manager is disposed, or the listener cancels.
+final class _UserChangesAfterInitWaiter {
+  _UserChangesAfterInitWaiter({
+    required this.onInitDone,
+    required this.onInitFailed,
+    required this.onDisposed,
+  });
+
+  final void Function() onInitDone;
+  final void Function(Object error, StackTrace stackTrace) onInitFailed;
+  final void Function() onDisposed;
 }

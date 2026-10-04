@@ -162,6 +162,82 @@ _Manager _manager({
   ),
 );
 
+/// Runs [body] in a zone that keeps a [WeakReference] to every callback
+/// registered through it, so a test can tell whether those callbacks (and
+/// whatever they closed over, such as a [StreamController]) are still
+/// reachable afterwards.
+///
+/// `Future.then`, `Future.any`, `Stream.listen` and friends all register
+/// their callbacks with [Zone.current] when it is not the root zone, so this
+/// sees every closure `userChangesAfterInit()` attaches to a future on behalf
+/// of a listener — including ones that capture that listener's controller.
+List<WeakReference<Function>> _trackRegisteredCallbacks(void Function() body) {
+  final refs = <WeakReference<Function>>[];
+  runZoned(
+    body,
+    zoneSpecification: ZoneSpecification(
+      registerCallback: <R>(self, parent, zone, f) {
+        refs.add(WeakReference(f));
+        return parent.registerCallback(zone, f);
+      },
+      registerUnaryCallback: <R, T>(self, parent, zone, f) {
+        refs.add(WeakReference(f));
+        return parent.registerUnaryCallback(zone, f);
+      },
+      registerBinaryCallback: <R, T1, T2>(self, parent, zone, f) {
+        refs.add(WeakReference(f));
+        return parent.registerBinaryCallback(zone, f);
+      },
+    ),
+  );
+  return refs;
+}
+
+/// The number of [refs] still reachable after driving the garbage collector.
+///
+/// `package:test` runs without a VM service, so there is no direct "force a
+/// full GC" call; instead this allocates throwaway garbage (enough to trigger
+/// young- AND old-generation collections) until at most [atMost] targets
+/// survive, giving up after a bounded number of rounds. A genuinely retained
+/// target is never collected however many rounds run, so a leak still fails
+/// deterministically; only the time spent proving it varies.
+Future<int> _aliveAfterGc(
+  List<WeakReference<Function>> refs, {
+  required int atMost,
+}) async {
+  // Count DISTINCT survivors: static tear-offs the stream internals register
+  // (e.g. the default no-op done/error handlers) are canonical, never
+  // collected, and identical across rounds, so they collapse to one each
+  // instead of masquerading as a per-round leak.
+  int alive() =>
+      (Set<Object>.identity()
+            ..addAll(refs.map((r) => r.target).whereType<Object>()))
+          .length;
+  for (var round = 0; round < 60 && alive() > atMost; round++) {
+    var junk = <List<int>>[];
+    for (var i = 0; i < 4000; i++) {
+      junk.add(List<int>.filled(512, i));
+    }
+    junk = const [];
+    await Future<void>.delayed(Duration.zero);
+  }
+  return alive();
+}
+
+/// Runs [body] in an error zone and returns every error that escaped it
+/// uncaught (e.g. a `StateError` from adding to a closed controller inside a
+/// fire-and-forget callback), after letting queued microtasks drain.
+Future<List<Object>> _runGuarded(Future<void> Function() body) async {
+  final uncaught = <Object>[];
+  final finished = Completer<void>();
+  runZonedGuarded(() {
+    unawaited(body().whenComplete(finished.complete));
+  }, (e, st) => uncaught.add(e));
+  await finished.future.timeout(const Duration(seconds: 5));
+  await pumpEventQueue();
+  return uncaught;
+}
+
 void main() {
   group('userChangesAfterInit (#453)', () {
     test(
@@ -358,5 +434,277 @@ void main() {
         await manager.dispose();
       },
     );
+    // Real-retention regression (#453): the debug counter above only checks
+    // the manager's own bookkeeping, so it passes even if a listener's
+    // closure stays attached to some long-lived future. These tests instead
+    // hold a WeakReference to every callback a subscribe/cancel round
+    // registers and require (almost) all of them to be garbage-collectable
+    // once the round is over. With N rounds, a per-round leak leaves ~N (or
+    // 2N) survivors; the fixed implementation leaves only the manager's
+    // single initFuture attachment (2 callbacks) at most.
+    const rounds = 50;
+    const allowedSurvivors = 4;
+
+    test(
+      'subscribe/cancel BEFORE init() retains nothing per round (#453)',
+      () async {
+        final manager = _manager(store: await _store(), client: _client());
+
+        final refs = _trackRegisteredCallbacks(() {
+          for (var i = 0; i < rounds; i++) {
+            unawaited(manager.userChangesAfterInit().listen((_) {}).cancel());
+          }
+        });
+        await pumpEventQueue();
+        expect(refs.length, greaterThanOrEqualTo(rounds));
+
+        expect(
+          await _aliveAfterGc(refs, atMost: allowedSurvivors),
+          lessThanOrEqualTo(allowedSurvivors),
+          reason:
+              'a cancelled listener must not stay reachable from initFuture '
+              'while init() has not run yet',
+        );
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'subscribe/cancel AFTER init() retains nothing per round (#453)',
+      () async {
+        final manager = _manager(store: await _store(), client: _client());
+        await manager.init();
+
+        final refs = _trackRegisteredCallbacks(() {
+          for (var i = 0; i < rounds; i++) {
+            unawaited(manager.userChangesAfterInit().listen((_) {}).cancel());
+          }
+        });
+        await pumpEventQueue();
+        expect(refs.length, greaterThanOrEqualTo(rounds));
+
+        expect(
+          await _aliveAfterGc(refs, atMost: allowedSurvivors),
+          lessThanOrEqualTo(allowedSurvivors),
+          reason:
+              'a cancelled listener must not stay reachable from any future '
+              'that outlives it (e.g. one that only completes on dispose)',
+        );
+        await manager.dispose();
+      },
+    );
+
+    // B-1: dispose() closes every pending listener's controller, but a
+    // listener only observes that (as a done event) a microtask later — or
+    // never, while paused. An init() failure delivered in that window must
+    // not be added to the already-closed controller (StateError: Cannot add
+    // event after closing), which would surface as an uncaught zone error.
+    group('init() failure after dispose() raises no uncaught error', () {
+      test('app disposes in its own catch around init()', () async {
+        final gate = Completer<void>();
+        final manager = _manager(
+          store: await _store(),
+          client: _client(discoveryGate: gate.future, failDiscovery: true),
+        );
+        final events = <String>[];
+        final uncaught = await _runGuarded(() async {
+          // The app awaits init() first, so its catch — and the dispose()
+          // inside it — runs before the listener's own reaction to the
+          // same failed future.
+          final app = () async {
+            try {
+              await manager.init();
+            } on Object catch (_) {
+              await manager.dispose();
+            }
+          }();
+          final done = Completer<void>();
+          manager.userChangesAfterInit().listen(
+            (_) => events.add('data'),
+            onError: (Object _) => events.add('error'),
+            onDone: () {
+              events.add('done');
+              done.complete();
+            },
+          );
+          gate.complete();
+          await app;
+          await done.future;
+        });
+
+        expect(uncaught, isEmpty);
+        // Whether the error lands before the dispose() closed the stream
+        // depends on callback order; either way the stream must terminate
+        // exactly once and never emit a user.
+        expect(events, anyOf(equals(['done']), equals(['error', 'done'])));
+      });
+
+      test('paused listener, dispose mid-init, init fails later', () async {
+        final gate = Completer<void>();
+        final manager = _manager(
+          store: await _store(),
+          client: _client(discoveryGate: gate.future, failDiscovery: true),
+        );
+        final events = <String>[];
+        final uncaught = await _runGuarded(() async {
+          final sub = manager.userChangesAfterInit().listen(
+            (_) => events.add('data'),
+            onError: (Object _) => events.add('error'),
+            onDone: () => events.add('done'),
+          )..pause();
+          final init = manager.init().then<void>((_) {}, onError: (_) {});
+          await pumpEventQueue();
+
+          await manager.dispose();
+          gate.complete();
+          await init;
+          await pumpEventQueue();
+
+          sub.resume();
+          await pumpEventQueue();
+          await sub.cancel();
+        });
+
+        expect(uncaught, isEmpty);
+        expect(events, ['done']);
+      });
+
+      test(
+        'failed init() error queued in the same turn as dispose()',
+        () async {
+          final store = await _store();
+          final events = <String>[];
+          final uncaught = await _runGuarded(() async {
+            // The manager is created, init() fails, and the listener lives
+            // all in one error zone, so only the closed-controller hazard is
+            // under test here (see the cross-zone test below for the other).
+            final manager = _manager(
+              store: store,
+              client: _client(failDiscovery: true),
+            );
+            await expectLater(manager.init(), throwsA(anything));
+            manager.userChangesAfterInit().listen(
+              (_) => events.add('data'),
+              onError: (Object _) => events.add('error'),
+              onDone: () => events.add('done'),
+            );
+            // Same synchronous turn: the failed initFuture's callbacks are
+            // queued but have not run yet.
+            await manager.dispose();
+            await pumpEventQueue();
+          });
+
+          expect(uncaught, isEmpty);
+          // Whether the error lands before the dispose() closed the stream
+          // depends on callback order; either way the stream must terminate
+          // exactly once and never emit a user.
+          expect(events, anyOf(equals(['done']), equals(['error', 'done'])));
+        },
+      );
+    });
+
+    // A future's error is never handed to a handler registered in a different
+    // error zone (it is reported as uncaught in the future's own zone). An app
+    // that subscribes inside runZonedGuarded but calls init() outside it must
+    // still see the failure on the stream, not as an uncaught error.
+    test(
+      'init() failure reaches a listener subscribed in another error zone',
+      () async {
+        final gate = Completer<void>();
+        final manager = _manager(
+          store: await _store(),
+          client: _client(discoveryGate: gate.future, failDiscovery: true),
+        );
+        final events = <String>[];
+        final done = Completer<void>();
+        final uncaught = await _runGuarded(() async {
+          manager.userChangesAfterInit().listen(
+            (_) => events.add('data'),
+            onError: (Object _) => events.add('error'),
+            onDone: () {
+              events.add('done');
+              done.complete();
+            },
+          );
+        });
+
+        final init = manager.init().then<void>((_) {}, onError: (_) {});
+        gate.complete();
+        await init;
+        await done.future.timeout(const Duration(seconds: 5));
+
+        expect(uncaught, isEmpty);
+        expect(events, ['error', 'done']);
+        await manager.dispose();
+      },
+    );
+
+    test('closes without emitting when disposed mid-init()', () async {
+      final gate = Completer<void>();
+      final manager = _manager(
+        store: await _store(),
+        client: _client(discoveryGate: gate.future),
+      );
+      final events = <String>[];
+      final done = Completer<void>();
+      manager.userChangesAfterInit().listen(
+        (_) => events.add('data'),
+        onError: (Object _) => events.add('error'),
+        onDone: () {
+          events.add('done');
+          done.complete();
+        },
+      );
+      final init = manager.init().then<void>((_) {}, onError: (_) {});
+      await pumpEventQueue();
+
+      await manager.dispose();
+      await done.future.timeout(const Duration(seconds: 5));
+      gate.complete();
+      await init;
+      await pumpEventQueue();
+
+      expect(events, ['done']);
+    });
+
+    test('closes at once when subscribed after dispose()', () async {
+      final manager = _manager(store: await _store(), client: _client());
+      await manager.dispose();
+      final events = <String>[];
+      final done = Completer<void>();
+      manager.userChangesAfterInit().listen(
+        (_) => events.add('data'),
+        onDone: () {
+          events.add('done');
+          done.complete();
+        },
+      );
+      await done.future.timeout(const Duration(seconds: 5));
+      expect(events, ['done']);
+    });
+
+    for (final cancelFirst in [true, false]) {
+      test(
+        'cancel racing dispose() (${cancelFirst ? 'cancel' : 'dispose'} '
+        'first) is clean',
+        () async {
+          final manager = _manager(store: await _store(), client: _client());
+          final uncaught = await _runGuarded(() async {
+            final sub = manager.userChangesAfterInit().listen((_) {});
+            if (cancelFirst) {
+              final cancel = sub.cancel();
+              await manager.dispose();
+              await cancel;
+            } else {
+              final dispose = manager.dispose();
+              await sub.cancel();
+              await dispose;
+            }
+          });
+          expect(uncaught, isEmpty);
+          expect(manager.debugPendingUserChangesAfterInitListenerCount, 0);
+        },
+      );
+    }
   });
 }
