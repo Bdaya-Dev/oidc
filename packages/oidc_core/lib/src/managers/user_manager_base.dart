@@ -854,7 +854,7 @@ abstract class OidcUserManagerBase {
           );
         }
 
-        return createUserFromToken(
+        return await createUserFromToken(
           token: token,
           nonce: null,
           attributes: null,
