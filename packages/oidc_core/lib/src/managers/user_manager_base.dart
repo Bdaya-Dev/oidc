@@ -55,9 +55,15 @@ enum _OidcClientRegistrationStaleness {
 /// Carrying the credentials keeps the conversion inside the read path's discard
 /// logic, so a cached entry that cannot become credentials is dropped rather
 /// than thrown on.
+///
+/// `fingerprint` is the `registered_for` digest the record carries (null for a
+/// record written without one). It is kept so an RFC 7592 update can re-persist
+/// the record with the fingerprint it was ISSUED for: an update edits the same
+/// client, it does not change what this build asks to be registered for.
 typedef _OidcCachedClientRegistration = ({
   OidcClientRegistrationResponse response,
   OidcClientAuthentication credentials,
+  String? fingerprint,
   _OidcClientRegistrationStaleness staleness,
 });
 
@@ -442,7 +448,176 @@ abstract class OidcUserManagerBase {
   Logger get logger => _logger;
 
   /// Gets a stream that reflects the current data of the user.
+  ///
+  /// It replays [currentUser] to every new listener, including BEFORE [init]
+  /// completes, when [currentUser] is still the initial `null`. A listener
+  /// attached that early therefore cannot tell "not initialized yet" from
+  /// "signed out"; use [userChangesAfterInit] when that distinction matters.
   Stream<OidcUser?> userChanges() => userSubject.stream;
+
+  /// Like [userChanges], but holds its first emission until [init] has
+  /// completed, so every `null` it emits means "signed out" rather than "not
+  /// initialized yet".
+  ///
+  /// Safe to subscribe before calling [init] — for example alongside
+  /// [events], which must be subscribed before [init] to observe a failure
+  /// (such as an `invalid_grant`) while the cached session is restored. Each
+  /// listener then receives:
+  ///
+  /// 1. nothing while [init] is in flight (intermediate values set during
+  ///    [init] are not replayed);
+  /// 2. [currentUser] as it stands once [init] completes;
+  /// 3. every subsequent change, exactly like [userChanges].
+  ///
+  /// A listener that subscribes after [init] has completed gets [currentUser]
+  /// immediately. If [init] fails, the error is emitted and the stream closes.
+  /// If the manager is disposed before [init] completes, the stream closes
+  /// without emitting. Like [userChanges], the returned stream can be listened
+  /// to more than once.
+  Stream<OidcUser?> userChangesAfterInit() => Stream<OidcUser?>.multi((
+    controller,
+  ) {
+    if (_isDisposed) {
+      // Already disposed before this listener even attached: [dispose] will
+      // never run again to release it, so settle immediately instead of
+      // registering a waiter.
+      unawaited(controller.close());
+      return;
+    }
+
+    // Every add/addError/close below is guarded on `controller.isClosed`:
+    // [dispose] closes a waiting controller synchronously, but the listener
+    // only observes that (as a done event) later — or never, while paused —
+    // so nothing else may touch the controller once it is closed.
+    StreamSubscription<OidcUser?>? forwarding;
+    final waiter = _UserChangesAfterInitWaiter(
+      onInitDone: () {
+        if (controller.isClosed) {
+          return;
+        }
+        if (_isDisposed) {
+          unawaited(controller.close());
+          return;
+        }
+        forwarding = userSubject.stream.listen(
+          (user) {
+            if (!controller.isClosed) {
+              controller.add(user);
+            }
+          },
+          onError: (Object e, StackTrace st) {
+            if (!controller.isClosed) {
+              controller.addError(e, st);
+            }
+          },
+          onDone: () {
+            if (!controller.isClosed) {
+              unawaited(controller.close());
+            }
+          },
+        );
+      },
+      onInitFailed: (e, st) {
+        if (controller.isClosed) {
+          return;
+        }
+        controller.addError(e, st);
+        unawaited(controller.close());
+      },
+      onDisposed: () {
+        if (!controller.isClosed) {
+          unawaited(controller.close());
+        }
+      },
+    );
+
+    controller.onCancel = () {
+      // Dropping the waiter is all it takes to release this listener: the
+      // manager's single [initFuture] attachment only reaches listeners
+      // through [_userChangesAfterInitWaiters].
+      _userChangesAfterInitWaiters.remove(waiter);
+      return forwarding?.cancel();
+    };
+
+    if (_initSettledForUserChangesAfterInit) {
+      // [init] already settled: nothing to wait for, so this listener never
+      // enters [_userChangesAfterInitWaiters] at all.
+      final error = _initErrorForUserChangesAfterInit;
+      if (error != null) {
+        waiter.onInitFailed(
+          error,
+          _initErrorStackTraceForUserChangesAfterInit ?? StackTrace.empty,
+        );
+      } else {
+        waiter.onInitDone();
+      }
+      return;
+    }
+    _userChangesAfterInitWaiters.add(waiter);
+  });
+
+  /// [userChangesAfterInit] listeners still waiting on [initFuture].
+  ///
+  /// This set is the ONLY place a waiting listener (and the controller its
+  /// callbacks close over) is referenced from: nothing is attached to
+  /// [initFuture] on a listener's behalf. A listener that cancels is removed
+  /// here and becomes garbage straight away, even if [init] never runs or
+  /// never settles. [init]'s own memoized body drains the set when it
+  /// finishes (see [_settleUserChangesAfterInitWaiters]), and [dispose]
+  /// drains whatever is left.
+  ///
+  /// Earlier revisions attached callbacks to a long-lived future — first a
+  /// per-listener `Future.any([initFuture, <a future completed only by
+  /// dispose>])`, then a per-listener `initFuture.then`, then a single
+  /// manager-owned `initFuture.then`. The per-listener ones kept a cancelled
+  /// listener reachable until that future completed (for the manager's whole
+  /// lifetime, or for as long as [init] had not run). Any of them can lose an
+  /// [init] failure: [initFuture] belongs to the zone the manager was
+  /// constructed in, and a future's error is never delivered to a handler
+  /// registered in a different error zone (it is reported as uncaught in the
+  /// future's zone instead). And attaching an error handler at all would mark
+  /// a failed, un-awaited [init] as handled. Settling from inside [init]
+  /// avoids every one of these: the error is caught where it is thrown, then
+  /// rethrown untouched.
+  final Set<_UserChangesAfterInitWaiter> _userChangesAfterInitWaiters = {};
+
+  /// Whether [init]'s memoized body has finished. Once `true`, new
+  /// [userChangesAfterInit] listeners are answered straight away from the
+  /// recorded outcome instead of waiting.
+  bool _initSettledForUserChangesAfterInit = false;
+  Object? _initErrorForUserChangesAfterInit;
+  StackTrace? _initErrorStackTraceForUserChangesAfterInit;
+
+  /// Records [init]'s outcome and drains [_userChangesAfterInitWaiters].
+  ///
+  /// Called exactly once, from inside [init]'s memoized body, just before
+  /// [initFuture] completes. Tolerates an empty set (every waiter cancelled,
+  /// or [dispose] already drained them) and a disposed manager.
+  void _settleUserChangesAfterInitWaiters(Object? error, StackTrace? st) {
+    _initSettledForUserChangesAfterInit = true;
+    _initErrorForUserChangesAfterInit = error;
+    _initErrorStackTraceForUserChangesAfterInit = st;
+    for (final waiter in _userChangesAfterInitWaiters.toList()) {
+      // Skip a waiter removed (cancelled) by an earlier one's callbacks.
+      if (!_userChangesAfterInitWaiters.remove(waiter)) {
+        continue;
+      }
+      if (error != null) {
+        waiter.onInitFailed(error, st ?? StackTrace.empty);
+      } else {
+        waiter.onInitDone();
+      }
+    }
+  }
+
+  /// The number of [userChangesAfterInit] listeners currently waiting on
+  /// [initFuture].
+  ///
+  /// Exposed only for tests, to assert this returns to 0 once listeners
+  /// settle or cancel instead of being retained for the manager's lifetime.
+  @visibleForTesting
+  int get debugPendingUserChangesAfterInitListenerCount =>
+      _userChangesAfterInitWaiters.length;
 
   /// Gets a stream of events related to the current manager.
   Stream<OidcEvent> events() => eventsController.stream;
@@ -659,7 +834,10 @@ abstract class OidcUserManagerBase {
     // already persisted by prepareAuthorizationCodeFlowRequest above, so local
     // validation is unchanged (RFC 9126 §6).
     if (shouldPushAuthorizationRequest) {
-      final parEndpoint = discoveryDocument.pushedAuthorizationRequestEndpoint;
+      final parEndpoint = resolveEndpoint(
+        discoveryDocument,
+        OidcConstants_ProviderMetadata.pushedAuthorizationRequestEndpoint,
+      );
       if (parEndpoint == null) {
         logAndThrow(
           'Pushed Authorization Requests are required/enabled but the '
@@ -707,7 +885,10 @@ abstract class OidcUserManagerBase {
     final tokenResp = await (settings.hooks?.token).execute(
       request: OidcTokenHookRequest(
         metadata: discoveryDocument,
-        tokenEndpoint: discoveryDocument.tokenEndpoint!,
+        tokenEndpoint: resolveEndpoint(
+          discoveryDocument,
+          OidcConstants_ProviderMetadata.tokenEndpoint,
+        )!,
         request: OidcTokenRequest.password(
           username: username,
           password: password,
@@ -765,21 +946,23 @@ abstract class OidcUserManagerBase {
     ensureInit();
 
     final metadata = discoveryDocumentOverride ?? discoveryDocument;
-    final tokenEndpoint = metadata.tokenEndpoint;
+    final tokenEndpoint = resolveEndpoint(
+      metadata,
+      OidcConstants_ProviderMetadata.tokenEndpoint,
+    );
     if (tokenEndpoint == null) {
       logAndThrow("This provider doesn't provide a token endpoint");
     }
 
-    final deviceAuthEndpointValue = metadata
-        .src[OidcConstants_ProviderMetadata.deviceAuthorizationEndpoint];
-    if (deviceAuthEndpointValue == null) {
+    final deviceAuthorizationEndpoint = resolveEndpoint(
+      metadata,
+      OidcConstants_ProviderMetadata.deviceAuthorizationEndpoint,
+    );
+    if (deviceAuthorizationEndpoint == null) {
       logAndThrow(
         "This provider doesn't provide the device_authorization_endpoint",
       );
     }
-    final deviceAuthorizationEndpoint = Uri.parse(
-      deviceAuthEndpointValue.toString(),
-    );
 
     final credentials = clientCredentials;
     final deviceResp = await OidcEndpoints.deviceAuthorization(
@@ -1201,7 +1384,11 @@ abstract class OidcUserManagerBase {
         discoveryDocumentOverride ?? this.discoveryDocument;
 
     final revocationEndpoint =
-        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+        revocationEndpointOverride ??
+        resolveEndpoint(
+          discoveryDocument,
+          OidcConstants_ProviderMetadata.revocationEndpoint,
+        );
     if (revocationEndpoint == null) {
       return; // no revocation endpoint, nothing to do.
     }
@@ -1306,7 +1493,11 @@ abstract class OidcUserManagerBase {
         discoveryDocumentOverride ?? this.discoveryDocument;
 
     final revocationEndpoint =
-        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+        revocationEndpointOverride ??
+        resolveEndpoint(
+          discoveryDocument,
+          OidcConstants_ProviderMetadata.revocationEndpoint,
+        );
     if (revocationEndpoint == null) {
       return; // no revocation endpoint, nothing to do.
     }
@@ -1580,7 +1771,10 @@ abstract class OidcUserManagerBase {
         }
       }
 
-      final tokenEndpoint = metadata.tokenEndpoint;
+      final tokenEndpoint = resolveEndpoint(
+        metadata,
+        OidcConstants_ProviderMetadata.tokenEndpoint,
+      );
       if (tokenEndpoint == null) {
         logAndThrow(
           "This provider doesn't provide a token endpoint",
@@ -2164,7 +2358,10 @@ abstract class OidcUserManagerBase {
       final tokenResponse = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
           metadata: discoveryDocument,
-          tokenEndpoint: discoveryDocument.tokenEndpoint!,
+          tokenEndpoint: resolveEndpoint(
+            discoveryDocument,
+            OidcConstants_ProviderMetadata.tokenEndpoint,
+          )!,
           // clientSecret is intentionally NOT passed here: `credentials`
           // below is the single source of client authentication (RFC 6749
           // §2.3). Also setting it on the request would duplicate it into
@@ -2347,7 +2544,10 @@ abstract class OidcUserManagerBase {
       final tokenResponse = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
           metadata: discoveryDocument,
-          tokenEndpoint: discoveryDocument.tokenEndpoint!,
+          tokenEndpoint: resolveEndpoint(
+            discoveryDocument,
+            OidcConstants_ProviderMetadata.tokenEndpoint,
+          )!,
           credentials: credentials,
           client: httpClient,
           headers: settings.extraTokenHeaders,
@@ -2677,7 +2877,10 @@ abstract class OidcUserManagerBase {
     Map<String, String>? headers,
     Map<String, dynamic>? extra,
   }) async {
-    final tokenEndpoint = discoveryDocument.tokenEndpoint;
+    final tokenEndpoint = resolveEndpoint(
+      discoveryDocument,
+      OidcConstants_ProviderMetadata.tokenEndpoint,
+    );
     if (tokenEndpoint == null) {
       logAndThrow("This provider doesn't provide a token endpoint.");
     }
@@ -2738,7 +2941,10 @@ abstract class OidcUserManagerBase {
     Map<String, String>? headers,
     Map<String, dynamic>? extra,
   }) async {
-    final introspectionEndpoint = discoveryDocument.introspectionEndpoint;
+    final introspectionEndpoint = resolveEndpoint(
+      discoveryDocument,
+      OidcConstants_ProviderMetadata.introspectionEndpoint,
+    );
     if (introspectionEndpoint == null) {
       logAndThrow("This provider doesn't provide an introspection endpoint.");
     }
@@ -3130,7 +3336,10 @@ abstract class OidcUserManagerBase {
     var userInfoFailed = false;
 
     if (errors.isEmpty) {
-      final userInfoEP = metadata.userinfoEndpoint;
+      final userInfoEP = resolveEndpoint(
+        metadata,
+        OidcConstants_ProviderMetadata.userinfoEndpoint,
+      );
 
       if (settings.userInfoSettings.sendUserInfoRequest && userInfoEP != null) {
         try {
@@ -3402,7 +3611,13 @@ abstract class OidcUserManagerBase {
   static const clientRegistrationKeyPrefix = 'client_registration.';
 
   /// The member of the persisted record holding the RFC 7591 §3.2.1
-  /// registration response exactly as the OP returned it.
+  /// registration response: composed from the registration in hand (never
+  /// the store) when rotated via [updateClientRegistration] /
+  /// [readClientRegistration] — returned members win; only `client_id`,
+  /// `registration_access_token`, `registration_client_uri` and, unless the
+  /// client became public, `client_secret` (with its
+  /// `client_secret_expires_at`) are carried over when omitted; any other
+  /// omitted member is dropped.
   static const _recordResponseMember = 'registration';
 
   /// The member of the persisted record holding the staleness fingerprint of
@@ -3615,16 +3830,25 @@ abstract class OidcUserManagerBase {
 
   OidcClientRegistrationResponse? _clientRegistration;
 
+  /// The `registered_for` fingerprint of [_clientRegistration]'s record: the
+  /// digest of the request the client was ISSUED for. Null when DCR is off, or
+  /// when the record in use was written without one.
+  String? _clientRegistrationFingerprint;
+
   /// The RFC 7591 §3.2.1 registration this manager is running as — restored
   /// from the store or issued during [init]. Null when
   /// [OidcUserManagerSettings.dynamicClientRegistration] is disabled.
   ///
   /// Carries `registration_client_uri` / `registration_access_token` for RFC
-  /// 7592 client management via [OidcEndpoints] — which is how an app performs
-  /// every operation [ensureClientRegistration] lists as a non-goal.
+  /// 7592 client management. Prefer [updateClientRegistration] /
+  /// [readClientRegistration] over driving [OidcEndpoints] with these directly:
+  /// those adopt AND persist a `client_secret` or `registration_access_token`
+  /// the OP rotates in its response, which a direct [OidcEndpoints] call
+  /// leaves the manager and the store unaware of.
   ///
-  /// It does not move once [init] has resolved it: this is the identity every
-  /// request the manager sends is built from, for the manager's whole life.
+  /// It is resolved once by [init] and only ever moves afterwards through
+  /// [updateClientRegistration] / [readClientRegistration], which keep the same
+  /// `client_id` and swap in the OP's rotated credentials.
   OidcClientRegistrationResponse? get clientRegistration => _clientRegistration;
 
   @protected
@@ -3679,9 +3903,11 @@ abstract class OidcUserManagerBase {
   void _applyClientRegistration(
     OidcClientRegistrationResponse response, {
     required OidcClientAuthentication credentials,
+    required String? fingerprint,
   }) {
     clientCredentials = credentials;
     _clientRegistration = response;
+    _clientRegistrationFingerprint = fingerprint;
   }
 
   /// Converts a registration [response] into the credentials this manager would
@@ -3709,11 +3935,15 @@ abstract class OidcUserManagerBase {
         'client on a backend.',
       );
     }
-    return OidcClientAuthentication.fromRegistrationResponse(
+    final credentials = OidcClientAuthentication.fromRegistrationResponse(
       response,
       preferredMethod:
           settings.dynamicClientRegistration?.preferredTokenEndpointAuthMethod,
     );
+    // A registration the OP answered with an mTLS method is just as unusable
+    // in a browser as a configured one (see the check at the top of [init]).
+    ensureClientAuthenticationSupported(credentials);
+    return credentials;
   }
 
   /// Whether [response]'s issued `client_secret` is past its expiry.
@@ -3901,6 +4131,7 @@ abstract class OidcUserManagerBase {
       return (
         response: response,
         credentials: credentials,
+        fingerprint: issuedFor,
         staleness: _OidcClientRegistrationStaleness.secretExpired,
       );
     }
@@ -3923,12 +4154,14 @@ abstract class OidcUserManagerBase {
       return (
         response: response,
         credentials: credentials,
+        fingerprint: issuedFor,
         staleness: _OidcClientRegistrationStaleness.superseded,
       );
     }
     return (
       response: response,
       credentials: credentials,
+      fingerprint: issuedFor,
       staleness: _OidcClientRegistrationStaleness.current,
     );
   }
@@ -3939,27 +4172,34 @@ abstract class OidcUserManagerBase {
   /// disabled. Requires [currentDiscoveryDocument] to be loaded.
   ///
   /// Runs at most ONCE per manager: [init] is memoized and this returns
-  /// immediately once a registration is applied. That is the whole lifecycle —
-  /// the identity resolved here is served verbatim to every later request and
-  /// is never re-derived.
+  /// immediately once a registration is applied. The identity resolved here is
+  /// served to every later request. However, after a rotation via
+  /// [updateClientRegistration] / [readClientRegistration], later requests use
+  /// credentials composed from the registration in hand (never the store):
+  /// returned members win; only `client_id`, `registration_access_token`,
+  /// `registration_client_uri` and, unless the client became public,
+  /// `client_secret` (with its `client_secret_expires_at`) are carried over
+  /// when omitted; any other omitted member is dropped.
   ///
   /// ## Non-goals
   ///
   /// Each of these is a capability the manager deliberately does not AUTOMATE.
-  /// None of them is unavailable to apps: the full RFC 7592 client-management
-  /// surface already ships as explicit calls on [OidcEndpoints], and
+  /// None of them is unavailable to apps: [updateClientRegistration] and
+  /// [readClientRegistration] drive RFC 7592 §2.2 / §2.1 on the manager's own
+  /// registration (adopting and persisting rotated credentials), the rest of
+  /// the RFC 7592 surface ships as explicit calls on [OidcEndpoints], and
   /// [clientRegistration] hands over the `registration_client_uri` and
   /// `registration_access_token` they need.
   ///
-  /// - **No mid-session `client_secret` rotation.** RFC 7592 App. A.1: "the
-  ///   authorization server decides the frequency of the credential rotation
-  ///   and not the client" — the §2.1 read is an OP-driven affordance, not a
-  ///   client obligation, and an OP that conformantly returns the registration
-  ///   verbatim leaves a client-driven rotation loop with nothing to make
-  ///   progress on. Against an OP that DOES rotate on a schedule the session
-  ///   breaks at expiry with a typed failure; the app's handler is
-  ///   [OidcEndpoints.readClientConfiguration], or [forgetClientRegistration]
-  ///   followed by a fresh `init()`.
+  /// - **No automatic mid-session `client_secret` rotation.** RFC 7592 App.
+  ///   A.1: "the authorization server decides the frequency of the credential
+  ///   rotation and not the client" — the §2.1 read is an OP-driven
+  ///   affordance, not a client obligation, and an OP that conformantly
+  ///   returns the registration verbatim leaves a client-driven rotation loop
+  ///   with nothing to make progress on. Against an OP that DOES rotate on a
+  ///   schedule the session breaks at expiry with a typed failure; the app's
+  ///   handler is [readClientRegistration] (which persists what it reads), or
+  ///   [forgetClientRegistration] followed by a fresh `init()`.
   /// - **No automatic re-registration when the OP disowns the client.** RFC
   ///   6749 §5.2 makes `invalid_client` three-way ambiguous ("unknown client,
   ///   no client authentication included, or unsupported authentication
@@ -3967,11 +4207,13 @@ abstract class OidcUserManagerBase {
   ///   disambiguate it, so there is no reliable trigger to automate on. The
   ///   app's handler is `catch` → [forgetClientRegistration] → retry, or
   ///   [OidcEndpoints.registerClient] driven directly.
-  /// - **No RFC 7592 `PUT`/`DELETE`, and no orphan tracking or reaping.** RFC
-  ///   7591 §5 assigns cleanup of registered-but-unused clients to the
-  ///   authorization server. An app that wants to edit or retire its own
-  ///   OP-side client calls [OidcEndpoints.updateClientConfiguration] (RFC 7592
-  ///   §2.2) or [OidcEndpoints.deleteClientConfiguration] (§2.3) before
+  /// - **No automatic RFC 7592 `PUT`/`DELETE`, and no orphan tracking or
+  ///   reaping.** RFC 7591 §5 assigns cleanup of registered-but-unused clients
+  ///   to the authorization server. An app that wants to edit its own OP-side
+  ///   client calls [updateClientRegistration] (RFC 7592 §2.2 — NOT
+  ///   [OidcEndpoints.updateClientConfiguration] directly, whose rotated
+  ///   credentials the manager would never learn of); one that wants to retire
+  ///   it calls [OidcEndpoints.deleteClientConfiguration] (§2.3) before
   ///   [forgetClientRegistration].
   ///
   /// Every one of those would need DURABLE control state — a retry budget, an
@@ -4002,6 +4244,7 @@ abstract class OidcUserManagerBase {
       _applyClientRegistration(
         cached.response,
         credentials: cached.credentials,
+        fingerprint: cached.fingerprint,
       );
       return;
     }
@@ -4044,10 +4287,14 @@ abstract class OidcUserManagerBase {
     required OidcProviderMetadata metadata,
     required _OidcCachedClientRegistration? fallback,
   }) async {
-    // Deliberately NOT `OidcProviderMetadata.resolveEndpoint(...,
-    // useMtlsAliases: settings.useMtlsEndpointAliases)`: registration runs
-    // before the client has any mTLS identity to present.
-    final endpoint = metadata.registrationEndpoint;
+    // Routed through the mTLS alias choke point like every other direct
+    // request: the client certificate lives in [httpClient], which this POST
+    // also uses, so an OP that aliases `registration_endpoint` (e.g. FAPI /
+    // open-banking DCR, which requires mTLS there) gets it on the alias host.
+    final endpoint = resolveEndpoint(
+      metadata,
+      OidcConstants_ProviderMetadata.registrationEndpoint,
+    );
     if (endpoint == null) {
       logAndThrow(
         'Dynamic client registration is enabled but the provider at '
@@ -4102,6 +4349,7 @@ abstract class OidcUserManagerBase {
       _applyClientRegistration(
         fallback.response,
         credentials: fallback.credentials,
+        fingerprint: fallback.fingerprint,
       );
       return;
     }
@@ -4111,7 +4359,11 @@ abstract class OidcUserManagerBase {
       response,
       fingerprint: fingerprint,
     );
-    _applyClientRegistration(response, credentials: credentials);
+    _applyClientRegistration(
+      response,
+      credentials: credentials,
+      fingerprint: fingerprint,
+    );
   }
 
   /// The resolved discovery document, which dynamic client registration always
@@ -4125,8 +4377,14 @@ abstract class OidcUserManagerBase {
       );
 
   /// Serializes the ONE immutable record persisted per issuer: the RFC 7591
-  /// §3.2.1 response exactly as the OP returned it, plus the staleness
-  /// fingerprint of the request it was ISSUED FOR.
+  /// §3.2.1 response (composed from the registration in hand — never the
+  /// store — when rotated via [updateClientRegistration] /
+  /// [readClientRegistration]: returned members win; only `client_id`,
+  /// `registration_access_token`, `registration_client_uri` and, unless the
+  /// client became public, `client_secret` (with its
+  /// `client_secret_expires_at`) are carried over when omitted; any other
+  /// omitted member is dropped), plus the staleness fingerprint of the
+  /// request it was ISSUED FOR.
   ///
   /// Both members are written together, in one value, under one key, from
   /// values already in hand — never merged onto, incremented from, or otherwise
@@ -4238,6 +4496,239 @@ abstract class OidcUserManagerBase {
     );
   }
 
+  /// Tail of the serialized RFC 7592 management calls. See
+  /// [_serializeClientManagement].
+  Future<void> _clientManagementTail = Future<void>.value();
+
+  /// Runs [action] after every previously-queued RFC 7592 management call has
+  /// settled.
+  ///
+  /// RFC 7592 §2.2 lets each response rotate the `registration_access_token`,
+  /// after which "the client MUST immediately discard" the old one. Two calls
+  /// racing on the same token would leave the loser presenting a token the
+  /// winner just retired, so the second call must start from the registration
+  /// the first one adopted.
+  Future<T> _serializeClientManagement<T>(Future<T> Function() action) {
+    final result = _clientManagementTail.then((_) => action());
+    _clientManagementTail = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
+  }
+
+  /// Updates this manager's OWN dynamically-registered client in place (RFC
+  /// 7592 §2.2) and adopts whatever credentials the OP rotates in the
+  /// response — in memory AND in the persisted record.
+  ///
+  /// The request starts from [OidcClientRegistrationResponse.toUpdateRequest]
+  /// of [clientRegistration] — §2.2 requires the PUT to carry every member "as
+  /// returned to the client from a previous registration, read, or update
+  /// operation", since values replace rather than augment — and [edit] may
+  /// change it before it is sent (mutate and return the same instance, or
+  /// return a new one). The `client_id` must survive the edit: §2.2 requires
+  /// it, and it must match the client being updated.
+  ///
+  /// ## Rotation
+  ///
+  /// §2.2: "If the authorization server includes a new client secret and/or
+  /// registration access token in its response, the client MUST immediately
+  /// discard its previous client secret and/or registration access token." So
+  /// the response is adopted as the new registration, with the members it
+  /// omits (`registration_access_token`, `registration_client_uri`, and the
+  /// `client_secret` unless the client became public) carried over from the
+  /// registration in hand. RFC 7592 §3 makes the first two REQUIRED in the
+  /// response, but an OP that leaves them out is far likelier to have not
+  /// rotated them than to have revoked them, and dropping them would orphan
+  /// the OP-side client.
+  ///
+  /// The adopted registration is persisted through the same single write as a
+  /// fresh registration, keeping the `registered_for` fingerprint the record
+  /// was ISSUED for: an update edits the same client, it does not change what
+  /// this app build asks to be registered for. So a later launch restores the
+  /// rotated credentials and does not re-register. (An update that changes a
+  /// fingerprinted member — `redirect_uris`, `scope`, … — therefore does NOT
+  /// change what the next launch compares against; change the settings, not
+  /// the OP-side client, to move what the app is registered for.)
+  ///
+  /// If the store cannot take the write, the manager STILL switches to the
+  /// adopted credentials — the old ones are dead per §2.2, so keeping them
+  /// would break every later request — and a typed [OidcException] is thrown
+  /// so the app knows the next launch will restore the pre-update record.
+  ///
+  /// Throws a typed [OidcException], with nothing sent, when dynamic client
+  /// registration is disabled, before [init], or when [clientRegistration]
+  /// carries no `registration_client_uri` / `registration_access_token` (an OP
+  /// that does not support RFC 7592, or a record restored on web, where those
+  /// members are never persisted). A response naming a different `client_id`,
+  /// or one this platform cannot run as (see
+  /// [clientCredentialsForRegistration]), is refused before anything is stored
+  /// or swapped.
+  ///
+  /// Calls are serialized with [readClientRegistration], so each one presents
+  /// the token the previous one adopted.
+  Future<OidcClientRegistrationResponse> updateClientRegistration({
+    OidcClientRegistrationRequest Function(
+      OidcClientRegistrationRequest request,
+    )?
+    edit,
+    Map<String, String>? headers,
+  }) => _serializeClientManagement(() async {
+    final current = _requireManagedClientRegistration();
+    final registrationClientUri = _requireRegistrationClientUri(current);
+    final registrationAccessToken = _requireRegistrationAccessToken(current);
+    final base = current.toUpdateRequest();
+    final request = edit == null ? base : edit(base);
+    final sentClientId = request.toMap()['client_id'];
+    if (sentClientId != current.clientId) {
+      logAndThrow(
+        'An RFC 7592 §2.2 update must carry the client_id of the client being '
+        'updated ("${current.clientId}"), but the edited request carries '
+        '"$sentClientId". Nothing was sent.',
+      );
+    }
+    final response = await OidcEndpoints.updateClientConfiguration(
+      registrationClientUri: registrationClientUri,
+      registrationAccessToken: registrationAccessToken,
+      request: request,
+      client: httpClient,
+      headers: headers,
+    );
+    return _adoptManagedClientRegistration(current, response);
+  });
+
+  /// Reads this manager's OWN dynamically-registered client (RFC 7592 §2.1)
+  /// and adopts the result exactly as [updateClientRegistration] does —
+  /// including a `client_secret` or `registration_access_token` the OP rotated
+  /// on its own schedule (RFC 7592 App. A.1), which is persisted so the next
+  /// launch restores the live credentials instead of the retired ones.
+  ///
+  /// This is the explicit, app-invoked handler for an OP that rotates
+  /// credentials: the manager still never calls it on its own (see the
+  /// non-goals on [ensureClientRegistration]). Same preconditions, failure
+  /// modes and serialization as [updateClientRegistration].
+  Future<OidcClientRegistrationResponse> readClientRegistration({
+    Map<String, String>? headers,
+  }) => _serializeClientManagement(() async {
+    final current = _requireManagedClientRegistration();
+    final response = await OidcEndpoints.readClientConfiguration(
+      registrationClientUri: _requireRegistrationClientUri(current),
+      registrationAccessToken: _requireRegistrationAccessToken(current),
+      client: httpClient,
+      headers: headers,
+    );
+    return _adoptManagedClientRegistration(current, response);
+  });
+
+  OidcClientRegistrationResponse _requireManagedClientRegistration() {
+    ensureInit();
+    if (settings.dynamicClientRegistration == null) {
+      logAndThrow(
+        'RFC 7592 client management through the manager needs '
+        '`OidcUserManagerSettings.dynamicClientRegistration`: without it there '
+        'is no registration for the manager to manage. Call OidcEndpoints '
+        'directly for a client registered out of band.',
+      );
+    }
+    return _clientRegistration ??
+        logAndThrow(
+          'No client registration has been resolved for this manager.',
+        );
+  }
+
+  Uri _requireRegistrationClientUri(OidcClientRegistrationResponse current) =>
+      current.registrationClientUri ??
+      logAndThrow(
+        'The client registration (client_id "${current.clientId}") carries no '
+        'RFC 7592 `registration_client_uri`: the provider does not support '
+        'client management, or the record was restored on web, where the '
+        'management members are never persisted.',
+      );
+
+  String _requireRegistrationAccessToken(
+    OidcClientRegistrationResponse current,
+  ) =>
+      current.registrationAccessToken ??
+      logAndThrow(
+        'The client registration (client_id "${current.clientId}") carries no '
+        'RFC 7592 `registration_access_token`: the provider does not support '
+        'client management, or the record was restored on web, where the '
+        'management members are never persisted.',
+      );
+
+  /// Adopts an RFC 7592 §2.1 / §2.2 [response] for the registration [current]
+  /// as this manager's identity: CONVERT, then PERSIST, then APPLY — with the
+  /// one difference from [_registerClient] that APPLY also happens when
+  /// PERSIST fails (the old credentials are already dead; see
+  /// [updateClientRegistration]).
+  ///
+  /// The record is composed from values already in hand ([current] and
+  /// [response]) — never from the store — so this is not a read-modify-write
+  /// of the persisted registration.
+  Future<OidcClientRegistrationResponse> _adoptManagedClientRegistration(
+    OidcClientRegistrationResponse current,
+    OidcClientRegistrationResponse response,
+  ) async {
+    final returnedClientId = response.clientId;
+    if (returnedClientId != null && returnedClientId != current.clientId) {
+      logAndThrow(
+        'The RFC 7592 client configuration endpoint answered for client_id '
+        '"$returnedClientId", but the client being managed is '
+        '"${current.clientId}". The response was not adopted.',
+      );
+    }
+    final returned = response.src;
+    final becamePublic =
+        response.tokenEndpointAuthMethod ==
+        OidcConstants_ClientAuthenticationMethods.none;
+    final carryOverSecret =
+        !returned.containsKey('client_secret') && !becamePublic;
+    final merged = OidcClientRegistrationResponse.fromJson({
+      for (final member in const [
+        'client_id',
+        'registration_access_token',
+        'registration_client_uri',
+      ])
+        if (!returned.containsKey(member) && current.src.containsKey(member))
+          member: current.src[member],
+      if (carryOverSecret) ...{
+        if (current.src.containsKey('client_secret'))
+          'client_secret': current.src['client_secret'],
+        if (!returned.containsKey('client_secret_expires_at') &&
+            current.src.containsKey('client_secret_expires_at'))
+          'client_secret_expires_at': current.src['client_secret_expires_at'],
+      },
+      ...returned,
+    });
+    final credentials = clientCredentialsForRegistration(merged);
+    final fingerprint = _clientRegistrationFingerprint;
+    try {
+      await _persistClientRegistration(
+        _requireClientRegistrationIssuer(),
+        merged,
+        fingerprint: fingerprint ?? '',
+      );
+    } on Object catch (e, st) {
+      _applyClientRegistration(
+        merged,
+        credentials: credentials,
+        fingerprint: fingerprint,
+      );
+      logAndThrow(
+        'The client registration (client_id "${current.clientId}") was updated '
+        'by the provider, but the result could not be persisted. The manager '
+        'runs as the provider-issued credentials for this session (RFC 7592 '
+        '§2.2 retires the previous ones); the next launch will restore the '
+        'pre-update record.',
+        error: e,
+        stackTrace: st,
+      );
+    }
+    _applyClientRegistration(
+      merged,
+      credentials: credentials,
+      fingerprint: fingerprint,
+    );
+    return merged;
+  }
+
   /// Cache-only counterpart used by the [OidcInitMode.cacheFirst] path (no
   /// network). Returns true when DCR is disabled or a usable persisted
   /// registration was applied; false when the caller must fall back to the
@@ -4262,7 +4753,11 @@ abstract class OidcUserManagerBase {
         cached.staleness != _OidcClientRegistrationStaleness.current) {
       return false;
     }
-    _applyClientRegistration(cached.response, credentials: cached.credentials);
+    _applyClientRegistration(
+      cached.response,
+      credentials: cached.credentials,
+      fingerprint: cached.fingerprint,
+    );
     return true;
   }
 
@@ -4860,6 +5355,78 @@ abstract class OidcUserManagerBase {
     );
   }
 
+  /// Throws an [UnsupportedError] when [credentials] uses an RFC 8705 mutual
+  /// TLS method (`tls_client_auth` / `self_signed_tls_client_auth`) on web.
+  ///
+  /// A browser exposes no API for `fetch`/XHR to present a client certificate
+  /// (certificates are OS/browser-managed), so such a client could never
+  /// authenticate. Failing at [init], before any request, beats an opaque
+  /// `invalid_client` at the first token request.
+  @protected
+  void ensureClientAuthenticationSupported(
+    OidcClientAuthentication credentials,
+  ) {
+    if (!isWeb) {
+      return;
+    }
+    final method = credentials.location;
+    if (method == OidcConstants_ClientAuthenticationMethods.tlsClientAuth ||
+        method ==
+            OidcConstants_ClientAuthenticationMethods.selfSignedTlsClientAuth) {
+      throw UnsupportedError(
+        'The "$method" client authentication method (mutual TLS, RFC 8705) is '
+        'not supported on web: browsers expose no API for fetch/XHR to '
+        'present a client certificate. Use a different '
+        'OidcClientAuthentication on web, or perform the mTLS-authenticated '
+        'requests from a backend.',
+      );
+    }
+  }
+
+  /// Throws an [UnsupportedError] when
+  /// [OidcUserManagerSettings.useMtlsEndpointAliases] is enabled on web.
+  ///
+  /// This is independent of [ensureClientAuthenticationSupported] / the
+  /// chosen client authentication method: RFC 8705 §5 `mtls_endpoint_aliases`
+  /// exist for authorization servers that expect a client certificate on
+  /// those alias hosts, so a browser following them -- even while
+  /// authenticating with e.g. `client_secret_basic` or `none` -- would send
+  /// every back-channel request to a host it can never complete the expected
+  /// TLS handshake with. Without this guard that misconfiguration would only
+  /// surface as an opaque connection/handshake failure at the first
+  /// back-channel request instead of loudly at [init].
+  @protected
+  void ensureMtlsEndpointAliasesSupportedOnWeb() {
+    if (isWeb && settings.useMtlsEndpointAliases) {
+      throw UnsupportedError(
+        '`useMtlsEndpointAliases: true` (RFC 8705 §5) is not supported on '
+        'web: browsers expose no API for fetch/XHR to present a client '
+        'certificate, so the mTLS alias hosts it would route back-channel '
+        'requests to can never complete the TLS handshake the server expects '
+        'there. Disable `useMtlsEndpointAliases` on web, or perform the '
+        'mTLS-authenticated requests from a backend.',
+      );
+    }
+  }
+
+  /// The single choke point every back-channel endpoint read in this manager
+  /// goes through: returns the endpoint stored under [endpointName] (an
+  /// `OidcConstants_ProviderMetadata` endpoint key) in [metadata], applying the
+  /// RFC 8705 §5 `mtls_endpoint_aliases` alias-or-fallback rule when
+  /// [OidcUserManagerSettings.useMtlsEndpointAliases] is on.
+  ///
+  /// Front-channel endpoints are never aliased (see
+  /// [OidcProviderMetadata.frontChannelEndpoints]). `jwks_uri` is not routed
+  /// here either: it is an unauthenticated public read that the id_token and
+  /// UserInfo verifiers each resolve from [OidcProviderMetadata.jwksUri], and
+  /// splitting it would key the JWKS cache under two URLs.
+  @protected
+  Uri? resolveEndpoint(OidcProviderMetadata metadata, String endpointName) =>
+      metadata.resolveEndpoint(
+        endpointName,
+        useMtlsAliases: settings.useMtlsEndpointAliases,
+      );
+
   /// Registers the current [discoveryDocument]'s `jwks_uri` with [keyStore].
   ///
   /// The symmetric HS* key (RFC 7518 §3.2, the `client_secret` octets) is
@@ -4923,31 +5490,49 @@ abstract class OidcUserManagerBase {
   ///   document is otherwise served from its TTL cache).
   Future<void> init() {
     return initMemoizer.runOnce(() async {
-      await store.init();
-      if (settings.initMode == OidcInitMode.cacheFirst &&
-          await _tryCacheFirstInit()) {
-        attachLifecycleListeners();
-        return;
+      // Settle [userChangesAfterInit] listeners from in here rather than by
+      // listening to [initFuture] (see [_userChangesAfterInitWaiters]): the
+      // outcome is observed where it happens, and a failure is rethrown
+      // unchanged so callers (and the zone, if nobody awaits) see it as
+      // before.
+      try {
+        await _runInit();
+      } on Object catch (e, st) {
+        _settleUserChangesAfterInitWaiters(e, st);
+        rethrow;
       }
-      // Blocking / network path (the [OidcInitMode.blockingValidate] semantics,
-      // also the fallback when cache-first has nothing to restore).
-      await ensureDiscoveryDocument();
-      // Must precede `loadStateResult()` and `loadCachedTokens()`, which
-      // validate `aud` against `clientCredentials.clientId`. (The HS* `oct`
-      // verification key needs no ordering: [keyStore] derives it from the
-      // current credentials at lookup time.)
-      await ensureClientRegistration();
-      setupKeyStore();
-      await clearUnusedStates();
-      if (!await loadLogoutRequests()) {
-        //no logout requests.
-        if (!await loadStateResult()) {
-          //no state results.
-          await loadCachedTokens();
-        }
-      }
-      attachLifecycleListeners();
+      _settleUserChangesAfterInitWaiters(null, null);
     });
+  }
+
+  /// The body of [init], run once by [initMemoizer].
+  Future<void> _runInit() async {
+    ensureClientAuthenticationSupported(clientCredentials);
+    ensureMtlsEndpointAliasesSupportedOnWeb();
+    await store.init();
+    if (settings.initMode == OidcInitMode.cacheFirst &&
+        await _tryCacheFirstInit()) {
+      attachLifecycleListeners();
+      return;
+    }
+    // Blocking / network path (the [OidcInitMode.blockingValidate] semantics,
+    // also the fallback when cache-first has nothing to restore).
+    await ensureDiscoveryDocument();
+    // Must precede `loadStateResult()` and `loadCachedTokens()`, which
+    // validate `aud` against `clientCredentials.clientId`. (The HS* `oct`
+    // verification key needs no ordering: [keyStore] derives it from the
+    // current credentials at lookup time.)
+    await ensureClientRegistration();
+    setupKeyStore();
+    await clearUnusedStates();
+    if (!await loadLogoutRequests()) {
+      //no logout requests.
+      if (!await loadStateResult()) {
+        //no state results.
+        await loadCachedTokens();
+      }
+    }
+    attachLifecycleListeners();
   }
 
   /// Attempts the [OidcInitMode.cacheFirst] restore: deserialize the cached user
@@ -5149,6 +5734,17 @@ abstract class OidcUserManagerBase {
     // auto-refresh whose response lands mid-dispose observes it and no-ops
     // (see [isDisposed] / [_performAutoRefresh]).
     _isDisposed = true;
+    // Release every [userChangesAfterInit] listener still waiting on
+    // [initFuture] (dispose-before-init / dispose-mid-init). Listeners that
+    // already settled or cancelled are no longer in the set. Draining it here
+    // also leaves the single pending [initFuture] attachment (if any) with
+    // nothing to deliver, so a late init failure can never reach a controller
+    // this just closed.
+    for (final waiter in _userChangesAfterInitWaiters.toList()) {
+      if (_userChangesAfterInitWaiters.remove(waiter)) {
+        waiter.onDisposed();
+      }
+    }
     // The shared in-flight auto-refresh already swallows its own outcome once
     // disposed, but latch onto it here too so its settling can never surface an
     // unhandled error into the zone after teardown. Mirrors how the other
@@ -5384,4 +5980,19 @@ abstract class OidcUserManagerBase {
       rethrow;
     }
   }
+}
+
+/// A [OidcUserManagerBase.userChangesAfterInit] listener waiting on
+/// [OidcUserManagerBase.initFuture], as held by the manager until init
+/// settles, the manager is disposed, or the listener cancels.
+final class _UserChangesAfterInitWaiter {
+  _UserChangesAfterInitWaiter({
+    required this.onInitDone,
+    required this.onInitFailed,
+    required this.onDisposed,
+  });
+
+  final void Function() onInitDone;
+  final void Function(Object error, StackTrace stackTrace) onInitFailed;
+  final void Function() onDisposed;
 }

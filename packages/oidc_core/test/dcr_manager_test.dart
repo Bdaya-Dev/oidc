@@ -2429,4 +2429,433 @@ void main() {
       expect(kept['registration_access_token'], 'rat-issued-client-1');
     });
   });
+
+  group('RFC 7592 client management through the manager: rotation is adopted '
+      'and persisted', () {
+    /// The body the OP answers an RFC 7592 §2.1 read / §2.2 update with.
+    Map<String, dynamic> managedBody({
+      String clientId = 'issued-client-1',
+      String? clientSecret = 'issued-secret-2',
+      String? registrationAccessToken = 'rat-2',
+      bool includeClientUri = true,
+      Map<String, dynamic> extra = const {},
+    }) => {
+      'client_id': clientId,
+      'client_secret': ?clientSecret,
+      'token_endpoint_auth_method': 'client_secret_post',
+      'client_secret_expires_at': 0,
+      'registration_access_token': ?registrationAccessToken,
+      if (includeClientUri)
+        'registration_client_uri': '$_issuerA/register/$clientId',
+      ...extra,
+    };
+
+    test(
+      'updateClientRegistration() PUTs the full previously-returned metadata '
+      'to registration_client_uri with the registration_access_token, and the '
+      'edit callback shapes the body',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(
+            log,
+            registration: (hit, url) => _registrationBody(
+              extra: const {'client_name': 'dcr-test-app'},
+            ),
+            clientRead: (hit, url) => managedBody(),
+          ),
+        );
+        await manager.init();
+
+        await manager.updateClientRegistration(
+          edit: (request) => request..clientName = 'renamed-app',
+        );
+
+        final put = log.clientReads.single;
+        expect(put.method, 'PUT');
+        expect(put.url, Uri.parse('$_issuerA/register/issued-client-1'));
+        expect(put.headers['Authorization'], 'Bearer rat-issued-client-1');
+        // RFC 7592 §2.2: the PUT carries client_id and every member as
+        // previously returned (values replace, not augment) — but never the
+        // server-managed members.
+        expect(put.json['client_id'], 'issued-client-1');
+        expect(put.json['client_secret'], 'issued-secret-1');
+        expect(put.json['token_endpoint_auth_method'], 'client_secret_post');
+        expect(put.json['client_name'], 'renamed-app');
+        expect(put.json.containsKey('registration_access_token'), isFalse);
+        expect(put.json.containsKey('registration_client_uri'), isFalse);
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'a rotated client_secret and registration_access_token replace the old '
+      'ones in memory AND in the store, and a later launch restores them '
+      'without re-registering',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(log, clientRead: (hit, url) => managedBody()),
+        );
+        await manager.init();
+
+        final updated = await manager.updateClientRegistration();
+
+        // RFC 7592 §2.2: "the client MUST immediately discard its previous
+        // client secret and/or registration access token".
+        expect(updated.clientSecret, 'issued-secret-2');
+        expect(manager.clientRegistration!.registrationAccessToken, 'rat-2');
+        await manager.introspectToken(token: 'at-1');
+        expect(
+          log.to('/introspect').single.sentClientSecret,
+          'issued-secret-2',
+        );
+
+        final stored = (await _storedRegistration(store))!;
+        expect(stored['client_secret'], 'issued-secret-2');
+        expect(stored['registration_access_token'], 'rat-2');
+        await manager.dispose();
+
+        // The update edits the SAME client: the record keeps the fingerprint
+        // it was issued for, so the next launch restores it as current.
+        final nextLog = <_Rec>[];
+        final next = _manager(store: store, client: _client(nextLog));
+        await next.init();
+        expect(nextLog.registrationHits, 0);
+        expect(next.clientRegistration!.registrationAccessToken, 'rat-2');
+        await next.introspectToken(token: 'at-1');
+        expect(
+          nextLog.to('/introspect').single.sentClientSecret,
+          'issued-secret-2',
+        );
+        await next.dispose();
+      },
+    );
+
+    test(
+      'members the response omits (no rotation) are carried over from the '
+      'registration in hand, so the management credentials are never lost',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(
+            log,
+            clientRead: (hit, url) => managedBody(
+              clientSecret: null,
+              registrationAccessToken: null,
+              includeClientUri: false,
+              extra: const {'client_name': 'renamed-app'},
+            ),
+          ),
+        );
+        await manager.init();
+
+        final updated = await manager.updateClientRegistration();
+
+        expect(updated.clientName, 'renamed-app');
+        expect(updated.clientSecret, 'issued-secret-1');
+        expect(updated.registrationAccessToken, 'rat-issued-client-1');
+        expect(
+          updated.registrationClientUri,
+          Uri.parse('$_issuerA/register/issued-client-1'),
+        );
+        final stored = (await _storedRegistration(store))!;
+        expect(stored['client_secret'], 'issued-secret-1');
+        expect(stored['registration_access_token'], 'rat-issued-client-1');
+        expect(stored['client_name'], 'renamed-app');
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'readClientRegistration() (RFC 7592 §2.1) adopts and persists an '
+      'OP-rotated secret the same way',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(log, clientRead: (hit, url) => managedBody()),
+        );
+        await manager.init();
+
+        await manager.readClientRegistration();
+
+        final get = log.clientReads.single;
+        expect(get.method, 'GET');
+        expect(get.headers['Authorization'], 'Bearer rat-issued-client-1');
+        expect(manager.clientCredentials.clientSecret, 'issued-secret-2');
+        expect(
+          (await _storedRegistration(store))!['registration_access_token'],
+          'rat-2',
+        );
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'a response naming a DIFFERENT client_id is refused: nothing is '
+      'persisted and the running identity is unchanged',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(
+            log,
+            clientRead: (hit, url) => managedBody(clientId: 'someone-else'),
+          ),
+        );
+        await manager.init();
+        final before = await _storedRecord(store);
+
+        await expectLater(
+          manager.updateClientRegistration(),
+          throwsA(isA<OidcException>()),
+        );
+
+        expect(manager.clientCredentials.clientId, 'issued-client-1');
+        expect(manager.clientCredentials.clientSecret, 'issued-secret-1');
+        expect(await _storedRecord(store), before);
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'an edit that changes client_id is refused before anything is sent',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(store: store, client: _client(log));
+        await manager.init();
+
+        await expectLater(
+          manager.updateClientRegistration(
+            edit: (request) =>
+                OidcClientRegistrationRequest(extra: {'client_id': 'other'}),
+          ),
+          throwsA(isA<OidcException>()),
+        );
+        expect(log.clientReads, isEmpty);
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'without a registration_access_token (e.g. a web record, whose '
+      'management members are redacted) the call throws without any request',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(
+            log,
+            registration: (hit, url) =>
+                _registrationBody(includeManagementMembers: false),
+          ),
+        );
+        await manager.init();
+
+        await expectLater(
+          manager.updateClientRegistration(),
+          throwsA(isA<OidcException>()),
+        );
+        await expectLater(
+          manager.readClientRegistration(),
+          throwsA(isA<OidcException>()),
+        );
+        expect(log.clientReads, isEmpty);
+        await manager.dispose();
+      },
+    );
+
+    test('throws when dynamic client registration is disabled', () async {
+      final log = <_Rec>[];
+      final store = await _seededStore();
+      final manager = _manager(
+        store: store,
+        client: _client(log),
+        settings: _settings(),
+      );
+      await manager.init();
+
+      await expectLater(
+        manager.updateClientRegistration(),
+        throwsA(isA<OidcException>()),
+      );
+      expect(log.clientReads, isEmpty);
+      await manager.dispose();
+    });
+
+    test(
+      'a store that cannot take the rotated record still leaves the manager '
+      'running as the ROTATED credentials (the old ones are dead), and the '
+      'failure is surfaced as a typed OidcException',
+      () async {
+        final log = <_Rec>[];
+        final store = _ToggleSecureWriteFailingStore();
+        await store.init();
+        final manager = _manager(
+          store: store,
+          client: _client(log, clientRead: (hit, url) => managedBody()),
+        );
+        await manager.init();
+        store.failing = true;
+
+        await expectLater(
+          manager.updateClientRegistration(),
+          throwsA(isA<OidcException>()),
+        );
+
+        expect(manager.clientCredentials.clientSecret, 'issued-secret-2');
+        expect(manager.clientRegistration!.registrationAccessToken, 'rat-2');
+        await manager.dispose();
+      },
+    );
+
+    test(
+      'concurrent calls are serialized, so the second presents the token the '
+      'first one rotated in',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(
+            log,
+            clientRead: (hit, url) => managedBody(
+              clientSecret: 'issued-secret-${hit + 1}',
+              registrationAccessToken: 'rat-${hit + 1}',
+            ),
+          ),
+        );
+        await manager.init();
+
+        await Future.wait([
+          manager.updateClientRegistration(),
+          manager.updateClientRegistration(),
+        ]);
+
+        final calls = log.clientReads.toList();
+        expect(calls, hasLength(2));
+        expect(calls[0].headers['Authorization'], 'Bearer rat-issued-client-1');
+        expect(calls[1].headers['Authorization'], 'Bearer rat-2');
+        expect(manager.clientRegistration!.registrationAccessToken, 'rat-3');
+        await manager.dispose();
+      },
+    );
+  });
+
+  // RFC 8705 (#386 phase 2): DCR and mutual TLS.
+  group('DCR with mutual TLS (RFC 8705)', () {
+    test(
+      'useMtlsEndpointAliases routes the registration POST to the '
+      'registration_endpoint alias, and a tls_client_auth answer becomes '
+      'mTLS credentials',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(
+            log,
+            metadataA: {
+              ..._metadataJson(),
+              'mtls_endpoint_aliases': {
+                'registration_endpoint': 'https://mtls.op.example.com/register',
+              },
+            },
+            registration: (hit, url) => _registrationBody(
+              clientSecret: null,
+              authMethod:
+                  OidcConstants_ClientAuthenticationMethods.tlsClientAuth,
+            ),
+          ),
+          settings: OidcUserManagerSettings(
+            redirectUri: Uri.parse('app://cb'),
+            userInfoSettings: const OidcUserInfoSettings(
+              sendUserInfoRequest: false,
+            ),
+            dynamicClientRegistration: _dcr(),
+            useMtlsEndpointAliases: true,
+          ),
+        );
+
+        await manager.init();
+
+        expect(
+          log.to('/register').single.url,
+          Uri.parse('https://mtls.op.example.com/register'),
+        );
+        expect(
+          manager.clientCredentials.location,
+          OidcConstants_ClientAuthenticationMethods.tlsClientAuth,
+        );
+        expect(manager.clientCredentials.clientId, 'issued-client-1');
+        await manager.dispose();
+      },
+    );
+
+    for (final method in const [
+      OidcConstants_ClientAuthenticationMethods.tlsClientAuth,
+      OidcConstants_ClientAuthenticationMethods.selfSignedTlsClientAuth,
+    ]) {
+      test(
+        'on web, a registration answered with $method throws an '
+        'UnsupportedError and persists nothing',
+        () async {
+          final log = <_Rec>[];
+          final store = await _seededStore();
+          final manager = _manager(
+            store: store,
+            client: _client(
+              log,
+              registration: (hit, url) =>
+                  _registrationBody(clientSecret: null, authMethod: method),
+            ),
+            isWeb: true,
+          );
+
+          await expectLater(
+            manager.init(),
+            throwsA(
+              isA<UnsupportedError>().having(
+                (e) => e.message,
+                'message',
+                allOf(contains(method), contains('RFC 8705')),
+              ),
+            ),
+          );
+          expect(log.registrationHits, 1);
+          expect(await _storedRecord(store), isNull);
+          await manager.dispose();
+        },
+      );
+    }
+  });
+}
+
+/// An [OidcMemoryStore] whose [OidcStoreNamespace.secureTokens] writes start
+/// failing once [failing] is flipped.
+class _ToggleSecureWriteFailingStore extends OidcMemoryStore {
+  bool failing = false;
+
+  @override
+  Future<void> setMany(
+    OidcStoreNamespace namespace, {
+    required Map<String, String> values,
+    String? managerId,
+  }) async {
+    if (failing && namespace == OidcStoreNamespace.secureTokens) {
+      throw StateError('the keychain is locked');
+    }
+    return super.setMany(namespace, values: values, managerId: managerId);
+  }
 }

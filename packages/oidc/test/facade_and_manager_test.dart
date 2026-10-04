@@ -298,6 +298,35 @@ void main() {
       );
     });
 
+    // Same asynchronous-rejection regression as the authorize-path test
+    // above, but for getPlatformEndSessionResponse: an OidcException thrown
+    // by a platform implementation (e.g. oidc_desktop's "doesn't provide
+    // 'end_session_endpoint'") must still come out unwrapped (rethrown as
+    // the same instance), not re-wrapped into a generic
+    // 'Failed to end user session' OidcException that loses the specific
+    // message.
+    test('getPlatformEndSessionResponse rethrows an OidcException that '
+        'rejects asynchronously, unchanged', () async {
+      const original = OidcException('logout native failure async');
+      when(
+        () => oidcPlatform.getEndSessionResponse(
+          doc,
+          endSessionRequest,
+          platformOptions,
+          const {},
+        ),
+      ).thenAnswer((_) async => throw original);
+
+      await expectLater(
+        () => OidcFlutter.getPlatformEndSessionResponse(
+          metadata: doc,
+          request: endSessionRequest,
+          preparationResult: const {},
+        ),
+        throwsA(same(original)),
+      );
+    });
+
     test(
       'listenToFrontChannelLogoutRequests streams events from the platform',
       () async {

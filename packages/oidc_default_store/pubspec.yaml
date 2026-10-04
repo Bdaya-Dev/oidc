@@ -6,14 +6,15 @@ homepage: https://bdaya-dev.github.io/oidc/
 topics: ["oidc", "openidconnect", "oauth", "authentication"]
 resolution: workspace
 environment:
-  sdk: ">=3.5.0 <4.0.0"
+  # flutter_secure_storage ^11.0.0 requires Dart >=3.8.0.
+  sdk: ">=3.8.0 <4.0.0"
   flutter: ">=3.22.0"
 
 dependencies:
   async: ^2.13.0
   flutter:
     sdk: flutter
-  flutter_secure_storage: ^10.0.0
+  flutter_secure_storage: ^11.0.0
   logging: ^1.2.0
   oidc_core: ^3.0.0
   # >=2.3.0 is the first release that ships SharedPreferencesAsync /
@@ -23,7 +24,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  mocktail: ^1.0.3
   # Test-only: provides InMemorySharedPreferencesAsync +
   # SharedPreferencesAsyncPlatform so the SharedPreferencesAsync backend can be
   # exercised in-memory on the VM (see the async store tests).
