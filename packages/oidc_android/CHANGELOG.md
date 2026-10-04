@@ -1,3 +1,14 @@
+## 3.0.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**(oidc_web_core): surface the flow timeout as OidcException, not TimeoutException. ([be6a5316](https://github.com/Bdaya-Dev/oidc/commit/be6a5316df6cc83ee90807c4f88f4d37d5cd144d))
+ - **FIX**(oidc_android): forward Map-valued raw intent extras instead of dropping them. ([7ffda6a7](https://github.com/Bdaya-Dev/oidc/commit/7ffda6a74f07aeaba3a077a1d879a615b3dfbe77))
+ - **FIX**(oidc_android): dismiss the Custom Tab after the intent-filter redirect. ([34a83693](https://github.com/Bdaya-Dev/oidc/commit/34a836933563e3fe37dc7121b87272676554a331))
+ - **DOCS**(test): state the wiring guard's single-layer scope. ([e25e04b8](https://github.com/Bdaya-Dev/oidc/commit/e25e04b89711cd526919f73ed7c9a8faf5c386cb))
+ - **BREAKING** **FIX**(oidc_android): report the options the Auth Tab path cannot apply. ([8b7226ce](https://github.com/Bdaya-Dev/oidc/commit/8b7226ced748e953e8b3ea95ba3c711d8976dd8d))
+ - **BREAKING** **FIX**(oidc_android): apply the documented Custom Tabs options natively. ([9e83a10b](https://github.com/Bdaya-Dev/oidc/commit/9e83a10ba732611ec4ef9d11c8cbe3a68ca8a7b9))
+
 ## 2.0.1
 
  - **DOCS**(oidc_android): state the minSdk 23 requirement, and stop instructing 21 ([#427](https://github.com/Bdaya-Dev/oidc/issues/427)). ([1f210d0a](https://github.com/Bdaya-Dev/oidc/commit/1f210d0a36843dd0aa5080be499ecbafa0347c35))

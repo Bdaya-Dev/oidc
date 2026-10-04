@@ -1,3 +1,7 @@
+## 1.1.0
+
+ - **FEAT**(oidc_loopback_listener): capture form_post bodies and fragments. ([3bc512c3](https://github.com/Bdaya-Dev/oidc/commit/3bc512c3b0fa9377635083707ecc5d7f7886fdea))
+
 ## 1.0.0
 
  - **FIX**: resolve all four library bugs; drive honest unit coverage to ~95% ([#368](https://github.com/Bdaya-Dev/oidc/issues/368)). ([c86bee17](https://github.com/Bdaya-Dev/oidc/commit/c86bee17189a0a70fee947c685e91a55062b1d35))
