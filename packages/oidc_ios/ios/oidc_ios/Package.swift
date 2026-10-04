@@ -11,16 +11,11 @@ let package = Package(
     products: [
         .library(name: "oidc-ios", targets: ["oidc_ios"])
     ],
-    dependencies: [
-        // Required for Swift Package Manager plugins as of Flutter 3.41.
-        .package(name: "FlutterFramework", path: "../FlutterFramework")
-    ],
+    dependencies: [],
     targets: [
         .target(
             name: "oidc_ios",
-            dependencies: [
-                .product(name: "FlutterFramework", package: "FlutterFramework")
-            ],
+            dependencies: [],
             resources: [
                 // .process("Resources"),
             ]

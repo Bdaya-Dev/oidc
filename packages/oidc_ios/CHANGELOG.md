@@ -1,7 +1,6 @@
 ## 0.8.0+4
 
- - **FIX**: move to the Flutter Swift Package Manager plugin layout so Flutter no longer reports `oidc_ios` as lacking SwiftPM support ([#450](https://github.com/Bdaya-Dev/oidc/issues/450)). `Package.swift` now lives at `ios/oidc_ios/Package.swift` (the root-level manifest is removed), sources moved to `ios/oidc_ios/Sources/oidc_ios/`, and the package depends on `FlutterFramework`. The CocoaPods podspec points at the new source path, so CocoaPods builds keep working.
- - **CHORE**: the minimum supported SDK is now Flutter 3.41 / Dart 3.11, which the `FlutterFramework` dependency requires. On older Flutter versions, pub keeps resolving `0.8.0+3`.
+ - **FIX**: move to the Flutter Swift Package Manager plugin layout so Flutter no longer reports `oidc_ios` as lacking SwiftPM support ([#450](https://github.com/Bdaya-Dev/oidc/issues/450)). `Package.swift` now lives at `ios/oidc_ios/Package.swift` (the root-level manifest is removed) and sources moved to `ios/oidc_ios/Sources/oidc_ios/`. The CocoaPods podspec points at the new source path, so CocoaPods builds keep working.
 
 ## 0.8.0+3
 

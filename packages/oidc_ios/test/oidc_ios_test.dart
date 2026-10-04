@@ -12,14 +12,15 @@ void main() {
   group('OidcIOS', () {
     late OidcIOS oidc;
     late List<MethodCall> log;
-    const methodChannel = MethodChannel(
-      'crossingthestreams.io/flutter_appauth',
-    );
+    const methodChannel =
+        MethodChannel('crossingthestreams.io/flutter_appauth');
     const mockAuthResponse = {
       'authorizationCode': '1234',
       'codeVerifier': '12344321',
       'nonce': 'abcd',
-      'authorizationAdditionalParameters': {'hello': 'world'},
+      'authorizationAdditionalParameters': {
+        'hello': 'world',
+      },
     };
     final metadata = OidcProviderMetadata.fromJson(testDiscoveryRaw);
 
@@ -29,14 +30,14 @@ void main() {
       log = <MethodCall>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(methodChannel, (methodCall) async {
-            log.add(methodCall);
-            switch (methodCall.method) {
-              case 'authorize':
-                return mockAuthResponse;
-              default:
-                throw UnimplementedError();
-            }
-          });
+        log.add(methodCall);
+        switch (methodCall.method) {
+          case 'authorize':
+            return mockAuthResponse;
+          default:
+            throw UnimplementedError();
+        }
+      });
     });
     tearDown(() => log.clear());
 
