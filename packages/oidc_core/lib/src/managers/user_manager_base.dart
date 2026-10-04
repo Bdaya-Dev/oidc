@@ -3349,10 +3349,13 @@ abstract class OidcUserManagerBase {
   static const clientRegistrationKeyPrefix = 'client_registration.';
 
   /// The member of the persisted record holding the RFC 7591 §3.2.1
-  /// registration response, merged with any previous record when rotated via
-  /// [updateClientRegistration] / [readClientRegistration]: the OP's returned
-  /// members replace the previous ones, while omitted members (like
-  /// `registration_access_token`) are carried over.
+  /// registration response: composed from the registration in hand (never
+  /// the store) when rotated via [updateClientRegistration] /
+  /// [readClientRegistration] — returned members win; only `client_id`,
+  /// `registration_access_token`, `registration_client_uri` and, unless the
+  /// client became public, `client_secret` (with its
+  /// `client_secret_expires_at`) are carried over when omitted; any other
+  /// omitted member is dropped.
   static const _recordResponseMember = 'registration';
 
   /// The member of the persisted record holding the staleness fingerprint of
@@ -3906,8 +3909,11 @@ abstract class OidcUserManagerBase {
   /// immediately once a registration is applied. The identity resolved here is
   /// served to every later request. However, after a rotation via
   /// [updateClientRegistration] / [readClientRegistration], later requests use
-  /// the merged credentials (the OP's response members replace the previous ones,
-  /// while omitted members like `registration_access_token` are carried over).
+  /// credentials composed from the registration in hand (never the store):
+  /// returned members win; only `client_id`, `registration_access_token`,
+  /// `registration_client_uri` and, unless the client became public,
+  /// `client_secret` (with its `client_secret_expires_at`) are carried over
+  /// when omitted; any other omitted member is dropped.
   ///
   /// ## Non-goals
   ///
@@ -4101,10 +4107,14 @@ abstract class OidcUserManagerBase {
       );
 
   /// Serializes the ONE immutable record persisted per issuer: the RFC 7591
-  /// §3.2.1 response (merged with any previous record when rotated via
-  /// [updateClientRegistration] / [readClientRegistration], so the OP's returned
-  /// members replace the previous ones while omitted members are carried over),
-  /// plus the staleness fingerprint of the request it was ISSUED FOR.
+  /// §3.2.1 response (composed from the registration in hand — never the
+  /// store — when rotated via [updateClientRegistration] /
+  /// [readClientRegistration]: returned members win; only `client_id`,
+  /// `registration_access_token`, `registration_client_uri` and, unless the
+  /// client became public, `client_secret` (with its
+  /// `client_secret_expires_at`) are carried over when omitted; any other
+  /// omitted member is dropped), plus the staleness fingerprint of the
+  /// request it was ISSUED FOR.
   ///
   /// Both members are written together, in one value, under one key, from
   /// values already in hand — never merged onto, incremented from, or otherwise

@@ -62,21 +62,23 @@ typedef OidcClientRegistrationRequestBuilder =
 /// ## The manager registers once, and then leaves the client alone
 ///
 /// One immutable record is persisted per issuer and restored on every later
-/// launch with no network call. It is replaced only when the request this build
-/// would send no longer matches the one it was issued for, or when the issued
-/// `client_secret` has expired.
+/// launch with no network call. It is re-issued only when the request this
+/// build would send no longer matches the one it was issued for, or when the
+/// issued `client_secret` has expired; the only other write is an RFC 7592
+/// call the app makes through the manager (below).
 ///
 /// Nothing automatically rotates the credential mid-session, re-registers when
 /// the provider answers `invalid_client`, or tracks and reaps orphaned OP-side
 /// clients — each of those is a documented non-goal on
 /// `OidcUserManagerBase.ensureClientRegistration`, naming the clause that makes
-/// it optional and the call an app makes instead. However, RFC 7592 rotation is
-/// now driven by the manager itself: `OidcUserManagerBase.updateClientRegistration()`
-/// and `readClientRegistration()` adopt the OP's response and merge rotated
-/// credentials into the persisted record, so later back-channel calls present the
-/// latest secret and the next launch restores the rotated identity.
-/// `OidcUserManagerBase.forgetClientRegistration` is the escape hatch out of
-/// all of them.
+/// it optional and the call an app makes instead. RFC 7592 rotation can be
+/// driven through the manager when the app calls
+/// `OidcUserManagerBase.updateClientRegistration()` / `readClientRegistration()`
+/// — the manager never calls either on its own — which adopt the OP's response
+/// and merge rotated credentials into the persisted record, so later
+/// back-channel calls present the latest secret and the next launch restores
+/// the rotated identity. `OidcUserManagerBase.forgetClientRegistration` is the
+/// escape hatch out of all of them.
 class OidcDynamicClientRegistrationSettings {
   ///
   const OidcDynamicClientRegistrationSettings({
