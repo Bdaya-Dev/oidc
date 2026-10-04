@@ -43,7 +43,7 @@ class OidcFlutter {
     Map<String, dynamic> preparationResult = const {},
   }) async {
     try {
-      return _platform.getAuthorizationResponse(
+      return await _platform.getAuthorizationResponse(
         metadata,
         request,
         options,
@@ -70,7 +70,7 @@ class OidcFlutter {
     OidcPlatformSpecificOptions options = const OidcPlatformSpecificOptions(),
   }) async {
     try {
-      return _platform.getEndSessionResponse(
+      return await _platform.getEndSessionResponse(
         metadata,
         request,
         options,
