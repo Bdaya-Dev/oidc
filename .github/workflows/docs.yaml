@@ -52,7 +52,7 @@ jobs:
           mkdir -p dist/oidc-docs
           cp -R site/. dist/oidc-docs/
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           # Upload specific path
           path: 'site'
