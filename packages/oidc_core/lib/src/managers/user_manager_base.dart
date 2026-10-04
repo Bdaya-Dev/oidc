@@ -3287,6 +3287,24 @@ abstract class OidcUserManagerBase {
     String? authorizationCode,
     Duration? maxAge,
     bool reactToUserInfoUnauthorized = false,
+    // #468: disambiguates what [user] IS, for the failure branch only.
+    //
+    // `false` (the default -- a new login response, or a refresh response):
+    // [user] is a NEW candidate racing against the ALREADY-ESTABLISHED
+    // [currentUser] session (e.g. a repeated login while signed in, or the
+    // result of refreshing the current session's token). If validation
+    // rejects it, the still-valid previous session must not be torn down:
+    // the stored token and [currentUser] are both left exactly as they are,
+    // and only the candidate is rejected (this still returns `null`).
+    //
+    // `true` (cache-first / blocking init revalidating the STORED token
+    // itself, via [loadCachedTokens]): [user] IS (a freshly-rebuilt copy of)
+    // the very session [currentUser] and the store already represent --
+    // there is no DIFFERENT previous session to protect here, because this
+    // rejection is ABOUT that session. The existing removal is correct, and
+    // [currentUser] is forgotten too so memory does not keep showing a
+    // signed-in user the store no longer has.
+    bool isRevalidatingCurrentSession = false,
   }) async {
     var actualUser = user;
     final errors = validateUser(
@@ -3497,6 +3515,21 @@ abstract class OidcUserManagerBase {
           StackTrace.current,
         );
       }
+
+      // #468: a DIFFERENT, already-established session is sitting in
+      // `currentUser` and this rejection is for a new candidate (a repeated
+      // login, or a refresh response) -- not that session's own stored token
+      // being re-checked. Keep the store and `currentUser` exactly as they
+      // are; only the candidate is rejected.
+      final previousUser = currentUser;
+      if (previousUser != null && !isRevalidatingCurrentSession) {
+        return null;
+      }
+
+      // Either there was no previous session to protect (a fresh login /
+      // cold start with nothing signed in yet), or [isRevalidatingCurrentSession]
+      // says [user] IS that previous session's own stored token -- removing it
+      // is correct in both cases.
       await store.setCurrentNonce(null, managerId: id);
 
       await store.removeMany(
@@ -3509,6 +3542,15 @@ abstract class OidcUserManagerBase {
         },
         managerId: id,
       );
+
+      // #468: keep memory consistent with what was just removed from storage
+      // -- a rejected STORED session must not keep showing a signed-in user
+      // the store no longer has. Mirrors [forgetUser]'s own
+      // event-then-null-emission contract.
+      if (previousUser != null) {
+        emitEvent(OidcPreLogoutEvent.now(currentUser: previousUser));
+        userSubject.add(null);
+      }
     }
     return null;
   }
@@ -5177,6 +5219,12 @@ abstract class OidcUserManagerBase {
             // UserInfo 401 from a revoked access token should trigger the
             // recover-via-refresh + typed-event reaction.
             reactToUserInfoUnauthorized: true,
+            // #468: [loadedUser] here IS the cached/stored session being
+            // re-checked (rebuilt from the same stored token, refreshed in
+            // place above on success) -- not a competing new session -- so a
+            // rejection must remove it from the store AND forget it from
+            // memory, not preserve it as if it were someone else's session.
+            isRevalidatingCurrentSession: true,
           );
         }
       }
