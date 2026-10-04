@@ -439,6 +439,20 @@ This is similar to firebase auth, and can be used to track the current session.
 
 You can also get access to the current authenticated user via `currentUser` property.
 
+`userChanges()` replays the current user to every new listener, even before `init()` has completed. At that point the current user is still the initial `null`, so a listener attached before `init()` can't tell "not initialized yet" apart from "signed out".
+
+If you need that distinction, for example because you subscribe before `init()` alongside `events()` (which has to happen before `init()` to observe an `invalid_grant` while the cached session is restored), use `userChangesAfterInit()` instead. It emits nothing until `init()` completes, then emits the settled user, then every later change. Any `null` it emits means signed out:
+
+```dart
+manager.events().listen(handleEvent);
+manager.userChangesAfterInit().listen((user) {
+  // Only runs once init() has completed; null here really means signed out.
+});
+await manager.init();
+```
+
+If `init()` fails, `userChangesAfterInit()` emits the error and closes. If the manager is disposed before `init()` completes, it closes without emitting.
+
 ### Listening to events
 
 Events are an advanced form of user changes, since they occur in more places than the `currentUser` stream, and help the developer hook into every flow.

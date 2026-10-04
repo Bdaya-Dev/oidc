@@ -442,7 +442,176 @@ abstract class OidcUserManagerBase {
   Logger get logger => _logger;
 
   /// Gets a stream that reflects the current data of the user.
+  ///
+  /// It replays [currentUser] to every new listener, including BEFORE [init]
+  /// completes, when [currentUser] is still the initial `null`. A listener
+  /// attached that early therefore cannot tell "not initialized yet" from
+  /// "signed out"; use [userChangesAfterInit] when that distinction matters.
   Stream<OidcUser?> userChanges() => userSubject.stream;
+
+  /// Like [userChanges], but holds its first emission until [init] has
+  /// completed, so every `null` it emits means "signed out" rather than "not
+  /// initialized yet".
+  ///
+  /// Safe to subscribe before calling [init] — for example alongside
+  /// [events], which must be subscribed before [init] to observe a failure
+  /// (such as an `invalid_grant`) while the cached session is restored. Each
+  /// listener then receives:
+  ///
+  /// 1. nothing while [init] is in flight (intermediate values set during
+  ///    [init] are not replayed);
+  /// 2. [currentUser] as it stands once [init] completes;
+  /// 3. every subsequent change, exactly like [userChanges].
+  ///
+  /// A listener that subscribes after [init] has completed gets [currentUser]
+  /// immediately. If [init] fails, the error is emitted and the stream closes.
+  /// If the manager is disposed before [init] completes, the stream closes
+  /// without emitting. Like [userChanges], the returned stream can be listened
+  /// to more than once.
+  Stream<OidcUser?> userChangesAfterInit() => Stream<OidcUser?>.multi((
+    controller,
+  ) {
+    if (_isDisposed) {
+      // Already disposed before this listener even attached: [dispose] will
+      // never run again to release it, so settle immediately instead of
+      // registering a waiter.
+      unawaited(controller.close());
+      return;
+    }
+
+    // Every add/addError/close below is guarded on `controller.isClosed`:
+    // [dispose] closes a waiting controller synchronously, but the listener
+    // only observes that (as a done event) later — or never, while paused —
+    // so nothing else may touch the controller once it is closed.
+    StreamSubscription<OidcUser?>? forwarding;
+    final waiter = _UserChangesAfterInitWaiter(
+      onInitDone: () {
+        if (controller.isClosed) {
+          return;
+        }
+        if (_isDisposed) {
+          unawaited(controller.close());
+          return;
+        }
+        forwarding = userSubject.stream.listen(
+          (user) {
+            if (!controller.isClosed) {
+              controller.add(user);
+            }
+          },
+          onError: (Object e, StackTrace st) {
+            if (!controller.isClosed) {
+              controller.addError(e, st);
+            }
+          },
+          onDone: () {
+            if (!controller.isClosed) {
+              unawaited(controller.close());
+            }
+          },
+        );
+      },
+      onInitFailed: (e, st) {
+        if (controller.isClosed) {
+          return;
+        }
+        controller.addError(e, st);
+        unawaited(controller.close());
+      },
+      onDisposed: () {
+        if (!controller.isClosed) {
+          unawaited(controller.close());
+        }
+      },
+    );
+
+    controller.onCancel = () {
+      // Dropping the waiter is all it takes to release this listener: the
+      // manager's single [initFuture] attachment only reaches listeners
+      // through [_userChangesAfterInitWaiters].
+      _userChangesAfterInitWaiters.remove(waiter);
+      return forwarding?.cancel();
+    };
+
+    if (_initSettledForUserChangesAfterInit) {
+      // [init] already settled: nothing to wait for, so this listener never
+      // enters [_userChangesAfterInitWaiters] at all.
+      final error = _initErrorForUserChangesAfterInit;
+      if (error != null) {
+        waiter.onInitFailed(
+          error,
+          _initErrorStackTraceForUserChangesAfterInit ?? StackTrace.empty,
+        );
+      } else {
+        waiter.onInitDone();
+      }
+      return;
+    }
+    _userChangesAfterInitWaiters.add(waiter);
+  });
+
+  /// [userChangesAfterInit] listeners still waiting on [initFuture].
+  ///
+  /// This set is the ONLY place a waiting listener (and the controller its
+  /// callbacks close over) is referenced from: nothing is attached to
+  /// [initFuture] on a listener's behalf. A listener that cancels is removed
+  /// here and becomes garbage straight away, even if [init] never runs or
+  /// never settles. [init]'s own memoized body drains the set when it
+  /// finishes (see [_settleUserChangesAfterInitWaiters]), and [dispose]
+  /// drains whatever is left.
+  ///
+  /// Earlier revisions attached callbacks to a long-lived future — first a
+  /// per-listener `Future.any([initFuture, <a future completed only by
+  /// dispose>])`, then a per-listener `initFuture.then`, then a single
+  /// manager-owned `initFuture.then`. The per-listener ones kept a cancelled
+  /// listener reachable until that future completed (for the manager's whole
+  /// lifetime, or for as long as [init] had not run). Any of them can lose an
+  /// [init] failure: [initFuture] belongs to the zone the manager was
+  /// constructed in, and a future's error is never delivered to a handler
+  /// registered in a different error zone (it is reported as uncaught in the
+  /// future's zone instead). And attaching an error handler at all would mark
+  /// a failed, un-awaited [init] as handled. Settling from inside [init]
+  /// avoids every one of these: the error is caught where it is thrown, then
+  /// rethrown untouched.
+  final Set<_UserChangesAfterInitWaiter> _userChangesAfterInitWaiters = {};
+
+  /// Whether [init]'s memoized body has finished. Once `true`, new
+  /// [userChangesAfterInit] listeners are answered straight away from the
+  /// recorded outcome instead of waiting.
+  bool _initSettledForUserChangesAfterInit = false;
+  Object? _initErrorForUserChangesAfterInit;
+  StackTrace? _initErrorStackTraceForUserChangesAfterInit;
+
+  /// Records [init]'s outcome and drains [_userChangesAfterInitWaiters].
+  ///
+  /// Called exactly once, from inside [init]'s memoized body, just before
+  /// [initFuture] completes. Tolerates an empty set (every waiter cancelled,
+  /// or [dispose] already drained them) and a disposed manager.
+  void _settleUserChangesAfterInitWaiters(Object? error, StackTrace? st) {
+    _initSettledForUserChangesAfterInit = true;
+    _initErrorForUserChangesAfterInit = error;
+    _initErrorStackTraceForUserChangesAfterInit = st;
+    for (final waiter in _userChangesAfterInitWaiters.toList()) {
+      // Skip a waiter removed (cancelled) by an earlier one's callbacks.
+      if (!_userChangesAfterInitWaiters.remove(waiter)) {
+        continue;
+      }
+      if (error != null) {
+        waiter.onInitFailed(error, st ?? StackTrace.empty);
+      } else {
+        waiter.onInitDone();
+      }
+    }
+  }
+
+  /// The number of [userChangesAfterInit] listeners currently waiting on
+  /// [initFuture].
+  ///
+  /// Exposed only for tests, to assert this returns to 0 once listeners
+  /// settle or cancel instead of being retained for the manager's lifetime.
+  @visibleForTesting
+  int get debugPendingUserChangesAfterInitListenerCount =>
+      _userChangesAfterInitWaiters.length;
 
   /// Gets a stream of events related to the current manager.
   Stream<OidcEvent> events() => eventsController.stream;
@@ -5000,33 +5169,49 @@ abstract class OidcUserManagerBase {
   ///   document is otherwise served from its TTL cache).
   Future<void> init() {
     return initMemoizer.runOnce(() async {
-      ensureClientAuthenticationSupported(clientCredentials);
-      ensureMtlsEndpointAliasesSupportedOnWeb();
-      await store.init();
-      if (settings.initMode == OidcInitMode.cacheFirst &&
-          await _tryCacheFirstInit()) {
-        attachLifecycleListeners();
-        return;
+      // Settle [userChangesAfterInit] listeners from in here rather than by
+      // listening to [initFuture] (see [_userChangesAfterInitWaiters]): the
+      // outcome is observed where it happens, and a failure is rethrown
+      // unchanged so callers (and the zone, if nobody awaits) see it as
+      // before.
+      try {
+        await _runInit();
+      } on Object catch (e, st) {
+        _settleUserChangesAfterInitWaiters(e, st);
+        rethrow;
       }
-      // Blocking / network path (the [OidcInitMode.blockingValidate] semantics,
-      // also the fallback when cache-first has nothing to restore).
-      await ensureDiscoveryDocument();
-      // Must precede `loadStateResult()` and `loadCachedTokens()`, which
-      // validate `aud` against `clientCredentials.clientId`. (The HS* `oct`
-      // verification key needs no ordering: [keyStore] derives it from the
-      // current credentials at lookup time.)
-      await ensureClientRegistration();
-      setupKeyStore();
-      await clearUnusedStates();
-      if (!await loadLogoutRequests()) {
-        //no logout requests.
-        if (!await loadStateResult()) {
-          //no state results.
-          await loadCachedTokens();
-        }
-      }
-      attachLifecycleListeners();
+      _settleUserChangesAfterInitWaiters(null, null);
     });
+  }
+
+  /// The body of [init], run once by [initMemoizer].
+  Future<void> _runInit() async {
+    ensureClientAuthenticationSupported(clientCredentials);
+    ensureMtlsEndpointAliasesSupportedOnWeb();
+    await store.init();
+    if (settings.initMode == OidcInitMode.cacheFirst &&
+        await _tryCacheFirstInit()) {
+      attachLifecycleListeners();
+      return;
+    }
+    // Blocking / network path (the [OidcInitMode.blockingValidate] semantics,
+    // also the fallback when cache-first has nothing to restore).
+    await ensureDiscoveryDocument();
+    // Must precede `loadStateResult()` and `loadCachedTokens()`, which
+    // validate `aud` against `clientCredentials.clientId`. (The HS* `oct`
+    // verification key needs no ordering: [keyStore] derives it from the
+    // current credentials at lookup time.)
+    await ensureClientRegistration();
+    setupKeyStore();
+    await clearUnusedStates();
+    if (!await loadLogoutRequests()) {
+      //no logout requests.
+      if (!await loadStateResult()) {
+        //no state results.
+        await loadCachedTokens();
+      }
+    }
+    attachLifecycleListeners();
   }
 
   /// Attempts the [OidcInitMode.cacheFirst] restore: deserialize the cached user
@@ -5228,6 +5413,17 @@ abstract class OidcUserManagerBase {
     // auto-refresh whose response lands mid-dispose observes it and no-ops
     // (see [isDisposed] / [_performAutoRefresh]).
     _isDisposed = true;
+    // Release every [userChangesAfterInit] listener still waiting on
+    // [initFuture] (dispose-before-init / dispose-mid-init). Listeners that
+    // already settled or cancelled are no longer in the set. Draining it here
+    // also leaves the single pending [initFuture] attachment (if any) with
+    // nothing to deliver, so a late init failure can never reach a controller
+    // this just closed.
+    for (final waiter in _userChangesAfterInitWaiters.toList()) {
+      if (_userChangesAfterInitWaiters.remove(waiter)) {
+        waiter.onDisposed();
+      }
+    }
     // The shared in-flight auto-refresh already swallows its own outcome once
     // disposed, but latch onto it here too so its settling can never surface an
     // unhandled error into the zone after teardown. Mirrors how the other
@@ -5463,4 +5659,19 @@ abstract class OidcUserManagerBase {
       rethrow;
     }
   }
+}
+
+/// A [OidcUserManagerBase.userChangesAfterInit] listener waiting on
+/// [OidcUserManagerBase.initFuture], as held by the manager until init
+/// settles, the manager is disposed, or the listener cancels.
+final class _UserChangesAfterInitWaiter {
+  _UserChangesAfterInitWaiter({
+    required this.onInitDone,
+    required this.onInitFailed,
+    required this.onDisposed,
+  });
+
+  final void Function() onInitDone;
+  final void Function(Object error, StackTrace stackTrace) onInitFailed;
+  final void Function() onDisposed;
 }
