@@ -439,12 +439,12 @@ class OidcDefaultStore implements OidcStore {
   }) async {
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
-        // optimally we would make these operations concurrent, but due to this issue we can't.
-        // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
-        try {
-          // secure storage might not be supported in all platforms,
-          // so we fallback to normal storage if that's the case.
-          if (secureStorage case final secureStorage?) {
+        // secure storage might not be supported in all platforms,
+        // so we fallback to normal storage if that's the case.
+        if (secureStorage case final secureStorage?) {
+          // optimally we would make these operations concurrent, but due to this issue we can't.
+          // see https://github.com/mogol/flutter_secure_storage/issues/381#issuecomment-1128636818
+          try {
             final res = <String, String>{};
             for (final k in keys) {
               final v = await secureStorage.read(
@@ -455,17 +455,17 @@ class OidcDefaultStore implements OidcStore {
               }
             }
             return res;
-          } else {
-            _warnInsecureSecureTokensFallback();
+          } catch (e) {
+            // coverage:ignore-start
+            _logger.warning(
+                'tried reading secure tokens using package:flutter_secure_storage,'
+                ' but it failed, falling back to using package:shared_pereferences, which is not secure.');
             return _defaultGetMany(namespace, keys, managerId);
+            // coverage:ignore-end
           }
-        } catch (e) {
-          // coverage:ignore-start
-          _logger.warning(
-              'tried reading secure tokens using package:flutter_secure_storage,'
-              ' but it failed, falling back to using package:shared_pereferences, which is not secure.');
+        } else {
+          _warnInsecureSecureTokensFallback();
           return _defaultGetMany(namespace, keys, managerId);
-          // coverage:ignore-end
         }
       case OidcStoreNamespace.session:
         if (testIsWeb &&
@@ -500,25 +500,25 @@ class OidcDefaultStore implements OidcStore {
 
     switch (namespace) {
       case OidcStoreNamespace.secureTokens:
-        try {
-          if (secureStorage case final secureStorage?) {
+        if (secureStorage case final secureStorage?) {
+          try {
             for (final entry in values.entries) {
               await secureStorage.write(
                 key: _getKey(namespace, entry.key, managerId),
                 value: entry.value,
               );
             }
-          } else {
-            _warnInsecureSecureTokensFallback();
+          } catch (e) {
+            // coverage:ignore-start
+            _logger.warning(
+                'tried writing secure tokens using package:flutter_secure_storage,'
+                ' but it failed, falling back to using package:shared_pereferences, which is not secure.');
             return _defaultSetMany(namespace, values, managerId);
+            // coverage:ignore-end
           }
-        } catch (e) {
-          // coverage:ignore-start
-          _logger.warning(
-              'tried writing secure tokens using package:flutter_secure_storage,'
-              ' but it failed, falling back to using package:shared_pereferences, which is not secure.');
+        } else {
+          _warnInsecureSecureTokensFallback();
           return _defaultSetMany(namespace, values, managerId);
-          // coverage:ignore-end
         }
 
       case OidcStoreNamespace.session:
