@@ -297,5 +297,66 @@ void main() {
       expect(errors, hasLength(1));
       await manager.dispose();
     });
+
+    // Regression test: `userChangesAfterInit()` used to race `initFuture`
+    // against a shared future that only ever completed inside `dispose()`
+    // (`Future.any([initFuture, _disposeSignal.future])`). Since that future
+    // stayed pending for the manager's entire lifetime, every listener's
+    // `.then` callback — and the `StreamController` it closed over — stayed
+    // permanently attached to it, even long after the listener had cancelled
+    // or `initFuture` had already settled. A caller that repeatedly
+    // subscribed to and cancelled this stream (e.g. once per rebuild) leaked
+    // one retained closure/controller per round for as long as the manager
+    // lived. `debugPendingUserChangesAfterInitListenerCount` exposes the
+    // number of listeners still pinned like this; it must drop back to 0
+    // once a listener cancels or `initFuture` settles, instead of only ever
+    // growing until `dispose()`.
+    test(
+      'does not retain userChangesAfterInit listeners past settle/cancel '
+      '(#453 leak)',
+      () async {
+        final manager = _manager(store: await _store(), client: _client());
+
+        // Subscribe twice *before* init() completes, then cancel one and let
+        // init() settle for the other — neither should remain pending once
+        // init() has settled.
+        final earlySub1 = manager.userChangesAfterInit().listen((_) {});
+        final earlySub2 = manager.userChangesAfterInit().listen((_) {});
+        await pumpEventQueue();
+        expect(manager.debugPendingUserChangesAfterInitListenerCount, 2);
+
+        await earlySub1.cancel();
+        expect(manager.debugPendingUserChangesAfterInitListenerCount, 1);
+
+        await manager.init();
+        await pumpEventQueue();
+        expect(
+          manager.debugPendingUserChangesAfterInitListenerCount,
+          0,
+          reason:
+              'a settled initFuture must release every listener that was '
+              'waiting on it, not just the ones that happened to cancel',
+        );
+
+        // Post-init, repeated subscribe/cancel rounds must not accumulate:
+        // each round's listener resolves against the already-settled
+        // initFuture and releases itself right away.
+        for (var i = 0; i < 50; i++) {
+          final sub = manager.userChangesAfterInit().listen((_) {});
+          await sub.cancel();
+        }
+        await pumpEventQueue();
+        expect(
+          manager.debugPendingUserChangesAfterInitListenerCount,
+          0,
+          reason:
+              'subscribe/cancel rounds after init() must not leak a pending '
+              'listener per round',
+        );
+
+        await earlySub2.cancel();
+        await manager.dispose();
+      },
+    );
   });
 }

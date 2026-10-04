@@ -473,13 +473,49 @@ abstract class OidcUserManagerBase {
   ) {
     StreamSubscription<OidcUser?>? sub;
     var cancelled = false;
+
+    // The closer this listener registered in
+    // [_pendingUserChangesAfterInitClosers] while waiting on [initFuture], so
+    // [dispose] can release it if it never gets to settle on its own. Set
+    // back to `null` the moment it is removed (on cancel, or once
+    // [initFuture] settles) so it is never invoked twice and never lingers in
+    // the set past the point this listener stopped needing it.
+    void Function()? pendingCloser;
+
+    void unregisterPendingCloser() {
+      final closer = pendingCloser;
+      if (closer != null) {
+        pendingCloser = null;
+        _pendingUserChangesAfterInitClosers.remove(closer);
+      }
+    }
+
     controller.onCancel = () {
       cancelled = true;
+      unregisterPendingCloser();
       return sub?.cancel();
     };
+
+    if (_isDisposed) {
+      // Already disposed before this listener even attached: [dispose] will
+      // never run again to release a pending closer, so settle immediately
+      // instead of registering one.
+      unawaited(controller.close());
+      return;
+    }
+
+    pendingCloser = () {
+      unregisterPendingCloser();
+      if (!cancelled) {
+        unawaited(controller.close());
+      }
+    };
+    _pendingUserChangesAfterInitClosers.add(pendingCloser!);
+
     unawaited(
-      Future.any([initFuture, _disposeSignal.future]).then(
+      initFuture.then(
         (_) {
+          unregisterPendingCloser();
           if (cancelled) {
             return;
           }
@@ -494,6 +530,7 @@ abstract class OidcUserManagerBase {
           );
         },
         onError: (Object e, StackTrace st) {
+          unregisterPendingCloser();
           if (cancelled) {
             return;
           }
@@ -504,9 +541,36 @@ abstract class OidcUserManagerBase {
     );
   });
 
-  /// Completes when [dispose] is called, so [userChangesAfterInit] listeners
-  /// waiting on an [init] that will never run are released.
-  final Completer<void> _disposeSignal = Completer<void>();
+  /// Pending [userChangesAfterInit] listeners still waiting on [initFuture],
+  /// keyed by the closer callback each one registers for [dispose] to invoke.
+  ///
+  /// The previous approach raced `initFuture` against a shared
+  /// `_disposeSignal.future` that only ever completed inside [dispose] (via
+  /// `Future.any`). Because that future stayed pending for the manager's
+  /// entire lifetime, every listener's `.then` callback — and the
+  /// [StreamController] it captured — stayed attached to it too, even after
+  /// the listener cancelled or [initFuture] had long since settled. A caller
+  /// that repeatedly subscribed to and cancelled [userChangesAfterInit] (for
+  /// example re-subscribing on every widget rebuild) therefore leaked one
+  /// closure, and the controller it closed over, per subscription until
+  /// [dispose] finally ran.
+  ///
+  /// Each listener now adds its own closer here and removes it the moment it
+  /// no longer needs one — on cancel, or as soon as [initFuture] settles —
+  /// instead of pinning it to a future that may not complete for a long time.
+  /// [dispose] invokes whatever is left (listeners disposed-before- or
+  /// disposed-mid-init) and clears the set.
+  final Set<void Function()> _pendingUserChangesAfterInitClosers = {};
+
+  /// The number of [userChangesAfterInit] listeners currently waiting on
+  /// [initFuture], i.e. with a pending entry in
+  /// [_pendingUserChangesAfterInitClosers].
+  ///
+  /// Exposed only for tests, to assert this returns to 0 once listeners
+  /// settle or cancel instead of being retained for the manager's lifetime.
+  @visibleForTesting
+  int get debugPendingUserChangesAfterInitListenerCount =>
+      _pendingUserChangesAfterInitClosers.length;
 
   /// Gets a stream of events related to the current manager.
   Stream<OidcEvent> events() => eventsController.stream;
@@ -5154,9 +5218,14 @@ abstract class OidcUserManagerBase {
     // auto-refresh whose response lands mid-dispose observes it and no-ops
     // (see [isDisposed] / [_performAutoRefresh]).
     _isDisposed = true;
-    if (!_disposeSignal.isCompleted) {
-      _disposeSignal.complete();
+    // Release every [userChangesAfterInit] listener still waiting on
+    // [initFuture] (dispose-before-init / dispose-mid-init); listeners that
+    // already settled or cancelled have already removed themselves from this
+    // set, so this never re-closes a controller that moved on.
+    for (final closer in _pendingUserChangesAfterInitClosers.toList()) {
+      closer();
     }
+    _pendingUserChangesAfterInitClosers.clear();
     // The shared in-flight auto-refresh already swallows its own outcome once
     // disposed, but latch onto it here too so its settling can never surface an
     // unhandled error into the zone after teardown. Mirrors how the other
