@@ -11,17 +11,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('oidc_android library surface', () {
-    test(
-      'prepareForRedirectFlow is a no-op that returns an empty preparation '
-      'map (Chrome Custom Tabs are launched directly, no pre-navigation '
-      'step)',
-      () {
-        final result = OidcAndroid().prepareForRedirectFlow(
-          const OidcPlatformSpecificOptions(),
-        );
-        expect(result, isEmpty);
-      },
-    );
+    test('prepareForRedirectFlow is a no-op that returns an empty preparation '
+        'map (Chrome Custom Tabs are launched directly, no pre-navigation '
+        'step)', () {
+      final result = OidcAndroid().prepareForRedirectFlow(
+        const OidcPlatformSpecificOptions(),
+      );
+      expect(result, isEmpty);
+    });
 
     test(
       'listenToFrontChannelLogoutRequests returns an empty stream '
@@ -37,22 +34,19 @@ void main() {
       },
     );
 
-    test(
-      'monitorSessionStatus returns an empty stream '
-      '(session-status polling is not supported on Android)',
-      () async {
-        final events = await OidcAndroid()
-            .monitorSessionStatus(
-              checkSessionIframe: Uri.parse('https://op.example.com/check'),
-              request: const OidcMonitorSessionStatusRequest(
-                clientId: 'client-1',
-                sessionState: 'state-1',
-                interval: Duration(seconds: 1),
-              ),
-            )
-            .toList();
-        expect(events, isEmpty);
-      },
-    );
+    test('monitorSessionStatus returns an empty stream '
+        '(session-status polling is not supported on Android)', () async {
+      final events = await OidcAndroid()
+          .monitorSessionStatus(
+            checkSessionIframe: Uri.parse('https://op.example.com/check'),
+            request: const OidcMonitorSessionStatusRequest(
+              clientId: 'client-1',
+              sessionState: 'state-1',
+              interval: Duration(seconds: 1),
+            ),
+          )
+          .toList();
+      expect(events, isEmpty);
+    });
   });
 }

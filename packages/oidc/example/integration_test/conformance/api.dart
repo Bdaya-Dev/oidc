@@ -214,6 +214,10 @@ String? webFingerIdentifierFor({
   String? clientSecret,
   String? postLogoutRedirectUri,
   String? frontChannelLogoutUri,
+  // OIDC Registration 1.0 section 2 client metadata; the suite defaults an
+  // omitted value to `web`, whose redirect_uri rules then reject a loopback
+  // http redirect for any non-code response type. A native RP must say so.
+  String? applicationType,
   Map<String, String>? extraVariant,
   String publish = 'everything',
 }) {
@@ -252,6 +256,7 @@ String? webFingerIdentifierFor({
     'client': {
       'client_id': clientId,
       if (clientSecret != null) 'client_secret': clientSecret,
+      if (applicationType != null) 'application_type': applicationType,
       'redirect_uri': redirectUri,
       if (postLogoutRedirectUri != null)
         'post_logout_redirect_uri': postLogoutRedirectUri,

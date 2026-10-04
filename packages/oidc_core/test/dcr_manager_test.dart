@@ -2752,6 +2752,94 @@ void main() {
       },
     );
   });
+
+  // RFC 8705 (#386 phase 2): DCR and mutual TLS.
+  group('DCR with mutual TLS (RFC 8705)', () {
+    test(
+      'useMtlsEndpointAliases routes the registration POST to the '
+      'registration_endpoint alias, and a tls_client_auth answer becomes '
+      'mTLS credentials',
+      () async {
+        final log = <_Rec>[];
+        final store = await _seededStore();
+        final manager = _manager(
+          store: store,
+          client: _client(
+            log,
+            metadataA: {
+              ..._metadataJson(),
+              'mtls_endpoint_aliases': {
+                'registration_endpoint': 'https://mtls.op.example.com/register',
+              },
+            },
+            registration: (hit, url) => _registrationBody(
+              clientSecret: null,
+              authMethod:
+                  OidcConstants_ClientAuthenticationMethods.tlsClientAuth,
+            ),
+          ),
+          settings: OidcUserManagerSettings(
+            redirectUri: Uri.parse('app://cb'),
+            userInfoSettings: const OidcUserInfoSettings(
+              sendUserInfoRequest: false,
+            ),
+            dynamicClientRegistration: _dcr(),
+            useMtlsEndpointAliases: true,
+          ),
+        );
+
+        await manager.init();
+
+        expect(
+          log.to('/register').single.url,
+          Uri.parse('https://mtls.op.example.com/register'),
+        );
+        expect(
+          manager.clientCredentials.location,
+          OidcConstants_ClientAuthenticationMethods.tlsClientAuth,
+        );
+        expect(manager.clientCredentials.clientId, 'issued-client-1');
+        await manager.dispose();
+      },
+    );
+
+    for (final method in const [
+      OidcConstants_ClientAuthenticationMethods.tlsClientAuth,
+      OidcConstants_ClientAuthenticationMethods.selfSignedTlsClientAuth,
+    ]) {
+      test(
+        'on web, a registration answered with $method throws an '
+        'UnsupportedError and persists nothing',
+        () async {
+          final log = <_Rec>[];
+          final store = await _seededStore();
+          final manager = _manager(
+            store: store,
+            client: _client(
+              log,
+              registration: (hit, url) =>
+                  _registrationBody(clientSecret: null, authMethod: method),
+            ),
+            isWeb: true,
+          );
+
+          await expectLater(
+            manager.init(),
+            throwsA(
+              isA<UnsupportedError>().having(
+                (e) => e.message,
+                'message',
+                allOf(contains(method), contains('RFC 8705')),
+              ),
+            ),
+          );
+          expect(log.registrationHits, 1);
+          expect(await _storedRecord(store), isNull);
+          await manager.dispose();
+        },
+      );
+    }
+  });
 }
 
 /// An [OidcMemoryStore] whose [OidcStoreNamespace.secureTokens] writes start

@@ -24,9 +24,7 @@ class Storage {
 /// Stub window object exposing local/session storage.
 class Window {
   /// Creates a stub window with local and session storage.
-  Window()
-      : localStorage = Storage(),
-        sessionStorage = Storage();
+  Window() : localStorage = Storage(), sessionStorage = Storage();
 
   /// Stub local storage.
   final Storage localStorage;

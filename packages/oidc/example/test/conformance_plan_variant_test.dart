@@ -183,35 +183,45 @@ void main() {
     }
   });
 
-  group('form_post needs an http(s) redirect', () {
+  group('form_post needs a transport that can read a POST body', () {
     test('custom scheme cannot receive a form POST', () {
       expect(
         canReceiveFormPost(
           Uri.parse('com.bdayadev.oidc.example:/oauth2redirect'),
+          'macos',
         ),
         isFalse,
         reason: 'a custom scheme is not an HTTP endpoint; no browser can POST',
       );
     });
 
-    test('no transport in this harness can — not loopback, not web', () {
-      // This test used to assert loopback and web COULD. That was the
-      // predicate's implementation asserted back at itself, not a capability:
-      //   * loopback — oidc_loopback_listener.dart:70 answers 405 to every
-      //     non-GET, so a form POST never becomes a captured redirect.
-      //   * web — redirect.html reads location.hash/search in JS; a POST body
-      //     is not readable from the page at all.
-      //   * custom scheme — not an HTTP endpoint; nothing can POST to it.
-      // Until the loopback listener accepts POST, false everywhere is the
-      // honest answer, and the plans skip with a reason instead of burning
-      // 30s per module and failing with an Android-specific message on Linux.
-      expect(canReceiveFormPost(Uri.parse('http://localhost:22434')), isFalse);
+    test('the desktop loopback listener can, as of 1.1.0', () {
+      // An earlier version of this test asserted the loopback listener could
+      // NOT (oidc_loopback_listener answered 405 to every non-GET), and for a
+      // while that assertion was honest. oidc_loopback_listener 1.1.0 reads an
+      // application/x-www-form-urlencoded POST body and folds it into the
+      // returned Uri's query parameters, so the capability is real now --
+      // OAuth 2.0 Form Post Response Mode is deliverable to linux and windows.
       expect(
-        canReceiveFormPost(Uri.parse('http://localhost:22433/redirect.html')),
-        isFalse,
+        canReceiveFormPost(Uri.parse('http://localhost:22434'), 'linux'),
+        isTrue,
       );
       expect(
-        canReceiveFormPost(Uri.parse('com.bdayadev.oidc.example:/cb')),
+        canReceiveFormPost(Uri.parse('http://localhost:22434'), 'windows'),
+        isTrue,
+      );
+    });
+
+    test('the web page still cannot: a POST body is unreadable from JS', () {
+      // redirect.html reads location.hash/search; the platform gives a page
+      // script no access to the request body that delivered it. The URI alone
+      // cannot separate this case from desktop loopback -- both are http(s) --
+      // which is why the predicate takes the platform too.
+      expect(
+        canReceiveFormPost(
+          Uri.parse('https://rp.oidc.test:22433/redirect.html'),
+          'Web',
+        ),
         isFalse,
       );
     });
@@ -231,45 +241,55 @@ void main() {
     });
   });
 
-  group('fragment responses need a transport that can carry a fragment', () {
-    test('hybrid and implicit return fragments', () {
-      expect(
-        isFragmentResponsePlan('oidcc-client-hybrid-certification-test-plan'),
-        isTrue,
+  group('the registered client declares its application_type', () {
+    // Registration 1.0 section 2: application_type "The default, if omitted,
+    // is web". A desktop RP registering http://localhost with hybrid/implicit
+    // response types is therefore judged as a WEB client and refused:
+    //
+    //   [FAILURE] redirect_uri is one of the registered uris but uses http
+    //   scheme which is not allowed when application_type is web and response
+    //   type is not code
+    //
+    // 36 of those on the first live linux run (PR #447), one per fragment-mode
+    // module. The same section sanctions our exact shape for native clients:
+    // "Native Clients MUST only register redirect_uris using custom URI
+    // schemes or loopback URLs using the http scheme; loopback URLs use
+    // localhost or the IP loopback literals". The fix is telling the truth:
+    // every non-web platform here IS a native client.
+    test('the plan request carries application_type when given', () {
+      final (_, body) = prepareTestPlanRequest(
+        planName: basicPlan,
+        description: 'test',
+        clientId: 'my_client',
+        redirectUri: 'http://localhost:22434',
+        requestType: 'plain_http_request',
+        clientRegistration: 'static_client',
+        applicationType: 'native',
       );
-      expect(
-        isFragmentResponsePlan('oidcc-client-implicit-certification-test-plan'),
-        isTrue,
-      );
+      expect((body['client']! as Map)['application_type'], 'native');
     });
 
-    test('formpost variants do NOT, despite -hybrid-/-implicit- in the id', () {
-      // response_mode=form_post overrides the default, so these arrive as a
-      // POST body. A naive substring match classifies them as fragment plans
-      // and skips them for the wrong reason.
-      for (final p in [
-        'oidcc-client-formpost-hybrid-certification-test-plan',
-        'oidcc-client-formpost-implicit-certification-test-plan',
-      ]) {
-        expect(isFragmentResponsePlan(p), isFalse, reason: p);
+    test('omitted means absent, not defaulted here', () {
+      // The suite owns the default; the harness must not invent one silently.
+      final (_, body) = build(basicPlan);
+      expect((body['client']! as Map).containsKey('application_type'), isFalse);
+    });
+
+    test('every non-web platform is native; web is web', () {
+      for (final p in ['linux', 'windows', 'macos', 'ios', 'android']) {
+        expect(applicationTypeForPlatform(p), 'native', reason: p);
       }
-    });
-
-    test('the logout -rp-hybrid variants are not fragment plans either', () {
-      expect(
-        isFragmentResponsePlan('oidcc-client-rp-initiated-logout-rp-hybrid'),
-        isFalse,
-      );
-    });
-
-    test('loopback platforms cannot receive a fragment; others can', () {
-      expect(canReceiveFragmentResponse('linux'), isFalse);
-      expect(canReceiveFragmentResponse('windows'), isFalse);
-      for (final p in ['macos', 'ios', 'android', 'web']) {
-        expect(canReceiveFragmentResponse(p), isTrue, reason: p);
-      }
+      expect(applicationTypeForPlatform('Web'), 'web');
     });
   });
+
+  // The fragment gate (canReceiveFragmentResponse) is gone, deliberately.
+  // oidc_loopback_listener 1.1.0 recovers a fragment via its JS relay page and
+  // oidc_desktop 1.1.0 enables it exactly when the flow's response mode needs
+  // it, so every platform can now receive a fragment response and a
+  // universally-true gate is dead code. The response-mode classification the
+  // gate leaned on (formpost overrides the hybrid/implicit fragment default)
+  // lives on, tested, in oidc_desktop's responseArrivesInFragment.
 
   group(
     'third-party-initiated login needs an endpoint the app cannot host',

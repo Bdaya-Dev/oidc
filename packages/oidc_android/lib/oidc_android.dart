@@ -17,7 +17,7 @@ class OidcAndroid extends OidcPlatform {
   /// [hostApi] is injectable for testing; production uses the default
   /// Pigeon-generated host API bound to the standard binary messenger.
   OidcAndroid({OidcAndroidHostApi? hostApi})
-      : _hostApi = hostApi ?? OidcAndroidHostApi();
+    : _hostApi = hostApi ?? OidcAndroidHostApi();
 
   /// Registers this class as the default instance of [OidcPlatform].
   static void registerWith() {
@@ -36,8 +36,7 @@ class OidcAndroid extends OidcPlatform {
   @override
   Map<String, dynamic> prepareForRedirectFlow(
     OidcPlatformSpecificOptions options,
-  ) =>
-      const {};
+  ) => const {};
 
   @override
   Future<OidcAuthorizeResponse?> getAuthorizationResponse(
@@ -80,8 +79,8 @@ class OidcAndroid extends OidcPlatform {
     return OidcEndpoints.parseAuthorizeResponse(
       responseUri: Uri.parse(responseUrl),
       overrides: {
-        OidcConstants_AuthParameters.redirectUri:
-            request.redirectUri.toString(),
+        OidcConstants_AuthParameters.redirectUri: request.redirectUri
+            .toString(),
       },
     );
   }
@@ -123,10 +122,7 @@ class OidcAndroid extends OidcPlatform {
   /// contract shared by all platforms), a missing native plugin (Pigeon's
   /// `channel-error`, or a [MissingPluginException]) becomes a clear
   /// [OidcException], and any other [PlatformException] is rethrown wrapped.
-  Future<String?> _guard(
-    String method,
-    Future<String?> Function() call,
-  ) async {
+  Future<String?> _guard(String method, Future<String?> Function() call) async {
     try {
       return await call();
     } on MissingPluginException catch (e, st) {
@@ -160,16 +156,14 @@ class OidcAndroid extends OidcPlatform {
 
   @override
   Stream<OidcFrontChannelLogoutIncomingRequest>
-      listenToFrontChannelLogoutRequests(
+  listenToFrontChannelLogoutRequests(
     Uri listenOn,
     OidcFrontChannelRequestListeningOptions options,
-  ) =>
-          const Stream.empty();
+  ) => const Stream.empty();
 
   @override
   Stream<OidcMonitorSessionResult> monitorSessionStatus({
     required Uri checkSessionIframe,
     required OidcMonitorSessionStatusRequest request,
-  }) =>
-      const Stream.empty();
+  }) => const Stream.empty();
 }
