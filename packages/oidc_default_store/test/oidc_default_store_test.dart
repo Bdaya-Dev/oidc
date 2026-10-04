@@ -23,21 +23,23 @@ void main() {
     });
 
     testWidgets(
-        'per-managerId key index survives multiple writes (register reads the '
-        'managerId bucket, not the null bucket)', (tester) async {
-      final store = OidcDefaultStore();
-      await store.init();
-      const ns = OidcStoreNamespace.state;
-      const managerId = 'mgrA';
-      await store.setMany(ns, values: {'k1': 'v1'}, managerId: managerId);
-      // A SEPARATE write for the SAME manager must not drop the previously
-      // registered key. Before the fix, _registerKeyForNamespace read the
-      // default (null) bucket instead of the managerId bucket, so this second
-      // write overwrote the index with just {k2}, orphaning k1.
-      await store.setMany(ns, values: {'k2': 'v2'}, managerId: managerId);
-      final keys = await store.getAllKeys(ns, managerId: managerId);
-      expect(keys, containsAll(<String>['k1', 'k2']));
-    });
+      'per-managerId key index survives multiple writes (register reads the '
+      'managerId bucket, not the null bucket)',
+      (tester) async {
+        final store = OidcDefaultStore();
+        await store.init();
+        const ns = OidcStoreNamespace.state;
+        const managerId = 'mgrA';
+        await store.setMany(ns, values: {'k1': 'v1'}, managerId: managerId);
+        // A SEPARATE write for the SAME manager must not drop the previously
+        // registered key. Before the fix, _registerKeyForNamespace read the
+        // default (null) bucket instead of the managerId bucket, so this second
+        // write overwrote the index with just {k2}, orphaning k1.
+        await store.setMany(ns, values: {'k2': 'v2'}, managerId: managerId);
+        final keys = await store.getAllKeys(ns, managerId: managerId);
+        expect(keys, containsAll(<String>['k1', 'k2']));
+      },
+    );
 
     test('recommended secure-storage options expose the hardened posture', () {
       // iOS/macOS: MSAL-style first_unlock_this_device, never iCloud-synced.
@@ -64,10 +66,7 @@ void main() {
       );
 
       // Passing the hardened instance must not break construction.
-      expect(
-        OidcDefaultStore(secureStorageInstance: secure),
-        isNotNull,
-      );
+      expect(OidcDefaultStore(secureStorageInstance: secure), isNotNull);
     });
 
     final storeConfigs = [
@@ -84,23 +83,19 @@ void main() {
         expect(store.didInit, false);
         await store.init();
         expect(store.didInit, true);
-        const goldenValues = {
-          'k1': 'v1',
-          'k2': 'v2',
-        };
+        const goldenValues = {'k1': 'v1', 'k2': 'v2'};
         for (final namespace in OidcStoreNamespace.values) {
           var allKeys = await store.getAllKeys(namespace);
           expect(allKeys, isEmpty);
 
-          await store.setMany(
-            namespace,
-            values: goldenValues,
-          );
+          await store.setMany(namespace, values: goldenValues);
           allKeys = await store.getAllKeys(namespace);
           expect(allKeys, goldenValues.keys);
 
-          var allValues =
-              await store.getMany(namespace, keys: {...allKeys, 'k3'});
+          var allValues = await store.getMany(
+            namespace,
+            keys: {...allKeys, 'k3'},
+          );
           expect(allValues, allOf(hasLength(2), equals(goldenValues)));
 
           //test single entry methods.

@@ -23,8 +23,7 @@ void main() {
           InMemorySharedPreferencesAsync.empty();
     });
 
-    testWidgets(
-        'default (non-injected) backend round-trips through '
+    testWidgets('default (non-injected) backend round-trips through '
         'SharedPreferencesAsync', (tester) async {
       final store = OidcDefaultStore();
       await store.init();
@@ -47,8 +46,7 @@ void main() {
       expect(legacy.getString('oidc.state.k1'), isNull);
     });
 
-    testWidgets(
-        'an injected SharedPreferencesAsync is used for all non-secure '
+    testWidgets('an injected SharedPreferencesAsync is used for all non-secure '
         'persistence', (tester) async {
       final injected = SharedPreferencesAsync();
       final store = OidcDefaultStore(sharedPreferencesAsync: injected);
@@ -70,84 +68,88 @@ void main() {
     });
 
     testWidgets(
-        'the deprecated synchronous SharedPreferences constructor path still '
-        'works end-to-end', (tester) async {
-      final legacy = await SharedPreferences.getInstance();
-      // ignore: deprecated_member_use_from_same_package
-      final store = OidcDefaultStore(sharedPreferences: legacy);
-      await store.init();
+      'the deprecated synchronous SharedPreferences constructor path still '
+      'works end-to-end',
+      (tester) async {
+        final legacy = await SharedPreferences.getInstance();
+        // ignore: deprecated_member_use_from_same_package
+        final store = OidcDefaultStore(sharedPreferences: legacy);
+        await store.init();
 
-      const ns = OidcStoreNamespace.request;
-      await store.setMany(ns, values: {'a': '1', 'b': '2'});
+        const ns = OidcStoreNamespace.request;
+        await store.setMany(ns, values: {'a': '1', 'b': '2'});
 
-      // full round-trip through the store.
-      expect(await store.getMany(ns, keys: {'a', 'b'}), {'a': '1', 'b': '2'});
-      expect(await store.getAllKeys(ns), {'a', 'b'});
+        // full round-trip through the store.
+        expect(await store.getMany(ns, keys: {'a', 'b'}), {'a': '1', 'b': '2'});
+        expect(await store.getAllKeys(ns), {'a', 'b'});
 
-      // data lands in the SAME legacy instance we passed.
-      expect(legacy.getString('oidc.request.a'), '1');
+        // data lands in the SAME legacy instance we passed.
+        expect(legacy.getString('oidc.request.a'), '1');
 
-      // and it must NOT have leaked into the async store.
-      final async = SharedPreferencesAsync();
-      expect(await async.getString('oidc.request.a'), isNull);
+        // and it must NOT have leaked into the async store.
+        final async = SharedPreferencesAsync();
+        expect(await async.getString('oidc.request.a'), isNull);
 
-      await store.removeMany(ns, keys: {'a'});
-      expect(legacy.getString('oidc.request.a'), isNull);
-      expect(await store.getAllKeys(ns), {'b'});
-    });
-
-    testWidgets(
-        'existing legacy data under the storagePrefix is migrated once into '
-        'the async store, and unrelated keys are left untouched',
-        (tester) async {
-      // Seed the legacy store as if a previous app version had written OIDC
-      // data through the synchronous API, plus an unrelated key.
-      SharedPreferences.setMockInitialValues({
-        'oidc.keys.state': <String>['k1'],
-        'oidc.state.k1': 'legacy-value',
-        'some.other.app.key': 'do-not-touch',
-      });
-
-      final store = OidcDefaultStore();
-      await store.init();
-
-      const ns = OidcStoreNamespace.state;
-      // migrated data is now visible through the (async-backed) store.
-      expect(await store.getAllKeys(ns), {'k1'});
-      expect(await store.get(ns, key: 'k1'), 'legacy-value');
-
-      // it physically exists in the async store now.
-      final async = SharedPreferencesAsync();
-      expect(await async.getString('oidc.state.k1'), 'legacy-value');
-      expect(await async.getStringList('oidc.keys.state'), ['k1']);
-
-      // the unrelated (non-prefixed) key was NOT migrated.
-      expect(await async.getString('some.other.app.key'), isNull);
-
-      // the one-time migration marker was written.
-      expect(await async.getBool('oidc.__oidc_async_migration_done'), isTrue);
-    });
+        await store.removeMany(ns, keys: {'a'});
+        expect(legacy.getString('oidc.request.a'), isNull);
+        expect(await store.getAllKeys(ns), {'b'});
+      },
+    );
 
     testWidgets(
-        'migration does not overwrite values already in the async store',
-        (tester) async {
-      SharedPreferences.setMockInitialValues({
-        'oidc.state.k1': 'legacy-value',
-      });
-      // The async store already has a newer value for the same key.
-      SharedPreferencesAsyncPlatform.instance =
-          InMemorySharedPreferencesAsync.withData({
-        'oidc.state.k1': 'async-value',
-      });
+      'existing legacy data under the storagePrefix is migrated once into '
+      'the async store, and unrelated keys are left untouched',
+      (tester) async {
+        // Seed the legacy store as if a previous app version had written OIDC
+        // data through the synchronous API, plus an unrelated key.
+        SharedPreferences.setMockInitialValues({
+          'oidc.keys.state': <String>['k1'],
+          'oidc.state.k1': 'legacy-value',
+          'some.other.app.key': 'do-not-touch',
+        });
 
-      final store = OidcDefaultStore();
-      await store.init();
+        final store = OidcDefaultStore();
+        await store.init();
 
-      // the pre-existing async value wins; the legacy copy must not clobber it.
-      expect(
-        await store.get(OidcStoreNamespace.state, key: 'k1'),
-        'async-value',
-      );
-    });
+        const ns = OidcStoreNamespace.state;
+        // migrated data is now visible through the (async-backed) store.
+        expect(await store.getAllKeys(ns), {'k1'});
+        expect(await store.get(ns, key: 'k1'), 'legacy-value');
+
+        // it physically exists in the async store now.
+        final async = SharedPreferencesAsync();
+        expect(await async.getString('oidc.state.k1'), 'legacy-value');
+        expect(await async.getStringList('oidc.keys.state'), ['k1']);
+
+        // the unrelated (non-prefixed) key was NOT migrated.
+        expect(await async.getString('some.other.app.key'), isNull);
+
+        // the one-time migration marker was written.
+        expect(await async.getBool('oidc.__oidc_async_migration_done'), isTrue);
+      },
+    );
+
+    testWidgets(
+      'migration does not overwrite values already in the async store',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({
+          'oidc.state.k1': 'legacy-value',
+        });
+        // The async store already has a newer value for the same key.
+        SharedPreferencesAsyncPlatform.instance =
+            InMemorySharedPreferencesAsync.withData({
+              'oidc.state.k1': 'async-value',
+            });
+
+        final store = OidcDefaultStore();
+        await store.init();
+
+        // the pre-existing async value wins; the legacy copy must not clobber it.
+        expect(
+          await store.get(OidcStoreNamespace.state, key: 'k1'),
+          'async-value',
+        );
+      },
+    );
   });
 }
