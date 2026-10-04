@@ -141,6 +141,79 @@ this is done using these functions:
 - `setAttributes`: merges input attributes with existing attributes.
 - `clearAttributes`: removes all attributes.
 
+When a refresh response has no `id_token` (allowed by OpenID Connect Core §12.2), `replaceToken` keeps the previous id_token
+and records that in the token: `OidcToken.idTokenRetainedFromPriorResponse` is `true`. The flag is persisted with the token,
+and `OidcToken.fromResponse` never takes it from a server response.
+
+## ID token validation
+
+`OidcUserManagerBase.validateUser` checks an id_token's claims and returns the list of problems it found. Which checks apply
+can depend on the flow that produced the token, so `validateUser`, `validateAndSaveUser` and `createUserFromToken` take an
+`OidcIdTokenValidationContext`:
+
+```dart
+const OidcIdTokenValidationContext({
+  OidcIdTokenSource source = OidcIdTokenSource.tokenEndpoint,
+  String? authorizationCode, // the code returned with the id_token, checked against c_hash
+  Duration? maxAge,          // the max_age that was requested, checked against auth_time
+});
+```
+
+The `at_hash` and `c_hash` rules per `OidcIdTokenSource`:
+
+| source | `at_hash` | `c_hash` |
+|---|---|---|
+| `authorizationEndpoint` (implicit, hybrid front channel) | required when an access_token came with the id_token, and must match | required when a code came with the id_token, and must match |
+| `tokenEndpoint` (code exchange, password, device code) | checked when present | checked when present |
+| `refresh` | checked when present, only if the refresh returned a new id_token | same |
+| `storedSession` (`init()` revalidating the stored session) | checked when present, unless the stored id_token was retained across a refresh | same |
+
+An id_token that was retained from an earlier response (`idTokenRetainedFromPriorResponse`) never has its hashes compared,
+whatever the source: they were computed for the tokens of the response that issued it.
+
+### When validation fails
+
+`validateAndSaveUser` returns `null` and clears the pending nonce. It does not touch the stored session or `currentUser`, so
+a login or refresh response that fails validation leaves an already signed-in session in place.
+
+A stored session that fails revalidation during `init()` is handled by the cached-token loader. It calls
+`OidcUserManagerSettings.shouldRemoveInvalidToken` (by default the session is removed unless `supportOfflineAuth` is on). If
+the session is removed, the in-memory user is signed out too. If the policy keeps it, the token stays in the store but no user
+is signed in with it.
+
+### Migrating from 3.x
+
+These are breaking changes for code that subclasses `OidcUserManagerBase`:
+
+- `validateUser({user, metadata, authorizationCode, maxAge})` is now `validateUser({user, metadata, context})`.
+- `validateAndSaveUser({user, metadata, authorizationCode, maxAge, reactToUserInfoUnauthorized})` is now
+  `validateAndSaveUser({user, metadata, context, reactToUserInfoUnauthorized})`.
+- `createUserFromToken({..., authorizationCode, maxAge, ...})` is now `createUserFromToken({..., context, ...})`.
+
+Pass the old arguments through the context:
+
+```dart
+// before
+validateUser(user: user, metadata: metadata, authorizationCode: code, maxAge: maxAge);
+// after
+validateUser(
+  user: user,
+  metadata: metadata,
+  context: OidcIdTokenValidationContext(authorizationCode: code, maxAge: maxAge),
+);
+```
+
+If you validate an id_token that came from the authorization endpoint, pass `source: OidcIdTokenSource.authorizationEndpoint`
+to get the required-hash checks.
+
+Behavior changes:
+
+- `validateAndSaveUser` no longer deletes the stored token, user info and attributes when validation fails. If your subclass
+  relied on that, remove the session yourself (for example with `forgetUser()`).
+- `shouldRemoveInvalidToken` returning `false` now really keeps the stored token. Before, it had already been deleted.
+- An implicit `id_token token` response whose id_token has no `at_hash` is now rejected (OpenID Connect Core §3.2.2.10).
+- A refresh that keeps the old id_token no longer fails the `at_hash` check, either right away or when the app restarts.
+
 ## OidcException
 
 Most of the errors thrown by this library are of type `OidcException`.

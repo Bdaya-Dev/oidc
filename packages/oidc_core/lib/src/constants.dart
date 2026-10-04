@@ -845,6 +845,12 @@ class OidcConstants_AuthorizeRequest_CodeChallengeMethod {
 class OidcConstants_Store {
   static const expiresAt = 'expiresAt';
   static const expiresInReferenceDate = 'expiresInReferenceDate';
+
+  /// Key in a stored token's extra fields that records that its id_token was
+  /// kept from an earlier response (read by
+  /// `OidcToken.idTokenRetainedFromPriorResponse`). The name predates that
+  /// getter and is kept so sessions persisted by earlier versions still read
+  /// correctly.
   static const allowExpiredIdToken = 'allowExpiredIdToken';
   static const currentUserAttributes = 'userAttributes';
   static const currentUserInfo = 'userInfo';

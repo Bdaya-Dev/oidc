@@ -25,10 +25,12 @@ import 'package:test/test.dart';
 // access_token, and the implicit flow logged the user in regardless.
 //
 // #447's hybrid-flow fix added exactly this presence check to
-// `validateFrontChannelIdToken` for `code id_token token`. This file proves
-// the mirror of that fix for plain `id_token token` implicit logins, and that
-// `id_token`-only implicit logins (where at_hash is "not used") are
-// unaffected.
+// `validateFrontChannelIdToken` for `code id_token token`. Both flows now share
+// one rule: `OidcIdTokenSource.authorizationEndpoint` makes `validateUser`
+// require the hash (see id_token_hash_rules_test.dart for the per-source unit
+// coverage). This file proves it end to end for plain `id_token token`
+// implicit logins, and that `id_token`-only implicit logins (where at_hash is
+// "not used") are unaffected.
 
 const _issuer = 'https://op.example.com';
 final _signingKey = JsonWebKey.generate('RS256');

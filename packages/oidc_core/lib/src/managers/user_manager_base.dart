@@ -1756,17 +1756,16 @@ abstract class OidcUserManagerBase {
             attributes: null,
             nonce: stateData.nonce,
             metadata: metadata,
-            // Hybrid responses may carry a front-channel `code` to bind via
-            // `c_hash`; null for a pure implicit response.
-            authorizationCode: response.code,
-            maxAge: stateData.maxAge,
-            // OIDC Core §3.2.2.10: this id_token comes straight from the
-            // authorization endpoint (never the token endpoint), so when it is
-            // paired with an access_token (`id_token token`) `at_hash` is
-            // REQUIRED, not merely checked for a match if present. A pure
-            // `id_token` implicit response has no access_token, so the
-            // requirement is a no-op for it, matching "not used" in the spec.
-            requireAtHashWithAccessToken: true,
+            // This id_token comes straight from the authorization endpoint, so
+            // `at_hash` is REQUIRED when an access_token came with it
+            // (`id_token token`, OIDC Core §3.2.2.10) and `c_hash` is REQUIRED
+            // when a `code` did (§3.3.2.11). For `id_token` alone neither
+            // applies.
+            context: OidcIdTokenValidationContext(
+              source: OidcIdTokenSource.authorizationEndpoint,
+              authorizationCode: response.code,
+              maxAge: stateData.maxAge,
+            ),
           );
         }
       }
@@ -1862,8 +1861,10 @@ abstract class OidcUserManagerBase {
         attributes: null,
         userInfo: null,
         metadata: metadata,
-        authorizationCode: code,
-        maxAge: stateData.maxAge,
+        context: OidcIdTokenValidationContext(
+          authorizationCode: code,
+          maxAge: stateData.maxAge,
+        ),
       );
     } finally {
       //remove the state + state response since we already handled it.
@@ -1881,14 +1882,6 @@ abstract class OidcUserManagerBase {
     }
   }
 
-  /// Handles a token; either from cache, in which case the [nonce] will be null
-  /// , or from an auth response, in which case [nonce] will not be null.
-  ///
-  /// This function creates an [OidcUser] by validating the token, and then
-  /// passing the result to [validateAndSaveUser].
-  ///
-  /// if the manager already has a [currentUser], this function replaces
-  /// its internal token (after validation).
   /// Resolves the allowlist of JWS algorithms an id_token's `alg` header may
   /// use during signature verification.
   ///
@@ -1905,6 +1898,20 @@ abstract class OidcUserManagerBase {
       settings.allowedIdTokenAlgorithms ??
       metadata.idTokenSigningAlgValuesSupported;
 
+  /// Handles a token; either from cache, in which case the [nonce] will be null
+  /// , or from an auth response, in which case [nonce] will not be null.
+  ///
+  /// This function creates an [OidcUser] by validating the token, and then
+  /// passing the result to [validateAndSaveUser].
+  ///
+  /// if the manager already has a [currentUser], this function replaces
+  /// its internal token (after validation). When the [token] carries no
+  /// id_token, the current one is kept and marked as such (see
+  /// [OidcToken.idTokenRetainedFromPriorResponse]).
+  ///
+  /// [context] describes the response [token] came from and is passed to
+  /// [validateAndSaveUser] (it is unused when [validateAndSave] is false).
+  /// See [OidcIdTokenValidationContext].
   @protected
   Future<OidcUser?> createUserFromToken({
     required OidcToken token,
@@ -1914,17 +1921,12 @@ abstract class OidcUserManagerBase {
     required OidcProviderMetadata metadata,
     OidcUser? currentUserOverride,
     bool validateAndSave = true,
-    String? authorizationCode,
-    Duration? maxAge,
+    OidcIdTokenValidationContext context = const OidcIdTokenValidationContext(),
     // When true, the user is (re)built from scratch via [OidcUser.fromIdToken]
     // (verifying the id_token signature) instead of replacing the token on the
     // existing [currentUser]. Used by cache-first background revalidation, whose
     // locally-restored user was deserialized WITHOUT verification.
     bool ignoreCurrentUser = false,
-    // Forwarded to [validateUser] via [validateAndSaveUser]: see its doc for
-    // why only the implicit-flow branch of [handleSuccessfulAuthResponse]
-    // passes true.
-    bool requireAtHashWithAccessToken = false,
   }) async {
     final currentUser = ignoreCurrentUser
         ? null
@@ -1999,9 +2001,7 @@ abstract class OidcUserManagerBase {
       return validateAndSaveUser(
         user: newUser,
         metadata: metadata,
-        authorizationCode: authorizationCode,
-        maxAge: maxAge,
-        requireAtHashWithAccessToken: requireAtHashWithAccessToken,
+        context: context,
       );
     } else {
       return newUser;
@@ -2405,6 +2405,9 @@ abstract class OidcUserManagerBase {
         attributes: null,
         metadata: discoveryDocument,
         currentUserOverride: existingUser,
+        context: const OidcIdTokenValidationContext(
+          source: OidcIdTokenSource.refresh,
+        ),
       );
     } on Object catch (e, st) {
       // #120: signal the failure to background observers of events() before any
@@ -2604,6 +2607,9 @@ abstract class OidcUserManagerBase {
         attributes: null,
         userInfo: null,
         metadata: discoveryDocument,
+        context: const OidcIdTokenValidationContext(
+          source: OidcIdTokenSource.refresh,
+        ),
       );
 
       // Successful refresh - update last server contact and exit offline mode
@@ -3021,33 +3027,19 @@ abstract class OidcUserManagerBase {
         'replay attack.',
       );
     }
+    // §3.3.2.11: an id_token issued from the authorization endpoint with a
+    // code MUST carry `c_hash`, and one issued with an access_token MUST carry
+    // `at_hash`. The authorizationEndpoint source makes validateUser enforce
+    // both, with the same rule the implicit flow uses.
     final errors = validateUser(
       user: frontChannelUser,
       metadata: metadata,
-      authorizationCode: code,
-      maxAge: maxAge,
+      context: OidcIdTokenValidationContext(
+        source: OidcIdTokenSource.authorizationEndpoint,
+        authorizationCode: code,
+        maxAge: maxAge,
+      ),
     );
-    // §3.3.2.11: validateUser only checks these hashes when present, but an
-    // id_token issued from the authorization endpoint with a code MUST carry
-    // `c_hash`, and one issued with an access_token MUST carry `at_hash`.
-    // Without them the front-channel tokens are not bound to this id_token.
-    final frontChannelClaims = frontChannelUser.parsedIdToken.claims;
-    if (frontChannelClaims['c_hash'] is! String) {
-      errors.add(
-        JoseException(
-          'id token issued with an authorization code is missing the '
-          'required `c_hash` claim.',
-        ),
-      );
-    }
-    if (accessToken != null && frontChannelClaims['at_hash'] is! String) {
-      errors.add(
-        JoseException(
-          'id token issued with an access_token is missing the required '
-          '`at_hash` claim.',
-        ),
-      );
-    }
     if (errors.isNotEmpty) {
       for (final error in errors) {
         logger.warning(
@@ -3079,21 +3071,25 @@ abstract class OidcUserManagerBase {
   Uri? resolveExpectedIssuer(OidcProviderMetadata metadata) =>
       settings.expectedIssuer ?? metadata.issuer;
 
+  /// Validates [user]'s id_token claims (OpenID Connect Core §3.1.3.7 and
+  /// related sections) and returns every problem found. An empty list means
+  /// the id_token is valid. This does not verify the signature, which
+  /// [OidcUser.fromIdToken] / [OidcUser.replaceToken] already did.
+  ///
+  /// [context] describes where the id_token came from. It decides the
+  /// `at_hash` / `c_hash` rules (see [OidcIdTokenSource]) and carries the
+  /// authorization code and the requested `max_age` to check against:
+  ///
+  /// * Present hashes must always match: `at_hash` against the access_token,
+  ///   `c_hash` against [OidcIdTokenValidationContext.authorizationCode].
+  /// * For [OidcIdTokenSource.authorizationEndpoint], a hash whose token was
+  ///   returned with the id_token must also be present.
+  /// * When [OidcToken.idTokenRetainedFromPriorResponse] is set, the id_token
+  ///   came from an earlier response, so neither hash is checked.
   List<Exception> validateUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
-    String? authorizationCode,
-    Duration? maxAge,
-    // OpenID Connect Core §3.2.2.10 (Implicit ID Token): when the id_token is
-    // issued from the authorization endpoint together with an access_token
-    // (implicit `id_token token`), `at_hash` is REQUIRED, not merely checked
-    // for a match if present. It is "not used" for `id_token` alone, and
-    // stays OPTIONAL for a token-endpoint-issued id_token (code flow,
-    // refresh -- §3.1.3.6 / §3.3.3.6), so this defaults to false and is only
-    // set by the implicit-flow caller in [handleSuccessfulAuthResponse]. The
-    // hybrid flow enforces its own equivalent requirement separately in
-    // [validateFrontChannelIdToken].
-    bool requireAtHashWithAccessToken = false,
+    OidcIdTokenValidationContext context = const OidcIdTokenValidationContext(),
   }) {
     final claims = user.parsedIdToken.claims;
     // `exp` is REQUIRED (OIDC Core §2). jose's `validate()` force-unwraps the
@@ -3219,60 +3215,12 @@ abstract class OidcUserManagerBase {
       }
     }
 
-    // `at_hash` (§3.2.2.9): when present alongside an access_token, it MUST be
-    // the base64url left-half hash of the access_token using the id_token's
-    // signing-alg hash.
-    final atHash = claims['at_hash'];
-    final accessToken = user.token.accessToken;
-    if (atHash is String && accessToken != null) {
-      final alg = oidcReadJwtAlg(user.idToken);
-      final expected = alg == null
-          ? null
-          : oidcComputeTokenHash(alg, accessToken);
-      // Compare padding-insensitively: the spec mandates unpadded base64url,
-      // but tolerate a non-conformant OP that pads rather than false-rejecting.
-      if (expected != null && expected != atHash.replaceAll('=', '')) {
-        errors.add(
-          JoseException('id token `at_hash` does not match the access_token.'),
-        );
-      }
-    } else if (requireAtHashWithAccessToken &&
-        accessToken != null &&
-        atHash is! String) {
-      // §3.2.2.10: an id_token issued from the authorization endpoint
-      // alongside an access_token (implicit `id_token token`) MUST carry
-      // `at_hash` -- unlike the generic check above, its absence here is
-      // itself the failure, not merely a skipped match.
-      errors.add(
-        JoseException(
-          'id token issued with an access_token is missing the required '
-          '`at_hash` claim.',
-        ),
-      );
-    }
-
-    // `c_hash` (§3.3.2.11): when an id_token returned from the authorization
-    // endpoint alongside an authorization `code` (hybrid flow) carries `c_hash`,
-    // it MUST be the base64url left-half hash of the code, using the id_token's
-    // signing-alg hash.
-    final cHash = claims['c_hash'];
-    if (cHash is String && authorizationCode != null) {
-      final alg = oidcReadJwtAlg(user.idToken);
-      final expected = alg == null
-          ? null
-          : oidcComputeTokenHash(alg, authorizationCode);
-      if (expected != null && expected != cHash.replaceAll('=', '')) {
-        errors.add(
-          JoseException(
-            'id token `c_hash` does not match the authorization code.',
-          ),
-        );
-      }
-    }
+    errors.addAll(_validateIdTokenHashes(user, context));
 
     // `auth_time` vs `max_age` (§3.1.2.1): when `max_age` was requested, the
     // id_token MUST contain `auth_time`, and the end-user's last authentication
     // MUST NOT be older than `max_age` (within the configured tolerance).
+    final maxAge = context.maxAge;
     if (maxAge != null) {
       final authTimeRaw = claims['auth_time'];
       final authTime = authTimeRaw is num
@@ -3303,10 +3251,89 @@ abstract class OidcUserManagerBase {
     return errors;
   }
 
+  /// The `at_hash` and `c_hash` rules shared by every id_token source. See
+  /// [validateUser] and [OidcIdTokenSource].
+  List<Exception> _validateIdTokenHashes(
+    OidcUser user,
+    OidcIdTokenValidationContext context,
+  ) {
+    // §3.2.2.9 / §3.3.2.11: a hash binds the id_token to a token issued in
+    // the SAME response. An id_token kept across a refresh that returned none
+    // (§12.2) was issued with earlier tokens, so comparing its hashes with the
+    // current ones would report a mismatch for a valid session.
+    if (user.token.idTokenRetainedFromPriorResponse) {
+      return const [];
+    }
+    final errors = <Exception>[];
+    final claims = user.parsedIdToken.claims;
+    // Only the authorization endpoint makes the hashes REQUIRED: at_hash with
+    // an access_token (§3.2.2.10 implicit, §3.3.2.11 hybrid), c_hash with a
+    // code (§3.3.2.11). From the token endpoint they are OPTIONAL (§3.1.3.8,
+    // §3.3.3.6) and only checked when present.
+    final hashesRequired =
+        context.source == OidcIdTokenSource.authorizationEndpoint;
+
+    void check({
+      required String claim,
+      required String? value,
+      required String valueName,
+    }) {
+      if (value == null) {
+        return;
+      }
+      final hash = claims[claim];
+      if (hash is! String) {
+        if (hashesRequired) {
+          errors.add(
+            JoseException(
+              'id token issued with an $valueName is missing the required '
+              '`$claim` claim.',
+            ),
+          );
+        }
+        return;
+      }
+      // The base64url left half of the hash of [value], using the hash of the
+      // id_token's signing alg.
+      final alg = oidcReadJwtAlg(user.idToken);
+      final expected = alg == null ? null : oidcComputeTokenHash(alg, value);
+      // Compare padding-insensitively: the spec mandates unpadded base64url,
+      // but tolerate a non-conformant OP that pads rather than false-rejecting.
+      if (expected != null && expected != hash.replaceAll('=', '')) {
+        errors.add(
+          JoseException('id token `$claim` does not match the $valueName.'),
+        );
+      }
+    }
+
+    check(
+      claim: 'at_hash',
+      value: user.token.accessToken,
+      valueName: 'access_token',
+    );
+    check(
+      claim: 'c_hash',
+      value: context.authorizationCode,
+      valueName: 'authorization code',
+    );
+    return errors;
+  }
+
   bool _isJwtExpiredError(Exception error) =>
       error is JoseException && error.message.startsWith('JWT expired');
 
-  /// This function validates that a user claims
+  /// Validates [user] with [validateUser] (using [context]) and, when
+  /// [OidcUserInfoSettings.sendUserInfoRequest] is set, with the UserInfo
+  /// endpoint. On success the user is saved to the store, published as
+  /// [currentUser] and returned.
+  ///
+  /// On failure this returns `null` and clears the pending nonce, and
+  /// nothing else: the stored session and [currentUser] stay as they were.
+  /// A rejected login or refresh response therefore leaves an
+  /// already-established session in place (#468). Removing a stored session
+  /// that itself fails revalidation is up to the caller that read it from the
+  /// store ([loadCachedTokens]), which applies
+  /// [OidcUserManagerSettings.shouldRemoveInvalidToken].
   ///
   /// When [reactToUserInfoUnauthorized] is `true`, a UserInfo `401` (RFC 6750
   /// §3) triggers the #302 recovery reaction: one refresh-token grant + a single
@@ -3319,18 +3346,14 @@ abstract class OidcUserManagerBase {
   Future<OidcUser?> validateAndSaveUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
-    String? authorizationCode,
-    Duration? maxAge,
+    OidcIdTokenValidationContext context = const OidcIdTokenValidationContext(),
     bool reactToUserInfoUnauthorized = false,
-    bool requireAtHashWithAccessToken = false,
   }) async {
     var actualUser = user;
     final errors = validateUser(
       user: actualUser,
       metadata: metadata,
-      authorizationCode: authorizationCode,
-      maxAge: maxAge,
-      requireAtHashWithAccessToken: requireAtHashWithAccessToken,
+      context: context,
     );
     OidcUserInfoResponse? userInfoResp;
     var userInfoFailed = false;
@@ -3535,17 +3558,12 @@ abstract class OidcUserManagerBase {
         );
       }
       await store.setCurrentNonce(null, managerId: id);
-
-      await store.removeMany(
-        OidcStoreNamespace.secureTokens,
-        keys: {
-          OidcConstants_Store.currentToken,
-          OidcConstants_Store.currentUserInfo,
-          OidcConstants_Store.currentUserAttributes,
-          OidcConstants_AuthParameters.nonce,
-        },
-        managerId: id,
-      );
+      // #468: reject [user] without touching the stored session or
+      // [currentUser]. [user] is usually a NEW candidate (a login or refresh
+      // response) and the session already in place is still valid, so it must
+      // not be removed because the candidate failed. When [user] IS the stored
+      // session (revalidation in [loadCachedTokens]), that caller decides
+      // whether to remove it, honoring `shouldRemoveInvalidToken`.
     }
     return null;
   }
@@ -5133,6 +5151,9 @@ abstract class OidcUserManagerBase {
     // validation errors that were evaluated.
     OidcUser? policyUser;
     var policyErrors = const <Exception>[];
+    // The user a refresh below published as [currentUser], if any. Retracted
+    // again if this load ends up removing the stored session.
+    OidcUser? publishedByRefresh;
     try {
       final decodedAttributes = rawAttributes == null
           ? null
@@ -5157,6 +5178,7 @@ abstract class OidcUserManagerBase {
         final validationErrors = validateUser(
           user: loadedUser,
           metadata: metadata,
+          context: _storedSessionContext,
         );
         policyUser = loadedUser;
         policyErrors = validationErrors;
@@ -5202,6 +5224,7 @@ abstract class OidcUserManagerBase {
             );
             if (refreshedUser != null) {
               loadedUser = refreshedUser;
+              publishedByRefresh = refreshedUser;
             }
           }
           // [loadedUser] is provably non-null here (this branch is only entered
@@ -5210,6 +5233,10 @@ abstract class OidcUserManagerBase {
           loadedUser = await validateAndSaveUser(
             user: loadedUser,
             metadata: metadata,
+            // The (possibly just refreshed) stored session. A refresh that kept
+            // the id_token recorded that in the token, so its at_hash is not
+            // compared with the new access_token here either.
+            context: _storedSessionContext,
             // #302: this validates a resumed (already-established) session, so a
             // UserInfo 401 from a revoked access token should trigger the
             // recover-via-refresh + typed-event reaction.
@@ -5241,9 +5268,26 @@ abstract class OidcUserManagerBase {
           keys: usedKeys,
           managerId: id,
         );
+        // #468: keep memory in step with the store. This path owns removing
+        // the stored session (validateAndSaveUser never does), so it also
+        // retracts the user a refresh above published before the session
+        // failed revalidation. Only that exact object: a user some other flow
+        // signed in meanwhile is not this session. (The user cache-first
+        // restored is retracted by _scheduleBackgroundRevalidation, and
+        // blocking init has no other user in memory.) Mirrors forgetUser()'s
+        // event-then-null contract, without its wider store cleanup.
+        final staleUser = currentUser;
+        if (staleUser != null && identical(staleUser, publishedByRefresh)) {
+          emitEvent(OidcPreLogoutEvent.now(currentUser: staleUser));
+          userSubject.add(null);
+        }
       }
     }
   }
+
+  static const _storedSessionContext = OidcIdTokenValidationContext(
+    source: OidcIdTokenSource.storedSession,
+  );
 
   /// Loads the current state, and checks if it has a result.
   ///
