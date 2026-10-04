@@ -78,10 +78,10 @@ class OidcDefaultStore implements OidcStore {
 
   /// Recommended hardened [AndroidOptions] for storing OIDC tokens at rest.
   ///
-  /// This is the `flutter_secure_storage` v10 default (an Android-Keystore-backed
-  /// RSA key wrapping an AES-GCM payload key). The deprecated
-  /// `encryptedSharedPreferences` (Jetpack Security) path is intentionally NOT
-  /// set — v10 migrates away from it automatically. (RFC 9700 §4.9.3/§4.14.)
+  /// This is the `flutter_secure_storage` default (an Android-Keystore-backed
+  /// RSA key wrapping an AES-GCM payload key), unchanged since v10. The
+  /// `encryptedSharedPreferences` (Jetpack Security) backend was removed in
+  /// v11, after v10 migrated data away from it. (RFC 9700 §4.9.3/§4.14.)
   static const AndroidOptions recommendedAndroidOptions =
       AndroidOptions.defaultOptions;
 
@@ -119,7 +119,7 @@ class OidcDefaultStore implements OidcStore {
   /// );
   /// ```
   ///
-  /// Android uses [recommendedAndroidOptions] (the v10 default), so it is not
+  /// Android uses [recommendedAndroidOptions] (the package default), so it is not
   /// passed explicitly here.
   ///
   /// This is opt-in (not the constructor default) to preserve backward

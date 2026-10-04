@@ -18,8 +18,8 @@ void main() {
     );
 
     test(
-      'recommendedAndroidOptions is the flutter_secure_storage v10 default '
-      '(no deprecated encryptedSharedPreferences)',
+      'recommendedAndroidOptions is the flutter_secure_storage default '
+      '(no removed encryptedSharedPreferences)',
       () {
         expect(
           OidcDefaultStore.recommendedAndroidOptions,
