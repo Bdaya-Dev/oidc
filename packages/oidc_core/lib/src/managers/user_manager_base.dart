@@ -3349,7 +3349,10 @@ abstract class OidcUserManagerBase {
   static const clientRegistrationKeyPrefix = 'client_registration.';
 
   /// The member of the persisted record holding the RFC 7591 §3.2.1
-  /// registration response exactly as the OP returned it.
+  /// registration response, merged with any previous record when rotated via
+  /// [updateClientRegistration] / [readClientRegistration]: the OP's returned
+  /// members replace the previous ones, while omitted members (like
+  /// `registration_access_token`) are carried over.
   static const _recordResponseMember = 'registration';
 
   /// The member of the persisted record holding the staleness fingerprint of
@@ -3900,9 +3903,11 @@ abstract class OidcUserManagerBase {
   /// disabled. Requires [currentDiscoveryDocument] to be loaded.
   ///
   /// Runs at most ONCE per manager: [init] is memoized and this returns
-  /// immediately once a registration is applied. That is the whole lifecycle —
-  /// the identity resolved here is served verbatim to every later request and
-  /// is never re-derived.
+  /// immediately once a registration is applied. The identity resolved here is
+  /// served to every later request. However, after a rotation via
+  /// [updateClientRegistration] / [readClientRegistration], later requests use
+  /// the merged credentials (the OP's response members replace the previous ones,
+  /// while omitted members like `registration_access_token` are carried over).
   ///
   /// ## Non-goals
   ///
@@ -4096,8 +4101,10 @@ abstract class OidcUserManagerBase {
       );
 
   /// Serializes the ONE immutable record persisted per issuer: the RFC 7591
-  /// §3.2.1 response exactly as the OP returned it, plus the staleness
-  /// fingerprint of the request it was ISSUED FOR.
+  /// §3.2.1 response (merged with any previous record when rotated via
+  /// [updateClientRegistration] / [readClientRegistration], so the OP's returned
+  /// members replace the previous ones while omitted members are carried over),
+  /// plus the staleness fingerprint of the request it was ISSUED FOR.
   ///
   /// Both members are written together, in one value, under one key, from
   /// values already in hand — never merged onto, incremented from, or otherwise

@@ -66,11 +66,15 @@ typedef OidcClientRegistrationRequestBuilder =
 /// would send no longer matches the one it was issued for, or when the issued
 /// `client_secret` has expired.
 ///
-/// Nothing rotates the credential mid-session, re-registers when the provider
-/// answers `invalid_client`, or tracks and reaps orphaned OP-side clients —
-/// each of those is a documented non-goal on
+/// Nothing automatically rotates the credential mid-session, re-registers when
+/// the provider answers `invalid_client`, or tracks and reaps orphaned OP-side
+/// clients — each of those is a documented non-goal on
 /// `OidcUserManagerBase.ensureClientRegistration`, naming the clause that makes
-/// it optional and the [OidcEndpoints] call an app makes instead.
+/// it optional and the call an app makes instead. However, RFC 7592 rotation is
+/// now driven by the manager itself: `OidcUserManagerBase.updateClientRegistration()`
+/// and `readClientRegistration()` adopt the OP's response and merge rotated
+/// credentials into the persisted record, so later back-channel calls present the
+/// latest secret and the next launch restores the rotated identity.
 /// `OidcUserManagerBase.forgetClientRegistration` is the escape hatch out of
 /// all of them.
 class OidcDynamicClientRegistrationSettings {
