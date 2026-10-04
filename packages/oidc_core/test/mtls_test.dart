@@ -218,6 +218,44 @@ void main() {
       );
     });
 
+    // The manager now reads EVERY endpoint through resolveEndpoint, so the
+    // top-level fallback must honour the typed fields, not just the raw `src`
+    // map: `copyWith(tokenEndpoint: ...)` keeps the original `src`.
+    test('top-level fallback honours a copyWith-overridden typed field', () {
+      final overridden = md.copyWith(
+        tokenEndpoint: Uri.parse('https://override.example.com/token'),
+        userinfoEndpoint: Uri.parse('https://override.example.com/userinfo'),
+        revocationEndpoint: Uri.parse('https://override.example.com/revoke'),
+      );
+      expect(
+        overridden.resolveEndpoint(
+          OidcConstants_ProviderMetadata.tokenEndpoint,
+        ),
+        Uri.parse('https://override.example.com/token'),
+      );
+      expect(
+        overridden.resolveEndpoint(
+          OidcConstants_ProviderMetadata.userinfoEndpoint,
+          useMtlsAliases: true,
+        ),
+        Uri.parse('https://override.example.com/userinfo'),
+      );
+      expect(
+        overridden.resolveEndpoint(
+          OidcConstants_ProviderMetadata.revocationEndpoint,
+        ),
+        Uri.parse('https://override.example.com/revoke'),
+      );
+      // The alias still wins when routing is on and one is published.
+      expect(
+        overridden.resolveEndpoint(
+          OidcConstants_ProviderMetadata.tokenEndpoint,
+          useMtlsAliases: true,
+        ),
+        Uri.parse('https://mtls.op.example.com/token'),
+      );
+    });
+
     test('enabled but server publishes no aliases at all → top-level', () {
       final noAliases = OidcProviderMetadata.fromJson({
         'issuer': 'https://op.example.com',

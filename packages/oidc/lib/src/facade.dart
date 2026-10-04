@@ -76,6 +76,8 @@ class OidcFlutter {
         options,
         preparationResult,
       );
+    } on OidcException {
+      rethrow;
     } catch (e, st) {
       throw OidcException(
         'Failed to end user session',

@@ -828,7 +828,10 @@ abstract class OidcUserManagerBase {
     // already persisted by prepareAuthorizationCodeFlowRequest above, so local
     // validation is unchanged (RFC 9126 §6).
     if (shouldPushAuthorizationRequest) {
-      final parEndpoint = discoveryDocument.pushedAuthorizationRequestEndpoint;
+      final parEndpoint = resolveEndpoint(
+        discoveryDocument,
+        OidcConstants_ProviderMetadata.pushedAuthorizationRequestEndpoint,
+      );
       if (parEndpoint == null) {
         logAndThrow(
           'Pushed Authorization Requests are required/enabled but the '
@@ -876,7 +879,10 @@ abstract class OidcUserManagerBase {
     final tokenResp = await (settings.hooks?.token).execute(
       request: OidcTokenHookRequest(
         metadata: discoveryDocument,
-        tokenEndpoint: discoveryDocument.tokenEndpoint!,
+        tokenEndpoint: resolveEndpoint(
+          discoveryDocument,
+          OidcConstants_ProviderMetadata.tokenEndpoint,
+        )!,
         request: OidcTokenRequest.password(
           username: username,
           password: password,
@@ -934,21 +940,23 @@ abstract class OidcUserManagerBase {
     ensureInit();
 
     final metadata = discoveryDocumentOverride ?? discoveryDocument;
-    final tokenEndpoint = metadata.tokenEndpoint;
+    final tokenEndpoint = resolveEndpoint(
+      metadata,
+      OidcConstants_ProviderMetadata.tokenEndpoint,
+    );
     if (tokenEndpoint == null) {
       logAndThrow("This provider doesn't provide a token endpoint");
     }
 
-    final deviceAuthEndpointValue = metadata
-        .src[OidcConstants_ProviderMetadata.deviceAuthorizationEndpoint];
-    if (deviceAuthEndpointValue == null) {
+    final deviceAuthorizationEndpoint = resolveEndpoint(
+      metadata,
+      OidcConstants_ProviderMetadata.deviceAuthorizationEndpoint,
+    );
+    if (deviceAuthorizationEndpoint == null) {
       logAndThrow(
         "This provider doesn't provide the device_authorization_endpoint",
       );
     }
-    final deviceAuthorizationEndpoint = Uri.parse(
-      deviceAuthEndpointValue.toString(),
-    );
 
     final credentials = clientCredentials;
     final deviceResp = await OidcEndpoints.deviceAuthorization(
@@ -1132,9 +1140,9 @@ abstract class OidcUserManagerBase {
   ///
   /// The authorization endpoint returns an id_token in the front channel
   /// ALONGSIDE the code. That id_token is validated before the exchange --
-  /// `nonce` must match, `c_hash` must bind the returned code, and `at_hash`
-  /// (when present) must bind the front-channel access_token -- and only then
-  /// is the code redeemed. The user is built from the TOKEN ENDPOINT response;
+  /// `nonce` must match, `c_hash` must be present and bind the returned code,
+  /// and `at_hash` must be present and bind the front-channel access_token
+  /// whenever one was returned -- and only then is the code redeemed. The user is built from the TOKEN ENDPOINT response;
   /// the front-channel tokens are a binding check, never the final credentials.
   ///
   /// This is not the implicit flow and is not deprecated: the code exchange
@@ -1144,8 +1152,8 @@ abstract class OidcUserManagerBase {
   /// That is not the same as "no token crosses the front channel". `code
   /// token` and `code id_token token` put an access token in the redirect by
   /// definition (§3.3.2.1), where it can reach browser history, `Referer`
-  /// headers and proxy logs. `at_hash` binding is enforced when it is present,
-  /// but if you want nothing but the code in the front channel, use
+  /// headers and proxy logs. `at_hash` binding is enforced for `code id_token
+  /// token`, but if you want nothing but the code in the front channel, use
   /// `code id_token` -- the default here. [loginImplicitFlow] by contrast keeps
   /// the front-channel tokens and never calls the token endpoint.
   ///
@@ -1370,7 +1378,11 @@ abstract class OidcUserManagerBase {
         discoveryDocumentOverride ?? this.discoveryDocument;
 
     final revocationEndpoint =
-        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+        revocationEndpointOverride ??
+        resolveEndpoint(
+          discoveryDocument,
+          OidcConstants_ProviderMetadata.revocationEndpoint,
+        );
     if (revocationEndpoint == null) {
       return; // no revocation endpoint, nothing to do.
     }
@@ -1475,7 +1487,11 @@ abstract class OidcUserManagerBase {
         discoveryDocumentOverride ?? this.discoveryDocument;
 
     final revocationEndpoint =
-        revocationEndpointOverride ?? discoveryDocument.revocationEndpoint;
+        revocationEndpointOverride ??
+        resolveEndpoint(
+          discoveryDocument,
+          OidcConstants_ProviderMetadata.revocationEndpoint,
+        );
     if (revocationEndpoint == null) {
       return; // no revocation endpoint, nothing to do.
     }
@@ -1742,7 +1758,10 @@ abstract class OidcUserManagerBase {
         }
       }
 
-      final tokenEndpoint = metadata.tokenEndpoint;
+      final tokenEndpoint = resolveEndpoint(
+        metadata,
+        OidcConstants_ProviderMetadata.tokenEndpoint,
+      );
       if (tokenEndpoint == null) {
         logAndThrow(
           "This provider doesn't provide a token endpoint",
@@ -1760,9 +1779,9 @@ abstract class OidcUserManagerBase {
 
       // OpenID Connect Core §3.3.2 (Hybrid flow): when the authorization
       // endpoint ALSO returned an id_token in the front channel, validate it
-      // before exchanging the code — `nonce` must match, `c_hash` must bind the
-      // returned `code`, and `at_hash` (when present) must bind the
-      // front-channel access_token.
+      // before exchanging the code — `nonce` must match, `c_hash` must be
+      // present and bind the returned `code`, and `at_hash` must be present and
+      // bind the front-channel access_token whenever one was returned.
       final frontChannelIdToken = response.idToken;
       if (frontChannelIdToken != null) {
         await validateFrontChannelIdToken(
@@ -2321,7 +2340,10 @@ abstract class OidcUserManagerBase {
       final tokenResponse = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
           metadata: discoveryDocument,
-          tokenEndpoint: discoveryDocument.tokenEndpoint!,
+          tokenEndpoint: resolveEndpoint(
+            discoveryDocument,
+            OidcConstants_ProviderMetadata.tokenEndpoint,
+          )!,
           // clientSecret is intentionally NOT passed here: `credentials`
           // below is the single source of client authentication (RFC 6749
           // §2.3). Also setting it on the request would duplicate it into
@@ -2504,7 +2526,10 @@ abstract class OidcUserManagerBase {
       final tokenResponse = await (settings.hooks?.token).execute(
         request: OidcTokenHookRequest(
           metadata: discoveryDocument,
-          tokenEndpoint: discoveryDocument.tokenEndpoint!,
+          tokenEndpoint: resolveEndpoint(
+            discoveryDocument,
+            OidcConstants_ProviderMetadata.tokenEndpoint,
+          )!,
           credentials: credentials,
           client: httpClient,
           headers: settings.extraTokenHeaders,
@@ -2834,7 +2859,10 @@ abstract class OidcUserManagerBase {
     Map<String, String>? headers,
     Map<String, dynamic>? extra,
   }) async {
-    final tokenEndpoint = discoveryDocument.tokenEndpoint;
+    final tokenEndpoint = resolveEndpoint(
+      discoveryDocument,
+      OidcConstants_ProviderMetadata.tokenEndpoint,
+    );
     if (tokenEndpoint == null) {
       logAndThrow("This provider doesn't provide a token endpoint.");
     }
@@ -2895,7 +2923,10 @@ abstract class OidcUserManagerBase {
     Map<String, String>? headers,
     Map<String, dynamic>? extra,
   }) async {
-    final introspectionEndpoint = discoveryDocument.introspectionEndpoint;
+    final introspectionEndpoint = resolveEndpoint(
+      discoveryDocument,
+      OidcConstants_ProviderMetadata.introspectionEndpoint,
+    );
     if (introspectionEndpoint == null) {
       logAndThrow("This provider doesn't provide an introspection endpoint.");
     }
@@ -2928,8 +2959,9 @@ abstract class OidcUserManagerBase {
 
   /// Validates the front-channel id_token returned by the authorization
   /// endpoint in the OpenID Connect Hybrid flow (OpenID Connect Core §3.3.2):
-  /// signature, `nonce`, `c_hash` (binding [code]) and `at_hash` (binding the
-  /// front-channel [accessToken], when present). Throws on any failure.
+  /// signature, `nonce`, `c_hash` (REQUIRED, binding [code]) and `at_hash`
+  /// (REQUIRED when [accessToken] is non-null, binding it). Throws on any
+  /// failure.
   ///
   /// This is an additional security gate run BEFORE the code is exchanged; the
   /// logged-in user is still built from the token-endpoint response.
@@ -2977,6 +3009,27 @@ abstract class OidcUserManagerBase {
       authorizationCode: code,
       maxAge: maxAge,
     );
+    // §3.3.2.11: validateUser only checks these hashes when present, but an
+    // id_token issued from the authorization endpoint with a code MUST carry
+    // `c_hash`, and one issued with an access_token MUST carry `at_hash`.
+    // Without them the front-channel tokens are not bound to this id_token.
+    final frontChannelClaims = frontChannelUser.parsedIdToken.claims;
+    if (frontChannelClaims['c_hash'] is! String) {
+      errors.add(
+        JoseException(
+          'id token issued with an authorization code is missing the '
+          'required `c_hash` claim.',
+        ),
+      );
+    }
+    if (accessToken != null && frontChannelClaims['at_hash'] is! String) {
+      errors.add(
+        JoseException(
+          'id token issued with an access_token is missing the required '
+          '`at_hash` claim.',
+        ),
+      );
+    }
     if (errors.isNotEmpty) {
       for (final error in errors) {
         logger.warning(
@@ -3240,7 +3293,10 @@ abstract class OidcUserManagerBase {
     var userInfoFailed = false;
 
     if (errors.isEmpty) {
-      final userInfoEP = metadata.userinfoEndpoint;
+      final userInfoEP = resolveEndpoint(
+        metadata,
+        OidcConstants_ProviderMetadata.userinfoEndpoint,
+      );
 
       if (settings.userInfoSettings.sendUserInfoRequest && userInfoEP != null) {
         try {
@@ -3819,11 +3875,15 @@ abstract class OidcUserManagerBase {
         'client on a backend.',
       );
     }
-    return OidcClientAuthentication.fromRegistrationResponse(
+    final credentials = OidcClientAuthentication.fromRegistrationResponse(
       response,
       preferredMethod:
           settings.dynamicClientRegistration?.preferredTokenEndpointAuthMethod,
     );
+    // A registration the OP answered with an mTLS method is just as unusable
+    // in a browser as a configured one (see the check at the top of [init]).
+    ensureClientAuthenticationSupported(credentials);
+    return credentials;
   }
 
   /// Whether [response]'s issued `client_secret` is past its expiry.
@@ -4154,10 +4214,14 @@ abstract class OidcUserManagerBase {
     required OidcProviderMetadata metadata,
     required _OidcCachedClientRegistration? fallback,
   }) async {
-    // Deliberately NOT `OidcProviderMetadata.resolveEndpoint(...,
-    // useMtlsAliases: settings.useMtlsEndpointAliases)`: registration runs
-    // before the client has any mTLS identity to present.
-    final endpoint = metadata.registrationEndpoint;
+    // Routed through the mTLS alias choke point like every other direct
+    // request: the client certificate lives in [httpClient], which this POST
+    // also uses, so an OP that aliases `registration_endpoint` (e.g. FAPI /
+    // open-banking DCR, which requires mTLS there) gets it on the alias host.
+    final endpoint = resolveEndpoint(
+      metadata,
+      OidcConstants_ProviderMetadata.registrationEndpoint,
+    );
     if (endpoint == null) {
       logAndThrow(
         'Dynamic client registration is enabled but the provider at '
@@ -4970,6 +5034,78 @@ abstract class OidcUserManagerBase {
     );
   }
 
+  /// Throws an [UnsupportedError] when [credentials] uses an RFC 8705 mutual
+  /// TLS method (`tls_client_auth` / `self_signed_tls_client_auth`) on web.
+  ///
+  /// A browser exposes no API for `fetch`/XHR to present a client certificate
+  /// (certificates are OS/browser-managed), so such a client could never
+  /// authenticate. Failing at [init], before any request, beats an opaque
+  /// `invalid_client` at the first token request.
+  @protected
+  void ensureClientAuthenticationSupported(
+    OidcClientAuthentication credentials,
+  ) {
+    if (!isWeb) {
+      return;
+    }
+    final method = credentials.location;
+    if (method == OidcConstants_ClientAuthenticationMethods.tlsClientAuth ||
+        method ==
+            OidcConstants_ClientAuthenticationMethods.selfSignedTlsClientAuth) {
+      throw UnsupportedError(
+        'The "$method" client authentication method (mutual TLS, RFC 8705) is '
+        'not supported on web: browsers expose no API for fetch/XHR to '
+        'present a client certificate. Use a different '
+        'OidcClientAuthentication on web, or perform the mTLS-authenticated '
+        'requests from a backend.',
+      );
+    }
+  }
+
+  /// Throws an [UnsupportedError] when
+  /// [OidcUserManagerSettings.useMtlsEndpointAliases] is enabled on web.
+  ///
+  /// This is independent of [ensureClientAuthenticationSupported] / the
+  /// chosen client authentication method: RFC 8705 §5 `mtls_endpoint_aliases`
+  /// exist for authorization servers that expect a client certificate on
+  /// those alias hosts, so a browser following them -- even while
+  /// authenticating with e.g. `client_secret_basic` or `none` -- would send
+  /// every back-channel request to a host it can never complete the expected
+  /// TLS handshake with. Without this guard that misconfiguration would only
+  /// surface as an opaque connection/handshake failure at the first
+  /// back-channel request instead of loudly at [init].
+  @protected
+  void ensureMtlsEndpointAliasesSupportedOnWeb() {
+    if (isWeb && settings.useMtlsEndpointAliases) {
+      throw UnsupportedError(
+        '`useMtlsEndpointAliases: true` (RFC 8705 §5) is not supported on '
+        'web: browsers expose no API for fetch/XHR to present a client '
+        'certificate, so the mTLS alias hosts it would route back-channel '
+        'requests to can never complete the TLS handshake the server expects '
+        'there. Disable `useMtlsEndpointAliases` on web, or perform the '
+        'mTLS-authenticated requests from a backend.',
+      );
+    }
+  }
+
+  /// The single choke point every back-channel endpoint read in this manager
+  /// goes through: returns the endpoint stored under [endpointName] (an
+  /// `OidcConstants_ProviderMetadata` endpoint key) in [metadata], applying the
+  /// RFC 8705 §5 `mtls_endpoint_aliases` alias-or-fallback rule when
+  /// [OidcUserManagerSettings.useMtlsEndpointAliases] is on.
+  ///
+  /// Front-channel endpoints are never aliased (see
+  /// [OidcProviderMetadata.frontChannelEndpoints]). `jwks_uri` is not routed
+  /// here either: it is an unauthenticated public read that the id_token and
+  /// UserInfo verifiers each resolve from [OidcProviderMetadata.jwksUri], and
+  /// splitting it would key the JWKS cache under two URLs.
+  @protected
+  Uri? resolveEndpoint(OidcProviderMetadata metadata, String endpointName) =>
+      metadata.resolveEndpoint(
+        endpointName,
+        useMtlsAliases: settings.useMtlsEndpointAliases,
+      );
+
   /// Registers the current [discoveryDocument]'s `jwks_uri` with [keyStore].
   ///
   /// The symmetric HS* key (RFC 7518 §3.2, the `client_secret` octets) is
@@ -5050,6 +5186,8 @@ abstract class OidcUserManagerBase {
 
   /// The body of [init], run once by [initMemoizer].
   Future<void> _runInit() async {
+    ensureClientAuthenticationSupported(clientCredentials);
+    ensureMtlsEndpointAliasesSupportedOnWeb();
     await store.init();
     if (settings.initMode == OidcInitMode.cacheFirst &&
         await _tryCacheFirstInit()) {

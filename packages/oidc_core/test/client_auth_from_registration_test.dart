@@ -195,10 +195,37 @@ void main() {
     test('throws for an unknown/unsupported method', () {
       expect(
         () => OidcClientAuthentication.fromRegistrationResponse(
-          _resp(method: 'tls_client_auth'),
+          _resp(method: 'not_a_real_auth_method'),
         ),
         throwsA(isA<OidcException>()),
       );
     });
+
+    // RFC 8705 §2.1.2 / §2.2.2: an mTLS-registered client needs nothing from
+    // the response beyond its client_id; the certificate lives in the
+    // transport (the cert-bearing http.Client), never in the credentials.
+    for (final method in const [
+      OidcConstants_ClientAuthenticationMethods.tlsClientAuth,
+      OidcConstants_ClientAuthenticationMethods.selfSignedTlsClientAuth,
+    ]) {
+      test('$method maps to the mTLS method with only the client_id', () {
+        final auth = OidcClientAuthentication.fromRegistrationResponse(
+          _resp(method: method),
+        );
+        expect(auth.location, method);
+        expect(auth.clientId, 'reg-client');
+        expect(auth.getAuthorizationHeader(), isNull);
+        expect(auth.getBodyParameters(), {'client_id': 'reg-client'});
+      });
+
+      test('$method ignores an (unexpected) issued client_secret', () {
+        final auth = OidcClientAuthentication.fromRegistrationResponse(
+          _resp(method: method, clientSecret: 'unused'),
+        );
+        expect(auth.location, method);
+        expect(auth.clientSecret, isNull);
+        expect(auth.getBodyParameters(), {'client_id': 'reg-client'});
+      });
+    }
   });
 }

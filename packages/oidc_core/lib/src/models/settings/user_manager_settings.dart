@@ -521,19 +521,23 @@ class OidcUserManagerSettings {
   /// Customized hooks to modify the user manager behavior.
   final OidcUserManagerHooks? hooks;
 
-  /// RFC 8705 §5: when `true`, backend requests resolve their endpoint through
-  /// the authorization server's `mtls_endpoint_aliases` (falling back to the
-  /// conventional endpoint when a given alias is absent) via
-  /// [OidcProviderMetadata.resolveEndpoint].
+  /// RFC 8705 §5: when `true`, every request the manager makes directly to the
+  /// authorization server (token for every grant, UserInfo, revocation,
+  /// introspection, PAR, device authorization and dynamic client registration)
+  /// resolves its endpoint through the server's `mtls_endpoint_aliases`,
+  /// falling back to the conventional endpoint when a given alias is absent,
+  /// via [OidcUserManagerBase.resolveEndpoint] /
+  /// [OidcProviderMetadata.resolveEndpoint]. Aliases of front-channel endpoints
+  /// are ignored (RFC 8705 §5), and `jwks_uri` is never aliased.
   ///
   /// Defaults to `false`. This is NOT auto-inferred from the selected client
   /// authentication method: an mTLS-authenticating client only needs the alias
   /// endpoints when the server publishes them, and enabling it must be an
   /// explicit deployment decision (RFC 8705 §5).
   ///
-  /// Note: establishing the certificate-bearing TLS transport itself is handled
-  /// by the platform HTTP layer and is out of scope for this setting, which
-  /// only governs endpoint selection.
+  /// Note: this setting only governs endpoint selection. The client certificate
+  /// is presented by the manager's `httpClient`; build one with
+  /// [OidcMtls.createHttpClient].
   final bool useMtlsEndpointAliases;
 
   /// Enables + configures RFC 7591 Dynamic Client Registration.

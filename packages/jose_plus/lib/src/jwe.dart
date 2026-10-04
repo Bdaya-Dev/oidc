@@ -351,10 +351,22 @@ class JsonWebEncryptionBuilder extends JoseObjectBuilder<JsonWebEncryption> {
         final algId = ecdhAlgorithmId(algorithm, encryptionAlgorithm!);
         final keyLen = ecdhKeyDataLen(algorithm, encryptionAlgorithm!);
 
+        // `apu`/`apv` are OPTIONAL, but when present in the header they are part
+        // of the Concat KDF OtherInfo (PartyUInfo/PartyVInfo, RFC 7518 4.6.2).
+        final header = payload.protectedHeader;
+        final apu = header?.getTyped<String>('apu');
+        final apv = header?.getTyped<String>('apv');
+
         final result = ecdhEsDerive(
           recipientPublicKey: key,
           algorithmId: algId,
           keyDataLen: keyLen,
+          apu: apu == null
+              ? null
+              : Uint8List.fromList(decodeBase64EncodedBytes(apu)),
+          apv: apv == null
+              ? null
+              : Uint8List.fromList(decodeBase64EncodedBytes(apv)),
         );
 
         // Add EPK to header

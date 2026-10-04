@@ -53,13 +53,13 @@ jobs:
 
       - name: Setup Python
         if: steps.filter.outputs.docs == 'true'
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: 3.x
 
       - name: Restore MkDocs cache
         if: steps.filter.outputs.docs == 'true'
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           key: mkdocs-material-${{ runner.os }}-${{ hashFiles('mkdocs.yml') }}
           path: .cache
