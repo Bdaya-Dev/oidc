@@ -69,6 +69,25 @@ void main() {
         await store.getMany(OidcStoreNamespace.state, keys: {'state-1'}),
         isEmpty,
       );
+      // The real storage key is prefixed, so check that exact key too:
+      // a wrong-namespace write lands under `code_verifier.state-1`, not
+      // `state-1`, and would slip past the two checks above.
+      expect(
+        await store.getMany(
+          OidcStoreNamespace.state,
+          keys: {'code_verifier.state-1'},
+        ),
+        isEmpty,
+      );
+      // ...and pin down where it does live, so a key rename cannot turn the
+      // negative check above into a vacuous pass.
+      expect(
+        await store.getMany(
+          OidcStoreNamespace.secureTokens,
+          keys: {'code_verifier.state-1'},
+        ),
+        {'code_verifier.state-1': 'the-verifier'},
+      );
     });
   });
 
