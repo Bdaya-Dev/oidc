@@ -24,7 +24,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  mocktail: ^1.0.3
   # Test-only: provides InMemorySharedPreferencesAsync +
   # SharedPreferencesAsyncPlatform so the SharedPreferencesAsync backend can be
   # exercised in-memory on the VM (see the async store tests).
