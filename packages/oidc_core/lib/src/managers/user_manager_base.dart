@@ -1920,6 +1920,11 @@ abstract class OidcUserManagerBase {
         : (currentUserOverride ?? this.currentUser);
     OidcUser? newUser;
     final idTokenOverride = await settings.getIdToken?.call(token);
+    // Set below (refresh branch only) when [currentUser]'s id_token is being
+    // RETAINED rather than replaced, i.e. this grant returned no new
+    // id_token. Forwarded to [validateAndSaveUser] so its `at_hash` check
+    // isn't run against a retained id_token; see [validateUser]'s doc.
+    var idTokenRetainedAcrossRefresh = false;
     if (currentUser == null) {
       newUser = await OidcUser.fromIdToken(
         token: token,
@@ -1939,6 +1944,7 @@ abstract class OidcUserManagerBase {
     } else {
       final reusesExistingIdToken =
           idTokenOverride == null && token.idToken == null;
+      idTokenRetainedAcrossRefresh = reusesExistingIdToken;
       newUser = await currentUser.replaceToken(
         token,
         idTokenOverride: idTokenOverride,
@@ -1988,6 +1994,7 @@ abstract class OidcUserManagerBase {
       return validateAndSaveUser(
         user: newUser,
         metadata: metadata,
+        idTokenRetainedAcrossRefresh: idTokenRetainedAcrossRefresh,
         authorizationCode: authorizationCode,
         maxAge: maxAge,
       );
@@ -3070,6 +3077,15 @@ abstract class OidcUserManagerBase {
   List<Exception> validateUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
+    // True only when [user]'s id_token is being RETAINED across a refresh
+    // that returned no new id_token (OIDC Core §12.2 allows the refresh
+    // response to omit it). Skips the `at_hash` match check below: `at_hash`
+    // (§3.2.2.9) binds an id_token to the access_token issued ALONGSIDE it in
+    // the SAME response, so a retained id_token's `at_hash` was computed for
+    // a PRIOR access_token and comparing it to this one is a false mismatch,
+    // not a validation failure. Set by [validateAndSaveUser]'s caller; see
+    // its doc.
+    bool idTokenRetainedAcrossRefresh = false,
     String? authorizationCode,
     Duration? maxAge,
   }) {
@@ -3202,7 +3218,9 @@ abstract class OidcUserManagerBase {
     // signing-alg hash.
     final atHash = claims['at_hash'];
     final accessToken = user.token.accessToken;
-    if (atHash is String && accessToken != null) {
+    if (atHash is String &&
+        accessToken != null &&
+        !idTokenRetainedAcrossRefresh) {
       final alg = oidcReadJwtAlg(user.idToken);
       final expected = alg == null
           ? null
@@ -3284,6 +3302,9 @@ abstract class OidcUserManagerBase {
   Future<OidcUser?> validateAndSaveUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
+    // Forwarded to [validateUser]: see its doc. Only [createUserFromToken]'s
+    // refresh branch (a grant that returned no new id_token) passes true.
+    bool idTokenRetainedAcrossRefresh = false,
     String? authorizationCode,
     Duration? maxAge,
     bool reactToUserInfoUnauthorized = false,
@@ -3292,6 +3313,7 @@ abstract class OidcUserManagerBase {
     final errors = validateUser(
       user: actualUser,
       metadata: metadata,
+      idTokenRetainedAcrossRefresh: idTokenRetainedAcrossRefresh,
       authorizationCode: authorizationCode,
       maxAge: maxAge,
     );
