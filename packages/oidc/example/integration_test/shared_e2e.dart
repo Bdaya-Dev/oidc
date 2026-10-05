@@ -34,6 +34,11 @@ const String oidcConformanceToken = String.fromEnvironment(
 
 final Logger _testLogger = Logger('oidc.conformance');
 
+/// The Config RP module whose correct outcome is `init()` throwing: the RP
+/// must stop after fetching a discovery document with the wrong `issuer`.
+const discoveryIssuerMismatchModule =
+    'oidcc-client-test-discovery-issuer-mismatch';
+
 /// Whether [planName] is one of the four logout profiles.
 ///
 /// Matched on substring rather than an enumerated list: the logout plans also
@@ -681,6 +686,8 @@ Future<void> runOidcConformanceTest(
   // Asking the suite itself for each module's result (not just login/no-login
   // on the client side) is what catches that.
   final moduleFailures = <String>[];
+  // Null when the plan has no discovery-issuer-mismatch module.
+  bool? issuerMismatchRejected;
 
   for (final testPlanModule
       in testPlanModules.whereType<Map<String, dynamic>>()) {
@@ -800,7 +807,43 @@ Future<void> runOidcConformanceTest(
     app_state.currentManagerRx.$ = manager;
 
     logger.info('Initializing manager for test instance: $testInstanceId');
-    await manager.init();
+    // NOTE (merge with #469, test/467-per-module-conformance): this module's
+    // correct outcome is init() itself throwing -- the RP must stop after
+    // fetching discovery (OIDC Discovery §4.3) -- so it is the one module whose
+    // init failure is caught here instead of aborting the whole plan.
+    if (moduleName == discoveryIssuerMismatchModule) {
+      var rejected = false;
+      try {
+        await manager.init();
+        logger.severe('init() accepted a discovery document with a bad issuer');
+      } on OidcException catch (e) {
+        // Only the issuer rejection counts; anything else (e.g. the discovery
+        // fetch failing) is a real failure and aborts as for other modules.
+        if (!e.message.contains('Issuer mismatch')) {
+          rethrow;
+        }
+        rejected = true;
+        logger.info('Rejected at discovery, as the module requires: $e');
+      }
+      issuerMismatchRejected = rejected;
+      print('[e2e] $moduleName -> rejected at discovery: $rejected');
+      if (rejected) {
+        await sub.cancel();
+        app_state.currentManagerRx.$ = app_state.managersRx.$.first;
+        app_state.managersRx.update((managers) => managers..remove(manager));
+        if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
+          archive.addFile(
+            ArchiveFile.bytes(
+              '$moduleName.log',
+              utf8.encode(logsToWrite.join('\n')),
+            ),
+          );
+        }
+        continue;
+      }
+    } else {
+      await manager.init();
+    }
     expect(manager.didInit, true);
     logger.info('Manager initialized');
     if (moduleName == 'oidcc-client-test-discovery-openid-config') {
@@ -1008,6 +1051,14 @@ Future<void> runOidcConformanceTest(
       archive.addFile(ArchiveFile.bytes('$moduleName.log', data));
     }
   }
+
+  expect(
+    issuerMismatchRejected,
+    isNot(false),
+    reason:
+        '$discoveryIssuerMismatchModule: init() must reject a discovery '
+        'document whose issuer does not match (OIDC Discovery §4.3).',
+  );
 
   // Individual modules may legitimately end with no user, but a platform that
   // cannot capture the browser redirect at all scores zero here.

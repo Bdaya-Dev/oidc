@@ -15,6 +15,7 @@ OidcEndSessionState _$OidcEndSessionStateFromJson(Map<String, dynamic> json) =>
           ? null
           : Uri.parse(json['original_uri'] as String),
       options: json['options'] as Map<String, dynamic>?,
+      sessionState: json['session_state'] as String?,
       createdAt: _$JsonConverterFromJson<int, DateTime>(
         json['created_at'],
         const OidcNumericDateConverter().fromJson,
@@ -35,6 +36,7 @@ Map<String, dynamic> _$OidcEndSessionStateToJson(
   'options': instance.options,
   'post_logout_redirect_uri': instance.postLogoutRedirectUri.toString(),
   'original_uri': instance.originalUri?.toString(),
+  'session_state': instance.sessionState,
 };
 
 Value? _$JsonConverterFromJson<Json, Value>(

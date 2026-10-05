@@ -20,6 +20,12 @@ class OidcWebCore {
 
   static final _logger = Logger('Oidc.OidcWebCore');
 
+  /// Monotonically increasing suffix for [monitorSessionStatus]'s hidden
+  /// `check_session_iframe` ids, so two concurrently-running monitors never
+  /// share a DOM id (#474). Kept unique (rather than dropped) so each
+  /// monitor's iframe stays individually identifiable in devtools.
+  static int _nextSessionMonitorIframeId = 0;
+
   /// Version of the structured redirect wire protocol understood by this
   /// consumer and emitted by the bundled `redirect.html` template.
   ///
@@ -594,17 +600,40 @@ class OidcWebCore {
     StreamSubscription<MessageEvent>? messageSub;
     // Timer? timer;
 
-    const iframeId = 'oidc-session-management-iframe';
+    // The iframe THIS monitor instance owns. Every monitor used to share the
+    // fixed id below, so creating or tearing down one monitor's iframe could
+    // delete a *different*, still-running monitor's iframe (#474).
+    // Tracking our own element (rather than re-querying the DOM by id) means
+    // teardown can only ever affect this monitor.
+    HTMLIFrameElement? ownIframe;
+
+    final iframeId =
+        'oidc-session-management-iframe-${_nextSessionMonitorIframeId++}';
     void onMessageReceived(MessageEvent event) {
       final streamController = sc;
-      final iframe = document.getElementById(iframeId) as HTMLIFrameElement?;
+      final iframe = ownIframe;
       final eventOrigin = event.origin;
+      // `window.onMessage` is a single, shared, broadcast stream: every
+      // concurrently-running monitor's listener sees every message posted on
+      // it, including a reply meant for a *different* monitor's iframe (two
+      // monitors can share the same OP origin, e.g. two signed-in accounts).
+      // Matching `event.source` against this monitor's own iframe window --
+      // not just the origin -- is what keeps one monitor from reading
+      // another's replies (#474).
+      final sourceIsOwnIframe =
+          iframe != null &&
+          iframe.contentWindow != null &&
+          event.source == iframe.contentWindow;
       if (iframe == null ||
+          !iframe.isConnected ||
+          !sourceIsOwnIframe ||
           streamController == null ||
           eventOrigin != checkSessionIframe.origin) {
         logger.warning(
           'ignoring received message; '
           'iframe is null ? ${iframe == null}; '
+          'iframe is connected ? ${iframe?.isConnected}; '
+          "event source is this monitor's own iframe ? $sourceIsOwnIframe; "
           'streamController is null ? ${streamController == null}; '
           'eventOrigin is: ($eventOrigin), should be equal to: (${checkSessionIframe.origin}).',
         );
@@ -640,15 +669,36 @@ class OidcWebCore {
       }
     }
 
+    // Completed by `onCancel` if cancellation happens while `onListen` is
+    // still awaiting the iframe's `load`. Without this, removing an iframe
+    // that never fired `load` can leave that wait pending forever -- a
+    // never-completing future holding a reference to the detached iframe and
+    // the whole monitor closure (#474).
+    Completer<void>? cancelledBeforeLoad;
+
     sc = StreamController<OidcMonitorSessionResult>(
       onListen: () async {
-        final iframe =
-            _createHiddenIframe(appendToDocument: false, iframeId: iframeId)
-              ..id = iframeId
-              ..src = checkSessionIframe.toString();
-        final onloadFuture = iframe.onLoad.first;
-        _getBody().append(iframe);
-        await onloadFuture;
+        final localIframe = _createHiddenIframe(
+          appendToDocument: false,
+          iframeId: iframeId,
+        )..src = checkSessionIframe.toString();
+        ownIframe = localIframe;
+        final waitForCancel = Completer<void>();
+        cancelledBeforeLoad = waitForCancel;
+
+        _getBody().append(localIframe);
+        await Future.any<void>([
+          localIframe.onLoad.first,
+          waitForCancel.future,
+        ]);
+
+        if (!identical(ownIframe, localIframe)) {
+          // Cancelled (onCancel already removed `localIframe` and cleared
+          // `ownIframe`) before `load` fired. Stop setup here: no
+          // listener/timer gets attached for an iframe nobody owns anymore.
+          return;
+        }
+
         //start the session iframe
         messageSub = window.onMessage.listen(onMessageReceived);
 
@@ -656,12 +706,12 @@ class OidcWebCore {
         await timerSub?.cancel();
         logger.info('Starting periodic stream!');
         void sendCheckSession() {
-          final iframe = document.getElementById(iframeId);
-          if (!iframe.isA<HTMLIFrameElement>()) {
+          final iframe = ownIframe;
+          if (iframe == null || !iframe.isConnected) {
             return;
           }
           try {
-            final cw = (iframe! as HTMLIFrameElement).contentWindow;
+            final cw = iframe.contentWindow;
             if (cw == null) {
               return;
             }
@@ -685,10 +735,16 @@ class OidcWebCore {
         ).listen((_) => sendCheckSession());
       },
       onCancel: () {
-        //stop the session iframe
+        //stop the session iframe -- only THIS monitor's iframe, never a
+        //different monitor's (#474).
         timerSub?.cancel();
         messageSub?.cancel();
-        document.getElementById(iframeId)?.remove();
+        ownIframe?.remove();
+        ownIframe = null;
+        final waiting = cancelledBeforeLoad;
+        if (waiting != null && !waiting.isCompleted) {
+          waiting.complete();
+        }
       },
       onPause: () {
         timerSub?.pause();

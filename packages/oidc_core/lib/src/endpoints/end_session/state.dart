@@ -16,6 +16,7 @@ class OidcEndSessionState extends OidcState {
     required this.postLogoutRedirectUri,
     required this.originalUri,
     required this.options,
+    this.sessionState,
     super.createdAt,
     super.data,
     super.id,
@@ -39,6 +40,21 @@ class OidcEndSessionState extends OidcState {
   /// processes the response.
   @JsonKey(name: OidcConstants_Store.originalUri)
   final Uri? originalUri;
+
+  /// A snapshot of the ending session's `session_state` (OIDC Session
+  /// Management 1.0 §2), captured from [OidcUserManagerBase.currentUser] at
+  /// the moment [OidcUserManagerBase.logout] built this state. Only set when
+  /// [OidcSessionManagementSettings.enabled] is `true`.
+  ///
+  /// [OidcUserManagerBase.handleEndSessionResponse] passes it to
+  /// [OidcUserManagerBase.startEndSessionConfirmation], which asks the OP's
+  /// `check_session_iframe` about the ended session in the background and
+  /// reports an [OidcEndSessionConfirmationEvent]. On a web `samePage`
+  /// navigation the browser fully reloads at `post_logout_redirect_uri`, so
+  /// [OidcUserManagerBase.currentUser] is no longer available when the
+  /// response is handled -- this field is the only way that path still has it.
+  @JsonKey(name: OidcConstants_AuthParameters.sessionState)
+  final String? sessionState;
 
   @override
   Map<String, dynamic> toJson() => _$OidcEndSessionStateToJson(this);

@@ -7,3 +7,5 @@ linter:
 analyzer:
   errors:
     lines_longer_than_80_chars: ignore
+  exclude:
+    - build/**
