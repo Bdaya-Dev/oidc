@@ -105,4 +105,68 @@ void main() {
       expect(isAcceptableConformanceResult('INTERRUPTED'), isFalse);
     });
   });
+
+  // #469: on iOS the per-module failure line is the only harness output in
+  // the job log, so it has to say by itself whether the suite ever received
+  // the authorization request -- the question a stuck `status=WAITING`
+  // negative module could not answer.
+  group('describeSuiteLogForFailure', () {
+    Map<String, dynamic> block(String msg, int time) => {
+      'msg': msg,
+      'startBlock': true,
+      'time': time,
+    };
+
+    test('says so when the suite never received an authorization '
+        'request', () {
+      final digest = describeSuiteLogForFailure([
+        {'msg': 'Setup Done', 'time': 1000},
+        block('Discovery endpoint', 2000),
+        block('Jwks endpoint', 2500),
+      ]);
+      expect(digest, contains('NO authorization request received'));
+      expect(digest, contains('Discovery endpoint'));
+      expect(digest, contains('Jwks endpoint'));
+    });
+
+    test('times every request block from the first authorization '
+        'request', () {
+      final digest = describeSuiteLogForFailure([
+        block('Discovery endpoint', 9000),
+        block('Authorization endpoint', 10000),
+        {'msg': 'Created authorization code', 'time': 10100},
+        block('Jwks endpoint', 15020),
+      ]);
+      expect(digest, isNot(contains('NO authorization request')));
+      expect(digest, contains('Discovery endpoint@-1.00s'));
+      expect(digest, contains('Authorization endpoint@+0.00s'));
+      expect(digest, contains('Jwks endpoint@+5.02s'));
+    });
+
+    test('ends with the last entries, error included', () {
+      final digest = describeSuiteLogForFailure([
+        block('Authorization endpoint', 0),
+        {'msg': 'one', 'time': 1},
+        {'msg': 'two', 'time': 2},
+        {
+          'msg': 'Got unexpected HTTP call',
+          'result': 'FAILURE',
+          'error': 'boom',
+          'time': 3,
+        },
+      ], tailLength: 2);
+      expect(digest, contains('last 2:'));
+      expect(digest, isNot(contains('one')));
+      expect(digest, contains('two'));
+      expect(digest, contains('[FAILURE]@+0.00s Got unexpected HTTP call'));
+      expect(digest, contains('error: boom'));
+    });
+
+    test('an empty log is reported, not hidden', () {
+      expect(
+        describeSuiteLogForFailure(const []),
+        'suite log: empty or unreadable',
+      );
+    });
+  });
 }

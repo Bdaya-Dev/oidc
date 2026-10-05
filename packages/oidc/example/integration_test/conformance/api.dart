@@ -773,6 +773,75 @@ Future<List<Map<String, dynamic>>> fetchTestLogs({
   }
 }
 
+/// The block name `AbstractOIDCCClientTest.getAuthorizationEndpointBlockText`
+/// opens for every authorization request the suite receives.
+const _authorizationEndpointBlock = 'Authorization endpoint';
+
+/// A one-line digest of a module's suite log ([fetchTestLogs]) for a
+/// per-module FAILURE line, i.e. for the one channel every platform's job log
+/// shows.
+///
+/// The iOS job prints no Dart `print`/`logging` output at all -- patrol only
+/// forwards the failure the test throws -- so a module stuck at
+/// `status=WAITING` there could not say whether the suite ever received its
+/// authorization request (the client never reached the OP), or received it
+/// and the client's later requests raced the suite's own negative-module
+/// timer (`AbstractOIDCCClientTest.startWaitingForTimeout`, which finishes the
+/// module only if the status is still WAITING the instant
+/// `waitTimeoutSeconds` elapses after the authorization request). The two
+/// need opposite fixes, and the suite's log tells them apart.
+///
+/// Lists every request block the suite opened (`startBlock` entries:
+/// "Discovery endpoint", "Authorization endpoint", "Jwks endpoint", ...)
+/// with its time relative to the FIRST authorization request -- both clocks
+/// are the suite's, so there is no client/server skew in these offsets --
+/// followed by the last [tailLength] entries verbatim (truncated).
+String describeSuiteLogForFailure(
+  List<Map<String, dynamic>> entries, {
+  int tailLength = 3,
+}) {
+  if (entries.isEmpty) {
+    return 'suite log: empty or unreadable';
+  }
+  int? timeOf(Map<String, dynamic> entry) => (entry['time'] as num?)?.toInt();
+  String clip(Object? value, int max) {
+    final text = '$value'.replaceAll(RegExp(r'\s+'), ' ');
+    return text.length <= max ? text : '${text.substring(0, max)}...';
+  }
+
+  final blocks = entries.where((e) => e['startBlock'] == true).toList();
+  final authorize = blocks
+      .where((e) => '${e['msg']}'.startsWith(_authorizationEndpointBlock))
+      .firstOrNull;
+  final anchor = authorize == null ? null : timeOf(authorize);
+  String offset(Map<String, dynamic> entry) {
+    final time = timeOf(entry);
+    if (anchor == null || time == null) {
+      return '';
+    }
+    final seconds = (time - anchor) / 1000;
+    return '@${seconds >= 0 ? '+' : ''}${seconds.toStringAsFixed(2)}s';
+  }
+
+  final requestBlocks = blocks
+      .map((e) => '${clip(e['msg'], 60)}${offset(e)}')
+      .join(', ');
+  final tail = entries.length <= tailLength
+      ? entries
+      : entries.sublist(entries.length - tailLength);
+  final tailText = tail
+      .map(
+        (e) =>
+            '[${e['result'] ?? '-'}]${offset(e)} ${clip(e['msg'], 140)}'
+            '${e['error'] == null ? '' : ' | error: ${clip(e['error'], 140)}'}',
+      )
+      .join(' / ');
+  return 'suite log (${entries.length} entries): '
+      '${authorize == null ? 'NO authorization request received; ' : ''}'
+      'request blocks (relative to the first authorization request) '
+      '[$requestBlocks]; last ${tail.length}: $tailText';
+}
+
 /// Whether suite log entry message [msg] confirms the OP's
 /// `check_session_iframe` page completed one postMessage round trip with the
 /// RP (`LogGetSessionStateRequest`, openid-certification/conformance-suite:

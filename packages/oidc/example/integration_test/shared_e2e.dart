@@ -323,13 +323,21 @@ String _describeToken(OidcToken token) {
 /// message (what the CLIENT observed -- logged in, no user, or not driven at
 /// all for the discovery-only module) and plays no part in the verdict: the
 /// decision is the suite's own `result`, not what package:oidc returned.
-void _recordModuleVerdict({
+///
+/// A rejected verdict also carries [describeSuiteLogForFailure]'s digest of
+/// the module's suite log, fetched from [dio] only on that path: the failure
+/// line is the one piece of output every platform's job log shows (iOS shows
+/// nothing else), and "WAITING, no user" alone cannot say whether the suite
+/// ever received the authorization request.
+Future<void> _recordModuleVerdict({
+  required Dio dio,
+  required String instanceId,
   required List<String> moduleFailures,
   required Logger logger,
   required String moduleName,
   required Map<String, dynamic> verdict,
   required String authDescription,
-}) {
+}) async {
   final status = verdict['status'] as String?;
   final result = verdict['result'] as String?;
   // Set only when every poll inside pollConformanceModuleVerdict exhausted its
@@ -343,18 +351,26 @@ void _recordModuleVerdict({
     '(client: $authDescription)'
     '${pollError == null ? '' : ', last poll error: $pollError'}.',
   );
-  if (!isTerminalConformanceStatus(status)) {
+  final terminal = isTerminalConformanceStatus(status);
+  if (terminal && isAcceptableConformanceResult(result)) {
+    return;
+  }
+  final suiteLog = describeSuiteLogForFailure(
+    await fetchTestLogs(dio: dio, instanceId: instanceId),
+  );
+  if (!terminal) {
     moduleFailures.add(
       '$moduleName: suite status never reached FINISHED/INTERRUPTED within '
       'the poll timeout (last status=$status, result=$result; client: '
       '$authDescription)'
-      '${pollError == null ? '' : ' -- the last poll of it failed: $pollError'}.',
+      '${pollError == null ? '' : ' -- the last poll of it failed: $pollError'}'
+      '. $suiteLog',
     );
-  } else if (!isAcceptableConformanceResult(result)) {
+  } else {
     moduleFailures.add(
       '$moduleName: suite result was $result (status=$status; client: '
       '$authDescription). Acceptable results are PASSED, WARNING, REVIEW, '
-      'SKIPPED.',
+      'SKIPPED. $suiteLog',
     );
   }
 }
@@ -837,7 +853,9 @@ Future<void> runOidcConformanceTest(
           dio: dio,
           instanceId: testInstanceId,
         );
-        _recordModuleVerdict(
+        await _recordModuleVerdict(
+          dio: dio,
+          instanceId: testInstanceId,
           moduleFailures: moduleFailures,
           logger: logger,
           moduleName: moduleName,
@@ -867,7 +885,9 @@ Future<void> runOidcConformanceTest(
         dio: dio,
         instanceId: testInstanceId,
       );
-      _recordModuleVerdict(
+      await _recordModuleVerdict(
+        dio: dio,
+        instanceId: testInstanceId,
         moduleFailures: moduleFailures,
         logger: logger,
         moduleName: moduleName,
@@ -905,7 +925,15 @@ Future<void> runOidcConformanceTest(
     // SECOND time below: the suite rotates its signing key only once a second
     // `authorize` request arrives, so without a second real interaction here
     // the module waits forever for one the harness never made (#467).
+    // What the CLIENT saw, carried into the per-module failure line: on iOS
+    // that line is the only output that reaches the job log (see
+    // describeSuiteLogForFailure, api.dart).
+    String? loginError;
+    final loginStopwatch = Stopwatch();
     Future<OidcUser?> attemptLogin() async {
+      loginStopwatch
+        ..reset()
+        ..start();
       try {
         if (!hasCode) {
           // No code comes back, so there is nothing to exchange. Deprecated in
@@ -922,7 +950,10 @@ Future<void> runOidcConformanceTest(
         // Expected for the negative modules, whose broken responses the client
         // must reject, so record it rather than failing the run here.
         logger.severe('Login flow threw for $moduleName', e, stackTrace);
+        loginError = '$e';
         return null;
+      } finally {
+        loginStopwatch.stop();
       }
     }
 
@@ -1075,12 +1106,17 @@ Future<void> runOidcConformanceTest(
       dio: dio,
       instanceId: testInstanceId,
     );
-    _recordModuleVerdict(
+    await _recordModuleVerdict(
+      dio: dio,
+      instanceId: testInstanceId,
       moduleFailures: moduleFailures,
       logger: logger,
       moduleName: moduleName,
       verdict: verdict,
-      authDescription: authResult == null ? 'no user' : 'logged in',
+      authDescription: authResult == null
+          ? 'no user after ${loginStopwatch.elapsed.inMilliseconds}ms'
+                '${loginError == null ? '' : ', login threw: $loginError'}'
+          : 'logged in',
     );
     logger
       ..info(
