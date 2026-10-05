@@ -135,6 +135,48 @@ bool isBackChannelLogoutPlan(String planName) =>
 /// origin for `session_state` to be computed from in the first place.
 bool canGenerateSessionState(Uri redirectUri) => redirectUri.host.isNotEmpty;
 
+/// Whether [planName] is an OpenID Connect Session Management RP profile
+/// (`oidcc-client-rp-session-management-rp-basic`, plus the not-yet-wired
+/// `-rp-hybrid`/`-rp-implicit` variants, matched the same way
+/// [isLogoutConformancePlan] matches its own substring family).
+bool isSessionManagementConformancePlan(String planName) =>
+    planName.contains('-session-management-');
+
+/// Whether this platform can satisfy OpenID Connect Session Management's
+/// RP-side session-status check: hosting `check_session_iframe` in a frame
+/// the RP controls, posting `"$clientId $sessionState"` into it, and reading
+/// back the OP's postMessage result.
+///
+/// This is `true` ONLY on web (`package:oidc`'s decision, made and verified
+/// with the user, oidc#467): two independent reasons, either one sufficient
+/// on its own, rule out every other platform:
+///
+/// * RFC 8252 section 8.12 requires native apps to perform the authorization
+///   request in an external user-agent (the system browser), explicitly
+///   forbidding an embedded WebView for login. So on android/ios/macos/
+///   linux/windows, package:oidc's login flow never runs inside any
+///   app-controlled browser surface at all -- there is no WebView around,
+///   embedded or otherwise, for the app to host a frame in.
+/// * Even granting an embedded WebView purely for session monitoring (a
+///   SEPARATE browser surface from the one that performed login), OpenID
+///   Connect Session Management 1.0 section 3.2 computes `check_session_iframe`'s
+///   answer from the OP SESSION COOKIE held by whichever user-agent is
+///   loading it. That cookie lives in the EXTERNAL user-agent the §8.12 login
+///   happened in (the system browser), not in any separate surface the app
+///   might create -- a second, app-controlled WebView would carry no OP
+///   session cookie and could only ever answer "changed"/"error", which is
+///   not a meaningful session check, it is a permanently-broken one.
+///
+/// `monitorSessionStatus` reflects exactly this split today:
+/// `oidc_web_core`'s implementation does the real iframe + postMessage dance
+/// (the web page IS the browser the login ran in, so the cookie is right
+/// there); `oidc_desktop`/`oidc_android`/`oidc_darwin` each return
+/// `Stream.empty()`, tested explicitly in their own `library_surface_test.dart`
+/// files. See `packages/oidc/README.md`'s Session Management section for the
+/// native-platform alternatives (`OidcTokenRefreshFailedEvent`,
+/// `OidcUserInfoFailedEvent`, back-channel logout, OpenID Connect Native SSO).
+bool get supportsSessionManagement => kIsWeb;
+
 /// The OIDC Registration 1.0 section 2 `application_type` this platform's RP
 /// truthfully is.
 ///
@@ -439,6 +481,32 @@ Future<void> runOidcConformanceTest(
       'certification.openid.net. Every module timed out waiting for that POST '
       'while the plan reported success, because the aggregate counted logins '
       'only. Unskip once the runner is publicly reachable.',
+    );
+    return;
+  }
+
+  if (isSessionManagementConformancePlan(planName) &&
+      !supportsSessionManagement) {
+    // Confirmed against the suite's own public log (oidc#467, CI run
+    // 37273454165, linux instance LGM4mkXj5oBdTTq / windows instance
+    // 4l3cX3OUWBhPQYg): the RP's observed request sequence was discovery ->
+    // authorize -> token -> jwks -> userinfo -> end_session_endpoint, with
+    // ZERO requests to check_session_iframe before or after logout, so the
+    // module sits at status=WAITING forever -- no poll timeout fixes a
+    // module waiting on an interaction that structurally never happens on
+    // this platform. See [supportsSessionManagement] for why.
+    markTestSkipped(
+      '$planName needs the RP to host check_session_iframe in a frame it '
+      'controls and read back its postMessage result. RFC 8252 section 8.12 '
+      'requires $platform to run login in an external user-agent (no '
+      'embedded WebView), and OpenID Connect Session Management 1.0 section '
+      "3.2 ties check_session_iframe's answer to the OP session cookie held "
+      'by THAT external user-agent -- a cookie this app has no access to and '
+      'no frame to host against. package:oidc implements session-status '
+      "monitoring for web only; see packages/oidc/README.md's Session "
+      'Management section for native alternatives '
+      '(OidcTokenRefreshFailedEvent, OidcUserInfoFailedEvent, back-channel '
+      'logout, OpenID Connect Native SSO).',
     );
     return;
   }
