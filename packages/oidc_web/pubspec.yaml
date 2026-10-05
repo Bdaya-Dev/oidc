@@ -1,6 +1,6 @@
 name: oidc_web
 description: Web implementation of the oidc plugin
-version: 1.0.4
+version: 1.0.5
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_web
 homepage: https://bdaya-dev.github.io/oidc/
 topics: ["oidc", "openidconnect", "oauth", "authentication"]
@@ -26,7 +26,7 @@ dependencies:
 
   oidc_core: ^4.0.0
   oidc_platform_interface: ^1.0.4
-  oidc_web_core: ^1.2.1
+  oidc_web_core: ^1.2.2
 
 dev_dependencies:
   flutter_test:
