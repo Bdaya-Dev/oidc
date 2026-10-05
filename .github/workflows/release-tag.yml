@@ -16,6 +16,12 @@ jobs:
         with:
           fetch-depth: 0
       - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # Keep in sync with release-prepare.yml's pin. See that file's
+          # comment for why this branch's release workflows must not use
+          # the latest stable Flutter/Dart. #450
+          flutter-version: 3.35.4
       # see https://github.com/invertase/melos/issues/796
       - uses: bluefireteam/melos-action@main
         continue-on-error: true
