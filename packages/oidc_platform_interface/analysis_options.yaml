@@ -8,6 +8,7 @@ analyzer:
     # generated code is not linted. Its `// ignore_for_file: type=lint` header
     # covers lints, but not language-mode warnings like strict-raw-types.
     - lib/src/oidc_native.g.dart
+    - build/**
   errors:
     lines_longer_than_80_chars: ignore
 
