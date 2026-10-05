@@ -338,17 +338,71 @@ Future<void> runOidcConformanceTest(
 
   final dio = Dio(
     BaseOptions(
-      baseUrl: kIsWeb
-          ? Uri.parse(
-              'https://cors-proxy.bdaya-dev.workers.dev/corsproxy/',
-            ).replace(queryParameters: {'apiurl': baseUrl}).toString()
-          : baseUrl,
+      baseUrl: baseUrl,
       headers: {
         'Authorization': 'Bearer $oidcConformanceToken',
         'Accept': 'application/json',
       },
     ),
   );
+  if (kIsWeb) {
+    // The suite sends no CORS headers, so a browser has to go through a
+    // CORS-proxying Cloudflare Worker instead of calling it directly. That
+    // worker's calling convention is a single query parameter:
+    // `.../corsproxy/?apiurl=<the FULL target URL, own path and query
+    // included, percent-encoded as one value>`.
+    //
+    // This used to be done by baking a half-finished `apiurl=<bare origin>`
+    // into [BaseOptions.baseUrl] and relying on dio's `RequestOptions.uri`
+    // getter -- a plain `baseUrl + path` STRING CONCATENATION, not URI
+    // resolution (see package:dio's `lib/src/options.dart`) -- to extend
+    // that value as each call's `path` was appended. That only produces a
+    // correct `apiurl` for a `path` with no leading `/` and no query string
+    // of its own: a leading `/` lands right after the baseUrl's already
+    // percent-encoded trailing slash (`%2F`) and decodes to a literal
+    // double slash, and an embedded `?`/`&` -- which every endpoint that
+    // takes its own query parameters has, being built via
+    // `Uri(path: ..., queryParameters: {...})` -- breaks OUT of the
+    // `apiurl` value and starts new top-level query parameters on the
+    // proxy request that the worker has no use for and drops.
+    //
+    // `POST api/plan` (`conformance/api.dart`'s `prepareTestPlanRequest`)
+    // hit both: its path has a leading `/` AND its own `planName`/`variant`
+    // query, so the worker actually proxied to
+    // `https://www.certification.openid.net//api/plan?planName=...` with
+    // `variant` silently dropped. The suite's router does not recognize
+    // that double-slash path as the authenticated REST endpoint and falls
+    // back to its default web handling: a 302 to `login.html`, which the
+    // browser refuses to follow cross-origin (`net::ERR_FAILED`), surfacing
+    // here as "Creating the plan test plan failed with status null".
+    // `api/server`, `api/currentuser` and `api/plan/available` all pass a
+    // bare relative path with no leading slash and no query of its own, so
+    // the same string concatenation happens to land on the right value --
+    // which is exactly why only plan *creation* was failing.
+    //
+    // Fixed by not pre-baking `apiurl` at all: let dio resolve this
+    // request's OWN baseUrl+path+queryParameters first -- against the
+    // suite's bare origin, which carries no dangling query, that
+    // composition is correct for any path, leading slash or embedded query
+    // or not -- then wrap the single resulting absolute URL as the proxy's
+    // `apiurl` value via [Uri.replace], which percent-encodes it correctly
+    // regardless of what it contains.
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          final target = options.uri;
+          options
+            ..baseUrl = ''
+            ..queryParameters = {}
+            ..path =
+                Uri.parse('https://cors-proxy.bdaya-dev.workers.dev/corsproxy/')
+                    .replace(queryParameters: {'apiurl': target.toString()})
+                    .toString();
+          handler.next(options);
+        },
+      ),
+    );
+  }
   _testLogger
     ..info('Dio client configured for conformance API.')
     ..info('Fetching server diagnostics (api/server)...');
