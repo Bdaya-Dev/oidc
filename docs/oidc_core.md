@@ -63,6 +63,10 @@ The base class for all events, this contains an `at` property that stores when t
 
 Occurs before a user is forgotten, either via `forgetUser()` or via `logout()`.
 
+### OidcEndSessionConfirmationEvent
+
+Occurs after an RP-initiated `logout()` when session management is enabled, the OP advertises a `check_session_iframe` and the ended session had a `session_state`. It carries what the OP's `check_session_iframe` answered for the ended session (OpenID Connect Session Management 1.0 §3.1): `outcome` is `changed` (the expected answer after a successful logout, but not proof of it: blocked third-party cookies can make the iframe answer `changed` for every call, §5.1, and unrelated sessions can cause false positives, §3.2), `unchanged` (the OP session is still alive, so the OP-side logout did not take; the only reliable signal), `error`, or `timedOut` (see `OidcSessionManagementSettings.endSessionConfirmationTimeout`). Logout does not wait for it, and the manager does not act on it. On a resumed web `samePage` logout it is emitted during `init()`, so subscribe to `events()` before calling `init()`.
+
 ## OidcPkcePair
 
 you can use this to generate PKCE key pairs.

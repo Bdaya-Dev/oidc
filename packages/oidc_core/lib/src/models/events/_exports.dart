@@ -1,3 +1,4 @@
+export 'end_session_confirmation_event.dart';
 export 'event.dart';
 export 'offline_auth_warning_event.dart';
 export 'offline_mode_entered_event.dart';
