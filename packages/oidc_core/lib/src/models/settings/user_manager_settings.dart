@@ -217,10 +217,12 @@ class OidcUserManagerSettings {
   /// the data contained in the response MUST NOT be used"), throwing an
   /// [OidcException] on mismatch. A rejected document is neither persisted
   /// nor kept in memory: after a failed `init()` the manager has no discovery
-  /// document and every flow throws instead of building a request; a rejected
-  /// background (cache-first) refresh leaves the previously validated document
-  /// in use. A cached document that fails the check is discarded and fetched
-  /// again.
+  /// document and every flow (including `getAccessToken()`, which used to
+  /// return `null` there) throws instead of building a request. A rejected
+  /// background (cache-first) refresh is treated like an unreachable network:
+  /// the previously validated document stays in use and the restored session
+  /// is still re-verified against it. A cached document that fails the check
+  /// is discarded and fetched again.
   ///
   /// The expected issuer is [expectedIssuer] when set (compared exactly, see
   /// [OidcUtils.discoveryIssuerMatches]); otherwise it is derived from the

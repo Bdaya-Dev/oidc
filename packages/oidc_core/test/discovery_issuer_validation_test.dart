@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:clock/clock.dart';
@@ -670,7 +671,18 @@ void main() {
           client: _serving(docAt('$good/other', evil)),
         );
         await expectLater(m.init(), _throwsMismatch());
-        expect(() => m.discoveryDocument, throwsA(isA<OidcException>()));
+        expect(
+          () => m.discoveryDocument,
+          throwsA(
+            isA<OidcException>().having(
+              (e) => e.message,
+              'message',
+              contains('init() failed'),
+            ),
+          ),
+        );
+        // getAccessToken() used to return null here; it now throws too.
+        await expectLater(m.getAccessToken(), throwsA(isA<OidcException>()));
         await expectLater(
           m.loginAuthorizationCodeFlow(),
           throwsA(isA<OidcException>()),
@@ -699,72 +711,210 @@ void main() {
       },
     );
 
+    /// A store holding a STALE but valid cached document for [good] and a
+    /// restorable cached session whose id_token cannot be verified (no
+    /// jwks_uri, junk signature), so a real re-verification rejects it.
+    Future<OidcMemoryStore> staleGoodCacheWithSession() async {
+      final store = OidcMemoryStore();
+      await store.init();
+      final staleAt = clock
+          .now()
+          .subtract(const Duration(days: 30))
+          .toUtc()
+          .millisecondsSinceEpoch;
+      await store.setMany(
+        OidcStoreNamespace.discoveryDocument,
+        values: {
+          _wk(good).toString(): jsonEncode(docAt(good, good)),
+          '${_wk(good)}${OidcUserManagerBase.discoveryFetchedAtSuffix}': staleAt
+              .toString(),
+        },
+      );
+      String b64(Map<String, dynamic> m) =>
+          base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
+      final now = clock.now().millisecondsSinceEpoch ~/ 1000;
+      final idToken = [
+        b64({'alg': 'RS256', 'typ': 'JWT'}),
+        b64({
+          'iss': good,
+          'sub': 'user-1',
+          'aud': 'client-1',
+          'iat': now,
+          'exp': now + 3600,
+        }),
+        'c2ln',
+      ].join('.');
+      await store.set(
+        OidcStoreNamespace.secureTokens,
+        key: OidcConstants_Store.currentToken,
+        value: jsonEncode({
+          'access_token': 'at',
+          'refresh_token': 'rt',
+          'id_token': idToken,
+          'token_type': 'Bearer',
+          'expires_in': 3600,
+          OidcConstants_Store.expiresInReferenceDate: clock
+              .now()
+              .toUtc()
+              .toIso8601String(),
+        }),
+      );
+      return store;
+    }
+
+    Future<void> settle() async {
+      for (var i = 0; i < 20; i++) {
+        await pumpEventQueue();
+      }
+    }
+
     test(
       'cache-first background refresh: a stale validated doc stays in use '
       'when the network serves a mismatched one',
       () async {
-        final store = OidcMemoryStore();
-        await store.init();
-        final staleAt = clock
-            .now()
-            .subtract(const Duration(days: 30))
-            .toUtc()
-            .millisecondsSinceEpoch;
-        await store.setMany(
-          OidcStoreNamespace.discoveryDocument,
-          values: {
-            _wk(good).toString(): jsonEncode(docAt(good, good)),
-            '${_wk(good)}${OidcUserManagerBase.discoveryFetchedAtSuffix}':
-                staleAt.toString(),
-          },
-        );
-        String b64(Map<String, dynamic> m) =>
-            base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
-        final now = clock.now().millisecondsSinceEpoch ~/ 1000;
-        final idToken = [
-          b64({'alg': 'RS256', 'typ': 'JWT'}),
-          b64({
-            'iss': good,
-            'sub': 'user-1',
-            'aud': 'client-1',
-            'iat': now,
-            'exp': now + 3600,
-          }),
-          'c2ln',
-        ].join('.');
-        await store.set(
-          OidcStoreNamespace.secureTokens,
-          key: OidcConstants_Store.currentToken,
-          value: jsonEncode({
-            'access_token': 'at',
-            'refresh_token': 'rt',
-            'id_token': idToken,
-            'token_type': 'Bearer',
-            'expires_in': 3600,
-            OidcConstants_Store.expiresInReferenceDate: clock
-                .now()
-                .toUtc()
-                .toIso8601String(),
-          }),
-        );
         final requests = <Uri>[];
         final m = _lazy(
           wellKnown: _wk(good),
           client: _serving(docAt(evil, evil), requests),
-          store: store,
+          store: await staleGoodCacheWithSession(),
           initMode: OidcInitMode.cacheFirst,
         );
         await m.init();
         // Let the background revalidation (stale => network fetch) settle.
-        for (var i = 0; i < 20; i++) {
-          await pumpEventQueue();
-        }
+        await settle();
         expect(requests, contains(_wk(good)));
         expect(m.discoveryDocument.issuer, Uri.parse(good));
         expect(m.discoveryDocument.tokenEndpoint, Uri.parse('$good/token'));
         await m.loginAuthorizationCodeFlow();
         expect(m.authorizeEndpoints, [Uri.parse('$good/authorize')]);
         expect(requests.where((u) => u.host == 'attacker.example'), isEmpty);
+      },
+    );
+
+    // A rejected refresh must behave like an unreachable network: the restored
+    // (unverified) session is still re-verified against the kept document.
+    test(
+      'cache-first background refresh: a rejected document still lets the '
+      'restored session be re-verified (and dropped when it fails)',
+      () async {
+        final m = _lazy(
+          wellKnown: _wk(good),
+          client: _serving(docAt(evil, evil)),
+          store: await staleGoodCacheWithSession(),
+          initMode: OidcInitMode.cacheFirst,
+        );
+        await m.init();
+        expect(m.currentUser, isNotNull, reason: 'restored locally first');
+        await settle();
+        expect(m.currentUser, isNull);
+      },
+    );
+
+    test(
+      'cache-first background refresh while offline: same outcome (the '
+      'reference behavior for the rejected case above)',
+      () async {
+        final m = _lazy(
+          wellKnown: _wk(good),
+          client: MockClient((req) async => http.Response('', 503)),
+          store: await staleGoodCacheWithSession(),
+          initMode: OidcInitMode.cacheFirst,
+        );
+        await m.init();
+        await settle();
+        expect(m.currentUser, isNull);
+      },
+    );
+
+    // With a metadataSeed the published fallback is a new (seeded) object, so
+    // an identity-based "un-publish on failure" would miss it.
+    test(
+      'blocking init, stale bad cache, offline, metadataSeed set: the '
+      'rejected fallback is not left published',
+      () async {
+        final store = OidcMemoryStore();
+        await store.init();
+        await store.setMany(
+          OidcStoreNamespace.discoveryDocument,
+          values: {_wk(good).toString(): jsonEncode(docAt(evil, evil))},
+        );
+        final m = _DiscoveryManager.lazy(
+          discoveryDocumentUri: _wk(good),
+          clientCredentials: _clientCreds,
+          store: store,
+          httpClient: MockClient((req) async => http.Response('', 503)),
+          settings: OidcUserManagerSettings(
+            redirectUri: _redirect,
+            initMode: OidcInitMode.blockingValidate,
+            metadataSeed: OidcProviderMetadata.fromJson(const {
+              'scopes_supported': ['openid'],
+            }),
+          ),
+        );
+        await expectLater(m.init(), _throwsMismatch());
+        expect(() => m.discoveryDocument, throwsA(isA<OidcException>()));
+        await expectLater(
+          m.loginAuthorizationCodeFlow(),
+          throwsA(isA<OidcException>()),
+        );
+        expect(m.authorizeEndpoints, isEmpty);
+      },
+    );
+
+    test(
+      'blocking init, stale bad cache, offline: the fallback is checked '
+      'before it is published',
+      () async {
+        final store = OidcMemoryStore();
+        await store.init();
+        await store.setMany(
+          OidcStoreNamespace.discoveryDocument,
+          values: {_wk(good).toString(): jsonEncode(docAt(evil, evil))},
+        );
+        final m = _lazy(
+          wellKnown: _wk(good),
+          client: MockClient((req) async => http.Response('', 503)),
+          store: store,
+        );
+        await expectLater(m.init(), _throwsMismatch());
+        expect(() => m.discoveryDocument, throwsA(isA<OidcException>()));
+        await expectLater(
+          m.loginAuthorizationCodeFlow(),
+          throwsA(isA<OidcException>()),
+        );
+        expect(m.authorizeEndpoints, isEmpty);
+      },
+    );
+
+    test(
+      'a flow called while init() is still running says so (not "failed")',
+      () async {
+        final gate = Completer<void>();
+        final m = _lazy(
+          wellKnown: _wk(good),
+          client: MockClient((req) async {
+            await gate.future;
+            return http.Response(
+              jsonEncode(docAt(good, good)),
+              200,
+              headers: const {'content-type': 'application/json'},
+            );
+          }),
+        );
+        final init = m.init();
+        expect(
+          () => m.discoveryDocument,
+          throwsA(
+            isA<OidcException>().having(
+              (e) => e.message,
+              'message',
+              contains('still running'),
+            ),
+          ),
+        );
+        gate.complete();
+        await init;
+        expect(m.discoveryDocument.issuer, Uri.parse(good));
       },
     );
   });

@@ -234,8 +234,9 @@ Behavior changes:
 
 Per OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3, `OidcUserManagerSettings.strictIssuerValidation` (default `true`) rejects a
 discovery document whose `issuer` does not match the issuer it was expected to describe. A rejected document is neither
-persisted nor kept: after a failed `init()` every flow throws instead of building a request, and a rejected background
-(cache-first) refresh keeps the previously validated document. Set `OidcUserManagerSettings.expectedIssuer` when a provider's issuer cannot be derived
+persisted nor kept: after a failed `init()` every flow (including `getAccessToken()`, which used to return `null`)
+throws instead of building a request, and a rejected background (cache-first) refresh keeps the previously validated
+document and still re-verifies the restored session against it. Set `OidcUserManagerSettings.expectedIssuer` when a provider's issuer cannot be derived
 from the discovery URL; `strictIssuerValidation: false` only warns instead of rejecting, for providers `expectedIssuer`
 cannot describe either.
 

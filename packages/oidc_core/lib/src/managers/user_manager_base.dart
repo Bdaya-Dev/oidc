@@ -657,12 +657,16 @@ abstract class OidcUserManagerBase {
         'please call init() first.',
       );
     }
-    // `didInit` only says init() ran, not that it succeeded. A rejected
-    // discovery document (e.g. an issuer mismatch) is never kept, so nothing
-    // may be built from what is left.
+    // `didInit` only says init() was called, not that it finished or
+    // succeeded. A rejected discovery document (e.g. an issuer mismatch) is
+    // never kept, so nothing may be built from what is left.
     if (currentDiscoveryDocument == null) {
       logAndThrow(
-        'No usable discovery document: init() failed to load or validate it.',
+        _initSettled
+            ? 'No usable discovery document: init() failed to load or '
+                  'validate it.'
+            : 'The discovery document is not loaded yet: init() is still '
+                  'running; await init() first.',
       );
     }
   }
@@ -2227,6 +2231,9 @@ abstract class OidcUserManagerBase {
   ///
   /// * Returns `null` when there is no signed-in user — this is a state, not an
   ///   error, so it does not throw.
+  /// * Throws [OidcException] (like every other flow) when `init()` has not
+  ///   been called, is still running, or failed without a usable discovery
+  ///   document (e.g. an issuer mismatch).
   /// * Returns the current access token unchanged when the token carries no
   ///   `expires_in` (the library cannot know how much time is left; the same
   ///   assumption that disables the expiry timers) and [forceRefresh] is false.
@@ -4937,9 +4944,23 @@ abstract class OidcUserManagerBase {
     if (!await _isDiscoveryStale()) {
       return;
     }
-    // On a rejected document this throws and leaves the previously validated
-    // [currentDiscoveryDocument] (and the key store built from it) in place.
-    await _fetchAndApplyDiscovery(uri, fallback: currentDiscoveryDocument);
+    try {
+      await _fetchAndApplyDiscovery(uri, fallback: currentDiscoveryDocument);
+    } on OidcException catch (e, st) {
+      // A rejected refresh (issuer mismatch, failed signed metadata) is
+      // treated like an unreachable network: the previously validated
+      // [currentDiscoveryDocument] and the key store built from it stay in
+      // place, and the caller still re-verifies the restored session against
+      // them. Propagating would skip that re-verification and leave the
+      // locally-restored, unverified user signed in.
+      logger.warning(
+        'cache-first init: the refreshed discovery document was rejected; '
+        'keeping the previously validated one.',
+        e,
+        st,
+      );
+      return;
+    }
     // A refreshed document may advertise a new jwks_uri.
     setupKeyStore();
   }
@@ -4969,7 +4990,7 @@ abstract class OidcUserManagerBase {
         uri,
         client: httpClient,
       );
-    } catch (e, st) {
+    } on Object catch (e, st) {
       //maybe there is no internet.
       if (fallback == null) {
         logAndThrow(
@@ -5522,6 +5543,11 @@ abstract class OidcUserManagerBase {
   @protected
   AsyncMemoizer<void> initMemoizer = AsyncMemoizer();
 
+  /// Whether [init] has finished (successfully or not). [didInit] turns true
+  /// as soon as [init] is called; [ensureInit] uses this to tell "still
+  /// running" from "failed".
+  bool _initSettled = false;
+
   @protected
   final toDispose = <StreamSubscription<dynamic>>[];
 
@@ -5676,9 +5702,11 @@ abstract class OidcUserManagerBase {
       try {
         await _runInit();
       } on Object catch (e, st) {
+        _initSettled = true;
         _settleUserChangesAfterInitWaiters(e, st);
         rethrow;
       }
+      _initSettled = true;
       _settleUserChangesAfterInitWaiters(null, null);
     });
   }
