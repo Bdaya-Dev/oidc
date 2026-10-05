@@ -833,6 +833,17 @@ Future<void> runOidcConformanceTest(
       issuerMismatchRejected = rejected;
       print('[e2e] $moduleName -> rejected at discovery: $rejected');
       if (rejected) {
+        final verdict = await pollConformanceModuleVerdict(
+          dio: dio,
+          instanceId: testInstanceId,
+        );
+        _recordModuleVerdict(
+          moduleFailures: moduleFailures,
+          logger: logger,
+          moduleName: moduleName,
+          verdict: verdict,
+          authDescription: 'rejected at discovery (expected)',
+        );
         await sub.cancel();
         app_state.currentManagerRx.$ = app_state.managersRx.$.first;
         app_state.managersRx.update((managers) => managers..remove(manager));

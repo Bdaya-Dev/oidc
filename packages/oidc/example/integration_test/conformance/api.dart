@@ -823,7 +823,16 @@ Future<bool> waitForSuiteLogEntry({
 }) async {
   final stopwatch = Stopwatch()..start();
   while (true) {
-    final logs = await fetchTestLogs(dio: dio, instanceId: instanceId);
+    // A failed read counts as "not seen yet": the module's own verdict poll
+    // still decides pass/fail, so a network blip must not abort the plan.
+    List<Map<String, dynamic>> logs;
+    try {
+      logs = await retryTransientConformancePollErrors(
+        () => fetchTestLogs(dio: dio, instanceId: instanceId),
+      );
+    } on Object {
+      logs = const [];
+    }
     if (logs.any(matches)) {
       return true;
     }
