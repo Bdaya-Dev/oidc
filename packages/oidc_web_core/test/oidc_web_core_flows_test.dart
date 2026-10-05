@@ -474,7 +474,7 @@ void main() {
       final sub = stream.listen(results.add);
       addTearDown(() async {
         await sub.cancel();
-        web.document.getElementById('oidc-session-management-iframe')?.remove();
+        _removeAllSessionMonitorIframes();
       });
 
       // Give onListen time to load the iframe and attach the window listener.
@@ -522,9 +522,9 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 150));
 
       // Once the iframe is gone, both the incoming-message handler (its
-      // getElementById is null) and the periodic sendCheckSession (its target
-      // is no longer an <iframe>) bail out. The message is ignored.
-      web.document.getElementById('oidc-session-management-iframe')?.remove();
+      // own iframe is no longer connected) and the periodic sendCheckSession
+      // (same check) bail out. The message is ignored.
+      _removeAllSessionMonitorIframes();
       post('ignored-after-iframe-removed');
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
@@ -541,5 +541,153 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 250));
       // onCancel runs via the tearDown.
     });
+
+    test("cancelling an older monitor does not remove a newer monitor's "
+        'iframe, which keeps receiving replies (#474)', () async {
+      final origin = web.window.location.origin;
+      final checkSession = Uri.parse('$origin/__oidc_monitor_probe_474__');
+
+      final resultsA = <OidcMonitorSessionResult>[];
+      final streamA = core.monitorSessionStatus(
+        checkSessionIframe: checkSession,
+        request: const OidcMonitorSessionStatusRequest(
+          clientId: 'client-a',
+          sessionState: 'sess-a',
+          interval: Duration(milliseconds: 100),
+        ),
+      );
+      final subA = streamA.listen(resultsA.add);
+      addTearDown(() async {
+        await subA.cancel();
+        _removeAllSessionMonitorIframes();
+      });
+
+      // Let A's iframe load and attach before starting B, matching the
+      // "an older monitor is still running when a newer one starts"
+      // scenario from #474.
+      await Future<void>.delayed(const Duration(seconds: 1));
+      expect(
+        _sessionMonitorIframes(),
+        hasLength(1),
+        reason: "monitor A's iframe should be in the DOM",
+      );
+
+      final resultsB = <OidcMonitorSessionResult>[];
+      final streamB = core.monitorSessionStatus(
+        checkSessionIframe: checkSession,
+        request: const OidcMonitorSessionStatusRequest(
+          clientId: 'client-b',
+          sessionState: 'sess-b',
+          interval: Duration(milliseconds: 100),
+        ),
+      );
+      final subB = streamB.listen(resultsB.add);
+      addTearDown(() async {
+        await subB.cancel();
+        _removeAllSessionMonitorIframes();
+      });
+
+      await Future<void>.delayed(const Duration(seconds: 1));
+      expect(
+        _sessionMonitorIframes(),
+        hasLength(2),
+        reason:
+            "starting B must not remove A's iframe, and both should "
+            'now be present',
+      );
+
+      // Cancel the OLDER monitor (A).
+      await subA.cancel();
+
+      expect(
+        _sessionMonitorIframes(),
+        hasLength(1),
+        reason:
+            "cancelling A must remove only A's own iframe, leaving "
+            "B's iframe in the DOM",
+      );
+
+      void post(String data) => web.window.postMessage(data.toJS, origin.toJS);
+
+      resultsB.clear();
+      post('changed');
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(
+        resultsB,
+        isNotEmpty,
+        reason:
+            'cancelling the older monitor (A) must not stop the '
+            'newer monitor (B) from receiving session-status messages',
+      );
+    });
+
+    test('cancelling before `load` fires stops setup (no listener/timer '
+        'attached) and removes the iframe (#474)', () async {
+      final origin = web.window.location.origin;
+      final checkSession = Uri.parse(
+        '$origin/__oidc_monitor_probe_474_cancel_before_load__',
+      );
+
+      final before = _sessionMonitorIframes().length;
+
+      final results = <OidcMonitorSessionResult>[];
+      final stream = core.monitorSessionStatus(
+        checkSessionIframe: checkSession,
+        request: const OidcMonitorSessionStatusRequest(
+          clientId: 'client-cancel-before-load',
+          sessionState: 'sess-cancel-before-load',
+          interval: Duration(milliseconds: 50),
+        ),
+      );
+      final sub = stream.listen(results.add);
+      // Cancel synchronously (no `await` since `.listen()`), i.e. well
+      // before the browser could ever fire the iframe's `load` event.
+      await sub.cancel();
+
+      // Give plenty of time for `load` to have fired had the monitor
+      // still owned the iframe, and for a (never-started) periodic timer
+      // to have posted to it.
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+
+      expect(
+        _sessionMonitorIframes().length,
+        before,
+        reason:
+            'a monitor cancelled before `load` must not leave its '
+            'iframe in the DOM',
+      );
+
+      void post(String data) => web.window.postMessage(data.toJS, origin.toJS);
+      post('changed');
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(
+        results,
+        isEmpty,
+        reason:
+            'a monitor cancelled before `load` must never attach its '
+            'message listener or periodic timer',
+      );
+    });
   });
+}
+
+/// All hidden `check_session_iframe`s currently owned by some
+/// `monitorSessionStatus` monitor. Each monitor gets a uniquely-suffixed id
+/// (`oidc-session-management-iframe-<n>`, #474), so DOM presence is checked
+/// by id prefix rather than `getElementById` with the old fixed id.
+List<web.Element> _sessionMonitorIframes() {
+  final nodeList = web.document.querySelectorAll(
+    'iframe[id^="oidc-session-management-iframe"]',
+  );
+  return [
+    for (var i = 0; i < nodeList.length; i++) nodeList.item(i)! as web.Element,
+  ];
+}
+
+void _removeAllSessionMonitorIframes() {
+  for (final iframe in _sessionMonitorIframes()) {
+    iframe.remove();
+  }
 }
