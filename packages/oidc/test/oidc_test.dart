@@ -75,8 +75,10 @@ void main() {
       });
       test('lazy', () async {
         manager = OidcUserManager.lazy(
+          // The mock document's issuer: OIDC Discovery §4.3 rejects a document
+          // whose issuer differs from the one it was fetched for.
           discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
-            Uri.parse('https://example.com'),
+            Uri.parse('http://server.example.com'),
           ),
           clientCredentials: clientCredentials,
           store: store,

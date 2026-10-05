@@ -159,7 +159,7 @@ class OidcUserManagerSettings {
         const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
     this.allowedIdTokenAlgorithms,
-    this.strictIssuerValidation = false,
+    this.strictIssuerValidation = true,
     this.verifySignedMetadata = false,
     this.allowedSignedMetadataAlgorithms,
     this.expectedIssuer,
@@ -211,21 +211,81 @@ class OidcUserManagerSettings {
   /// accepted algorithms to an explicit caller-controlled set.
   final List<String>? allowedIdTokenAlgorithms;
 
-  /// When `true`, after the discovery document is loaded the manager asserts
-  /// that its `issuer` is identical to the expected issuer (the issuer used to
-  /// compose the well-known URL, or [expectedIssuer] if set) per OIDC Discovery
-  /// 1.0 §4.3 / RFC 8414 §3.3, throwing on mismatch and refusing to persist the
-  /// document.
+  /// When `true` (the **default**), after the discovery document is loaded the
+  /// manager asserts that its `issuer` matches the expected issuer per OIDC
+  /// Discovery 1.0 §4.3 / RFC 8414 §3.3 ("If these values are not identical,
+  /// the data contained in the response MUST NOT be used"), throwing an
+  /// [OidcException] on mismatch. A rejected document is neither persisted
+  /// nor kept in memory: after a failed `init()` the manager has no discovery
+  /// document and every flow (including `getAccessToken()`, which used to
+  /// return `null` there) throws instead of building a request. A rejected
+  /// background (cache-first) refresh is treated like an unreachable network:
+  /// the previously validated document stays in use and the restored session
+  /// is still re-verified against it. A cached document that fails the check
+  /// is discarded and fetched again.
   ///
-  /// When `false` (the **default**), a mismatch is only logged as a warning and
-  /// the document is still used — this preserves out-of-the-box Microsoft Entra
-  /// ID multi-tenant (`common`/`organizations`) and Azure AD B2C compatibility,
-  /// whose discovery `issuer` legitimately differs from the authority used to
-  /// fetch it (e.g. `https://login.microsoftonline.com/{tenantid}/v2.0`).
+  /// The expected issuer is [expectedIssuer] when set (compared exactly, see
+  /// [OidcUtils.discoveryIssuerMatches]); otherwise it is derived from the
+  /// well-known URL (OIDC §4.1 or RFC 8414 §3.1 layout). A derived issuer
+  /// cannot tell `X` from `X/` (both layouts strip the terminating `/`), so
+  /// for it a discovery `issuer` of `X/` is also accepted. An eagerly-supplied
+  /// document with no [expectedIssuer], or a custom discovery URL that cannot be
+  /// inverted, is not checked.
   ///
-  /// Recommended `true` for single-tenant / non-Entra deployments and required
-  /// for FAPI / high-assurance profiles; when enabling against a trailing-slash
-  /// issuer or a custom discovery URL, also set [expectedIssuer].
+  /// Microsoft Entra ID multi-tenant (`common`/`organizations`, v2.0) keeps
+  /// working: its templated issuer
+  /// (`https://login.microsoftonline.com/{tenantid}/v2.0`) matches an
+  /// [expectedIssuer] pinned to a concrete tenant. Other Entra authorities
+  /// whose issuer differs from the URL they are served at:
+  ///
+  ///  - **Tenant addressed by domain name** (e.g.
+  ///    `https://login.microsoftonline.com/contoso.onmicrosoft.com/v2.0`): the
+  ///    issuer carries the tenant GUID. Use the GUID authority
+  ///    (`https://login.microsoftonline.com/<tenant-GUID>/v2.0`) or set
+  ///    [expectedIssuer] to that GUID issuer.
+  ///  - **`consumers`** (`.../consumers/v2.0`): the issuer is the concrete
+  ///    Microsoft-account tenant
+  ///    (`https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0`),
+  ///    not a template. Set [expectedIssuer] to it.
+  ///  - **v1 `common`** (`https://login.microsoftonline.com/common`): the issuer
+  ///    is on another host (`https://sts.windows.net/{tenantid}/`). Set
+  ///    [expectedIssuer] to `https://sts.windows.net/<tenant-GUID>/`.
+  ///
+  /// Providers whose discovery `issuer` genuinely differs from the URL it is
+  /// served at (e.g. Azure AD B2C) need [expectedIssuer] set to that issuer.
+  ///
+  /// **Azure AD B2C** is the common case of a genuinely different issuer: with
+  /// its default token-compatibility setting (the "Issuer (iss) claim"
+  /// property, `AuthorityAndTenantGuid`), a discovery document fetched at
+  /// `https://fabrikamb2c.b2clogin.com/fabrikamb2c.onmicrosoft.com/B2C_1_susi/v2.0/.well-known/openid-configuration`
+  /// advertises
+  /// `"issuer": "https://fabrikamb2c.b2clogin.com/775527ff-9a37-4307-8b3d-cc311f58d925/v2.0/"`
+  /// — the tenant domain replaced by the tenant GUID, the policy segment
+  /// dropped, with a trailing slash (see Microsoft's [token compatibility
+  /// settings](https://learn.microsoft.com/azure/active-directory-b2c/tokens-overview#compatibility)
+  /// and, for custom policies, [`IssuanceClaimPattern`](https://learn.microsoft.com/azure/active-directory-b2c/jwt-issuer-technical-profile)).
+  /// Three ways to handle this, most to least preferred:
+  ///
+  ///  1. Switch the user flow/custom policy's "Issuer (iss) claim"
+  ///     (`IssuanceClaimPattern` in custom policies) to `AuthorityWithTfp`,
+  ///     and use the matching `/tfp/.../.well-known/openid-configuration`
+  ///     discovery URL. This makes the issuer
+  ///     `https://<host>/tfp/<tenant-GUID>/<policy>/v2.0/`, which is what that
+  ///     discovery URL derives to by default (no [expectedIssuer] needed).
+  ///     Microsoft documents this as the option for OpenID Connect
+  ///     Discovery 1.0-compliant issuers. The path comparison is
+  ///     case-sensitive, so the discovery URL's tenant and policy segments
+  ///     must use the same casing B2C emits in the issuer (it may lower-case
+  ///     the policy name); otherwise set [expectedIssuer].
+  ///  2. Keep B2C's default issuer format and set [expectedIssuer] to the
+  ///     actual issuer B2C returns, e.g. the GUID-form issuer shown above.
+  ///  3. Last resort: set this to `false`, which only warns instead of
+  ///     rejecting the document.
+  ///
+  /// When `false`, a mismatch is only logged as a warning and the document is
+  /// still used. This was the default before; it lets a provider that is not
+  /// the one the RP configured supply every endpoint, so only opt out when
+  /// [expectedIssuer] cannot describe the provider.
   final bool strictIssuerValidation;
 
   /// Master gate for RFC 8414 §2.1 signed authorization-server metadata
@@ -280,11 +340,15 @@ class OidcUserManagerSettings {
   /// Set this for issuers that contain a trailing slash, for custom/non-standard
   /// discovery URLs (e.g. Entra `?appid=` query, RFC 8414 insert-layout), or
   /// when constructing the manager with an eagerly-supplied `discoveryDocument`
-  /// (no `discoveryDocumentUri` to derive from).
+  /// (no `discoveryDocumentUri` to derive from). It is also how Azure AD B2C
+  /// users pin [strictIssuerValidation] to B2C's actual (GUID-form) issuer
+  /// instead of relaxing that check — see [strictIssuerValidation] for the
+  /// full set of options, including the spec-compliant `/tfp/` issuer format.
   ///
-  /// Comparison is the spec-mandated simple-string match via
-  /// [OidcUtils.issuersAreIdentical] (case-folds scheme+host only; path and
-  /// trailing slash stay significant).
+  /// Comparison against the discovery `issuer` is the spec-mandated
+  /// simple-string match via [OidcUtils.discoveryIssuerMatches] (case-folds
+  /// scheme+host only; path and trailing slash stay significant), plus
+  /// Entra's `{tenantid}` template matching a concrete tenant segment.
   final Uri? expectedIssuer;
 
   /// Whether/when the authorization-code login flow uses RFC 9126 Pushed

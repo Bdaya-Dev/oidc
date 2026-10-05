@@ -564,6 +564,126 @@ class OidcUtils {
     );
   }
 
+  /// Recovers the issuer a discovery URL was built from, for either layout:
+  ///
+  /// - OIDC Discovery 1.0 §4.1 (suffix): `https://op/a/.well-known/openid-configuration`
+  ///   → `https://op/a` (see [getIssuerFromOpenIdConfigWellKnownUri]);
+  /// - RFC 8414 §3.1 (insert): `https://as/.well-known/oauth-authorization-server/a`
+  ///   → `https://as/a`.
+  ///
+  /// Returns `null` for any other shape (a custom discovery URL), where the
+  /// issuer cannot be derived and must be supplied explicitly.
+  ///
+  /// Both layouts strip a terminating `/` from the issuer before building the
+  /// URL, so the result never ends in `/` even when the issuer did; see
+  /// [discoveryIssuerMatches].
+  static Uri? getIssuerFromWellKnownUri(Uri wellKnown) {
+    final oidc = getIssuerFromOpenIdConfigWellKnownUri(wellKnown);
+    if (oidc != null) {
+      return oidc;
+    }
+    final segments = wellKnown.pathSegments;
+    if (segments.length < 2 ||
+        segments[0] != '.well-known' ||
+        segments[1] != 'oauth-authorization-server') {
+      return null;
+    }
+    return Uri(
+      scheme: wellKnown.scheme,
+      userInfo: wellKnown.userInfo.isEmpty ? null : wellKnown.userInfo,
+      host: wellKnown.host,
+      port: wellKnown.hasPort ? wellKnown.port : null,
+      pathSegments: segments.sublist(2),
+    );
+  }
+
+  /// The literal placeholder Microsoft Entra ID advertises as the tenant
+  /// segment of its multi-tenant (`common` / `organizations`) discovery
+  /// `issuer`, e.g. `https://login.microsoftonline.com/{tenantid}/v2.0`.
+  /// (`consumers` serves the concrete MSA tenant issuer instead.)
+  static const entraTenantIdPlaceholder = '{tenantid}';
+
+  /// Whether a raw (still percent-encoded) path [segment] is
+  /// [entraTenantIdPlaceholder]. `Uri` encodes the braces as `%7B`/`%7D`.
+  /// Compared without decoding, so a malformed escape (e.g. `%FF`) is simply
+  /// "not the placeholder" rather than a [FormatException].
+  static bool _isEntraTenantIdPlaceholder(String segment) {
+    final s = segment.toLowerCase();
+    return s == entraTenantIdPlaceholder || s == '%7btenantid%7d';
+  }
+
+  /// Decides whether a discovery document's [actual] `issuer` is acceptable for
+  /// the [expected] issuer (OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3).
+  ///
+  /// [issuersAreIdentical] always matches. Beyond that, exactly two cases are
+  /// accepted, both because the spec's "identical" is checked against
+  /// something the RP does not actually have:
+  ///
+  /// - **[expectedWasDerived] and [actual] adds only a terminating `/`.** When
+  ///   [expected] was recovered from the well-known URL (see
+  ///   [getIssuerFromWellKnownUri]) rather than configured, the original
+  ///   issuer's trailing slash is gone: §4.1 and RFC 8414 §3.1 both remove it
+  ///   before building the URL, so `X` and `X/` share one URL. Both are
+  ///   consistent with that URL; anything longer (`X/more`) is not. An explicit
+  ///   expected issuer gets no such leeway.
+  /// - **[actual] is a Microsoft Entra ID multi-tenant template.** A path
+  ///   segment equal to [entraTenantIdPlaceholder] in [actual] matches any one
+  ///   non-empty segment of [expected] at the same position; every other
+  ///   component must still be identical. This keeps the
+  ///   `expectedIssuer: https://login.microsoftonline.com/<tenant>/v2.0` setup
+  ///   from #389 working against the templated document Entra serves.
+  static bool discoveryIssuerMatches(
+    Uri expected,
+    Uri actual, {
+    bool expectedWasDerived = false,
+  }) {
+    if (issuersAreIdentical(expected, actual)) {
+      return true;
+    }
+    if (expected.hasQuery ||
+        expected.hasFragment ||
+        actual.hasQuery ||
+        actual.hasFragment) {
+      return false;
+    }
+    String origin(Uri u) => Uri(
+      scheme: u.scheme.toLowerCase(),
+      userInfo: u.userInfo.isEmpty ? null : u.userInfo,
+      host: u.host.toLowerCase(),
+      port: u.hasPort ? u.port : null,
+    ).toString();
+    if (origin(expected) != origin(actual)) {
+      return false;
+    }
+    final expectedPath = expected.path;
+    var actualPath = actual.path;
+    if (expectedWasDerived &&
+        actualPath.endsWith('/') &&
+        !expectedPath.endsWith('/')) {
+      actualPath = actualPath.substring(0, actualPath.length - 1);
+    }
+    if (actualPath == expectedPath) {
+      return true;
+    }
+    final e = expectedPath.split('/');
+    final a = actualPath.split('/');
+    if (e.length != a.length) {
+      return false;
+    }
+    // Paths differ (checked above), so a full pass means a placeholder
+    // segment absorbed the difference.
+    for (var i = 0; i < e.length; i++) {
+      if (e[i] == a[i]) {
+        continue;
+      }
+      if (_isEntraTenantIdPlaceholder(a[i]) && e[i].isNotEmpty) {
+        continue;
+      }
+      return false;
+    }
+    return true;
+  }
+
   /// OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3: the discovery document's `issuer`
   /// MUST be identical to the issuer used to fetch it (mix-up defense). Compares
   /// by simple string equality, case-folding ONLY scheme + host (a genuine path

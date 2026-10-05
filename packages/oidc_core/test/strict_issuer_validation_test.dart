@@ -232,7 +232,7 @@ void main() {
     );
   });
 
-  group('strict OFF (default)', () {
+  group('strict OFF (opt-out)', () {
     test(
       'mismatched issuer => init succeeds, doc persisted, exactly one warning',
       () async {
@@ -339,22 +339,41 @@ void main() {
   });
 
   group('eager constructor (discoveryDocumentUri == null)', () {
-    test('strict ON, no expectedIssuer => warning, no throw', () async {
+    // Strict is the default, so a caller-supplied document (nothing to check it
+    // against) must neither throw nor warn on every init.
+    test('strict ON, no expectedIssuer => no throw, no warning', () async {
       late _DiscoveryManager m;
       final records = await _capture(() async {
         m = _eager(issuer: 'https://op.example.com', strict: true);
         await m.init();
       });
       expect(m.didInit, isTrue);
-      expect(
-        records.where(
-          (r) =>
-              r.level == Level.WARNING &&
-              r.message.contains('no expected issuer could be determined'),
-        ),
-        hasLength(1),
-      );
+      expect(records.where((r) => r.level >= Level.WARNING), isEmpty);
     });
+
+    test(
+      'custom (non-invertible) discovery URL, strict ON => warning, no throw',
+      () async {
+        late _DiscoveryManager m;
+        final records = await _capture(() async {
+          m = _lazy(
+            wellKnown: Uri.parse('https://op.example.com/custom/discovery'),
+            client: _serving(_doc(issuer: 'https://op.example.com')),
+            strict: true,
+          );
+          await m.init();
+        });
+        expect(m.didInit, isTrue);
+        expect(
+          records.where(
+            (r) =>
+                r.level == Level.WARNING &&
+                r.message.contains('no expected issuer could be determined'),
+          ),
+          hasLength(1),
+        );
+      },
+    );
 
     test(
       'strict ON, expectedIssuer matches the supplied doc => pass',

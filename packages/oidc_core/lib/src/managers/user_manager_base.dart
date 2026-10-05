@@ -657,6 +657,18 @@ abstract class OidcUserManagerBase {
         'please call init() first.',
       );
     }
+    // `didInit` only says init() was called, not that it finished or
+    // succeeded. A rejected discovery document (e.g. an issuer mismatch) is
+    // never kept, so nothing may be built from what is left.
+    if (currentDiscoveryDocument == null) {
+      logAndThrow(
+        _initSettled
+            ? 'No usable discovery document: init() failed to load or '
+                  'validate it.'
+            : 'The discovery document is not loaded yet: init() is still '
+                  'running; await init() first.',
+      );
+    }
   }
 
   @protected
@@ -2391,6 +2403,9 @@ abstract class OidcUserManagerBase {
   ///
   /// * Returns `null` when there is no signed-in user — this is a state, not an
   ///   error, so it does not throw.
+  /// * Throws [OidcException] (like every other flow) when `init()` has not
+  ///   been called, is still running, or failed without a usable discovery
+  ///   document (e.g. an issuer mismatch).
   /// * Returns the current access token unchanged when the token carries no
   ///   `expires_in` (the library cannot know how much time is left; the same
   ///   assumption that disables the expiry timers) and [forceRefresh] is false.
@@ -5036,7 +5051,7 @@ abstract class OidcUserManagerBase {
   Future<bool> _loadDiscoveryFromCacheOnly() async {
     if (currentDiscoveryDocument != null) {
       // Eagerly-supplied document.
-      _validateDiscoveryIssuer();
+      _validateCurrentDiscoveryOrForget();
       return true;
     }
     final uri = discoveryDocumentUri;
@@ -5055,8 +5070,13 @@ abstract class OidcUserManagerBase {
     if (cached == null) {
       return false;
     }
-    currentDiscoveryDocument = _applyMetadataSeed(cached);
-    _validateDiscoveryIssuer();
+    final seeded = _applyMetadataSeed(cached);
+    if (!_cachedDiscoveryIssuerIsAcceptable(seeded)) {
+      // Fall back to the blocking path, which fetches (and validates) afresh.
+      await _discardCachedDiscovery(key);
+      return false;
+    }
+    currentDiscoveryDocument = seeded;
     return true;
   }
 
@@ -5096,7 +5116,23 @@ abstract class OidcUserManagerBase {
     if (!await _isDiscoveryStale()) {
       return;
     }
-    await _fetchAndApplyDiscovery(uri);
+    try {
+      await _fetchAndApplyDiscovery(uri, fallback: currentDiscoveryDocument);
+    } on OidcException catch (e, st) {
+      // A rejected refresh (issuer mismatch, failed signed metadata) is
+      // treated like an unreachable network: the previously validated
+      // [currentDiscoveryDocument] and the key store built from it stay in
+      // place, and the caller still re-verifies the restored session against
+      // them. Propagating would skip that re-verification and leave the
+      // locally-restored, unverified user signed in.
+      logger.warning(
+        'cache-first init: the refreshed discovery document was rejected; '
+        'keeping the previously validated one.',
+        e,
+        st,
+      );
+      return;
+    }
     // A refreshed document may advertise a new jwks_uri.
     setupKeyStore();
   }
@@ -5106,21 +5142,29 @@ abstract class OidcUserManagerBase {
   /// fresh fetched-at timestamp, and applies
   /// [OidcUserManagerSettings.metadataSeed] in memory.
   ///
-  /// On a network failure the previously-loaded [currentDiscoveryDocument]
-  /// (cache) is kept as an offline fallback when present; only when there is no
-  /// fallback does this throw.
-  Future<void> _fetchAndApplyDiscovery(Uri uri) async {
+  /// The fetched document is checked in a local and only becomes
+  /// [currentDiscoveryDocument] once it has passed every check, so a rejected
+  /// document is never readable by anything else (key store, endpoints,
+  /// refresh). On rejection this throws and leaves [currentDiscoveryDocument]
+  /// as it was.
+  ///
+  /// On a network failure [fallback] (a cached document) is used instead when
+  /// present, after the same issuer check; only when there is no fallback does
+  /// this throw.
+  Future<void> _fetchAndApplyDiscovery(
+    Uri uri, {
+    OidcProviderMetadata? fallback,
+  }) async {
     final key = uri.toString();
-    var fetched = false;
+    OidcProviderMetadata fetchedDoc;
     try {
-      currentDiscoveryDocument = await OidcEndpoints.getProviderMetadata(
+      fetchedDoc = await OidcEndpoints.getProviderMetadata(
         uri,
         client: httpClient,
       );
-      fetched = true;
-    } catch (e, st) {
+    } on Object catch (e, st) {
       //maybe there is no internet.
-      if (currentDiscoveryDocument == null) {
+      if (fallback == null) {
         logAndThrow(
           "Couldn't fetch the discoveryDocument",
           error: e,
@@ -5132,10 +5176,17 @@ abstract class OidcUserManagerBase {
       }
       // Keep the cached document as an offline fallback (do NOT re-persist or
       // refresh its timestamp — it stays as stale as it really is). Still
-      // issuer-validate it: a poisoned cache must never be trusted, even offline
-      // (mirrors the pre-refactor validate-before-use behavior).
-      _validateDiscoveryIssuer();
-      currentDiscoveryDocument = _applyMetadataSeed(currentDiscoveryDocument!);
+      // issuer-validate it: a poisoned cache must never be trusted, even
+      // offline.
+      try {
+        _validateDiscoveryIssuer(fallback);
+      } on Object {
+        if (identical(currentDiscoveryDocument, fallback)) {
+          currentDiscoveryDocument = null;
+        }
+        rethrow;
+      }
+      currentDiscoveryDocument = _applyMetadataSeed(fallback);
       return;
     }
 
@@ -5144,23 +5195,22 @@ abstract class OidcUserManagerBase {
     // issuer-validation and persistence, so a signed-metadata issuer change is
     // still issuer-validated and only a verified+validated document is cached.
     if (settings.verifySignedMetadata &&
-        currentDiscoveryDocument!.src.containsKey(
+        fetchedDoc.src.containsKey(
           OidcConstants_ProviderMetadata.signedMetadata,
         )) {
       try {
-        currentDiscoveryDocument =
-            await OidcEndpoints.verifyAndMergeSignedMetadata(
-              metadata: currentDiscoveryDocument!,
-              expectedIssuer:
-                  settings.expectedIssuer ??
-                  OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(uri),
-              allowedAlgorithms:
-                  settings.allowedSignedMetadataAlgorithms ??
-                  currentDiscoveryDocument!.idTokenSigningAlgValuesSupported,
-              cacheStore: store,
-              client: httpClient,
-              jwksCacheMaxAge: settings.jwksCacheMaxAge,
-            );
+        fetchedDoc = await OidcEndpoints.verifyAndMergeSignedMetadata(
+          metadata: fetchedDoc,
+          expectedIssuer:
+              settings.expectedIssuer ??
+              OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(uri),
+          allowedAlgorithms:
+              settings.allowedSignedMetadataAlgorithms ??
+              fetchedDoc.idTokenSigningAlgValuesSupported,
+          cacheStore: store,
+          client: httpClient,
+          jwksCacheMaxAge: settings.jwksCacheMaxAge,
+        );
       } on OidcException catch (e, st) {
         // Always fail-closed: refuse to use the document. There is no
         // unverified-fallback opt-out (mirrors id_token handling).
@@ -5176,31 +5226,29 @@ abstract class OidcUserManagerBase {
       }
     }
 
-    // Validate the final document (network-sourced) BEFORE persisting, so a
-    // mismatched/poisoned document is never written to the store.
-    _validateDiscoveryIssuer();
+    // Validate the final document BEFORE persisting or publishing it, so a
+    // mismatched/poisoned document is never written to the store nor used.
+    _validateDiscoveryIssuer(fetchedDoc);
 
     // Persist the raw fetched document + a fresh fetched-at timestamp together
     // (mirrors OidcJwksStoreLoader). Only reached on a successful fetch, so the
     // TTL timestamp never advances while serving a stale offline copy.
-    if (fetched) {
-      await store.setMany(
-        OidcStoreNamespace.discoveryDocument,
-        values: {
-          key: jsonEncode(currentDiscoveryDocument!.src),
-          '$key$discoveryFetchedAtSuffix': clock
-              .now()
-              .toUtc()
-              .millisecondsSinceEpoch
-              .toString(),
-        },
-        managerId: id,
-      );
-    }
+    await store.setMany(
+      OidcStoreNamespace.discoveryDocument,
+      values: {
+        key: jsonEncode(fetchedDoc.src),
+        '$key$discoveryFetchedAtSuffix': clock
+            .now()
+            .toUtc()
+            .millisecondsSinceEpoch
+            .toString(),
+      },
+      managerId: id,
+    );
 
     // Apply the seed in memory AFTER persistence so the seed is never baked
     // into the cache (fetched/cached values still override it).
-    currentDiscoveryDocument = _applyMetadataSeed(currentDiscoveryDocument!);
+    currentDiscoveryDocument = _applyMetadataSeed(fetchedDoc);
   }
 
   /// First gets the cached discoveryDocument if any
@@ -5217,7 +5265,7 @@ abstract class OidcUserManagerBase {
       // An eagerly-supplied discoveryDocument (eager constructor, where
       // discoveryDocumentUri is null) is still validated against
       // `settings.expectedIssuer`.
-      _validateDiscoveryIssuer();
+      _validateCurrentDiscoveryOrForget();
       return;
     }
 
@@ -5236,8 +5284,9 @@ abstract class OidcUserManagerBase {
       key,
       cachedValues[key],
     );
-    // Keep the cached document as the offline fallback for the network fetch.
-    currentDiscoveryDocument = cachedMetadata;
+    // The cached document is only the offline fallback for the network fetch;
+    // it is not published as [currentDiscoveryDocument] until it is validated.
+    var fallback = cachedMetadata;
 
     // TTL cache: within `discoveryDocumentMaxAge`, skip the network fetch and
     // use the cached document (matching the JWKS loader's timestamp scheme).
@@ -5249,82 +5298,151 @@ abstract class OidcUserManagerBase {
         final fetchedAt = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
         final age = clock.now().toUtc().difference(fetchedAt);
         if (age <= settings.discoveryDocumentMaxAge) {
-          currentDiscoveryDocument = _applyMetadataSeed(cachedMetadata);
-          _validateDiscoveryIssuer();
-          return;
+          final seeded = _applyMetadataSeed(cachedMetadata);
+          if (_cachedDiscoveryIssuerIsAcceptable(seeded)) {
+            currentDiscoveryDocument = seeded;
+            return;
+          }
+          await _discardCachedDiscovery(key);
+          fallback = null;
         }
       }
     }
 
-    await _fetchAndApplyDiscovery(uri);
+    await _fetchAndApplyDiscovery(uri, fallback: fallback);
   }
 
   /// OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3: the discovery document's `issuer`
-  /// MUST be identical to the issuer used to fetch it.
+  /// MUST be identical to the issuer used to fetch it, and "if these values
+  /// are not identical, the data contained in the response MUST NOT be used".
   ///
+  /// Checks [document] (not yet published as [currentDiscoveryDocument]).
   /// Controlled by [OidcUserManagerSettings.strictIssuerValidation]: when
-  /// `true`, a mismatch (or a missing `issuer`) throws; when `false` (the
-  /// default), a mismatch is only logged as a warning and the document is still
-  /// used (preserves Entra multi-tenant / B2C compatibility).
-  void _validateDiscoveryIssuer() {
-    final strict = settings.strictIssuerValidation;
-    // Resolve the expected issuer: explicit `expectedIssuer` is authoritative;
-    // otherwise derive it from the well-known URL (the inverse of the builder
-    // every in-repo call site uses).
-    final uri = discoveryDocumentUri;
-    final expected =
-        settings.expectedIssuer ??
-        (uri == null
-            ? null
-            : OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(uri));
-
-    if (expected == null) {
-      if (strict) {
-        logger.warning(
-          'strictIssuerValidation is enabled but no expected issuer could be '
-          'determined (no `expectedIssuer` was set and the discovery URL could '
-          'not be inverted, e.g. an eagerly-supplied document or a custom '
-          'discovery URL); skipping the §4.3 issuer check.',
-        );
-      }
+  /// `true` (the default), a mismatch (or a missing `issuer`) throws; callers
+  /// run this before the document is persisted or assigned, so a rejected
+  /// document is never used. When `false`, it is only logged as a warning and
+  /// the document is still used.
+  void _validateDiscoveryIssuer(OidcProviderMetadata document) {
+    final problem = _discoveryIssuerProblem(document);
+    if (problem == null) {
       return;
     }
-
-    final actual = currentDiscoveryDocument?.issuer;
-    if (actual == null) {
-      if (strict) {
-        logAndThrow(
-          'Discovery document is missing the required `issuer` member '
-          '(OIDC Discovery §3 / RFC 8414 §2).',
-          extra: {
-            OidcConstants_Exception.discoveryDocumentUri: uri,
-          },
-        );
-      }
-      logger.warning(
-        'Discovery document is missing the required `issuer` member; '
-        'strictIssuerValidation is disabled so it is being used anyway.',
-      );
-      return;
-    }
-
-    if (OidcUtils.issuersAreIdentical(expected, actual)) {
-      return;
-    }
-    if (strict) {
+    if (settings.strictIssuerValidation) {
       logAndThrow(
-        'Issuer mismatch (OIDC Discovery §4.3 / RFC 8414 §3.3): discovery '
-        'issuer ($actual) != expected issuer ($expected).',
+        '$problem. The document was not used. If this provider legitimately '
+        'advertises a different issuer (e.g. Azure AD B2C), set '
+        '`OidcUserManagerSettings.expectedIssuer` to it; '
+        '`strictIssuerValidation: false` disables the check.',
         extra: {
-          OidcConstants_Exception.discoveryDocumentUri: uri,
+          OidcConstants_Exception.discoveryDocumentUri: discoveryDocumentUri,
         },
       );
     }
     logger.warning(
-      'Issuer mismatch (OIDC Discovery §4.3 / RFC 8414 §3.3): discovery issuer '
-      '($actual) != expected issuer ($expected); strictIssuerValidation is '
-      'disabled so the document is being used anyway.',
+      '$problem; strictIssuerValidation is disabled so the document is being '
+      'used anyway.',
     );
+  }
+
+  /// [_validateDiscoveryIssuer] for the already-assigned (eagerly-supplied)
+  /// [currentDiscoveryDocument]: on rejection it is forgotten before the
+  /// exception propagates, so nothing can be built from it afterwards.
+  void _validateCurrentDiscoveryOrForget() {
+    try {
+      _validateDiscoveryIssuer(currentDiscoveryDocument!);
+    } on Object {
+      currentDiscoveryDocument = null;
+      rethrow;
+    }
+  }
+
+  /// The [_validateDiscoveryIssuer] check for a document read back from the
+  /// [store]. Instead of throwing, returns `false` when the cached document
+  /// fails a strict check, so the caller can discard it and fetch a fresh one:
+  /// a document cached before the check applied (or by an older release with a
+  /// laxer default) must not lock the manager out of a provider that has since
+  /// been fixed. The fresh document is validated in turn.
+  bool _cachedDiscoveryIssuerIsAcceptable(OidcProviderMetadata document) {
+    final problem = _discoveryIssuerProblem(document);
+    if (problem == null) {
+      return true;
+    }
+    if (!settings.strictIssuerValidation) {
+      logger.warning(
+        '$problem; strictIssuerValidation is disabled so the cached document '
+        'is being used anyway.',
+      );
+      return true;
+    }
+    logger.warning(
+      '$problem. Discarding the cached discovery document and fetching it '
+      'again.',
+    );
+    return false;
+  }
+
+  /// Removes the cached discovery document (and its fetched-at timestamp) for
+  /// [key] and forgets the in-memory copy.
+  Future<void> _discardCachedDiscovery(String key) async {
+    currentDiscoveryDocument = null;
+    await store
+        .removeMany(
+          OidcStoreNamespace.discoveryDocument,
+          keys: {key, '$key$discoveryFetchedAtSuffix'},
+          managerId: id,
+        )
+        .onError((error, stackTrace) => null);
+  }
+
+  /// Returns why [document]'s `issuer` is unacceptable, or
+  /// `null` when it is acceptable (or there is nothing to compare it with).
+  ///
+  /// The expected issuer is [OidcUserManagerSettings.expectedIssuer] when set;
+  /// otherwise it is derived from [discoveryDocumentUri] (either well-known
+  /// layout, see [OidcUtils.getIssuerFromWellKnownUri]). The comparison is
+  /// [OidcUtils.discoveryIssuerMatches], which only relaxes "identical" where
+  /// the derived issuer has lost information (a trailing `/`) or the provider
+  /// serves Entra's documented `{tenantid}` template.
+  String? _discoveryIssuerProblem(OidcProviderMetadata document) {
+    final uri = discoveryDocumentUri;
+    final pinned = settings.expectedIssuer;
+    final expected =
+        pinned ??
+        (uri == null ? null : OidcUtils.getIssuerFromWellKnownUri(uri));
+
+    if (expected == null) {
+      if (uri == null) {
+        // A caller-supplied document: there is no fetch to check it against,
+        // so it is trusted as supplied unless `expectedIssuer` pins one.
+        logger.fine(
+          'Eagerly-supplied discovery document and no `expectedIssuer`; '
+          'skipping the §4.3 issuer check.',
+        );
+      } else if (settings.strictIssuerValidation) {
+        logger.warning(
+          'strictIssuerValidation is enabled but no expected issuer could be '
+          'determined (no `expectedIssuer` was set and the custom discovery '
+          'URL $uri could not be inverted); skipping the §4.3 issuer check. '
+          'Set `expectedIssuer` to enable it.',
+        );
+      }
+      return null;
+    }
+
+    final actual = document.issuer;
+    if (actual == null) {
+      return 'Discovery document is missing the required `issuer` member '
+          '(OIDC Discovery §3 / RFC 8414 §2)';
+    }
+    if (OidcUtils.discoveryIssuerMatches(
+      expected,
+      actual,
+      expectedWasDerived: pinned == null,
+    )) {
+      return null;
+    }
+    return 'Issuer mismatch (OIDC Discovery §4.3 / RFC 8414 §3.3): discovery '
+        'issuer ($actual) != expected issuer ($expected)';
   }
 
   /// Loads and verifies the tokens.
@@ -5597,6 +5715,11 @@ abstract class OidcUserManagerBase {
   @protected
   AsyncMemoizer<void> initMemoizer = AsyncMemoizer();
 
+  /// Whether [init] has finished (successfully or not). [didInit] turns true
+  /// as soon as [init] is called; [ensureInit] uses this to tell "still
+  /// running" from "failed".
+  bool _initSettled = false;
+
   @protected
   final toDispose = <StreamSubscription<dynamic>>[];
 
@@ -5751,9 +5874,11 @@ abstract class OidcUserManagerBase {
       try {
         await _runInit();
       } on Object catch (e, st) {
+        _initSettled = true;
         _settleUserChangesAfterInitWaiters(e, st);
         rethrow;
       }
+      _initSettled = true;
       _settleUserChangesAfterInitWaiters(null, null);
     });
   }

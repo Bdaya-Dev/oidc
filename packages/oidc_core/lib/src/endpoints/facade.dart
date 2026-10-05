@@ -536,8 +536,9 @@ class OidcEndpoints {
   /// [OidcUtils.getOpenIdConfigWellKnownUri] for it and require the discovery
   /// document's `issuer` to satisfy [OidcUtils.issuersAreIdentical]: §3 makes
   /// that equality ("this value MUST be identical to the issuer value returned
-  /// by WebFinger") the actual security boundary. `OidcUserManager` already
-  /// performs that check.
+  /// by WebFinger") the actual security boundary. `OidcUserManager` performs
+  /// that check by default (`strictIssuerValidation`); pass the returned issuer
+  /// as `expectedIssuer` to compare it exactly, trailing slash included.
   ///
   /// Throws [OidcException] when normalization fails, when the transport rules
   /// are violated, on a non-2xx/3xx response, or when the JRD carries no
