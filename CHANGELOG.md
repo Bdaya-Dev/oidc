@@ -3,6 +3,35 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-10-05
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_ios` - `v0.8.0+4`](#oidc_ios---v0804)
+ - [`oidc` - `v0.14.0+3`](#oidc---v01403)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc` - `v0.14.0+3`
+
+---
+
+#### `oidc_ios` - `v0.8.0+4`
+
+ - **FIX**(oidc_ios): drop unnecessary FlutterFramework dependency ([#450](https://github.com/Bdaya-Dev/oidc/issues/450)). ([894cf2bf](https://github.com/Bdaya-Dev/oidc/commit/894cf2bf142d55686548aabb1221f9fc7b5e0e77))
+ - **FIX**(oidc_ios): backport Flutter SwiftPM plugin layout to 0.8.x ([#450](https://github.com/Bdaya-Dev/oidc/issues/450)). ([183d7303](https://github.com/Bdaya-Dev/oidc/commit/183d73034ddbb354beda114a5a4a14d24a89f4f5))
+
+
 ## 2026-02-10
 
 ### Changes
