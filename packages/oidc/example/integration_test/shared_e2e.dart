@@ -691,6 +691,11 @@ Future<void> runOidcConformanceTest(
         await manager.init();
         logger.severe('init() accepted a discovery document with a bad issuer');
       } on OidcException catch (e) {
+        // Only the issuer rejection counts; anything else (e.g. the discovery
+        // fetch failing) is a real failure and aborts as for other modules.
+        if (!e.message.contains('Issuer mismatch')) {
+          rethrow;
+        }
         rejected = true;
         logger.info('Rejected at discovery, as the module requires: $e');
       }
