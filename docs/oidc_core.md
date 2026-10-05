@@ -141,6 +141,95 @@ this is done using these functions:
 - `setAttributes`: merges input attributes with existing attributes.
 - `clearAttributes`: removes all attributes.
 
+When a response for a signed-in user has no `id_token` (typically a refresh, which OpenID Connect Core §12.2 allows),
+`replaceToken` keeps the previous id_token and records that in the token: `OidcToken.idTokenRetainedFromPriorResponse` is
+`true`. The flag is persisted with the token, and `OidcToken.fromResponse` never takes it from a server response.
+
+## ID token validation
+
+`OidcUserManagerBase.validateUser` checks an id_token's claims and returns the list of problems it found. Which checks apply
+can depend on the flow that produced the token, so `validateUser`, `validateAndSaveUser` and `createUserFromToken` take an
+`OidcIdTokenValidationContext`:
+
+```dart
+const OidcIdTokenValidationContext({
+  OidcIdTokenSource source = OidcIdTokenSource.tokenEndpoint,
+  String? authorizationCode, // the code returned with the id_token, checked against c_hash
+  String? accessToken,       // the access_token returned with the id_token, checked against at_hash
+  Duration? maxAge,          // the max_age that was requested, checked against auth_time
+});
+```
+
+The hash rules are judged from the response's own tokens. When a user is already signed in, the user built for a new
+response keeps the previous session's access_token if the response returned none, so the access_token to check is passed in
+the context. For `authorizationEndpoint`, `accessToken: null` means the response returned no access_token (`id_token`,
+`code id_token`). For the other sources, `null` falls back to the user's own access_token. `createUserFromToken` fills
+`accessToken` in from the response token it is given.
+
+The `at_hash` and `c_hash` rules per `OidcIdTokenSource`:
+
+| source | `at_hash` | `c_hash` |
+|---|---|---|
+| `authorizationEndpoint` (implicit, hybrid front channel) | required when the response returned an access_token, and must match it | required when the response returned a code, and must match it |
+| `tokenEndpoint` (code exchange, password, device code) | checked when present | checked when present |
+| `refresh` | checked when present, only if the refresh returned a new id_token | same |
+| `storedSession` (`init()` revalidating the stored session) | checked when present, unless the stored id_token was retained from an earlier response | same |
+
+An id_token retained from an earlier response (`idTokenRetainedFromPriorResponse`) was not issued with the current tokens,
+so its hashes are never required. A refresh, and the stored session it produced, do not compare them either (§12.2). Any
+other response that kept the previous id_token, such as a password re-login whose response has no id_token, still
+compares a hash the kept id_token carries, as before.
+
+### When validation fails
+
+`validateAndSaveUser` returns `null` and clears the pending nonce. It does not touch the stored session or `currentUser`, so
+a login or refresh response that fails validation leaves an already signed-in session in place.
+
+A stored session that fails revalidation during `init()` is handled by the cached-token loader. It calls
+`OidcUserManagerSettings.shouldRemoveInvalidToken` (by default the session is removed unless `supportOfflineAuth` is on). If
+the policy keeps it, the token stays in the store. Either way no user is signed in with it: if `init()` had already signed a
+user in with that session (by refreshing it, or by cache-first restoring it), that user is signed out again.
+
+### Migrating from 3.x
+
+These are breaking changes for code that subclasses `OidcUserManagerBase`:
+
+- `validateUser({user, metadata, authorizationCode, maxAge})` is now `validateUser({user, metadata, context})`.
+- `validateAndSaveUser({user, metadata, authorizationCode, maxAge, reactToUserInfoUnauthorized})` is now
+  `validateAndSaveUser({user, metadata, context, reactToUserInfoUnauthorized})`.
+- `createUserFromToken({..., authorizationCode, maxAge, ...})` is now `createUserFromToken({..., context, ...})`.
+- `OidcIdTokenValidationContext.accessToken` is the access_token returned with the id_token. For the
+  `authorizationEndpoint` source, `at_hash` is checked against it and never against the validated user's token.
+
+Pass the old arguments through the context:
+
+```dart
+// before
+validateUser(user: user, metadata: metadata, authorizationCode: code, maxAge: maxAge);
+// after
+validateUser(
+  user: user,
+  metadata: metadata,
+  context: OidcIdTokenValidationContext(authorizationCode: code, maxAge: maxAge),
+);
+```
+
+If you call `validateUser` or `validateAndSaveUser` for an id_token that came from the authorization endpoint, pass
+`source: OidcIdTokenSource.authorizationEndpoint` and the access_token of that response as `accessToken` to get the
+required-hash checks. Without `accessToken`, that source treats the response as having returned no access_token.
+
+Behavior changes:
+
+- `validateAndSaveUser` no longer deletes the stored token, user info and attributes when validation fails. If your subclass
+  relied on that, remove the session yourself (for example with `forgetUser()`).
+- `shouldRemoveInvalidToken` returning `false` now really keeps the stored token. Before, it had already been deleted.
+- An implicit `id_token token` response whose id_token has no `at_hash` is now rejected (OpenID Connect Core §3.2.2.10).
+- A refresh that keeps the old id_token no longer fails the `at_hash` check, either right away or when the app restarts.
+- `at_hash` is compared with the access_token of the response that returned the id_token, not with one a signed-in user
+  kept from an earlier response.
+- When `init()` refreshes the stored session and the revalidation that follows fails, the refreshed user is now signed out
+  even if `shouldRemoveInvalidToken` keeps the session in the store.
+
 ## OidcException
 
 Most of the errors thrown by this library are of type `OidcException`.
