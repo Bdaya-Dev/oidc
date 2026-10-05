@@ -16,13 +16,6 @@ Packages with breaking changes:
 Packages with other changes:
 
  - [`oidc_macos` - `v0.8.0+4`](#oidc_macos---v0804)
- - [`oidc` - `v0.14.0+3`](#oidc---v01403)
-
-Packages with dependency updates only:
-
-> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
-
- - `oidc` - `v0.14.0+3`
 
 ---
 
