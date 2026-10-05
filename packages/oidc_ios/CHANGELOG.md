@@ -1,3 +1,8 @@
+## 0.8.0+4
+
+ - **FIX**(oidc_ios): drop unnecessary FlutterFramework dependency ([#450](https://github.com/Bdaya-Dev/oidc/issues/450)). ([894cf2bf](https://github.com/Bdaya-Dev/oidc/commit/894cf2bf142d55686548aabb1221f9fc7b5e0e77))
+ - **FIX**(oidc_ios): backport Flutter SwiftPM plugin layout to 0.8.x ([#450](https://github.com/Bdaya-Dev/oidc/issues/450)). ([183d7303](https://github.com/Bdaya-Dev/oidc/commit/183d73034ddbb354beda114a5a4a14d24a89f4f5))
+
 ## 0.8.0+3
 
  - **DOCS**: remove logo branding from screenshots. ([2acf65d3](https://github.com/Bdaya-Dev/oidc/commit/2acf65d34fb47c0449653a73373168df3deb1735))
