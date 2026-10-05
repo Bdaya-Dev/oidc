@@ -10,7 +10,9 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
@@ -18,6 +20,7 @@ import 'package:http/testing.dart';
 import 'package:jose_plus/jose.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
+import 'package:vm_service/vm_service_io.dart' as vm_service_io;
 
 const _issuer = 'https://op.example.com';
 final Uri _wellKnown = Uri.parse('$_issuer/.well-known/openid-configuration');
@@ -193,35 +196,61 @@ List<WeakReference<Function>> _trackRegisteredCallbacks(void Function() body) {
   return refs;
 }
 
-/// The number of [refs] still reachable after driving the garbage collector.
+/// The number of [refs] still reachable after a FULL garbage collection.
 ///
-/// `package:test` runs without a VM service, so there is no direct "force a
-/// full GC" call; instead this allocates throwaway garbage (enough to trigger
-/// young- AND old-generation collections) until at most [atMost] targets
-/// survive, giving up after a bounded number of rounds. A genuinely retained
-/// target is never collected however many rounds run, so a leak still fails
-/// deterministically; only the time spent proving it varies.
-Future<int> _aliveAfterGc(
-  List<WeakReference<Function>> refs, {
-  required int atMost,
-}) async {
+/// Allocating throwaway junk is NOT a reliable way to get there: junk that
+/// dies young only drives young-generation scavenges, so any target that was
+/// promoted to old space while it was still live (e.g. because a scavenge
+/// happened to run mid-test — likelier under `--coverage`/
+/// `--chain-stack-traces`, which allocate per registered callback) is only
+/// reclaimed by an old-generation mark-sweep that such junk never triggers.
+/// That made this check flaky: every promoted target "survived", which looks
+/// exactly like a leak.
+///
+/// So this asks the VM for a real full collection instead, through the VM
+/// service's `getAllocationProfile(gc: true)`, which collects BOTH
+/// generations before it returns. The service
+/// is already running under `dart test --coverage`; otherwise it is started
+/// here, bound to loopback, and stopped again afterwards. The count is then
+/// exact: a genuinely retained target is always counted and an unreachable
+/// one never is, so a leak fails deterministically and a non-leak never does.
+Future<int> _aliveAfterGc(List<WeakReference<Function>> refs) async {
+  await _collectAllGarbage();
   // Count DISTINCT survivors: static tear-offs the stream internals register
   // (e.g. the default no-op done/error handlers) are canonical, never
   // collected, and identical across rounds, so they collapse to one each
   // instead of masquerading as a per-round leak.
-  int alive() =>
-      (Set<Object>.identity()
-            ..addAll(refs.map((r) => r.target).whereType<Object>()))
-          .length;
-  for (var round = 0; round < 60 && alive() > atMost; round++) {
-    var junk = <List<int>>[];
-    for (var i = 0; i < 4000; i++) {
-      junk.add(List<int>.filled(512, i));
-    }
-    junk = const [];
-    await Future<void>.delayed(Duration.zero);
+  return (Set<Object>.identity()
+        ..addAll(refs.map((r) => r.target).whereType<Object>()))
+      .length;
+}
+
+/// Forces a full, synchronous garbage collection of this isolate's heap.
+Future<void> _collectAllGarbage() async {
+  var info = await dev.Service.getInfo();
+  final startedHere = info.serverWebSocketUri == null;
+  if (startedHere) {
+    info = await dev.Service.controlWebServer(
+      enable: true,
+      silenceOutput: true,
+    );
   }
-  return alive();
+  final uri = info.serverWebSocketUri;
+  if (uri == null) {
+    fail('the VM service is unavailable, so a full GC cannot be forced');
+  }
+  final service = await vm_service_io.vmServiceConnectUri(uri.toString());
+  try {
+    await service.getAllocationProfile(
+      dev.Service.getIsolateId(Isolate.current)!,
+      gc: true,
+    );
+  } finally {
+    await service.dispose();
+    if (startedHere) {
+      await dev.Service.controlWebServer();
+    }
+  }
 }
 
 /// Runs [body] in an error zone and returns every error that escaped it
@@ -467,7 +496,7 @@ void main() {
         expect(refs.length, greaterThanOrEqualTo(rounds));
 
         expect(
-          await _aliveAfterGc(refs, atMost: allowedSurvivors),
+          await _aliveAfterGc(refs),
           lessThanOrEqualTo(allowedSurvivors),
           reason:
               'a cancelled listener must not stay reachable from initFuture '
@@ -492,7 +521,7 @@ void main() {
         expect(refs.length, greaterThanOrEqualTo(rounds));
 
         expect(
-          await _aliveAfterGc(refs, atMost: allowedSurvivors),
+          await _aliveAfterGc(refs),
           lessThanOrEqualTo(allowedSurvivors),
           reason:
               'a cancelled listener must not stay reachable from any future '
