@@ -1,3 +1,16 @@
+## 5.0.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**(example): stop corrupting the web conformance POST through cors-proxy. ([4eea7cd8](https://github.com/Bdaya-Dev/oidc/commit/4eea7cd840c208582eaf873a0d34ce54e7e2a95e))
+ - **FIX**(oidc): rethrow platform OidcException from getPlatformEndSessionResponse unwrapped. ([ab422b70](https://github.com/Bdaya-Dev/oidc/commit/ab422b70d38093ab4e85a56176df78908780ba71))
+ - **FIX**: await futures returned inside try blocks (unawaited_return_in_try_block). ([452d6ee1](https://github.com/Bdaya-Dev/oidc/commit/452d6ee121674dee760f2d698f2a7d5565ad6600))
+ - **FIX**(example): register the RP's true application_type with the test plan. ([1253d9be](https://github.com/Bdaya-Dev/oidc/commit/1253d9be404bd36ed5d8f83521ce74efb3ca73f1))
+ - **FEAT**(oidc_core): mTLS transport, end-to-end alias routing and web guard ([#386](https://github.com/Bdaya-Dev/oidc/issues/386)). ([d3bd7213](https://github.com/Bdaya-Dev/oidc/commit/d3bd721399ddf579067791f12c536b2fb4022ad5))
+ - **FEAT**(oidc_core): adopt and persist RFC 7592 credential rotation through the manager ([#385](https://github.com/Bdaya-Dev/oidc/issues/385)). ([0b6f57c1](https://github.com/Bdaya-Dev/oidc/commit/0b6f57c199bc3d8b76bf05845b5a0b13c1d9bcd8))
+ - **BREAKING** **FIX**(oidc_core): reject a discovery document whose issuer does not match. ([fab65a06](https://github.com/Bdaya-Dev/oidc/commit/fab65a069d2b4bd4ac8d41fc78e6c194702f32b4))
+ - **BREAKING** **FEAT**(oidc_default_store): bump flutter_secure_storage to ^11 ([#451](https://github.com/Bdaya-Dev/oidc/issues/451)). ([166f394e](https://github.com/Bdaya-Dev/oidc/commit/166f394ed7d937f1098a558b92f325fc52043700))
+
 ## 4.0.0
 
 > Note: This release has breaking changes.

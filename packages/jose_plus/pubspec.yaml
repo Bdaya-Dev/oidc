@@ -1,6 +1,6 @@
 name: jose_plus
 description: Javascript Object Signing and Encryption (JOSE) library supporting JWE, JWS, JWK and JWT
-version: 1.0.0
+version: 1.0.1
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/jose_plus
 homepage: https://bdaya-dev.github.io/oidc/
 funding:

@@ -1,3 +1,7 @@
+## 1.0.1
+
+ - **FIX**(jose_plus): pass apu/apv to the ECDH-ES Concat KDF in build(). ([aa20db62](https://github.com/Bdaya-Dev/oidc/commit/aa20db62140e7a43cf60224f2a163515aa101314))
+
 ## 1.0.0
 
 > Note: This release has breaking changes.

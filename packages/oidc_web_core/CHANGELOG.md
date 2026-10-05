@@ -1,3 +1,8 @@
+## 1.2.1
+
+ - **FIX**(oidc_web_core): require event.source to match a monitor's own iframe ([#474](https://github.com/Bdaya-Dev/oidc/issues/474)). ([b4346936](https://github.com/Bdaya-Dev/oidc/commit/b4346936cc6df00a6902c471cb8a6eaaf722180e))
+ - **FIX**(oidc_web_core): each session monitor owns its own iframe ([#474](https://github.com/Bdaya-Dev/oidc/issues/474)). ([4771e740](https://github.com/Bdaya-Dev/oidc/commit/4771e74092858963581a7d571a6d9a2075a6bb73))
+
 ## 1.2.0
 
  - **FIX**(oidc_web_core): say what the auth window did when a flow times out. ([63532065](https://github.com/Bdaya-Dev/oidc/commit/635320654250d2338fde2cade4ea93b88f7fbb5a))
