@@ -4884,7 +4884,11 @@ abstract class OidcUserManagerBase {
       return false;
     }
     currentDiscoveryDocument = _applyMetadataSeed(cached);
-    _validateDiscoveryIssuer();
+    if (!_cachedDiscoveryIssuerIsAcceptable()) {
+      // Fall back to the blocking path, which fetches (and validates) afresh.
+      await _discardCachedDiscovery(key);
+      return false;
+    }
     return true;
   }
 
@@ -5078,8 +5082,10 @@ abstract class OidcUserManagerBase {
         final age = clock.now().toUtc().difference(fetchedAt);
         if (age <= settings.discoveryDocumentMaxAge) {
           currentDiscoveryDocument = _applyMetadataSeed(cachedMetadata);
-          _validateDiscoveryIssuer();
-          return;
+          if (_cachedDiscoveryIssuerIsAcceptable()) {
+            return;
+          }
+          await _discardCachedDiscovery(key);
         }
       }
     }
@@ -5088,71 +5094,122 @@ abstract class OidcUserManagerBase {
   }
 
   /// OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3: the discovery document's `issuer`
-  /// MUST be identical to the issuer used to fetch it.
+  /// MUST be identical to the issuer used to fetch it, and "if these values
+  /// are not identical, the data contained in the response MUST NOT be used".
   ///
   /// Controlled by [OidcUserManagerSettings.strictIssuerValidation]: when
-  /// `true`, a mismatch (or a missing `issuer`) throws; when `false` (the
-  /// default), a mismatch is only logged as a warning and the document is still
-  /// used (preserves Entra multi-tenant / B2C compatibility).
+  /// `true` (the default), a mismatch (or a missing `issuer`) throws before the
+  /// document is persisted or any request is built from it; when `false`, it
+  /// is only logged as a warning and the document is still used.
   void _validateDiscoveryIssuer() {
-    final strict = settings.strictIssuerValidation;
-    // Resolve the expected issuer: explicit `expectedIssuer` is authoritative;
-    // otherwise derive it from the well-known URL (the inverse of the builder
-    // every in-repo call site uses).
-    final uri = discoveryDocumentUri;
-    final expected =
-        settings.expectedIssuer ??
-        (uri == null
-            ? null
-            : OidcUtils.getIssuerFromOpenIdConfigWellKnownUri(uri));
-
-    if (expected == null) {
-      if (strict) {
-        logger.warning(
-          'strictIssuerValidation is enabled but no expected issuer could be '
-          'determined (no `expectedIssuer` was set and the discovery URL could '
-          'not be inverted, e.g. an eagerly-supplied document or a custom '
-          'discovery URL); skipping the §4.3 issuer check.',
-        );
-      }
+    final problem = _discoveryIssuerProblem();
+    if (problem == null) {
       return;
     }
-
-    final actual = currentDiscoveryDocument?.issuer;
-    if (actual == null) {
-      if (strict) {
-        logAndThrow(
-          'Discovery document is missing the required `issuer` member '
-          '(OIDC Discovery §3 / RFC 8414 §2).',
-          extra: {
-            OidcConstants_Exception.discoveryDocumentUri: uri,
-          },
-        );
-      }
-      logger.warning(
-        'Discovery document is missing the required `issuer` member; '
-        'strictIssuerValidation is disabled so it is being used anyway.',
-      );
-      return;
-    }
-
-    if (OidcUtils.issuersAreIdentical(expected, actual)) {
-      return;
-    }
-    if (strict) {
+    if (settings.strictIssuerValidation) {
       logAndThrow(
-        'Issuer mismatch (OIDC Discovery §4.3 / RFC 8414 §3.3): discovery '
-        'issuer ($actual) != expected issuer ($expected).',
+        '$problem. The document was not used. If this provider legitimately '
+        'advertises a different issuer (e.g. Azure AD B2C), set '
+        '`OidcUserManagerSettings.expectedIssuer` to it; '
+        '`strictIssuerValidation: false` disables the check.',
         extra: {
-          OidcConstants_Exception.discoveryDocumentUri: uri,
+          OidcConstants_Exception.discoveryDocumentUri: discoveryDocumentUri,
         },
       );
     }
     logger.warning(
-      'Issuer mismatch (OIDC Discovery §4.3 / RFC 8414 §3.3): discovery issuer '
-      '($actual) != expected issuer ($expected); strictIssuerValidation is '
-      'disabled so the document is being used anyway.',
+      '$problem; strictIssuerValidation is disabled so the document is being '
+      'used anyway.',
     );
+  }
+
+  /// The [_validateDiscoveryIssuer] check for a document read back from the
+  /// [store]. Instead of throwing, returns `false` when the cached document
+  /// fails a strict check, so the caller can discard it and fetch a fresh one:
+  /// a document cached before the check applied (or by an older release with a
+  /// laxer default) must not lock the manager out of a provider that has since
+  /// been fixed. The fresh document is validated in turn.
+  bool _cachedDiscoveryIssuerIsAcceptable() {
+    final problem = _discoveryIssuerProblem();
+    if (problem == null) {
+      return true;
+    }
+    if (!settings.strictIssuerValidation) {
+      logger.warning(
+        '$problem; strictIssuerValidation is disabled so the cached document '
+        'is being used anyway.',
+      );
+      return true;
+    }
+    logger.warning(
+      '$problem. Discarding the cached discovery document and fetching it '
+      'again.',
+    );
+    return false;
+  }
+
+  /// Removes the cached discovery document (and its fetched-at timestamp) for
+  /// [key] and forgets the in-memory copy.
+  Future<void> _discardCachedDiscovery(String key) async {
+    currentDiscoveryDocument = null;
+    await store
+        .removeMany(
+          OidcStoreNamespace.discoveryDocument,
+          keys: {key, '$key$discoveryFetchedAtSuffix'},
+          managerId: id,
+        )
+        .onError((error, stackTrace) => null);
+  }
+
+  /// Returns why [currentDiscoveryDocument]'s `issuer` is unacceptable, or
+  /// `null` when it is acceptable (or there is nothing to compare it with).
+  ///
+  /// The expected issuer is [OidcUserManagerSettings.expectedIssuer] when set;
+  /// otherwise it is derived from [discoveryDocumentUri] (either well-known
+  /// layout, see [OidcUtils.getIssuerFromWellKnownUri]). The comparison is
+  /// [OidcUtils.discoveryIssuerMatches], which only relaxes "identical" where
+  /// the derived issuer has lost information (a trailing `/`) or the provider
+  /// serves Entra's documented `{tenantid}` template.
+  String? _discoveryIssuerProblem() {
+    final uri = discoveryDocumentUri;
+    final pinned = settings.expectedIssuer;
+    final expected =
+        pinned ??
+        (uri == null ? null : OidcUtils.getIssuerFromWellKnownUri(uri));
+
+    if (expected == null) {
+      if (uri == null) {
+        // A caller-supplied document: there is no fetch to check it against,
+        // so it is trusted as supplied unless `expectedIssuer` pins one.
+        logger.fine(
+          'Eagerly-supplied discovery document and no `expectedIssuer`; '
+          'skipping the §4.3 issuer check.',
+        );
+      } else if (settings.strictIssuerValidation) {
+        logger.warning(
+          'strictIssuerValidation is enabled but no expected issuer could be '
+          'determined (no `expectedIssuer` was set and the custom discovery '
+          'URL $uri could not be inverted); skipping the §4.3 issuer check. '
+          'Set `expectedIssuer` to enable it.',
+        );
+      }
+      return null;
+    }
+
+    final actual = currentDiscoveryDocument?.issuer;
+    if (actual == null) {
+      return 'Discovery document is missing the required `issuer` member '
+          '(OIDC Discovery §3 / RFC 8414 §2)';
+    }
+    if (OidcUtils.discoveryIssuerMatches(
+      expected,
+      actual,
+      expectedWasDerived: pinned == null,
+    )) {
+      return null;
+    }
+    return 'Issuer mismatch (OIDC Discovery §4.3 / RFC 8414 §3.3): discovery '
+        'issuer ($actual) != expected issuer ($expected)';
   }
 
   /// Loads and verifies the tokens.

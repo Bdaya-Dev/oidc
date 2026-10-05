@@ -159,7 +159,7 @@ class OidcUserManagerSettings {
         const OidcFrontChannelRequestListeningOptions(),
     this.refreshBefore = defaultRefreshBefore,
     this.allowedIdTokenAlgorithms,
-    this.strictIssuerValidation = false,
+    this.strictIssuerValidation = true,
     this.verifySignedMetadata = false,
     this.allowedSignedMetadataAlgorithms,
     this.expectedIssuer,
@@ -211,21 +211,32 @@ class OidcUserManagerSettings {
   /// accepted algorithms to an explicit caller-controlled set.
   final List<String>? allowedIdTokenAlgorithms;
 
-  /// When `true`, after the discovery document is loaded the manager asserts
-  /// that its `issuer` is identical to the expected issuer (the issuer used to
-  /// compose the well-known URL, or [expectedIssuer] if set) per OIDC Discovery
-  /// 1.0 §4.3 / RFC 8414 §3.3, throwing on mismatch and refusing to persist the
-  /// document.
+  /// When `true` (the **default**), after the discovery document is loaded the
+  /// manager asserts that its `issuer` matches the expected issuer per OIDC
+  /// Discovery 1.0 §4.3 / RFC 8414 §3.3 ("If these values are not identical,
+  /// the data contained in the response MUST NOT be used"), throwing an
+  /// [OidcException] on mismatch — before any authorization request — and
+  /// refusing to persist the document. A cached document that fails the check
+  /// is discarded and fetched again.
   ///
-  /// When `false` (the **default**), a mismatch is only logged as a warning and
-  /// the document is still used — this preserves out-of-the-box Microsoft Entra
-  /// ID multi-tenant (`common`/`organizations`) and Azure AD B2C compatibility,
-  /// whose discovery `issuer` legitimately differs from the authority used to
-  /// fetch it (e.g. `https://login.microsoftonline.com/{tenantid}/v2.0`).
+  /// The expected issuer is [expectedIssuer] when set (compared exactly, see
+  /// [OidcUtils.discoveryIssuerMatches]); otherwise it is derived from the
+  /// well-known URL (OIDC §4.1 or RFC 8414 §3.1 layout). A derived issuer
+  /// cannot tell `X` from `X/` (both layouts strip the terminating `/`), so
+  /// for it a discovery `issuer` of `X/` is also accepted. An eagerly-supplied
+  /// document with no [expectedIssuer], or a custom discovery URL that cannot be
+  /// inverted, is not checked.
   ///
-  /// Recommended `true` for single-tenant / non-Entra deployments and required
-  /// for FAPI / high-assurance profiles; when enabling against a trailing-slash
-  /// issuer or a custom discovery URL, also set [expectedIssuer].
+  /// Microsoft Entra ID multi-tenant (`common`/`organizations`) keeps working:
+  /// its templated issuer (`https://login.microsoftonline.com/{tenantid}/v2.0`)
+  /// matches an [expectedIssuer] pinned to a concrete tenant. Providers whose
+  /// discovery `issuer` genuinely differs from the URL it is served at (e.g.
+  /// Azure AD B2C) need [expectedIssuer] set to that issuer.
+  ///
+  /// When `false`, a mismatch is only logged as a warning and the document is
+  /// still used. This was the default before; it lets a provider that is not
+  /// the one the RP configured supply every endpoint, so only opt out when
+  /// [expectedIssuer] cannot describe the provider.
   final bool strictIssuerValidation;
 
   /// Master gate for RFC 8414 §2.1 signed authorization-server metadata
@@ -282,9 +293,10 @@ class OidcUserManagerSettings {
   /// when constructing the manager with an eagerly-supplied `discoveryDocument`
   /// (no `discoveryDocumentUri` to derive from).
   ///
-  /// Comparison is the spec-mandated simple-string match via
-  /// [OidcUtils.issuersAreIdentical] (case-folds scheme+host only; path and
-  /// trailing slash stay significant).
+  /// Comparison against the discovery `issuer` is the spec-mandated
+  /// simple-string match via [OidcUtils.discoveryIssuerMatches] (case-folds
+  /// scheme+host only; path and trailing slash stay significant), plus
+  /// Entra's `{tenantid}` template matching a concrete tenant segment.
   final Uri? expectedIssuer;
 
   /// Whether/when the authorization-code login flow uses RFC 9126 Pushed
