@@ -802,6 +802,11 @@ Future<void> runOidcConformanceTest(
       // after that, which the suite answers with an "Illegal test state
       // change" error that flips an otherwise-correct login to FAILED.
       sendUserInfoRequest: !moduleFinishesBeforeUserinfo(moduleName),
+      // See requiresSessionManagementMonitoring (api.dart): OidcSessionManagementSettings.enabled
+      // defaults to false, and this module needs it true to get ANY
+      // check_session_iframe traffic at all -- the automatic post-login
+      // monitor and the post-logout probe are both gated on it.
+      sessionManagementEnabled: requiresSessionManagementMonitoring(moduleName),
     );
     app_state.managersRx.update((managers) => managers..add(manager));
     app_state.currentManagerRx.$ = manager;
@@ -932,6 +937,37 @@ Future<void> runOidcConformanceTest(
                     'verdict below will most likely be non-terminal.'
               : 'Second login completed: '
                     '${_describeToken(secondAuthResult.token)}',
+        );
+      }
+      // oidcc-client-test-session-management (see
+      // requiresSessionManagementMonitoring, api.dart) will not finish unless
+      // the suite observes a check_session_iframe postMessage round trip
+      // BEFORE logout, and `listenToUserSessionIfSupported`'s automatic
+      // monitor runs on its own schedule (iframe load, then
+      // sessionManagementSettings.interval) -- calling logout() immediately
+      // after login, as every other module does, would very likely race it.
+      // Poll the suite's own log for its confirmation instead of guessing a
+      // sleep duration that either races the monitor or wastes every other
+      // module's time budget.
+      if (requiresSessionManagementMonitoring(moduleName)) {
+        logger.info(
+          'Session management module: waiting for the suite to observe the '
+          'pre-logout check_session_iframe round trip...',
+        );
+        final sawPreLogoutCheck = await waitForSuiteLogEntry(
+          dio: dio,
+          instanceId: testInstanceId,
+          matches: (entry) =>
+              isSessionCheckPostMessageLogEntry(entry['msg'] as String?),
+        );
+        logger.info(
+          sawPreLogoutCheck
+              ? 'Suite confirmed the pre-logout check_session_iframe round '
+                    'trip.'
+              : 'Suite log never showed the pre-logout check_session_iframe '
+                    'round trip within the wait budget; logging out anyway so '
+                    'the suite verdict below names the real failure instead '
+                    'of the harness hanging silently.',
         );
       }
       // The logout profiles are two-step: log in, THEN initiate logout, and the

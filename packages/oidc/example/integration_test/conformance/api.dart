@@ -247,6 +247,44 @@ bool moduleFinishesBeforeUserinfo(String moduleName) =>
 bool requiresSecondLoginForKeyRotation(String moduleName) =>
     moduleName == 'oidcc-client-test-signing-key-rotation';
 
+/// Whether [moduleName] needs OpenID Connect Session Management 1.0 actually
+/// turned on for the manager driving it, and a wait for the suite to observe
+/// the PRE-logout `check_session_iframe` round trip before logging out.
+///
+/// `OIDCCClientTestSessionManagement`
+/// (openid-certification/conformance-suite,
+/// `src/main/java/net/openid/conformance/openid/client/logout/OIDCCClientTestSessionManagement.java`,
+/// extending `AbstractOIDCCClientLogoutTest`) will not fire finished until
+/// `receivedAuthorizationRequest && receivedEndSessionRequest &&
+/// receivedCheckSessionRequestBeforeLogout &&
+/// receivedCheckSessionRequestAfterLogout` are ALL true. The suite sets the
+/// latter two only from `handleGetSessionStateViaAjaxRequest`: the OP's
+/// `check_session_iframe` page itself calls back to `get_session_state`
+/// (`check_session_ajax_url`) the moment it RECEIVES a postMessage from the
+/// RP, logging "OP iframe received postMessage request from RP iframe" --
+/// see [isSessionCheckPostMessageLogEntry]. Loading the iframe alone
+/// ("The client requested check_session_iframe") is not enough.
+///
+/// `package:oidc`'s own `OidcSessionManagementSettings.enabled` defaults to
+/// `false` and gates EVERY piece of this: capturing `session_state` into the
+/// logout state, the automatic post-login monitor
+/// (`listenToUserSessionIfSupported`, wired to `userChanges` in
+/// `user_manager_base.dart`), and the post-logout probe
+/// (`startEndSessionConfirmation`, called from `handleEndSessionResponse`
+/// right before `forgetUser()`). Confirmed on CI (oidc#467): with it left at
+/// the default, login was immediately followed by logout with no
+/// `check_session_iframe` traffic at all, and the module sat at
+/// `status=WAITING result=null` forever. `conformanceManager`'s
+/// `sessionManagementEnabled` parameter is `true` for exactly this module.
+///
+/// Even with it enabled, the regular monitor's first postMessage lands on its
+/// OWN schedule (iframe load, then `sessionManagementSettings.interval`) --
+/// calling `logout()` immediately after login would very likely race it. The
+/// harness polls the suite's log for [isSessionCheckPostMessageLogEntry]
+/// before logging out, rather than sleeping a guessed duration.
+bool requiresSessionManagementMonitoring(String moduleName) =>
+    moduleName == 'oidcc-client-test-session-management';
+
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
   // oidcc-client-basic-certification-test-plan
   required String planName,
@@ -732,6 +770,67 @@ Future<List<Map<String, dynamic>>> fetchTestLogs({
     return (response.data ?? []).cast<Map<String, dynamic>>();
   } on Object {
     return const [];
+  }
+}
+
+/// Whether suite log entry message [msg] confirms the OP's
+/// `check_session_iframe` page completed one postMessage round trip with the
+/// RP (`LogGetSessionStateRequest`, openid-certification/conformance-suite:
+/// `src/main/java/net/openid/conformance/condition/as/logout/LogGetSessionStateRequest.java`).
+///
+/// This is the suite's OWN confirmation that `get_session_state` -- the ajax
+/// call `check_session_iframe`'s page makes back to the suite the instant it
+/// RECEIVES a postMessage (`AbstractOIDCCClientLogoutTest.handleGetSessionStateViaAjaxRequest`)
+/// -- actually fired, which is exactly what flips
+/// `receivedCheckSessionRequestBeforeLogout`/`...AfterLogout`
+/// (see [requiresSessionManagementMonitoring]). The suite logs one of two
+/// messages depending on whether a user happens to be logged in at that
+/// instant; both still flip the boolean, so both are matched by this shared
+/// prefix:
+///   - "OP iframe received postMessage request from RP iframe"
+///   - "OP iframe received postMessage request from RP iframe but the user
+///     is not logged in"
+///
+/// A weaker "The client requested check_session_iframe" entry
+/// (`LogCheckSessionIframeRequest`) only confirms the RP loaded the iframe,
+/// not that a postMessage reached it, so it is deliberately NOT matched here.
+bool isSessionCheckPostMessageLogEntry(String? msg) =>
+    msg != null &&
+    msg.startsWith('OP iframe received postMessage request from RP iframe');
+
+/// Polls the suite's own log for [instanceId] ([fetchTestLogs]) until an
+/// entry satisfies [matches] or [timeout] elapses, returning whether one was
+/// found.
+///
+/// Used instead of a blind `Future.delayed` to learn when
+/// `monitorSessionStatus`'s periodic `check_session_iframe` postMessage has
+/// actually landed (oidcc-client-test-session-management,
+/// [requiresSessionManagementMonitoring], oidc#467): the monitor runs on its
+/// own schedule (iframe load, then `sessionManagementSettings.interval`), so
+/// a guessed sleep either races it (too short, logging out before the suite
+/// observed the PRE-logout check) or wastes the run's time budget on every
+/// other module (too long). Polling the suite's own confirmation is exact
+/// either way, and fails closed: if nothing ever matches, this still returns
+/// after [timeout] rather than hanging, and the caller proceeds to logout
+/// regardless so [pollConformanceModuleVerdict]'s verdict names the real
+/// suite-reported failure rather than the harness hanging silently.
+Future<bool> waitForSuiteLogEntry({
+  required Dio dio,
+  required String instanceId,
+  required bool Function(Map<String, dynamic> entry) matches,
+  Duration timeout = const Duration(seconds: 20),
+  Duration interval = const Duration(seconds: 1),
+}) async {
+  final stopwatch = Stopwatch()..start();
+  while (true) {
+    final logs = await fetchTestLogs(dio: dio, instanceId: instanceId);
+    if (logs.any(matches)) {
+      return true;
+    }
+    if (stopwatch.elapsed >= timeout) {
+      return false;
+    }
+    await Future<void>.delayed(interval);
   }
 }
 

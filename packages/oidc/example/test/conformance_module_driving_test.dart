@@ -218,4 +218,83 @@ void main() {
       expect(calls, 3, reason: 'the default maxAttempts is 3');
     });
   });
+
+  // #469 web-job follow-up: the session-management plan runs for real on web
+  // (it is markTestSkipped everywhere else -- see shared_e2e.dart's
+  // supportsSessionManagement), and the module stayed at status=WAITING
+  // because OidcSessionManagementSettings.enabled defaults to false and the
+  // harness called logout() immediately after login, with no
+  // check_session_iframe traffic at all. These tests pin the pure logic the
+  // fix added: which module needs the setting turned on, and which suite log
+  // message actually confirms a postMessage round trip (as opposed to merely
+  // loading the iframe).
+  group('requiresSessionManagementMonitoring', () {
+    test('the session-management module needs it', () {
+      expect(
+        requiresSessionManagementMonitoring(
+          'oidcc-client-test-session-management',
+        ),
+        isTrue,
+      );
+    });
+
+    test('other Config/logout modules do not', () {
+      for (final module in [
+        'oidcc-client-test-discovery-openid-config',
+        'oidcc-client-test-discovery-jwks-uri-keys',
+        'oidcc-client-test-signing-key-rotation',
+        'oidcc-client-test-rp-init-logout',
+      ]) {
+        expect(
+          requiresSessionManagementMonitoring(module),
+          isFalse,
+          reason: module,
+        );
+      }
+    });
+  });
+
+  group('isSessionCheckPostMessageLogEntry', () {
+    test('matches the logged-in variant', () {
+      expect(
+        isSessionCheckPostMessageLogEntry(
+          'OP iframe received postMessage request from RP iframe',
+        ),
+        isTrue,
+      );
+    });
+
+    test(
+      'matches the not-logged-in variant (same boolean flips either way)',
+      () {
+        expect(
+          isSessionCheckPostMessageLogEntry(
+            'OP iframe received postMessage request from RP iframe but the '
+            'user is not logged in',
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'does NOT match merely loading the iframe -- that is a weaker signal',
+      () {
+        expect(
+          isSessionCheckPostMessageLogEntry(
+            'The client requested check_session_iframe',
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('does not match an unrelated log message', () {
+      expect(isSessionCheckPostMessageLogEntry('Setup Done'), isFalse);
+    });
+
+    test('does not match null', () {
+      expect(isSessionCheckPostMessageLogEntry(null), isFalse);
+    });
+  });
 }

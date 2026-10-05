@@ -16,6 +16,16 @@ OidcUserManager conformanceManager(
   // module's existing behaviour unchanged; only that one module's manager is
   // built with this false.
   bool sendUserInfoRequest = true,
+  // OidcSessionManagementSettings.enabled defaults to false, and gates EVERY
+  // OIDC Session Management 1.0 behaviour the manager has: capturing
+  // session_state into the logout state, listenToUserSessionIfSupported's
+  // automatic post-login check_session_iframe monitor, AND
+  // startEndSessionConfirmation's post-logout probe (user_manager_base.dart).
+  // Leaving it false is why oidcc-client-test-session-management (see
+  // requiresSessionManagementMonitoring in conformance/api.dart) saw none of
+  // the check_session_iframe traffic it waits for. True only for that
+  // module's manager; every other module is unaffected.
+  bool sessionManagementEnabled = false,
 }) => OidcUserManager.lazy(
   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
     Uri.parse(issuer),
@@ -95,6 +105,9 @@ OidcUserManager conformanceManager(
     ],
     userInfoSettings: OidcUserInfoSettings(
       sendUserInfoRequest: sendUserInfoRequest,
+    ),
+    sessionManagementSettings: OidcSessionManagementSettings(
+      enabled: sessionManagementEnabled,
     ),
   ),
 );
