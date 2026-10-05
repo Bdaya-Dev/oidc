@@ -1,7 +1,14 @@
 name: Prepare release
 on:
   push:
-    branches: [main]
+    branches: [main, "release/**"]
+
+# Serialize runs so two Prepare-release jobs never race each other while
+# opening/closing the release PR (otherwise each could close the other's
+# freshly-created PR and leave zero, or two, PRs open).
+concurrency:
+  group: release-prepare-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   prepare-release:
@@ -12,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !contains(github.event.head_commit.message, 'chore(release)') }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: subosito/flutter-action@v2
@@ -20,8 +27,8 @@ jobs:
       - uses: bluefireteam/melos-action@main
         continue-on-error: true
         with:
-          run-bootstrap: true          
-          bootstrap-no-example: false      
+          run-bootstrap: true
+          bootstrap-no-example: false
       - uses: bluefireteam/melos-action@main
         with:
           run-bootstrap: true
@@ -32,3 +39,65 @@ jobs:
           run-versioning: true
           publish-dry-run: true
           create-pr: true
+          # melos-action's own "Close previous release Pull Requests" step
+          # (which runs by default when create-pr is true) matches ANY open
+          # PR whose head branch looks like release-<number>, with no check
+          # on PR title or base branch. On a single `main`-only trigger that
+          # was harmless (there was only ever one lineage of release-* PRs),
+          # but now that release/** branches push here too, an unfiltered
+          # run on e.g. release/oidc_ios-0.8.x would delete-branch-and-close
+          # a perfectly good, still-open release PR targeting main (or vice
+          # versa), since run ids (and thus head branch names) are global,
+          # not per-branch. Disable it and rely solely on the "Close
+          # superseded release PRs" step below, which we've made base-aware.
+          close-existing-pr: false
+      # melos-action (peter-evans/create-pull-request under the hood) always
+      # opens a *new* PR from a run-id-suffixed branch (release-<run_id>), it
+      # never reuses/updates a previous one. Without this step every push to
+      # main that touches package versions piles up another open release PR.
+      # melos-action doesn't expose the PR number/branch as an action output,
+      # so the keeper is derived as "the newest open release-* PR".
+      #
+      # peter-evans/create-pull-request has no `base` input set above, so it
+      # defaults to "the branch checked out in the workflow" -- i.e. whatever
+      # branch (main or a release/** maintenance branch) triggered this push.
+      # melos-action has no base-branch input to set either way. That means
+      # the PR this step's sibling creates already targets the right branch;
+      # the only thing this step must additionally guard against is treating
+      # a release PR against a DIFFERENT base (e.g. main vs.
+      # release/oidc_ios-0.8.x) as superseding one another, since both use
+      # the same "chore(release): Publish packages" title and the same
+      # release-<run_id> head-branch naming scheme.
+      - name: Close superseded release PRs
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Must match melos-action's `pr-title` default (not overridden above).
+          RELEASE_PR_TITLE: "chore(release): Publish packages"
+          CURRENT_BASE: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t PR_NUMBERS < <(
+            gh pr list \
+              --repo "${{ github.repository }}" \
+              --state open \
+              --json number,headRefName,title,baseRefName \
+              --jq '.[] | select(.title == env.RELEASE_PR_TITLE and (.headRefName | startswith("release-")) and .baseRefName == env.CURRENT_BASE) | .number' \
+            | sort -rn
+          )
+
+          if [ "${#PR_NUMBERS[@]}" -le 1 ]; then
+            echo "No superseded release PRs to close (found ${#PR_NUMBERS[@]})."
+            exit 0
+          fi
+
+          keeper="${PR_NUMBERS[0]}"
+          echo "Keeping newest release PR #$keeper"
+
+          for number in "${PR_NUMBERS[@]:1}"; do
+            echo "Closing superseded release PR #$number"
+            gh pr comment "$number" --repo "${{ github.repository }}" \
+              --body "Superseded by the latest Prepare release run."
+            gh pr close "$number" --repo "${{ github.repository }}"
+          done
