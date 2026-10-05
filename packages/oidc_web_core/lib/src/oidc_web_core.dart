@@ -620,10 +620,11 @@ class OidcWebCore {
       // Matching `event.source` against this monitor's own iframe window --
       // not just the origin -- is what keeps one monitor from reading
       // another's replies (#474).
+      // `strictEquals` (JS `===`), not Dart `==`: under DDC, `==` reads a
+      // property off the cross-origin source window and throws SecurityError.
+      final ownWindow = iframe?.contentWindow;
       final sourceIsOwnIframe =
-          iframe != null &&
-          iframe.contentWindow != null &&
-          event.source == iframe.contentWindow;
+          ownWindow != null && event.source.strictEquals(ownWindow).toDart;
       if (iframe == null ||
           !iframe.isConnected ||
           !sourceIsOwnIframe ||

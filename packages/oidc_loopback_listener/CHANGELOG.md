@@ -1,3 +1,7 @@
+## 1.1.1
+
+ - **FIX**(oidc_loopback_listener): never relay a POST; its body is the response. ([db4381a7](https://github.com/Bdaya-Dev/oidc/commit/db4381a70c2063ffacad25b49531ca894b8981f1))
+
 ## 1.1.0
 
  - **FEAT**(oidc_loopback_listener): capture form_post bodies and fragments. ([3bc512c3](https://github.com/Bdaya-Dev/oidc/commit/3bc512c3b0fa9377635083707ecc5d7f7886fdea))
