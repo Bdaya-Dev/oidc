@@ -1,3 +1,10 @@
+## 2.0.0
+
+> Note: This release has breaking changes.
+
+ - **FIX**: await futures returned inside try blocks (unawaited_return_in_try_block). ([452d6ee1](https://github.com/Bdaya-Dev/oidc/commit/452d6ee121674dee760f2d698f2a7d5565ad6600))
+ - **BREAKING** **FEAT**(oidc_default_store): bump flutter_secure_storage to ^11 ([#451](https://github.com/Bdaya-Dev/oidc/issues/451)). ([166f394e](https://github.com/Bdaya-Dev/oidc/commit/166f394ed7d937f1098a558b92f325fc52043700))
+
 ## 1.1.2
 
  - Update a dependency to the latest release.
