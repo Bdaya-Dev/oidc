@@ -499,104 +499,120 @@ void main() {
       );
     }
   });
-  group('a stored session removed after an in-place refresh', () {
+  group('a stored session that fails revalidation after an in-place refresh', () {
     for (final initMode in OidcInitMode.values) {
-      test(
-        '${initMode.name}: the user the refresh published is forgotten too',
-        () async {
-          // The stored access_token is expired, so init() refreshes it. The
-          // refresh response validates (and is published as currentUser),
-          // but the stored-session revalidation that follows fails on its
-          // UserInfo call. loadCachedTokens then removes the stored session,
-          // and memory must not keep the user the refresh published.
-          final metadataJson = {
-            ..._metadataJson(),
-            'userinfo_endpoint': '$_issuer/userinfo',
-          };
-          final store = OidcMemoryStore();
-          await store.init();
-          await store.setMany(
-            OidcStoreNamespace.discoveryDocument,
-            values: {
-              _wellKnown.toString(): jsonEncode(metadataJson),
-              '$_wellKnown::oidc_discovery_fetched_at': clock
-                  .now()
-                  .millisecondsSinceEpoch
-                  .toString(),
-            },
-          );
-          await store.setMany(
-            OidcStoreNamespace.secureTokens,
-            values: {
-              OidcConstants_Store.currentToken: jsonEncode(
-                OidcToken(
-                  creationTime: clock
-                      .now()
-                      .subtract(const Duration(hours: 2))
-                      .toUtc(),
-                  idToken: _signIdToken(),
-                  accessToken: 'at-cached',
-                  refreshToken: 'rt-1',
-                  tokenType: 'Bearer',
-                  expiresIn: const Duration(hours: 1),
-                ).toJson(),
+      for (final keep in [false, true]) {
+        test(
+          keep
+              ? '${initMode.name}: kept by the policy, the user the refresh '
+                    'published is not left signed in'
+              : '${initMode.name}: removed, the user the refresh published is '
+                    'forgotten too',
+          () async {
+            // The stored access_token is expired, so init() refreshes it. The
+            // refresh response validates (and is published as currentUser),
+            // but the stored-session revalidation that follows fails on its
+            // UserInfo call. loadCachedTokens then removes the stored session,
+            // and memory must not keep the user the refresh published.
+            final metadataJson = {
+              ..._metadataJson(),
+              'userinfo_endpoint': '$_issuer/userinfo',
+            };
+            final store = OidcMemoryStore();
+            await store.init();
+            await store.setMany(
+              OidcStoreNamespace.discoveryDocument,
+              values: {
+                _wellKnown.toString(): jsonEncode(metadataJson),
+                '$_wellKnown::oidc_discovery_fetched_at': clock
+                    .now()
+                    .millisecondsSinceEpoch
+                    .toString(),
+              },
+            );
+            await store.setMany(
+              OidcStoreNamespace.secureTokens,
+              values: {
+                OidcConstants_Store.currentToken: jsonEncode(
+                  OidcToken(
+                    creationTime: clock
+                        .now()
+                        .subtract(const Duration(hours: 2))
+                        .toUtc(),
+                    idToken: _signIdToken(),
+                    accessToken: 'at-cached',
+                    refreshToken: 'rt-1',
+                    tokenType: 'Bearer',
+                    expiresIn: const Duration(hours: 1),
+                  ).toJson(),
+                ),
+              },
+            );
+            var userInfoCalls = 0;
+            final client = MockClient((req) async {
+              if (req.url.path.endsWith('/token')) {
+                return http.Response(
+                  jsonEncode({
+                    'access_token': 'at-refreshed',
+                    'token_type': 'Bearer',
+                    'expires_in': 3600,
+                    'refresh_token': 'rt-2',
+                    'id_token': _signIdToken(),
+                  }),
+                  200,
+                  headers: const {'content-type': 'application/json'},
+                );
+              }
+              if (req.url.path.endsWith('/userinfo')) {
+                userInfoCalls++;
+                return http.Response(
+                  // The refresh's own validation sees the right subject; the
+                  // stored-session revalidation right after it does not.
+                  jsonEncode({'sub': userInfoCalls == 1 ? 'user-1' : 'other'}),
+                  200,
+                  headers: const {'content-type': 'application/json'},
+                );
+              }
+              return http.Response('unexpected: ${req.url}', 599);
+            });
+            final manager = _M.lazy(
+              discoveryDocumentUri: _wellKnown,
+              clientCredentials: const OidcClientAuthentication.none(
+                clientId: 'client-1',
               ),
-            },
-          );
-          var userInfoCalls = 0;
-          final client = MockClient((req) async {
-            if (req.url.path.endsWith('/token')) {
-              return http.Response(
-                jsonEncode({
-                  'access_token': 'at-refreshed',
-                  'token_type': 'Bearer',
-                  'expires_in': 3600,
-                  'refresh_token': 'rt-2',
-                  'id_token': _signIdToken(),
-                }),
-                200,
-                headers: const {'content-type': 'application/json'},
-              );
-            }
-            if (req.url.path.endsWith('/userinfo')) {
-              userInfoCalls++;
-              return http.Response(
-                // The refresh's own validation sees the right subject; the
-                // stored-session revalidation right after it does not.
-                jsonEncode({'sub': userInfoCalls == 1 ? 'user-1' : 'other'}),
-                200,
-                headers: const {'content-type': 'application/json'},
-              );
-            }
-            return http.Response('unexpected: ${req.url}', 599);
-          });
-          final manager = _M.lazy(
-            discoveryDocumentUri: _wellKnown,
-            clientCredentials: const OidcClientAuthentication.none(
-              clientId: 'client-1',
-            ),
-            store: store,
-            httpClient: client,
-            keyStore: JsonWebKeyStore()..addKey(_signingKey),
-            settings: OidcUserManagerSettings(
-              redirectUri: Uri.parse('com.example.app://cb'),
-              initMode: initMode,
-            ),
-          );
+              store: store,
+              httpClient: client,
+              keyStore: JsonWebKeyStore()..addKey(_signingKey),
+              settings: OidcUserManagerSettings(
+                redirectUri: Uri.parse('com.example.app://cb'),
+                initMode: initMode,
+                shouldRemoveInvalidToken: keep ? (_, _) => false : null,
+              ),
+            );
 
-          await manager.init();
-          await pumpEventQueue();
+            await manager.init();
+            await pumpEventQueue();
 
-          expect(userInfoCalls, 2);
-          expect(await _storedToken(store), isNull);
-          expect(
-            manager.currentUser,
-            isNull,
-            reason: 'the store no longer has a session, so memory must not.',
-          );
-          await manager.dispose();
-        },
-      );
+            expect(userInfoCalls, 2);
+            if (keep) {
+              // The policy keeps the (refreshed) session on disk, but it failed
+              // revalidation, so nobody is signed in with it, exactly as when
+              // no refresh happened.
+              expect(await _storedToken(store), isNotNull);
+            } else {
+              expect(await _storedToken(store), isNull);
+            }
+            expect(
+              manager.currentUser,
+              isNull,
+              reason:
+                  'the session failed revalidation, so memory must not '
+                  'keep a user signed in with it.',
+            );
+            await manager.dispose();
+          },
+        );
+      }
     }
   });
 }

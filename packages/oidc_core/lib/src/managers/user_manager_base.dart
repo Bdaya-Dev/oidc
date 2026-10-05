@@ -1760,10 +1760,12 @@ abstract class OidcUserManagerBase {
             // `at_hash` is REQUIRED when an access_token came with it
             // (`id_token token`, OIDC Core §3.2.2.10) and `c_hash` is REQUIRED
             // when a `code` did (§3.3.2.11). For `id_token` alone neither
-            // applies.
+            // applies. Both are judged from THIS response's tokens: a
+            // signed-in user's token still holds the previous access_token.
             context: OidcIdTokenValidationContext(
               source: OidcIdTokenSource.authorizationEndpoint,
               authorizationCode: response.code,
+              accessToken: implicitTokenResponse.accessToken,
               maxAge: stateData.maxAge,
             ),
           );
@@ -1911,6 +1913,9 @@ abstract class OidcUserManagerBase {
   ///
   /// [context] describes the response [token] came from and is passed to
   /// [validateAndSaveUser] (it is unused when [validateAndSave] is false).
+  /// When its [OidcIdTokenValidationContext.accessToken] is `null`, it is
+  /// filled in from [token], so `at_hash` is compared with the access_token of
+  /// this response rather than one the current user kept from an earlier one.
   /// See [OidcIdTokenValidationContext].
   @protected
   Future<OidcUser?> createUserFromToken({
@@ -2001,7 +2006,17 @@ abstract class OidcUserManagerBase {
       return validateAndSaveUser(
         user: newUser,
         metadata: metadata,
-        context: context,
+        // `newUser.token` merges [token] into the current user's token, so it
+        // can hold an access_token from an earlier response. The hash rules
+        // must see this response's own access_token.
+        context: context.accessToken != null || token.accessToken == null
+            ? context
+            : OidcIdTokenValidationContext(
+                source: context.source,
+                authorizationCode: context.authorizationCode,
+                accessToken: token.accessToken,
+                maxAge: context.maxAge,
+              ),
       );
     } else {
       return newUser;
@@ -3037,6 +3052,7 @@ abstract class OidcUserManagerBase {
       context: OidcIdTokenValidationContext(
         source: OidcIdTokenSource.authorizationEndpoint,
         authorizationCode: code,
+        accessToken: accessToken,
         maxAge: maxAge,
       ),
     );
@@ -3080,12 +3096,17 @@ abstract class OidcUserManagerBase {
   /// `at_hash` / `c_hash` rules (see [OidcIdTokenSource]) and carries the
   /// authorization code and the requested `max_age` to check against:
   ///
-  /// * Present hashes must always match: `at_hash` against the access_token,
-  ///   `c_hash` against [OidcIdTokenValidationContext.authorizationCode].
+  /// * Present hashes must match: `at_hash` against
+  ///   [OidcIdTokenValidationContext.accessToken] (for sources other than
+  ///   [OidcIdTokenSource.authorizationEndpoint], the user's access_token when
+  ///   that is `null`), `c_hash` against
+  ///   [OidcIdTokenValidationContext.authorizationCode].
   /// * For [OidcIdTokenSource.authorizationEndpoint], a hash whose token was
   ///   returned with the id_token must also be present.
   /// * When [OidcToken.idTokenRetainedFromPriorResponse] is set, the id_token
-  ///   came from an earlier response, so neither hash is checked.
+  ///   came from an earlier response. For [OidcIdTokenSource.refresh] and
+  ///   [OidcIdTokenSource.storedSession] neither hash is checked; for the
+  ///   other sources neither is required, but a present one must match.
   List<Exception> validateUser({
     required OidcUser user,
     required OidcProviderMetadata metadata,
@@ -3260,8 +3281,13 @@ abstract class OidcUserManagerBase {
     // §3.2.2.9 / §3.3.2.11: a hash binds the id_token to a token issued in
     // the SAME response. An id_token kept across a refresh that returned none
     // (§12.2) was issued with earlier tokens, so comparing its hashes with the
-    // current ones would report a mismatch for a valid session.
-    if (user.token.idTokenRetainedFromPriorResponse) {
+    // current ones would report a mismatch for a valid session. The stored
+    // session such a refresh produced carries the same marker.
+    final kept = user.token.idTokenRetainedFromPriorResponse;
+    final source = context.source;
+    if (kept &&
+        (source == OidcIdTokenSource.refresh ||
+            source == OidcIdTokenSource.storedSession)) {
       return const [];
     }
     final errors = <Exception>[];
@@ -3269,9 +3295,18 @@ abstract class OidcUserManagerBase {
     // Only the authorization endpoint makes the hashes REQUIRED: at_hash with
     // an access_token (§3.2.2.10 implicit, §3.3.2.11 hybrid), c_hash with a
     // code (§3.3.2.11). From the token endpoint they are OPTIONAL (§3.1.3.8,
-    // §3.3.3.6) and only checked when present.
+    // §3.3.3.6) and only checked when present. A response that carried no
+    // id_token (the signed-in user's previous one was kept) did not issue
+    // the id_token with its tokens, so nothing is required of it; a hash it
+    // carries is still compared, as before this rule existed.
     final hashesRequired =
-        context.source == OidcIdTokenSource.authorizationEndpoint;
+        source == OidcIdTokenSource.authorizationEndpoint && !kept;
+    // The access_token returned WITH the id_token. From the authorization
+    // endpoint, only the response's own (null when it returned none): a
+    // signed-in user's merged token can still hold the previous session's.
+    final accessToken = source == OidcIdTokenSource.authorizationEndpoint
+        ? context.accessToken
+        : context.accessToken ?? user.token.accessToken;
 
     void check({
       required String claim,
@@ -3308,7 +3343,7 @@ abstract class OidcUserManagerBase {
 
     check(
       claim: 'at_hash',
-      value: user.token.accessToken,
+      value: accessToken,
       valueName: 'access_token',
     );
     check(
@@ -5268,19 +5303,21 @@ abstract class OidcUserManagerBase {
           keys: usedKeys,
           managerId: id,
         );
-        // #468: keep memory in step with the store. This path owns removing
-        // the stored session (validateAndSaveUser never does), so it also
-        // retracts the user a refresh above published before the session
-        // failed revalidation. Only that exact object: a user some other flow
-        // signed in meanwhile is not this session. (The user cache-first
-        // restored is retracted by _scheduleBackgroundRevalidation, and
-        // blocking init has no other user in memory.) Mirrors forgetUser()'s
-        // event-then-null contract, without its wider store cleanup.
-        final staleUser = currentUser;
-        if (staleUser != null && identical(staleUser, publishedByRefresh)) {
-          emitEvent(OidcPreLogoutEvent.now(currentUser: staleUser));
-          userSubject.add(null);
-        }
+      }
+      // #468: the stored session failed revalidation, so no user may stay
+      // signed in with it, whether the policy removed it from the store or
+      // kept it there (#201/#205 reject-but-keep: the same as when no refresh
+      // ran, and as _scheduleBackgroundRevalidation does for the user
+      // cache-first restored). This path owns that decision (validateAndSaveUser
+      // never touches the session), so it retracts the user a refresh above
+      // published before the session failed revalidation. Only that exact
+      // object: a user some other flow signed in meanwhile is not this
+      // session. Mirrors forgetUser()'s event-then-null contract, without its
+      // store cleanup.
+      final staleUser = currentUser;
+      if (staleUser != null && identical(staleUser, publishedByRefresh)) {
+        emitEvent(OidcPreLogoutEvent.now(currentUser: staleUser));
+        userSubject.add(null);
       }
     }
   }

@@ -8,9 +8,13 @@ library;
 //   implicit, §3.3.2.11 hybrid); c_hash REQUIRED with a code (§3.3.2.11).
 // * tokenEndpoint / refresh / storedSession: both OPTIONAL, checked only when
 //   present (§3.1.3.8, §3.3.3.6, §12.2).
-// * Any source: an id_token retained from an earlier response
-//   (`OidcToken.idTokenRetainedFromPriorResponse`) has its hashes skipped,
-//   because they bind the tokens of the response that issued it.
+// * The hashes are judged from the response's own tokens
+//   (`OidcIdTokenValidationContext.accessToken` / `authorizationCode`), never
+//   from an access_token a signed-in user's merged token kept.
+// * An id_token retained from an earlier response
+//   (`OidcToken.idTokenRetainedFromPriorResponse`): refresh / storedSession
+//   skip its hashes, because they bind the tokens of the response that issued
+//   it (§12.2). Any other source requires neither, but compares a present one.
 
 import 'dart:convert';
 
@@ -126,10 +130,20 @@ Future<OidcUser> _user({
   );
 }
 
+/// A context for [source]. Like the manager's call sites, the authorization
+/// endpoint passes the access_token of its response ([accessToken]); the
+/// other sources leave it to the validated user's token.
 OidcIdTokenValidationContext _ctx(
   OidcIdTokenSource source, {
   String? code,
-}) => OidcIdTokenValidationContext(source: source, authorizationCode: code);
+  String? accessToken = _accessToken,
+}) => OidcIdTokenValidationContext(
+  source: source,
+  authorizationCode: code,
+  accessToken: source == OidcIdTokenSource.authorizationEndpoint
+      ? accessToken
+      : null,
+);
 
 void main() {
   final manager = _M();
@@ -143,14 +157,17 @@ void main() {
     const context = OidcIdTokenValidationContext();
     expect(context.source, OidcIdTokenSource.tokenEndpoint);
     expect(context.authorizationCode, isNull);
+    expect(context.accessToken, isNull);
     expect(context.maxAge, isNull);
   });
 
-  test('toString does not leak the authorization code', () {
-    expect(
-      _ctx(OidcIdTokenSource.authorizationEndpoint, code: _code).toString(),
-      isNot(contains(_code)),
-    );
+  test('toString does not leak the authorization code or access_token', () {
+    final text = _ctx(
+      OidcIdTokenSource.authorizationEndpoint,
+      code: _code,
+    ).toString();
+    expect(text, isNot(contains(_code)));
+    expect(text, isNot(contains(_accessToken)));
   });
 
   group('at_hash', () {
@@ -169,9 +186,70 @@ void main() {
 
       test('${source.name}: no access_token means no at_hash rule', () async {
         final user = await _user(accessToken: null);
-        expect(manager.hashErrors(user, _ctx(source)), isEmpty);
+        expect(
+          manager.hashErrors(user, _ctx(source, accessToken: null)),
+          isEmpty,
+        );
       });
     }
+
+    group(
+      "authorizationEndpoint: the response's access_token decides, not the "
+      "user's (a signed-in user's merged token keeps the previous one)",
+      () {
+        test('none returned: a missing at_hash is accepted', () async {
+          final user = await _user();
+          expect(
+            manager.hashErrors(
+              user,
+              _ctx(OidcIdTokenSource.authorizationEndpoint, accessToken: null),
+            ),
+            isEmpty,
+          );
+        });
+
+        test('none returned: at_hash is not compared at all', () async {
+          final user = await _user(atHash: _hash('something-else'));
+          expect(
+            manager.hashErrors(
+              user,
+              _ctx(OidcIdTokenSource.authorizationEndpoint, accessToken: null),
+            ),
+            isEmpty,
+          );
+        });
+
+        test('one returned: at_hash is compared with it', () async {
+          final user = await _user(atHash: _hash(_accessToken));
+          expect(
+            manager.hashErrors(
+              user,
+              _ctx(
+                OidcIdTokenSource.authorizationEndpoint,
+                accessToken: 'at-from-this-response',
+              ),
+            ),
+            [contains('`at_hash` does not match the access_token')],
+          );
+        });
+      },
+    );
+
+    test(
+      "tokenEndpoint: a supplied access_token is used instead of the user's",
+      () async {
+        final user = await _user(atHash: _hash(_accessToken));
+        expect(
+          manager.hashErrors(
+            user,
+            const OidcIdTokenValidationContext(
+              accessToken: 'at-from-this-response',
+            ),
+          ),
+          [contains('`at_hash` does not match the access_token')],
+        );
+      },
+    );
 
     test(
       'authorizationEndpoint: a missing at_hash with an access_token is '
@@ -248,10 +326,14 @@ void main() {
     }
   });
 
-  group('an id_token retained from an earlier response (§12.2)', () {
-    for (final source in OidcIdTokenSource.values) {
+  group('an id_token retained from an earlier response', () {
+    for (final source in [
+      OidcIdTokenSource.refresh,
+      OidcIdTokenSource.storedSession,
+    ]) {
       test(
-        "${source.name}: its at_hash is not compared with the new token's",
+        "${source.name}: its at_hash is not compared with the new token's "
+        '(§12.2)',
         () async {
           final user = await _user(
             atHash: _hash('the-earlier-access-token'),
@@ -263,15 +345,34 @@ void main() {
       );
     }
 
-    test('nor is a missing hash required for it', () async {
-      final user = await _user(retained: true);
-      expect(
-        manager.hashErrors(
-          user,
-          _ctx(OidcIdTokenSource.authorizationEndpoint, code: _code),
-        ),
-        isEmpty,
+    for (final source in [
+      OidcIdTokenSource.tokenEndpoint,
+      OidcIdTokenSource.authorizationEndpoint,
+    ]) {
+      test(
+        '${source.name}: a present at_hash is still compared (only a refresh '
+        'may skip it)',
+        () async {
+          final user = await _user(
+            atHash: _hash('the-earlier-access-token'),
+            retained: true,
+          );
+          expect(manager.hashErrors(user, _ctx(source)), [
+            contains('`at_hash` does not match the access_token'),
+          ]);
+        },
       );
+    }
+
+    test('no hash is required for it, whatever the source', () async {
+      final user = await _user(retained: true);
+      for (final source in OidcIdTokenSource.values) {
+        expect(
+          manager.hashErrors(user, _ctx(source, code: _code)),
+          isEmpty,
+          reason: source.name,
+        );
+      }
     });
   });
 
