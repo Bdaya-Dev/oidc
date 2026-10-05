@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>oidc_web_core test fixture: session iframe echo</title>
+</head>
+<body>
+  <script>
+    // Minimal stand-in for an OP's `check_session_iframe`, used by
+    // oidc_web_core's `monitorSessionStatus` tests (#474).
+    //
+    // Whatever is posted to this page is echoed back to `window.parent`, so
+    // Dart test code can get a reply whose `event.source` is genuinely THIS
+    // iframe's content window (required by the `event.source` check in
+    // `onMessageReceived`, #474) without needing JS interop to call into the
+    // iframe directly. Three input shapes are understood:
+    //
+    //  * "<clientId> <sessionState>" (the real production wire format, sent
+    //    periodically by `sendCheckSession`) -> replies "changed:<sessionState>",
+    //    so a test driving two monitors against the same fixture URL can tell
+    //    which monitor's periodic ping produced which reply.
+    //  * "reply:<payload>" -> replies with exactly "<payload>", letting a test
+    //    drive canned "changed"/"unchanged"/"error"/arbitrary replies without
+    //    waiting on the periodic timer.
+    //  * "send-nonstring" -> replies with the NUMBER 99 (not a string), to
+    //    exercise the `isA<JSString>` guard on a message that otherwise
+    //    passes the origin/source checks.
+    window.addEventListener('message', function (event) {
+      var raw = String(event.data);
+      if (raw === 'send-nonstring') {
+        window.parent.postMessage(99, '*');
+        return;
+      }
+      if (raw.indexOf('reply:') === 0) {
+        window.parent.postMessage(raw.slice('reply:'.length), '*');
+        return;
+      }
+      var parts = raw.split(' ');
+      var sessionState = parts[1] || '';
+      window.parent.postMessage('changed:' + sessionState, '*');
+    });
+  </script>
+</body>
+</html>

@@ -457,10 +457,14 @@ void main() {
     test('emits changed/unchanged/error/unknown results for iframe messages '
         'and honors pause/resume/cancel', () async {
       final origin = web.window.location.origin;
-      // A same-origin URL that the package:test server answers (with a 404),
-      // so the iframe fires `onLoad` and onListen proceeds to attach the
-      // window message listener. Its origin matches the messages we post.
-      final checkSession = Uri.parse('$origin/__oidc_monitor_probe__');
+      // A real page (not a 404) so it can run script: it echoes back
+      // whatever is posted to it, so a reply's `event.source` is genuinely
+      // this monitor's iframe window, as `onMessageReceived` now requires
+      // (#474) -- a bare same-origin `window.postMessage` from the test
+      // itself no longer matches.
+      final checkSession = Uri.base.resolve(
+        'fixtures/session_iframe_echo.html',
+      );
 
       final results = <OidcMonitorSessionResult>[];
       final stream = core.monitorSessionStatus(
@@ -468,7 +472,11 @@ void main() {
         request: const OidcMonitorSessionStatusRequest(
           clientId: 'client-1',
           sessionState: 'sess-1',
-          interval: Duration(milliseconds: 200),
+          // Large enough that the periodic keep-alive ping (which the live
+          // fixture also echoes back, unlike the old dead 404 probe) only
+          // fires once, immediately, during setup -- not again during this
+          // test's exact-count assertions below.
+          interval: Duration(seconds: 30),
         ),
       );
       final sub = stream.listen(results.add);
@@ -480,7 +488,20 @@ void main() {
       // Give onListen time to load the iframe and attach the window listener.
       await Future<void>.delayed(const Duration(seconds: 2));
 
-      void post(String data) => web.window.postMessage(data.toJS, origin.toJS);
+      final iframes = _sessionMonitorIframes();
+      expect(
+        iframes,
+        hasLength(1),
+        reason: "the monitor's iframe should be attached by now",
+      );
+      final iframeWindow =
+          (iframes.single as web.HTMLIFrameElement).contentWindow!;
+
+      // Posts into the monitor's OWN iframe, which echoes back to
+      // `window.parent` -- mirroring the real OP protocol, and the only way
+      // to produce a reply whose `event.source` matches (#474).
+      void post(String data) =>
+          iframeWindow.postMessage('reply:$data'.toJS, origin.toJS);
 
       post('changed');
       await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -516,16 +537,20 @@ void main() {
 
       final resultsAfterAssertions = results.length;
 
-      // A non-string message (matching origin, iframe still present) is
-      // dropped at the `isA<JSString>` guard, not surfaced as a result.
-      web.window.postMessage(99.toJS, origin.toJS);
+      // A non-string message (matching origin AND source, iframe still
+      // present) is dropped at the `isA<JSString>` guard, not surfaced as a
+      // result. The fixture echoes back the NUMBER 99 (not a string) for
+      // this specific command.
+      iframeWindow.postMessage('send-nonstring'.toJS, origin.toJS);
       await Future<void>.delayed(const Duration(milliseconds: 150));
 
       // Once the iframe is gone, both the incoming-message handler (its
       // own iframe is no longer connected) and the periodic sendCheckSession
-      // (same check) bail out. The message is ignored.
+      // (same check) bail out. The message is ignored, however it arrives --
+      // a bare same-origin self-post is enough here since connectivity alone
+      // is what must reject it.
       _removeAllSessionMonitorIframes();
-      post('ignored-after-iframe-removed');
+      web.window.postMessage('ignored-after-iframe-removed'.toJS, origin.toJS);
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
       expect(
@@ -545,7 +570,9 @@ void main() {
     test("cancelling an older monitor does not remove a newer monitor's "
         'iframe, which keeps receiving replies (#474)', () async {
       final origin = web.window.location.origin;
-      final checkSession = Uri.parse('$origin/__oidc_monitor_probe_474__');
+      final checkSession = Uri.base.resolve(
+        'fixtures/session_iframe_echo.html',
+      );
 
       final resultsA = <OidcMonitorSessionResult>[];
       final streamA = core.monitorSessionStatus(
@@ -599,18 +626,22 @@ void main() {
       // Cancel the OLDER monitor (A).
       await subA.cancel();
 
+      final remaining = _sessionMonitorIframes();
       expect(
-        _sessionMonitorIframes(),
+        remaining,
         hasLength(1),
         reason:
             "cancelling A must remove only A's own iframe, leaving "
             "B's iframe in the DOM",
       );
 
-      void post(String data) => web.window.postMessage(data.toJS, origin.toJS);
+      // Drive a reply through B's own iframe -- the only one left, and the
+      // only source `event.source` will now accept (#474).
+      final iframeBWindow =
+          (remaining.single as web.HTMLIFrameElement).contentWindow!;
 
       resultsB.clear();
-      post('changed');
+      iframeBWindow.postMessage('reply:changed'.toJS, origin.toJS);
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
       expect(
@@ -670,6 +701,89 @@ void main() {
             'message listener or periodic timer',
       );
     });
+
+    test(
+      "a reply from one monitor's iframe is never delivered to a "
+      'different monitor on the same origin (event.source check, #474)',
+      () async {
+        // Both monitors point at the SAME check_session_iframe URL -- the
+        // "two concurrent monitors against the same OP origin" scenario the
+        // reviewer flagged: origin-only filtering can't tell their replies
+        // apart, only `event.source` (this monitor's own iframe window) can.
+        //
+        // `Uri.base.resolve` (rather than building `$origin/...` directly)
+        // mirrors how the browser itself would resolve a relative `src`, so
+        // this doesn't depend on package:test's server root matching the
+        // package root.
+        final fixture = Uri.base.resolve('fixtures/session_iframe_echo.html');
+        expect(
+          fixture.origin,
+          web.window.location.origin,
+          reason:
+              'sanity check: the fixture must resolve same-origin, or the '
+              "monitors' eventOrigin check would reject it outright and "
+              'this test would prove nothing',
+        );
+
+        final resultsA = <OidcMonitorSessionResult>[];
+        final streamA = core.monitorSessionStatus(
+          checkSessionIframe: fixture,
+          request: const OidcMonitorSessionStatusRequest(
+            clientId: 'client-a',
+            sessionState: 'sess-a',
+            interval: Duration(milliseconds: 150),
+          ),
+        );
+        final subA = streamA.listen(resultsA.add);
+        addTearDown(() async {
+          await subA.cancel();
+          _removeAllSessionMonitorIframes();
+        });
+
+        final resultsB = <OidcMonitorSessionResult>[];
+        final streamB = core.monitorSessionStatus(
+          checkSessionIframe: fixture,
+          request: const OidcMonitorSessionStatusRequest(
+            clientId: 'client-b',
+            sessionState: 'sess-b',
+            interval: Duration(milliseconds: 150),
+          ),
+        );
+        final subB = streamB.listen(resultsB.add);
+        addTearDown(() async {
+          await subB.cancel();
+          _removeAllSessionMonitorIframes();
+        });
+
+        // Let both iframes load and exchange a few request/reply round
+        // trips on their periodic interval.
+        await Future<void>.delayed(const Duration(seconds: 2));
+
+        bool received(List<OidcMonitorSessionResult> results, String state) =>
+            results.any((r) => r.getUnknownResult() == 'changed:$state');
+
+        expect(
+          received(resultsA, 'sess-a'),
+          isTrue,
+          reason: "monitor A should receive its own iframe's reply",
+        );
+        expect(
+          received(resultsB, 'sess-b'),
+          isTrue,
+          reason: "monitor B should receive its own iframe's reply",
+        );
+        expect(
+          received(resultsA, 'sess-b'),
+          isFalse,
+          reason: "monitor A must not receive monitor B's iframe reply",
+        );
+        expect(
+          received(resultsB, 'sess-a'),
+          isFalse,
+          reason: "monitor B must not receive monitor A's iframe reply",
+        );
+      },
+    );
   });
 }
 

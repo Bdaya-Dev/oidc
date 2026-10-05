@@ -613,14 +613,27 @@ class OidcWebCore {
       final streamController = sc;
       final iframe = ownIframe;
       final eventOrigin = event.origin;
+      // `window.onMessage` is a single, shared, broadcast stream: every
+      // concurrently-running monitor's listener sees every message posted on
+      // it, including a reply meant for a *different* monitor's iframe (two
+      // monitors can share the same OP origin, e.g. two signed-in accounts).
+      // Matching `event.source` against this monitor's own iframe window --
+      // not just the origin -- is what keeps one monitor from reading
+      // another's replies (#474).
+      final sourceIsOwnIframe =
+          iframe != null &&
+          iframe.contentWindow != null &&
+          event.source == iframe.contentWindow;
       if (iframe == null ||
           !iframe.isConnected ||
+          !sourceIsOwnIframe ||
           streamController == null ||
           eventOrigin != checkSessionIframe.origin) {
         logger.warning(
           'ignoring received message; '
           'iframe is null ? ${iframe == null}; '
           'iframe is connected ? ${iframe?.isConnected}; '
+          "event source is this monitor's own iframe ? $sourceIsOwnIframe; "
           'streamController is null ? ${streamController == null}; '
           'eventOrigin is: ($eventOrigin), should be equal to: (${checkSessionIframe.origin}).',
         );
