@@ -477,12 +477,16 @@ When session management is enabled (`sessionManagementSettings.enabled`), the OP
 
 | `outcome` | meaning |
 | --- | --- |
-| `changed` | the ended session is no longer the OP's current session: the OP-side logout took effect. |
-| `unchanged` | the OP still considers the session alive, e.g. the End-User declined to log out of the OP ([RP-Initiated Logout 1.0 §2](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout) lets the OP ask). This app is still logged out locally. |
+| `changed` | the expected answer after a successful logout, but not proof of it (see below). |
+| `unchanged` | the OP still considers the session alive, so the OP-side logout did not take, e.g. the End-User declined to log out of the OP ([RP-Initiated Logout 1.0 §2](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout) lets the OP ask). This app is still logged out locally. |
 | `error` | the OP iframe answered `error` (or an unknown value), or the probe failed. |
 | `timedOut` | no answer within `sessionManagementSettings.endSessionConfirmationTimeout`. |
 
+Only `unchanged` is a reliable signal. `changed` also shows up when the logout did not happen: when the browser blocks third-party cookies or storage (Safari and Firefox block or partition the OP iframe's cookies by default), cookie-based OPs "might then return changed for every single call" ([Session Management 1.0 §5.1](https://openid.net/specs/openid-connect-session-1_0.html#ThirdPartyContent)), and changes to unrelated sessions can produce false positives ([§3.2](https://openid.net/specs/openid-connect-session-1_0.html#OPiframe)).
+
 The check runs in the background: the user is forgotten and `userChanges()` emits `null` without waiting for it, so the event usually arrives after that. The manager does not act on the outcome (it does not re-authenticate with `prompt=none`, which would sign the user back in); what to do, for example telling the user they are still signed in at the OP, is up to the app. The event is not emitted on platforms without session monitoring (everything except web), or if the manager is disposed or a new session starts before the OP answers.
+
+On web with the `samePage` navigation mode, the end-session response is handled during `init()` on the reloaded page, so the event is emitted there: subscribe to `events()` before calling `init()` to receive it.
 
 ```dart
 manager.events().listen((event) {

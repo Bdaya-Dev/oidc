@@ -640,8 +640,8 @@ class OidcSessionManagementSettings {
   /// [OidcEndSessionConfirmationOutcome.timedOut] on
   /// [OidcUserManagerBase.events] (see [OidcEndSessionConfirmationEvent]).
   ///
-  /// The probe never delays logout (it runs after the user is forgotten), so
-  /// this only bounds how long its hidden iframe may linger and when the
+  /// The probe never delays logout (it starts just before the user is
+  /// forgotten, and its answer arrives after), so this only bounds how long its hidden iframe may linger and when the
   /// event is emitted. It covers loading the OP iframe document over the
   /// network plus a postMessage round trip; the probe re-sends its
   /// postMessage every [interval], so the default (twice the default

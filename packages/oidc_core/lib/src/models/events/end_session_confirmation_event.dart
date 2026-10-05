@@ -20,7 +20,9 @@ import 'package:oidc_core/oidc_core.dart';
 /// and runs in the background: [OidcUserManagerBase.forgetUser] and the
 /// `null` emission on [OidcUserManagerBase.userChanges] do NOT wait for it.
 /// This event therefore usually arrives AFTER the user has already been
-/// forgotten locally.
+/// forgotten locally. On a resumed web `samePage` logout it is emitted during
+/// [OidcUserManagerBase.init], so subscribe to
+/// [OidcUserManagerBase.events] before calling `init()` to see it.
 ///
 /// It is not emitted on platforms whose `monitorSessionStatus` never answers
 /// (every non-web platform returns an empty stream), nor when the manager is
@@ -35,16 +37,28 @@ import 'package:oidc_core/oidc_core.dart';
 /// which answer was given. The OP iframe is the only signal the RP has: per
 /// Session Management 1.0 §3.2 it answers `changed` when the `session_state`
 /// it is given no longer matches the OP's current one, and `unchanged` when
-/// it still does. Hence:
+/// it still does.
 ///
-/// * [OidcEndSessionConfirmationOutcome.changed]: the ended `session_state`
-///   is no longer the OP's current session -- the expected result of a
-///   successful logout. (Strictly, `changed` means "different", not "no
-///   session": an End-User who already signed back in at the OP also reads
-///   as `changed`.)
+/// Only `unchanged` is a reliable signal. `changed` is what a successful
+/// logout produces, but it is produced in other cases too:
+///
+/// * §5.1: when the browser blocks third-party cookies or storage (Safari and
+///   Firefox block or partition the OP iframe's cookies by default), "Cookie
+///   based implementations might then return changed for every single call".
+/// * §3.2: `changed` "might also occur as a result of changes to other
+///   sessions between the User Agent and the OP. RPs need to be prepared for
+///   either eventuality, silently handling any false positives".
+/// * An End-User who already signed in again at the OP also reads as
+///   `changed`: it means "different", not "no session".
+///
+/// Hence:
+///
+/// * [OidcEndSessionConfirmationOutcome.changed]: the expected answer after
+///   a successful logout, but not proof of it.
 /// * [OidcEndSessionConfirmationOutcome.unchanged]: the OP still considers
-///   the ended session live -- e.g. the End-User declined to log out of the
-///   OP. The RP's local logout still happened; the OP session did not end.
+///   the ended session live, so the OP-side logout did not take -- e.g. the
+///   End-User declined to log out of the OP. The RP's local logout still
+///   happened.
 /// * [OidcEndSessionConfirmationOutcome.error]: the OP iframe answered
 ///   `error` (or something outside the spec's three values), or the probe
 ///   itself failed.
@@ -59,8 +73,11 @@ import 'package:oidc_core/oidc_core.dart';
 /// active session in sync with the OP. After an RP-initiated logout the RP
 /// has deliberately ended its session; a `prompt=none` request here would
 /// silently sign the End-User back in if they still (or again) have an OP
-/// session -- the opposite of what logout asked for. The manager therefore
-/// only reports the outcome and leaves any follow-up (for example telling the
+/// session -- the opposite of what logout asked for. §3.1 itself treats this
+/// case as done: "If the original End-User is already logged out at the RP
+/// when the state changes indicate that End-User should be logged out, the
+/// logout is considered to have succeeded." The manager therefore only
+/// reports the outcome and leaves any follow-up (for example telling the
 /// End-User they are still signed in at the OP on
 /// [OidcEndSessionConfirmationOutcome.unchanged]) to the app.
 ///
@@ -118,12 +135,17 @@ class OidcEndSessionConfirmationEvent extends OidcEvent {
 /// The outcome reported by an [OidcEndSessionConfirmationEvent].
 enum OidcEndSessionConfirmationOutcome {
   /// The OP iframe answered `changed`: the ended session is no longer the
-  /// OP's current session. The OP-side logout took effect.
+  /// OP's current session as far as the iframe can tell. This is the
+  /// expected answer after a successful logout, but not proof of it: a
+  /// browser that blocks third-party cookies can make the iframe answer
+  /// `changed` for every call (Session Management 1.0 §5.1), and changes to
+  /// unrelated sessions can cause false positives (§3.2).
   changed,
 
   /// The OP iframe answered `unchanged`: the OP session is still alive, so
   /// the OP-side logout did not take effect (for example the End-User
-  /// declined it, RP-Initiated Logout 1.0 §2).
+  /// declined it, RP-Initiated Logout 1.0 §2). Unlike [changed], this is a
+  /// reliable signal.
   unchanged,
 
   /// The OP iframe answered `error` or an unrecognized value, or the probe
