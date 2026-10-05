@@ -29,8 +29,10 @@ class _ValidationManager extends OidcUserManagerBase {
   }) => validateUser(
     user: user,
     metadata: metadata,
-    authorizationCode: authorizationCode,
-    maxAge: maxAge,
+    context: OidcIdTokenValidationContext(
+      authorizationCode: authorizationCode,
+      maxAge: maxAge,
+    ),
   );
 
   /// Drives the full validate + UserInfo path (which is where the signed

@@ -39,7 +39,12 @@ class OidcToken {
   }) {
     creationTime ??= clock.now().toUtc();
     return OidcToken.fromJson({
-      ...response.src,
+      // The retained-id_token marker is internal state written by
+      // `OidcUser.replaceToken`, never something a response may set: a
+      // response carrying it would otherwise switch off the expiry and
+      // `at_hash` / `c_hash` checks for its own id_token. See
+      // [idTokenRetainedFromPriorResponse].
+      ...Map.of(response.src)..remove(OidcConstants_Store.allowExpiredIdToken),
       OidcConstants_AuthParameters.expiresIn: ?overrideExpiresIn?.inSeconds,
       OidcConstants_Store.expiresInReferenceDate: creationTime
           .toIso8601String(),
@@ -76,8 +81,32 @@ class OidcToken {
 
   bool get isOidc => idToken?.isNotEmpty ?? false;
 
-  bool get allowExpiredIdToken =>
+  /// Whether [idToken] was kept from an earlier response instead of being
+  /// issued in the response that produced this token.
+  ///
+  /// This happens when a response for a signed-in user has no `id_token`,
+  /// typically a refresh (OpenID Connect Core §12.2): `OidcUser.replaceToken`
+  /// keeps the previous id_token and records the fact in [extra], and
+  /// [toJson] persists it, so the fact survives an app restart.
+  ///
+  /// Validation reads it for two reasons:
+  ///
+  /// * The kept id_token may expire before the session does, so an expired
+  ///   `exp` is not an error for it ([allowExpiredIdToken]).
+  /// * Its `at_hash` / `c_hash` were computed for the tokens of the response
+  ///   that issued it, so they are never required. For a refresh response and
+  ///   the stored session (`OidcIdTokenSource.refresh` / `storedSession`) they
+  ///   are not compared with this token's [accessToken] either; any other
+  ///   response still compares a hash the kept id_token carries.
+  ///
+  /// [OidcToken.fromResponse] never sets it, even when a response contains the
+  /// key.
+  bool get idTokenRetainedFromPriorResponse =>
       extra?[OidcConstants_Store.allowExpiredIdToken] == true;
+
+  /// Whether an expired [idToken] is accepted. True exactly when
+  /// [idTokenRetainedFromPriorResponse] is.
+  bool get allowExpiredIdToken => idTokenRetainedFromPriorResponse;
 
   /// RECOMMENDED.
   ///
