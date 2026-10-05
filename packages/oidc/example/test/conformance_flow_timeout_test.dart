@@ -62,10 +62,7 @@ void main() {
   // cancels a browser that is merely slow, and the module is left at
   // status=WAITING while the library did nothing wrong.
   test('the iOS timeout outlasts the slowest simulator browser start seen', () {
-    expect(
-      options.ios.flowTimeoutSeconds,
-      iosConformanceFlowTimeoutSeconds,
-    );
+    expect(options.ios.flowTimeoutSeconds, iosConformanceFlowTimeoutSeconds);
     expect(
       iosConformanceFlowTimeoutSeconds,
       greaterThanOrEqualTo(observedIosBrowserStartSeconds * 1.5),

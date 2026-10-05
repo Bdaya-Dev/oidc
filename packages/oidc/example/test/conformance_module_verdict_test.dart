@@ -169,10 +169,7 @@ void main() {
         block('Authorization endpoint', 150000),
       ];
       expect(
-        describeSuiteLogForFailure(
-          entries,
-          clientLoginStartedAtMs: 100250,
-        ),
+        describeSuiteLogForFailure(entries, clientLoginStartedAtMs: 100250),
         contains(
           'first authorization request arrived 49.75s after the client '
           'started the login',
