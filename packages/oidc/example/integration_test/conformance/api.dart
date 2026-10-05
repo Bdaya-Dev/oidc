@@ -796,9 +796,17 @@ const _authorizationEndpointBlock = 'Authorization endpoint';
 /// with its time relative to the FIRST authorization request -- both clocks
 /// are the suite's, so there is no client/server skew in these offsets --
 /// followed by the last [tailLength] entries verbatim (truncated).
+///
+/// [clientLoginStartedAtMs] (the client's epoch ms when it started the login,
+/// if it did) adds when the first authorization request reached the suite
+/// relative to that. That offset compares the suite's clock with the
+/// client's (both NTP-synced, so expect about a second of skew). Good enough
+/// to tell "arrived right away" from "arrived 25s in" from "arrived after the
+/// client's flowTimeoutSeconds had already cancelled the browser".
 String describeSuiteLogForFailure(
   List<Map<String, dynamic>> entries, {
   int tailLength = 3,
+  int? clientLoginStartedAtMs,
 }) {
   if (entries.isEmpty) {
     return 'suite log: empty or unreadable';
@@ -836,8 +844,14 @@ String describeSuiteLogForFailure(
             '${e['error'] == null ? '' : ' | error: ${clip(e['error'], 140)}'}',
       )
       .join(' / ');
+  final crossClock = anchor == null || clientLoginStartedAtMs == null
+      ? ''
+      : 'first authorization request arrived '
+            '${((anchor - clientLoginStartedAtMs) / 1000).toStringAsFixed(2)}s '
+            'after the client started the login (suite vs client clock); ';
   return 'suite log (${entries.length} entries): '
       '${authorize == null ? 'NO authorization request received; ' : ''}'
+      '$crossClock'
       'request blocks (relative to the first authorization request) '
       '[$requestBlocks]; last ${tail.length}: $tailText';
 }

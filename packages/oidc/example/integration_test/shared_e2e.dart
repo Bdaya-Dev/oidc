@@ -337,6 +337,7 @@ Future<void> _recordModuleVerdict({
   required String moduleName,
   required Map<String, dynamic> verdict,
   required String authDescription,
+  int? clientLoginStartedAtMs,
 }) async {
   final status = verdict['status'] as String?;
   final result = verdict['result'] as String?;
@@ -357,6 +358,7 @@ Future<void> _recordModuleVerdict({
   }
   final suiteLog = describeSuiteLogForFailure(
     await fetchTestLogs(dio: dio, instanceId: instanceId),
+    clientLoginStartedAtMs: clientLoginStartedAtMs,
   );
   if (!terminal) {
     moduleFailures.add(
@@ -374,6 +376,19 @@ Future<void> _recordModuleVerdict({
     );
   }
 }
+
+/// A short label for a native browser-layer event, for a failure line.
+String describeNativeBrowserEvent(OidcNativeBrowserEvent event) =>
+    switch (event) {
+      OidcBrowserOpeningEvent() => 'opening',
+      OidcBrowserOpenedEvent() => 'opened',
+      OidcBrowserRedirectReceivedEvent() => 'redirectReceived',
+      // On darwin/android this is also what flowTimeoutSeconds produces.
+      OidcBrowserFlowCancelledEvent() => 'cancelled',
+      final OidcBrowserFlowFailedEvent e =>
+        'failed(${e.error.kind.name}: ${e.error.message})',
+      OidcBrowserNativeWarningEvent() => 'warning',
+    };
 
 /// Smoke path used when no conformance token is supplied: just initialize the
 /// example's default manager.
@@ -929,8 +944,34 @@ Future<void> runOidcConformanceTest(
     // that line is the only output that reaches the job log (see
     // describeSuiteLogForFailure, api.dart).
     String? loginError;
+    int? loginStartedAtMs;
     final loginStopwatch = Stopwatch();
+    // The native browser layer's own events (oidc_android / oidc_darwin; empty
+    // elsewhere), timed from the login start: they show whether the browser
+    // opened promptly, and whether the flow ended in a redirect or in
+    // flowTimeoutSeconds' cancel.
+    //
+    // Subscribed for the whole module rather than per attempt: the native
+    // event channel and the method reply that completes the login are
+    // separate channels, so the final event can land just after the login's
+    // Future does. It is cancelled once the verdict is recorded.
+    final browserTimeline = <String>[];
+    var loginStartedAt = DateTime.now();
+    final browserEvents = manager.events().listen((event) {
+      if (event is! OidcNativeBrowserEvent) {
+        return;
+      }
+      final offset = event.at.difference(loginStartedAt).inMilliseconds / 1000;
+      browserTimeline.add(
+        '${describeNativeBrowserEvent(event)}@'
+        '${offset >= 0 ? '+' : ''}${offset.toStringAsFixed(2)}s',
+      );
+    });
     Future<OidcUser?> attemptLogin() async {
+      browserTimeline.clear();
+      loginError = null;
+      loginStartedAt = DateTime.now();
+      loginStartedAtMs = loginStartedAt.millisecondsSinceEpoch;
       loginStopwatch
         ..reset()
         ..start();
@@ -1113,10 +1154,12 @@ Future<void> runOidcConformanceTest(
       logger: logger,
       moduleName: moduleName,
       verdict: verdict,
-      authDescription: authResult == null
-          ? 'no user after ${loginStopwatch.elapsed.inMilliseconds}ms'
-                '${loginError == null ? '' : ', login threw: $loginError'}'
-          : 'logged in',
+      clientLoginStartedAtMs: loginStartedAtMs,
+      authDescription:
+          '${authResult == null ? 'no user' : 'logged in'} after '
+          '${loginStopwatch.elapsed.inMilliseconds}ms'
+          '${loginError == null ? '' : ', login threw: $loginError'}'
+          '; browser events [${browserTimeline.join(', ')}]',
     );
     logger
       ..info(
@@ -1125,6 +1168,7 @@ Future<void> runOidcConformanceTest(
             : 'Login successful: ${_describeToken(authResult.token)}',
       )
       ..info('Cleaning up manager for test instance: $testInstanceId');
+    await browserEvents.cancel();
     await sub.cancel();
     app_state.currentManagerRx.$ = app_state.managersRx.$.first;
     app_state.managersRx.update((managers) => managers..remove(manager));

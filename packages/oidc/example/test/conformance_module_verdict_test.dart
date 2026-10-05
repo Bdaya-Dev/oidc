@@ -162,6 +162,28 @@ void main() {
       expect(digest, contains('error: boom'));
     });
 
+    test('places the first authorization request against the client login '
+        'start when that is known', () {
+      final entries = [
+        block('Discovery endpoint', 100000),
+        block('Authorization endpoint', 150000),
+      ];
+      expect(
+        describeSuiteLogForFailure(
+          entries,
+          clientLoginStartedAtMs: 100250,
+        ),
+        contains(
+          'first authorization request arrived 49.75s after the client '
+          'started the login',
+        ),
+      );
+      expect(
+        describeSuiteLogForFailure(entries),
+        isNot(contains('after the client started the login')),
+      );
+    });
+
     test('an empty log is reported, not hidden', () {
       expect(
         describeSuiteLogForFailure(const []),
