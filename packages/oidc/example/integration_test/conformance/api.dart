@@ -201,6 +201,52 @@ String? webFingerIdentifierFor({
   _ => null,
 };
 
+/// Whether [moduleName] finishes as soon as the RP has fetched BOTH the
+/// discovery document and the (randomized-path) `jwks_uri`, before any
+/// userinfo call.
+///
+/// `OIDCCClientTestDiscoveryJwksUriKeys`
+/// (openid-certification/conformance-suite,
+/// `src/main/java/net/openid/conformance/openid/client/config/OIDCCClientTestDiscoveryJwksUriKeys.java`)
+/// overrides `finishTestIfAllRequestsAreReceived` to call `fireTestFinished()`
+/// the instant `receivedDiscoveryRequest && receivedJwksRequest` are both
+/// true -- i.e. right after the client verifies the id_token's signature
+/// against the freshly-fetched jwks_uri, well before a normal login's own
+/// userinfo call. `OidcUserInfoSettings.sendUserInfoRequest` (package:oidc)
+/// defaults to `true`, so the manager's own userinfo call used to arrive
+/// AFTER the suite had already finished the module, and the suite answered it
+/// with "Illegal test state change: FINISHED -> RUNNING" -- confirmed on CI
+/// run 37252425838 (linux instance Bji4pEGUaWavYTg, windows instance
+/// sGDQlFZLvzCkkUY), which turned an otherwise-correct login into a FAILED
+/// verdict. `runOidcConformanceTest` in shared_e2e.dart builds exactly this
+/// module's manager with userinfo disabled rather than weakening the
+/// per-module assertion; see oidc#467.
+bool moduleFinishesBeforeUserinfo(String moduleName) =>
+    moduleName == 'oidcc-client-test-discovery-jwks-uri-keys';
+
+/// Whether [moduleName] requires a SECOND full authorization interaction
+/// after the first one succeeds.
+///
+/// `OIDCCClientTestSigningKeyRotation`
+/// (openid-certification/conformance-suite,
+/// `src/main/java/net/openid/conformance/openid/client/config/OIDCCClientTestSigningKeyRotation.java`)
+/// rotates its signing key only once a SECOND `authorize` request arrives
+/// (`handleClientRequestForPath` sets `receivedSecondAuthorizationRequest` and
+/// calls `configureServerJWKS()` again at exactly that point, not before), and
+/// its `finishTestIfAllRequestsAreReceived` override will not fire finished
+/// for the CODE response type -- the one this harness drives it with in the
+/// Config RP plan -- until BOTH `receivedSecondUserinfoRequest` and
+/// `receivedSecondJwksRequest` are true. That needs a second complete login:
+/// a second token exchange whose id_token is signed by the ROTATED key (so
+/// `package:oidc_core`'s own kid-miss forced-refetch self-heal -- OIDC Core
+/// §10.1.1, see `OidcUser.fromIdToken` -- fetches the jwks a second time) and
+/// a second userinfo call with the new access_token. Confirmed stuck at
+/// `status=WAITING result=null` after only ONE login on CI run 37252425838
+/// (linux instance A8MLwlTP0UizYW0, windows instance WmGCI7Zvht0bmZl) because
+/// the harness never issued that second interaction. See oidc#467.
+bool requiresSecondLoginForKeyRotation(String moduleName) =>
+    moduleName == 'oidcc-client-test-signing-key-rotation';
+
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
   // oidcc-client-basic-certification-test-plan
   required String planName,
@@ -497,6 +543,109 @@ bool isAcceptableConformanceResult(String? result) =>
 bool isTerminalConformanceStatus(String? status) =>
     status != null && terminalConformanceStatuses.contains(status);
 
+/// Whether [error], raised by a [getTestSummary] call inside
+/// [pollConformanceModuleVerdict], is worth retrying rather than letting it
+/// end the poll outright.
+///
+/// A transient network hiccup or a suite-side 5xx against ONE poll must not
+/// take the rest of the plan down with it: CodeRabbit and a human reviewer
+/// both flagged that an uncaught exception here used to propagate out of
+/// `pollConformanceModuleVerdict` -- an uncaught `Future` error inside the
+/// `testWidgets`/`patrolTest` body running `runOidcConformanceTest` -- failing
+/// the whole plan and losing every module after the one being polled, not
+/// just the single bad request. A 4xx, a malformed response, or any other
+/// non-transient error is NOT retried: retrying cannot change a deterministic
+/// failure, and masking it behind a retry delay would only slow the run down
+/// before it fails anyway.
+bool isTransientConformancePollError(Object error) {
+  if (error is! DioException) {
+    return false;
+  }
+  switch (error.type) {
+    case DioExceptionType.connectionTimeout:
+    case DioExceptionType.sendTimeout:
+    case DioExceptionType.receiveTimeout:
+    case DioExceptionType.connectionError:
+      return true;
+    case DioExceptionType.badResponse:
+      final statusCode = error.response?.statusCode;
+      return statusCode != null && statusCode >= 500;
+    case DioExceptionType.cancel:
+    case DioExceptionType.badCertificate:
+    case DioExceptionType.unknown:
+      return false;
+    // A timeout while Dio's own response transformer (JSON decode) was
+    // running, not a network condition -- not expected for this endpoint's
+    // tiny JSON body, so treated conservatively as non-transient rather than
+    // retried blind.
+    case DioExceptionType.transformTimeout:
+      return false;
+  }
+}
+
+/// Retries [poll] while it fails with a transient error
+/// ([isTransientConformancePollError]), up to [maxAttempts] attempts total,
+/// waiting `initialDelay * 2^(attempt - 1)` between tries.
+///
+/// The last error is rethrown once attempts are exhausted, or immediately for
+/// a non-transient error: this function only decides whether to retry, not
+/// what an exhausted/non-transient failure means for the caller's verdict --
+/// see [pollConformanceModuleVerdict], which turns that rethrow into a verdict
+/// map rather than letting it escape.
+///
+/// [maxAttempts] and [initialDelay] are parameters (not hardcoded) so a test
+/// can keep this fast and deterministic without mocking Dio or the clock: the
+/// retry COUNT and the transient/non-transient DECISION are the pure logic
+/// worth pinning down, and a millisecond-scale [initialDelay] exercises both
+/// without a real wait.
+Future<T> retryTransientConformancePollErrors<T>(
+  Future<T> Function() poll, {
+  int maxAttempts = 3,
+  Duration initialDelay = const Duration(milliseconds: 500),
+}) async {
+  var attempt = 0;
+  while (true) {
+    try {
+      return await poll();
+    } on Object catch (e) {
+      attempt++;
+      if (attempt >= maxAttempts || !isTransientConformancePollError(e)) {
+        rethrow;
+      }
+      await Future<void>.delayed(initialDelay * (1 << (attempt - 1)));
+    }
+  }
+}
+
+/// One [getTestSummary] read, tolerant of a failure that survives
+/// [retryTransientConformancePollErrors]: rather than letting it escape (and
+/// taking the rest of the plan down with it), it is folded into a verdict map
+/// carrying `pollError`. `isTerminalConformanceStatus(null)` is false, so
+/// [pollConformanceModuleVerdict]'s own timeout loop, and
+/// `_recordModuleVerdict`'s "never reached FINISHED/INTERRUPTED" message in
+/// shared_e2e.dart, already handle a map shaped like this; `pollError` just
+/// explains why THIS read could not refresh it. [previous] (the last summary
+/// that DID succeed, if any) is carried forward so a poll that fails after the
+/// module already reported something is not reported as if nothing had ever
+/// been read.
+Future<Map<String, dynamic>> _pollSummaryTolerant({
+  required Dio dio,
+  required String instanceId,
+  Map<String, dynamic>? previous,
+}) async {
+  try {
+    return await retryTransientConformancePollErrors(
+      () => getTestSummary(dio: dio, instanceId: instanceId),
+    );
+  } on Object catch (e) {
+    return {
+      'status': previous?['status'],
+      'result': previous?['result'],
+      'pollError': '$e',
+    };
+  }
+}
+
 /// Polls `GET api/info/{id}` ([getTestSummary]) until the suite reports a
 /// terminal `TestModule.Status` ([isTerminalConformanceStatus]) or [timeout]
 /// elapses, returning whatever the last poll read either way.
@@ -514,23 +663,42 @@ bool isTerminalConformanceStatus(String? status) =>
 /// /api/info/{id} (status and result)". `TestInfoResponse.status`/`.result`
 /// there enumerate exactly `TestModule.Status`/`TestModule.Result`.
 ///
-/// [timeout] defaults to 15s. `AbstractOIDCCClientTest.waitTimeoutSeconds`
-/// defaults to 5s in the suite's own source -- the longest a module
-/// legitimately waits on purpose, for a negative module expecting the RP to
-/// detect a problem and go silent -- so 15s leaves a 3x margin for
-/// network/poll jitter without masking a module that is genuinely stuck.
+/// [timeout] defaults to 30s, widened from an earlier 15s: CI run 37252425838
+/// (the same run that exposed the jwks-uri-keys and signing-key-rotation
+/// gaps above) hit `status=WAITING result=null` at the OLD 15s bound for
+/// `oidcc-client-test-session-management` on BOTH linux and windows, and that
+/// module passed on an unrelated retry -- i.e. the suite was still working,
+/// not stuck, when the old bound gave up on it.
+/// `AbstractOIDCCClientTest.waitTimeoutSeconds` defaults to 5s in the suite's
+/// own source -- the longest a module legitimately waits on purpose, for a
+/// negative module expecting the RP to detect a problem and go silent -- so
+/// 30s leaves a 6x margin for suite-side load/poll jitter, including the
+/// extra round trip [requiresSecondLoginForKeyRotation] modules now make
+/// through this same poll budget.
+///
+/// Each read is retried through [retryTransientConformancePollErrors]
+/// ([_pollSummaryTolerant]) rather than letting a single transient failure
+/// (network blip, suite-side 5xx) escape and fail the rest of the plan; a read
+/// that still fails after that degrades to a non-terminal verdict map instead
+/// of throwing, so a timeout (transient-poll-induced or genuine) still ends in
+/// the SAME named per-module failure `_recordModuleVerdict` already produces,
+/// rather than an uncaught exception with no module name attached.
 Future<Map<String, dynamic>> pollConformanceModuleVerdict({
   required Dio dio,
   required String instanceId,
-  Duration timeout = const Duration(seconds: 15),
+  Duration timeout = const Duration(seconds: 30),
   Duration interval = const Duration(seconds: 1),
 }) async {
   final stopwatch = Stopwatch()..start();
-  var summary = await getTestSummary(dio: dio, instanceId: instanceId);
+  var summary = await _pollSummaryTolerant(dio: dio, instanceId: instanceId);
   while (!isTerminalConformanceStatus(summary['status'] as String?) &&
       stopwatch.elapsed < timeout) {
     await Future<void>.delayed(interval);
-    summary = await getTestSummary(dio: dio, instanceId: instanceId);
+    summary = await _pollSummaryTolerant(
+      dio: dio,
+      instanceId: instanceId,
+      previous: summary,
+    );
   }
   return summary;
 }

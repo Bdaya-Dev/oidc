@@ -9,6 +9,13 @@ OidcUserManager conformanceManager(
   required Uri redirectUri,
   Uri? postLogoutRedirectUri,
   Uri? frontChannelLogoutUri,
+  // oidcc-client-test-discovery-jwks-uri-keys (see
+  // moduleFinishesBeforeUserinfo in conformance/api.dart) finishes the moment
+  // the client has fetched BOTH the discovery document and jwks_uri -- before
+  // a normal login's own userinfo call. Defaulting to true keeps every other
+  // module's existing behaviour unchanged; only that one module's manager is
+  // built with this false.
+  bool sendUserInfoRequest = true,
 }) => OidcUserManager.lazy(
   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
     Uri.parse(issuer),
@@ -86,5 +93,8 @@ OidcUserManager conformanceManager(
       OidcConstants_Scopes.address,
       OidcConstants_Scopes.phone,
     ],
+    userInfoSettings: OidcUserInfoSettings(
+      sendUserInfoRequest: sendUserInfoRequest,
+    ),
   ),
 );

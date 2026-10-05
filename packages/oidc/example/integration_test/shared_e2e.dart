@@ -285,15 +285,23 @@ void _recordModuleVerdict({
 }) {
   final status = verdict['status'] as String?;
   final result = verdict['result'] as String?;
+  // Set only when every poll inside pollConformanceModuleVerdict exhausted its
+  // retries (or hit a non-transient error) -- see _pollSummaryTolerant in
+  // api.dart. Surfaced here, not swallowed, so a transient-poll-induced
+  // non-terminal status is distinguishable from a module that is genuinely
+  // stuck.
+  final pollError = verdict['pollError'] as String?;
   logger.info(
     'Suite verdict for $moduleName: status=$status result=$result '
-    '(client: $authDescription).',
+    '(client: $authDescription)'
+    '${pollError == null ? '' : ', last poll error: $pollError'}.',
   );
   if (!isTerminalConformanceStatus(status)) {
     moduleFailures.add(
       '$moduleName: suite status never reached FINISHED/INTERRUPTED within '
       'the poll timeout (last status=$status, result=$result; client: '
-      '$authDescription).',
+      '$authDescription)'
+      '${pollError == null ? '' : ' -- the last poll of it failed: $pollError'}.',
     );
   } else if (!isAcceptableConformanceResult(result)) {
     moduleFailures.add(
@@ -659,6 +667,12 @@ Future<void> runOidcConformanceTest(
       redirectUri: redirectUri,
       postLogoutRedirectUri: redirectUri,
       frontChannelLogoutUri: Uri(path: 'redirect.html'),
+      // See moduleFinishesBeforeUserinfo (api.dart): this one module's suite
+      // instance finishes the moment the client has fetched discovery + jwks,
+      // and the manager's own (otherwise-automatic) userinfo call arrives
+      // after that, which the suite answers with an "Illegal test state
+      // change" error that flips an otherwise-correct login to FAILED.
+      sendUserInfoRequest: !moduleFinishesBeforeUserinfo(moduleName),
     );
     app_state.managersRx.update((managers) => managers..add(manager));
     app_state.currentManagerRx.$ = manager;
@@ -706,7 +720,11 @@ Future<void> runOidcConformanceTest(
     logger.info(
       'Starting login $flowName flow (${responseTypes.join(' ')})...',
     );
-    final authResult = await () async {
+    // Extracted so [requiresSecondLoginForKeyRotation] modules can call it a
+    // SECOND time below: the suite rotates its signing key only once a second
+    // `authorize` request arrives, so without a second real interaction here
+    // the module waits forever for one the harness never made (#467).
+    Future<OidcUser?> attemptLogin() async {
       try {
         if (!hasCode) {
           // No code comes back, so there is nothing to exchange. Deprecated in
@@ -725,9 +743,32 @@ Future<void> runOidcConformanceTest(
         logger.severe('Login flow threw for $moduleName', e, stackTrace);
         return null;
       }
-    }();
+    }
+
+    final authResult = await attemptLogin();
     if (authResult != null) {
       successfulLogins++;
+      // oidcc-client-test-signing-key-rotation (see
+      // requiresSecondLoginForKeyRotation, api.dart) only rotates its signing
+      // key, and only finishes, once it sees a SECOND full authorization
+      // interaction. package:oidc_core already self-heals a rotated key on
+      // its own (one rate-limited, cache-busting jwks refetch on a kid miss --
+      // OIDC Core §10.1.1); the harness just has to actually issue the second
+      // login the module is waiting for.
+      if (requiresSecondLoginForKeyRotation(moduleName)) {
+        logger.info(
+          'Signing-key-rotation module: issuing a second login to trigger '
+          'the key rotation and re-verification...',
+        );
+        final secondAuthResult = await attemptLogin();
+        logger.info(
+          secondAuthResult == null
+              ? 'Second login for $moduleName did not complete; the suite '
+                    'verdict below will most likely be non-terminal.'
+              : 'Second login completed: '
+                    '${_describeToken(secondAuthResult.token)}',
+        );
+      }
       // The logout profiles are two-step: log in, THEN initiate logout, and the
       // module only completes once it observes the end-session request. This
       // harness drove the login and stopped, so every logout module sat waiting
