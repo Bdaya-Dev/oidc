@@ -10,3 +10,5 @@ linter:
 analyzer:
   errors:
     invalid_use_of_internal_member: ignore
+  exclude:
+    - build/**
