@@ -28,13 +28,21 @@ typedef _MonitorCall = ({
   OidcMonitorSessionStatusRequest request,
 });
 
-/// A fake OP `check_session_iframe` with the browser's delivery shape: every
-/// monitor listens on the same `window.onMessage`, so each answer the OP posts
-/// back reaches EVERY live monitor, not just the one that asked
-/// (`OidcWebCore.monitorSessionStatus`).
+/// A fake OP `check_session_iframe` with the browser's delivery shape
+/// (`OidcWebCore.monitorSessionStatus`):
+///
+/// * every monitor listens on the same `window.onMessage`, so each answer the
+///   OP posts back reaches EVERY live monitor, not just the one that asked;
+/// * every monitor uses the same iframe id: a monitor that starts replaces
+///   the iframe, a monitor that is cancelled removes whichever iframe has
+///   that id, and answers are dropped while there is no iframe.
 class _FakeOp {
   /// Whether the End-User still has a session at the OP.
   bool sessionAlive = true;
+
+  /// Whether a monitor gets an answer as soon as it starts. When `false`, the
+  /// OP stays silent until [reply] is called.
+  bool autoReply = true;
 
   /// What the iframe answers a check with; defaults to the Session
   /// Management 1.0 §3.2 behavior for [sessionAlive].
@@ -42,25 +50,49 @@ class _FakeOp {
 
   final List<StreamController<OidcMonitorSessionResult>> live = [];
 
+  /// Every monitor ever started, in order, with how many answers each one
+  /// received.
+  final List<StreamController<OidcMonitorSessionResult>> all = [];
+  final Map<StreamController<OidcMonitorSessionResult>, int> received = {};
+
+  /// The monitor whose iframe currently holds the shared id, if any.
+  StreamController<OidcMonitorSessionResult>? iframeOwner;
+
   OidcMonitorSessionResult get answer =>
       answerOverride?.call() ??
       OidcValidMonitorSessionResult(changed: !sessionAlive);
+
+  /// The OP posts [answer] back; it reaches every live monitor, if the
+  /// shared iframe still exists.
+  void reply() {
+    if (iframeOwner == null) {
+      return;
+    }
+    final result = answer;
+    for (final c in List.of(live)) {
+      received[c] = (received[c] ?? 0) + 1;
+      c.add(result);
+    }
+  }
 
   Stream<OidcMonitorSessionResult> monitor() {
     late final StreamController<OidcMonitorSessionResult> sc;
     sc = StreamController<OidcMonitorSessionResult>(
       onListen: () {
         live.add(sc);
-        // The monitor posts `client_id session_state` right away; the OP's
-        // answer is delivered to every live listener.
-        final reply = answer;
-        scheduleMicrotask(() {
-          for (final c in List.of(live)) {
-            c.add(reply);
-          }
-        });
+        all.add(sc);
+        iframeOwner = sc;
+        // The monitor posts `client_id session_state` right away.
+        if (autoReply) {
+          scheduleMicrotask(reply);
+        }
       },
-      onCancel: () => live.remove(sc),
+      onCancel: () {
+        live.remove(sc);
+        // `document.getElementById(iframeId)?.remove()`: removes the shared
+        // iframe whoever created it.
+        iframeOwner = null;
+      },
     );
     return sc.stream;
   }
@@ -438,6 +470,50 @@ void main() {
           OidcEndSessionConfirmationOutcome.changed,
         ]);
         expect(manager.op.live, isEmpty);
+      },
+    );
+  });
+
+  group('a new sign-in while the probe is pending', () {
+    test(
+      'cancels the probe: no event for the old session, and the new '
+      "session's monitor keeps its iframe and its answers",
+      () async {
+        final manager = await _signedIn();
+        final events = _collect(manager);
+        // The OP does not answer the post-logout probe yet.
+        manager.op.autoReply = false;
+
+        await manager.logout();
+        await pumpEventQueue();
+        expect(manager.op.live, hasLength(1), reason: 'probe pending');
+
+        // The End-User signs in again before the OP answered.
+        manager.op
+          ..sessionAlive = true
+          ..autoReply = true;
+        manager.seed(await _user(sessionState: 'sess-live-2'));
+        await pumpEventQueue();
+
+        expect(
+          events,
+          isEmpty,
+          reason:
+              "the new session's `unchanged` answer must not be reported "
+              'as the outcome of the old session',
+        );
+        final newMonitor = manager.op.all.last;
+        expect(manager.monitorCalls.last.request.sessionState, 'sess-live-2');
+        expect(manager.op.live, [newMonitor]);
+        expect(manager.op.iframeOwner, newMonitor);
+
+        final before = manager.op.received[newMonitor] ?? 0;
+        manager.op.reply();
+        expect(
+          manager.op.received[newMonitor],
+          before + 1,
+          reason: "the new session's monitor still gets the OP's answers",
+        );
       },
     );
   });
