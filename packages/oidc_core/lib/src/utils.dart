@@ -598,9 +598,19 @@ class OidcUtils {
   }
 
   /// The literal placeholder Microsoft Entra ID advertises as the tenant
-  /// segment of its multi-tenant (`common` / `organizations` / `consumers`)
-  /// discovery `issuer`, e.g. `https://login.microsoftonline.com/{tenantid}/v2.0`.
+  /// segment of its multi-tenant (`common` / `organizations`) discovery
+  /// `issuer`, e.g. `https://login.microsoftonline.com/{tenantid}/v2.0`.
+  /// (`consumers` serves the concrete MSA tenant issuer instead.)
   static const entraTenantIdPlaceholder = '{tenantid}';
+
+  /// Whether a raw (still percent-encoded) path [segment] is
+  /// [entraTenantIdPlaceholder]. `Uri` encodes the braces as `%7B`/`%7D`.
+  /// Compared without decoding, so a malformed escape (e.g. `%FF`) is simply
+  /// "not the placeholder" rather than a [FormatException].
+  static bool _isEntraTenantIdPlaceholder(String segment) {
+    final s = segment.toLowerCase();
+    return s == entraTenantIdPlaceholder || s == '%7btenantid%7d';
+  }
 
   /// Decides whether a discovery document's [actual] `issuer` is acceptable for
   /// the [expected] issuer (OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3).
@@ -666,8 +676,7 @@ class OidcUtils {
       if (e[i] == a[i]) {
         continue;
       }
-      if (Uri.decodeComponent(a[i]).toLowerCase() == entraTenantIdPlaceholder &&
-          e[i].isNotEmpty) {
+      if (_isEntraTenantIdPlaceholder(a[i]) && e[i].isNotEmpty) {
         continue;
       }
       return false;

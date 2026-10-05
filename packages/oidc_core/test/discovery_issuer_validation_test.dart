@@ -32,6 +32,9 @@ class _DiscoveryManager extends OidcUserManagerBase {
     required super.settings,
   });
 
+  /// The authorization endpoint of every authorization request built.
+  final authorizeEndpoints = <Uri?>[];
+
   @override
   bool get isWeb => false;
   @override
@@ -40,7 +43,11 @@ class _DiscoveryManager extends OidcUserManagerBase {
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
     Map<String, dynamic> preparationResult,
-  ) async => null;
+  ) async {
+    authorizeEndpoints.add(metadata.authorizationEndpoint);
+    return null;
+  }
+
   @override
   Future<OidcEndSessionResponse?> getEndSessionResponse(
     OidcProviderMetadata metadata,
@@ -575,6 +582,7 @@ void main() {
         expectedIssuer: Uri.parse('https://other.example.com'),
       );
       await expectLater(m.init(), _throwsMismatch());
+      expect(() => m.discoveryDocument, throwsA(isA<OidcException>()));
     });
   });
 
@@ -613,5 +621,151 @@ void main() {
         isNull,
       );
     });
+  });
+
+  test(
+    'discoveryIssuerMatches: malformed percent-encoding is a mismatch, not '
+    'a FormatException',
+    () {
+      expect(
+        OidcUtils.discoveryIssuerMatches(
+          Uri.parse('https://op.example.com/common/v2.0'),
+          Uri.parse('https://op.example.com/%FF/v2.0'),
+        ),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'malformed percent-encoding in the discovery issuer with strict off => '
+    'init still succeeds (warns)',
+    () async {
+      final m = _lazy(
+        wellKnown: _wk('https://op.example.com/common/v2.0'),
+        client: _serving(_doc('https://op.example.com/%FF/v2.0')),
+        strict: false,
+      );
+      await m.init();
+      expect(m.didInit, isTrue);
+    },
+  );
+
+  group('a rejected document is never used afterwards', () {
+    const good = 'https://op.example.com';
+    const evil = 'https://attacker.example';
+
+    Map<String, dynamic> docAt(String issuer, String base) => {
+      'issuer': issuer,
+      'authorization_endpoint': '$base/authorize',
+      'token_endpoint': '$base/token',
+    };
+
+    test(
+      'blocking init: after "Issuer mismatch", discoveryDocument and the '
+      'login flows refuse to run instead of using the rejected document',
+      () async {
+        final m = _lazy(
+          wellKnown: _wk(good),
+          client: _serving(docAt('$good/other', evil)),
+        );
+        await expectLater(m.init(), _throwsMismatch());
+        expect(() => m.discoveryDocument, throwsA(isA<OidcException>()));
+        await expectLater(
+          m.loginAuthorizationCodeFlow(),
+          throwsA(isA<OidcException>()),
+        );
+        expect(m.authorizeEndpoints, isEmpty);
+      },
+    );
+
+    test(
+      'blocking init with a stale cached doc: a rejected network doc does '
+      'not leave the unvalidated cache (or itself) in use',
+      () async {
+        final store = OidcMemoryStore();
+        await store.init();
+        await store.setMany(
+          OidcStoreNamespace.discoveryDocument,
+          values: {_wk(good).toString(): jsonEncode(docAt(evil, evil))},
+        );
+        final m = _lazy(
+          wellKnown: _wk(good),
+          client: _serving(docAt(evil, evil)),
+          store: store,
+        );
+        await expectLater(m.init(), _throwsMismatch());
+        expect(() => m.discoveryDocument, throwsA(isA<OidcException>()));
+      },
+    );
+
+    test(
+      'cache-first background refresh: a stale validated doc stays in use '
+      'when the network serves a mismatched one',
+      () async {
+        final store = OidcMemoryStore();
+        await store.init();
+        final staleAt = clock
+            .now()
+            .subtract(const Duration(days: 30))
+            .toUtc()
+            .millisecondsSinceEpoch;
+        await store.setMany(
+          OidcStoreNamespace.discoveryDocument,
+          values: {
+            _wk(good).toString(): jsonEncode(docAt(good, good)),
+            '${_wk(good)}${OidcUserManagerBase.discoveryFetchedAtSuffix}':
+                staleAt.toString(),
+          },
+        );
+        String b64(Map<String, dynamic> m) =>
+            base64Url.encode(utf8.encode(jsonEncode(m))).replaceAll('=', '');
+        final now = clock.now().millisecondsSinceEpoch ~/ 1000;
+        final idToken = [
+          b64({'alg': 'RS256', 'typ': 'JWT'}),
+          b64({
+            'iss': good,
+            'sub': 'user-1',
+            'aud': 'client-1',
+            'iat': now,
+            'exp': now + 3600,
+          }),
+          'c2ln',
+        ].join('.');
+        await store.set(
+          OidcStoreNamespace.secureTokens,
+          key: OidcConstants_Store.currentToken,
+          value: jsonEncode({
+            'access_token': 'at',
+            'refresh_token': 'rt',
+            'id_token': idToken,
+            'token_type': 'Bearer',
+            'expires_in': 3600,
+            OidcConstants_Store.expiresInReferenceDate: clock
+                .now()
+                .toUtc()
+                .toIso8601String(),
+          }),
+        );
+        final requests = <Uri>[];
+        final m = _lazy(
+          wellKnown: _wk(good),
+          client: _serving(docAt(evil, evil), requests),
+          store: store,
+          initMode: OidcInitMode.cacheFirst,
+        );
+        await m.init();
+        // Let the background revalidation (stale => network fetch) settle.
+        for (var i = 0; i < 20; i++) {
+          await pumpEventQueue();
+        }
+        expect(requests, contains(_wk(good)));
+        expect(m.discoveryDocument.issuer, Uri.parse(good));
+        expect(m.discoveryDocument.tokenEndpoint, Uri.parse('$good/token'));
+        await m.loginAuthorizationCodeFlow();
+        expect(m.authorizeEndpoints, [Uri.parse('$good/authorize')]);
+        expect(requests.where((u) => u.host == 'attacker.example'), isEmpty);
+      },
+    );
   });
 }

@@ -233,8 +233,9 @@ Behavior changes:
 ## Discovery document issuer validation
 
 Per OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3, `OidcUserManagerSettings.strictIssuerValidation` (default `true`) rejects a
-discovery document whose `issuer` does not match the issuer it was expected to describe, throwing before the document is
-persisted or used for any request. Set `OidcUserManagerSettings.expectedIssuer` when a provider's issuer cannot be derived
+discovery document whose `issuer` does not match the issuer it was expected to describe. A rejected document is neither
+persisted nor kept: after a failed `init()` every flow throws instead of building a request, and a rejected background
+(cache-first) refresh keeps the previously validated document. Set `OidcUserManagerSettings.expectedIssuer` when a provider's issuer cannot be derived
 from the discovery URL; `strictIssuerValidation: false` only warns instead of rejecting, for providers `expectedIssuer`
 cannot describe either.
 
@@ -252,7 +253,9 @@ Options, most to least preferred:
 1. Switch the user flow/custom policy's "Issuer (iss) claim" (`IssuanceClaimPattern` in custom policies) to
    `AuthorityWithTfp`, and use the matching `/tfp/.../.well-known/openid-configuration` discovery URL. The resulting
    issuer (`https://<host>/tfp/<tenant-GUID>/<policy>/v2.0/`) is exactly what that URL derives to, so no `expectedIssuer`
-   is needed. This is Microsoft's documented option for OpenID Connect Discovery 1.0 compliance.
+   is needed. This is Microsoft's documented option for OpenID Connect Discovery 1.0 compliance. The comparison is
+   case-sensitive, so the discovery URL's tenant and policy segments must use the casing B2C emits in the issuer
+   (otherwise set `expectedIssuer`).
 2. Keep B2C's default issuer format and set `expectedIssuer` to the actual issuer B2C returns (as in the example above).
 3. Last resort: set `strictIssuerValidation: false`.
 
@@ -262,6 +265,14 @@ Entra's multi-tenant discovery `issuer` is a template (`https://login.microsofto
 concrete URL. `OidcUtils.discoveryIssuerMatches` matches that template against an `expectedIssuer` pinned to a concrete
 tenant (`https://login.microsoftonline.com/<tenant>/v2.0`), so pinning `expectedIssuer` is all a multi-tenant RP needs; see
 [#389](https://github.com/Bdaya-Dev/oidc/issues/389).
+
+### Other Entra authorities
+
+| Authority | Discovery `issuer` | What to set |
+| --- | --- | --- |
+| Tenant by domain name, e.g. `.../contoso.onmicrosoft.com/v2.0` | `https://login.microsoftonline.com/<tenant-GUID>/v2.0` | Use the GUID authority, or `expectedIssuer` = that issuer |
+| `.../consumers/v2.0` | `https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0` (concrete, not a template) | `expectedIssuer` = that issuer |
+| v1 `https://login.microsoftonline.com/common` | `https://sts.windows.net/{tenantid}/` | `expectedIssuer` = `https://sts.windows.net/<tenant-GUID>/` |
 
 ## OidcException
 

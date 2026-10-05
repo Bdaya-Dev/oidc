@@ -215,9 +215,12 @@ class OidcUserManagerSettings {
   /// manager asserts that its `issuer` matches the expected issuer per OIDC
   /// Discovery 1.0 §4.3 / RFC 8414 §3.3 ("If these values are not identical,
   /// the data contained in the response MUST NOT be used"), throwing an
-  /// [OidcException] on mismatch — before any authorization request — and
-  /// refusing to persist the document. A cached document that fails the check
-  /// is discarded and fetched again.
+  /// [OidcException] on mismatch. A rejected document is neither persisted
+  /// nor kept in memory: after a failed `init()` the manager has no discovery
+  /// document and every flow throws instead of building a request; a rejected
+  /// background (cache-first) refresh leaves the previously validated document
+  /// in use. A cached document that fails the check is discarded and fetched
+  /// again.
   ///
   /// The expected issuer is [expectedIssuer] when set (compared exactly, see
   /// [OidcUtils.discoveryIssuerMatches]); otherwise it is derived from the
@@ -227,11 +230,27 @@ class OidcUserManagerSettings {
   /// document with no [expectedIssuer], or a custom discovery URL that cannot be
   /// inverted, is not checked.
   ///
-  /// Microsoft Entra ID multi-tenant (`common`/`organizations`) keeps working:
-  /// its templated issuer (`https://login.microsoftonline.com/{tenantid}/v2.0`)
-  /// matches an [expectedIssuer] pinned to a concrete tenant. Providers whose
-  /// discovery `issuer` genuinely differs from the URL it is served at (e.g.
-  /// Azure AD B2C) need [expectedIssuer] set to that issuer.
+  /// Microsoft Entra ID multi-tenant (`common`/`organizations`, v2.0) keeps
+  /// working: its templated issuer
+  /// (`https://login.microsoftonline.com/{tenantid}/v2.0`) matches an
+  /// [expectedIssuer] pinned to a concrete tenant. Other Entra authorities
+  /// whose issuer differs from the URL they are served at:
+  ///
+  ///  - **Tenant addressed by domain name** (e.g.
+  ///    `https://login.microsoftonline.com/contoso.onmicrosoft.com/v2.0`): the
+  ///    issuer carries the tenant GUID. Use the GUID authority
+  ///    (`https://login.microsoftonline.com/<tenant-GUID>/v2.0`) or set
+  ///    [expectedIssuer] to that GUID issuer.
+  ///  - **`consumers`** (`.../consumers/v2.0`): the issuer is the concrete
+  ///    Microsoft-account tenant
+  ///    (`https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0`),
+  ///    not a template. Set [expectedIssuer] to it.
+  ///  - **v1 `common`** (`https://login.microsoftonline.com/common`): the issuer
+  ///    is on another host (`https://sts.windows.net/{tenantid}/`). Set
+  ///    [expectedIssuer] to `https://sts.windows.net/<tenant-GUID>/`.
+  ///
+  /// Providers whose discovery `issuer` genuinely differs from the URL it is
+  /// served at (e.g. Azure AD B2C) need [expectedIssuer] set to that issuer.
   ///
   /// **Azure AD B2C** is the common case of a genuinely different issuer: with
   /// its default token-compatibility setting (the "Issuer (iss) claim"
@@ -252,7 +271,10 @@ class OidcUserManagerSettings {
   ///     `https://<host>/tfp/<tenant-GUID>/<policy>/v2.0/`, which is what that
   ///     discovery URL derives to by default (no [expectedIssuer] needed).
   ///     Microsoft documents this as the option for OpenID Connect
-  ///     Discovery 1.0-compliant issuers.
+  ///     Discovery 1.0-compliant issuers. The path comparison is
+  ///     case-sensitive, so the discovery URL's tenant and policy segments
+  ///     must use the same casing B2C emits in the issuer (it may lower-case
+  ///     the policy name); otherwise set [expectedIssuer].
   ///  2. Keep B2C's default issuer format and set [expectedIssuer] to the
   ///     actual issuer B2C returns, e.g. the GUID-form issuer shown above.
   ///  3. Last resort: set this to `false`, which only warns instead of
