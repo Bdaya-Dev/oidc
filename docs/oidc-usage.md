@@ -201,8 +201,9 @@ settings to control the behavior of the instance.
 
 - `OidcSessionManagementSettings sessionManagementSettings`: contains settings for the session management spec:
     - `bool enabled`: (default false) whether to enable checking the session.
-    - `Duration interval`: (default 5 minutes) how often to check the current user session.
+    - `Duration interval`: (default 5 seconds) how often to check the current user session.
     - `bool stopIfErrorReceived`: (default true) whether to stop checking the current user session if the OP sends an `error` message.
+    - `Duration endSessionConfirmationTimeout`: (default 10 seconds) how long the one-off post-logout `check_session_iframe` probe waits for the OP's answer before reporting `timedOut` (see [Confirming logout at the OP](#confirming-logout-at-the-op-session-management)). It never delays logout itself.
 
 - `OidcPlatformSpecificOptions? options`: platform specific options to control auth requests:
     - `bool allowInsecureConnections`: Whether to allow non-HTTPS endpoints; for `android` 🤖 platform only.
@@ -466,6 +467,29 @@ manager.events().listen((event) {
       // make an api call with the currentUser.
       break;
     default:
+  }
+});
+```
+
+#### Confirming logout at the OP (Session Management)
+
+When session management is enabled (`sessionManagementSettings.enabled`), the OP advertises a `check_session_iframe`, and the signed-in session has a `session_state`, `logout()` asks the OP's `check_session_iframe` once more about the session it just ended, after the OP's end-session response arrives (including a web `samePage` logout resumed on the reloaded page). The answer is reported as an `OidcEndSessionConfirmationEvent`:
+
+| `outcome` | meaning |
+| --- | --- |
+| `changed` | the ended session is no longer the OP's current session: the OP-side logout took effect. |
+| `unchanged` | the OP still considers the session alive, e.g. the End-User declined to log out of the OP ([RP-Initiated Logout 1.0 §2](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout) lets the OP ask). This app is still logged out locally. |
+| `error` | the OP iframe answered `error` (or an unknown value), or the probe failed. |
+| `timedOut` | no answer within `sessionManagementSettings.endSessionConfirmationTimeout`. |
+
+The check runs in the background: the user is forgotten and `userChanges()` emits `null` without waiting for it, so the event usually arrives after that. The manager does not act on the outcome (it does not re-authenticate with `prompt=none`, which would sign the user back in); what to do, for example telling the user they are still signed in at the OP, is up to the app. The event is not emitted on platforms without session monitoring (everything except web), or if the manager is disposed or a new session starts before the OP answers.
+
+```dart
+manager.events().listen((event) {
+  if (event case OidcEndSessionConfirmationEvent(
+    outcome: OidcEndSessionConfirmationOutcome.unchanged,
+  )) {
+    // Logged out of this app, but still signed in at the OP.
   }
 });
 ```

@@ -1605,11 +1605,11 @@ abstract class OidcUserManagerBase {
             // Captured now, while `currentUser` is still populated: a web
             // `samePage` navigation fully reloads the browser at
             // `postLogoutRedirectUri`, so `handleEndSessionResponse` runs
-            // there with no `currentUser` to read it from. Threading it
-            // through this persisted state is what lets
-            // `confirmSessionEndedAtOp` still perform its one final
-            // check_session_iframe probe on that path.
-            sessionState: currentUser.token.sessionState,
+            // there with no `currentUser` to read it from. Only persisted
+            // when session management is enabled -- nothing else reads it.
+            sessionState: settings.sessionManagementSettings.enabled
+                ? currentUser.token.sessionState
+                : null,
           );
     if (stateData != null) {
       await store.setStateData(
@@ -1676,99 +1676,170 @@ abstract class OidcUserManagerBase {
     if (parsedState is! OidcEndSessionState) {
       logAndThrow('received wrong state type (${parsedState.runtimeType}).');
     }
-    // OIDC Session Management 1.0: the suite's own
-    // `oidcc-client-test-session-management` certification module (and its
-    // published description) expects one final check_session_iframe
-    // postMessage round trip AFTER the end-session response is handled,
-    // confirming the OP now reports the session as `changed` -- completing
-    // the handshake this manager started with `listenToUserSessionIfSupported`
-    // before logout. Must run before `forgetUser()`: that call tears the
-    // monitor down via the `userSubject` listener.
-    await confirmSessionEndedAtOp(parsedState.sessionState);
+    // OIDC Session Management 1.0 §3.1: ask the OP iframe once whether the
+    // session we just ended is still its current one. Awaited before
+    // `forgetUser()` only so the regular monitor is stopped first (see
+    // `startEndSessionConfirmation`); the probe itself runs in the background
+    // and reports through `events()`, so logout never waits on the OP.
+    await startEndSessionConfirmation(parsedState.sessionState);
     //if all state checks are successful, do logout.
     await forgetUser();
   }
 
-  /// Performs one last `check_session_iframe` probe for the session that
-  /// [logout] just ended, so the RP observes the OP's session state turn
-  /// `changed` instead of silently dropping its session-management monitor
-  /// the instant [forgetUser] nulls [currentUser].
+  /// The in-flight post-logout probe started by
+  /// [startEndSessionConfirmation], if any.
+  // Cancelled by `_cancelEndSessionConfirmation` (via a local copy, which the
+  // lint cannot follow).
+  // ignore: cancel_subscriptions
+  StreamSubscription<OidcMonitorSessionResult>? _endSessionConfirmationSub;
+
+  /// Fires [OidcEndSessionConfirmationOutcome.timedOut] for
+  /// [_endSessionConfirmationSub].
+  Timer? _endSessionConfirmationTimer;
+
+  /// Starts one background `check_session_iframe` probe (OpenID Connect
+  /// Session Management 1.0 §3.1) for [sessionState], the session that an
+  /// RP-initiated logout just ended, and reports what the OP answered as an
+  /// [OidcEndSessionConfirmationEvent] on [events].
   ///
-  /// [listenToUserSessionIfSupported] already tears the recurring
-  /// subscription down on every `userSubject` transition to `null` --
-  /// including this one, via [forgetUser] -- so without this, an RP-initiated
-  /// logout leaves the Session Management handshake half-finished: the RP
-  /// told the OP to end the session but never checked back. This mirrors that
-  /// method's own enablement/capability gating and issues a single check
-  /// instead of a recurring one.
+  /// Returns as soon as the probe is started; the returned future never waits
+  /// for the OP's answer and never completes with an error, so callers can
+  /// await it and then [forgetUser] without blocking logout on the OP.
   ///
-  /// Best-effort: a missing, slow, or erroring OP iframe must never block
-  /// logout from completing locally, so failures (including a timeout) are
-  /// logged and swallowed.
+  /// Gated exactly like [listenToUserSessionIfSupported]: a no-op unless
+  /// [OidcSessionManagementSettings.enabled] is `true`, the OP advertises a
+  /// `check_session_iframe`, and [sessionState] is non-null.
+  ///
+  /// The regular monitor ([sessionSub]) is cancelled BEFORE the probe starts.
+  /// On web every monitor listens to the same `window.onMessage` and shares
+  /// one iframe id, so a still-alive regular monitor would receive the
+  /// probe's `changed` answer and react to it as a mid-session change --
+  /// calling [reAuthorizeUser], i.e. a `prompt=none` sign-in in the middle of
+  /// logout. The probe's own answer is only reported, never acted on (see
+  /// [OidcEndSessionConfirmationEvent] for why §3.1's `prompt=none` rule does
+  /// not apply after an RP-initiated logout).
   @protected
-  Future<void> confirmSessionEndedAtOp(String? sessionState) async {
+  Future<void> startEndSessionConfirmation(String? sessionState) async {
     if (!settings.sessionManagementSettings.enabled) {
       return;
     }
     final checkSessionIframe = discoveryDocument.checkSessionIframe;
     if (checkSessionIframe == null || sessionState == null) {
       logger.fine(
-        "can't confirm the ended session at the OP due to lack of "
+        "can't check the ended session at the OP due to lack of "
         'sessionState ($sessionState) or checkSessionIframe '
         '($checkSessionIframe)',
       );
       return;
     }
-    final completer = Completer<void>();
-    final sub =
-        monitorSessionStatus(
-          checkSessionIframe: checkSessionIframe,
-          request: OidcMonitorSessionStatusRequest(
-            clientId: clientCredentials.clientId,
-            sessionState: sessionState,
-            interval: settings.sessionManagementSettings.interval,
-          ),
-        ).listen(
-          (_) {
-            if (!completer.isCompleted) {
-              completer.complete();
-            }
-          },
-          onError: (Object e, StackTrace st) {
-            if (!completer.isCompleted) {
-              completer.complete();
-            }
-          },
-          onDone: () {
-            if (!completer.isCompleted) {
-              completer.complete();
-            }
-          },
-        );
+    final regularMonitor = sessionSub;
+    sessionSub = null;
+    await _cancelEndSessionConfirmation();
     try {
-      // `.timeout` on the completer's future (not on `.first`) so a
-      // non-responding OP cannot leave the subscription dangling: `finally`
-      // below always cancels it, whether this completed normally or timed
-      // out, tearing the hidden iframe + timer down either way.
-      await completer.future.timeout(_confirmSessionEndedAtOpTimeout);
+      await regularMonitor?.cancel();
     } on Object catch (e, st) {
+      logger.warning('Failed to stop the session monitor.', e, st);
+    }
+    if (isDisposed) {
+      return;
+    }
+
+    void report(
+      OidcEndSessionConfirmationOutcome outcome, {
+      OidcMonitorSessionResult? result,
+      Object? error,
+      StackTrace? stackTrace,
+    }) {
+      unawaited(_cancelEndSessionConfirmation());
+      emitEvent(
+        OidcEndSessionConfirmationEvent.now(
+          outcome: outcome,
+          sessionState: sessionState,
+          result: result,
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
+    }
+
+    try {
+      final sub = _endSessionConfirmationSub =
+          monitorSessionStatus(
+            checkSessionIframe: checkSessionIframe,
+            request: OidcMonitorSessionStatusRequest(
+              clientId: clientCredentials.clientId,
+              sessionState: sessionState,
+              interval: settings.sessionManagementSettings.interval,
+            ),
+          ).listen(
+            (result) => report(switch (result) {
+              OidcValidMonitorSessionResult(changed: true) =>
+                OidcEndSessionConfirmationOutcome.changed,
+              OidcValidMonitorSessionResult(changed: false) =>
+                OidcEndSessionConfirmationOutcome.unchanged,
+              // `error`, or any value outside Session Management 1.0
+              // §3.2's three (OidcUnknownMonitorSessionResult).
+              _ => OidcEndSessionConfirmationOutcome.error,
+            }, result: result),
+            onError: (Object e, StackTrace st) {
+              logger.warning(
+                'Post-logout check_session_iframe probe failed.',
+                e,
+                st,
+              );
+              report(
+                OidcEndSessionConfirmationOutcome.error,
+                error: e,
+                stackTrace: st,
+              );
+            },
+            onDone: () {
+              // The platform has no session monitoring (every non-web
+              // platform returns an empty stream): nothing was asked, so
+              // nothing is reported.
+              logger.fine(
+                'Post-logout check_session_iframe probe ended without an '
+                'answer; no confirmation event emitted.',
+              );
+              unawaited(_cancelEndSessionConfirmation());
+            },
+          );
+      _endSessionConfirmationTimer = Timer(
+        settings.sessionManagementSettings.endSessionConfirmationTimeout,
+        () {
+          if (identical(_endSessionConfirmationSub, sub)) {
+            report(OidcEndSessionConfirmationOutcome.timedOut);
+          }
+        },
+      );
+    } on Object catch (e, st) {
+      // A platform `monitorSessionStatus` that throws synchronously must not
+      // make logout fail.
       logger.warning(
-        'Post-logout check_session_iframe probe failed; continuing with '
-        'logout.',
+        'Post-logout check_session_iframe probe could not start.',
         e,
         st,
       );
-    } finally {
-      await sub.cancel();
+      report(
+        OidcEndSessionConfirmationOutcome.error,
+        error: e,
+        stackTrace: st,
+      );
     }
   }
 
-  /// Upper bound for [confirmSessionEndedAtOp]'s single probe, so a
-  /// non-responding OP iframe (e.g. blocked by a browser extension, or an OP
-  /// that never answers the postMessage) cannot hang [logout] forever. The
-  /// probe's own first emission is normally near-instant (same-page
-  /// `postMessage`), so this is a safety net, not an expected wait.
-  static const _confirmSessionEndedAtOpTimeout = Duration(seconds: 5);
+  /// Stops the post-logout probe (its hidden iframe and timer), if any.
+  Future<void> _cancelEndSessionConfirmation() async {
+    _endSessionConfirmationTimer?.cancel();
+    _endSessionConfirmationTimer = null;
+    final sub = _endSessionConfirmationSub;
+    _endSessionConfirmationSub = null;
+    try {
+      await sub?.cancel();
+    } on Object catch (e, st) {
+      logger.warning('Failed to stop the post-logout probe.', e, st);
+    }
+  }
 
   /// You enter this function with an /authorize response.
   ///
@@ -2144,6 +2215,9 @@ abstract class OidcUserManagerBase {
     if (user == null) {
       return;
     }
+    // A new session supersedes any post-logout probe still waiting on the
+    // OP: on web both would share one iframe id and `window.onMessage`.
+    unawaited(_cancelEndSessionConfirmation());
     final checkSessionIframe = discoveryDocument.checkSessionIframe;
     final sessionState = user.token.sessionState;
     if (!settings.sessionManagementSettings.enabled) {
@@ -5944,6 +6018,7 @@ abstract class OidcUserManagerBase {
       );
     }
     await sessionSub?.cancel();
+    await _cancelEndSessionConfirmation();
     await tokenEvents.dispose();
     await userSubject.close();
     await eventsController.close();

@@ -10,18 +10,16 @@ import 'package:jose_plus/jose.dart';
 import 'package:oidc_core/oidc_core.dart';
 import 'package:test/test.dart';
 
-/// OpenID Connect Session Management 1.0 (https://openid.net/specs/openid-connect-session-1_0.html).
+/// OpenID Connect Session Management 1.0 §3.1 after an RP-initiated logout
+/// (RP-Initiated Logout 1.0 §2).
 ///
-/// The certification suite's `oidcc-client-test-session-management` module
-/// (`oidcc-client-rp-session-management-rp-basic` plan) requires at least one
-/// `check_session_iframe` postMessage round trip BEFORE the end-session
-/// request AND at least one AFTER it, observing the OP report `changed` --
-/// completing the handshake `listenToUserSessionIfSupported` started before
-/// logout. [OidcUserManagerBase.forgetUser] tears that subscription down the
-/// instant `userSubject` goes null, which happens as part of every
-/// RP-initiated logout, so without a deliberate final check the "after" probe
-/// never happens. These tests cover [OidcUserManagerBase.confirmSessionEndedAtOp],
-/// the fix for that gap, via a fake platform (no real browser / iframe).
+/// [OidcUserManagerBase.forgetUser] tears the regular session monitor down the
+/// instant `userSubject` goes null, so without a deliberate extra check the RP
+/// never asks the OP's `check_session_iframe` about the session it just ended.
+/// [OidcUserManagerBase.startEndSessionConfirmation] performs that one check
+/// in the background and reports the answer as an
+/// [OidcEndSessionConfirmationEvent]; these tests drive it through a fake OP
+/// (no real browser / iframe).
 const _issuer = 'https://op.example.com';
 const _checkSessionIframe = 'https://op.example.com/check_session_iframe';
 
@@ -30,9 +28,46 @@ typedef _MonitorCall = ({
   OidcMonitorSessionStatusRequest request,
 });
 
-/// A manager that records every [monitorSessionStatus] call instead of
-/// touching a real browser iframe, and lets a test control both how the
-/// end-session request resolves and what the fake OP "answers" each probe.
+/// A fake OP `check_session_iframe` with the browser's delivery shape: every
+/// monitor listens on the same `window.onMessage`, so each answer the OP posts
+/// back reaches EVERY live monitor, not just the one that asked
+/// (`OidcWebCore.monitorSessionStatus`).
+class _FakeOp {
+  /// Whether the End-User still has a session at the OP.
+  bool sessionAlive = true;
+
+  /// What the iframe answers a check with; defaults to the Session
+  /// Management 1.0 §3.2 behavior for [sessionAlive].
+  OidcMonitorSessionResult Function()? answerOverride;
+
+  final List<StreamController<OidcMonitorSessionResult>> live = [];
+
+  OidcMonitorSessionResult get answer =>
+      answerOverride?.call() ??
+      OidcValidMonitorSessionResult(changed: !sessionAlive);
+
+  Stream<OidcMonitorSessionResult> monitor() {
+    late final StreamController<OidcMonitorSessionResult> sc;
+    sc = StreamController<OidcMonitorSessionResult>(
+      onListen: () {
+        live.add(sc);
+        // The monitor posts `client_id session_state` right away; the OP's
+        // answer is delivered to every live listener.
+        final reply = answer;
+        scheduleMicrotask(() {
+          for (final c in List.of(live)) {
+            c.add(reply);
+          }
+        });
+      },
+      onCancel: () => live.remove(sc),
+    );
+    return sc.stream;
+  }
+}
+
+/// A manager that records every [monitorSessionStatus] and authorization
+/// request instead of touching a real browser.
 class _SessionManager extends OidcUserManagerBase {
   _SessionManager({
     required super.discoveryDocument,
@@ -45,19 +80,17 @@ class _SessionManager extends OidcUserManagerBase {
   void seed(OidcUser user) => userSubject.add(user);
   Future<void> saveUserRaw(OidcUser user) => saveUser(user);
 
-  /// `null` mimics a web `samePage` navigation: `oidc_web_core`'s own
-  /// `_getResponseUri` returns null synchronously for that mode (the browser
-  /// navigates away and the result only surfaces later, from a fresh page
-  /// load's `loadStateResult`). A non-null return mimics `popup`/`newPage`,
-  /// where the main page never navigates and gets the result back directly.
+  /// `null` mimics a web `samePage` navigation; a non-null return mimics
+  /// `popup`/`newPage`, where the page gets the result back directly.
   Future<OidcEndSessionResponse?> Function(OidcEndSessionRequest request)?
   onEndSession;
 
   final List<_MonitorCall> monitorCalls = [];
+  final List<OidcAuthorizeRequest> authorizeRequests = [];
 
-  /// What the fake OP's check_session_iframe "answers" each probe with.
-  /// Defaults to a single `changed` event, matching what a real OP reports
-  /// once `removeSessionState` has already run for the ended session.
+  final op = _FakeOp();
+
+  /// Overrides the fake OP for the next [monitorSessionStatus] calls.
   Stream<OidcMonitorSessionResult> Function()? monitorStreamFactory;
 
   @override
@@ -69,7 +102,10 @@ class _SessionManager extends OidcUserManagerBase {
     OidcAuthorizeRequest request,
     OidcPlatformSpecificOptions options,
     Map<String, dynamic> preparationResult,
-  ) async => null;
+  ) async {
+    authorizeRequests.add(request);
+    return null;
+  }
 
   @override
   Future<OidcEndSessionResponse?> getEndSessionResponse(
@@ -100,8 +136,7 @@ class _SessionManager extends OidcUserManagerBase {
       checkSessionIframe: checkSessionIframe,
       request: request,
     ));
-    return monitorStreamFactory?.call() ??
-        Stream.value(const OidcValidMonitorSessionResult(changed: true));
+    return monitorStreamFactory?.call() ?? op.monitor();
   }
 }
 
@@ -148,6 +183,7 @@ Future<OidcUser> _user({String? sessionState}) async {
 _SessionManager _build({
   bool sessionManagementEnabled = true,
   bool withCheckSessionIframe = true,
+  Duration endSessionConfirmationTimeout = const Duration(seconds: 10),
   OidcStore? store,
 }) {
   final client = MockClient((req) async => http.Response('{}', 404));
@@ -165,156 +201,382 @@ _SessionManager _build({
       postLogoutRedirectUri: Uri.parse('com.example.app://logged-out'),
       sessionManagementSettings: OidcSessionManagementSettings(
         enabled: sessionManagementEnabled,
+        endSessionConfirmationTimeout: endSessionConfirmationTimeout,
       ),
     ),
   );
 }
 
+/// Builds, inits and signs in a manager whose OP ends its session (and
+/// answers the end-session request directly, like `popup`/`newPage`).
+Future<_SessionManager> _signedIn({
+  bool sessionManagementEnabled = true,
+  bool withCheckSessionIframe = true,
+  String? sessionState = 'sess-live-1',
+  bool opEndsSession = true,
+  Duration endSessionConfirmationTimeout = const Duration(seconds: 10),
+}) async {
+  final manager = _build(
+    sessionManagementEnabled: sessionManagementEnabled,
+    withCheckSessionIframe: withCheckSessionIframe,
+    endSessionConfirmationTimeout: endSessionConfirmationTimeout,
+  );
+  addTearDown(manager.dispose);
+  await manager.init();
+  manager.seed(await _user(sessionState: sessionState));
+  await pumpEventQueue();
+  manager.onEndSession = (request) async {
+    if (opEndsSession) {
+      manager.op.sessionAlive = false;
+    }
+    return OidcEndSessionResponse.fromJson({'state': request.state});
+  };
+  return manager;
+}
+
+List<OidcEndSessionConfirmationEvent> _collect(_SessionManager manager) {
+  final events = <OidcEndSessionConfirmationEvent>[];
+  final sub = manager
+      .events()
+      .where((e) => e is OidcEndSessionConfirmationEvent)
+      .cast<OidcEndSessionConfirmationEvent>()
+      .listen(events.add);
+  addTearDown(sub.cancel);
+  return events;
+}
+
 void main() {
-  group('post-logout session-state confirmation (popup/newPage: '
-      'getEndSessionResponse resolves directly)', () {
-    test(
-      'logout() performs one final check_session probe, using the ending '
-      "session's own session_state, before forgetting the user",
-      () async {
-        final manager = _build();
-        await manager.init();
-        manager.seed(await _user(sessionState: 'sess-live-1'));
-        manager.onEndSession = (request) async =>
-            OidcEndSessionResponse.fromJson({'state': request.state});
-
-        await manager.logout();
-
-        // Two calls are expected: `seed()` above already starts the regular
-        // monitoring subscription via `listenToUserSessionIfSupported`
-        // (satisfying the module's "before" requirement, pre-existing
-        // behavior) -- the fix under test is the SECOND call, made by
-        // `confirmSessionEndedAtOp` from `handleEndSessionResponse` before
-        // `forgetUser()` tears the first one down. Before the fix, only the
-        // first call ever happened.
-        expect(
-          manager.monitorCalls,
-          hasLength(2),
-          reason:
-              'one pre-logout probe (regular monitoring) and one post-logout '
-              'confirmation probe are expected; before the fix, '
-              "forgetUser()'s userSubject listener tore the monitor down "
-              'without ever adding the second, post-logout probe',
-        );
-        final call = manager.monitorCalls.last;
-        expect(call.checkSessionIframe, Uri.parse(_checkSessionIframe));
-        expect(call.request.sessionState, 'sess-live-1');
-        expect(call.request.clientId, 'client-1');
-        expect(manager.currentUser, isNull, reason: 'logout still completes');
-      },
-    );
-
-    test(
-      'no probe is made when session management is disabled (the default)',
-      () async {
-        final manager = _build(sessionManagementEnabled: false);
-        await manager.init();
-        manager.seed(await _user(sessionState: 'sess-live-1'));
-        manager.onEndSession = (request) async =>
-            OidcEndSessionResponse.fromJson({'state': request.state});
-
-        await manager.logout();
-
-        expect(manager.monitorCalls, isEmpty);
-        expect(manager.currentUser, isNull);
-      },
-    );
-
-    test('no probe is made when the OP never issued a session_state', () async {
-      final manager = _build();
-      await manager.init();
-      manager.seed(await _user());
-      manager.onEndSession = (request) async =>
-          OidcEndSessionResponse.fromJson({'state': request.state});
+  group('post-logout end-session confirmation event', () {
+    test('OP logged the session out -> changed, probing the ended '
+        "session's own session_state", () async {
+      final manager = await _signedIn();
+      final events = _collect(manager);
 
       await manager.logout();
+      await pumpEventQueue();
 
-      expect(manager.monitorCalls, isEmpty);
       expect(manager.currentUser, isNull);
+      expect(events, hasLength(1));
+      expect(events.single.outcome, OidcEndSessionConfirmationOutcome.changed);
+      expect(events.single.sessionState, 'sess-live-1');
+      expect(
+        events.single.result,
+        isA<OidcValidMonitorSessionResult>().having(
+          (r) => r.changed,
+          'changed',
+          isTrue,
+        ),
+      );
+      // Regular monitor (started by seed) + the post-logout probe.
+      expect(manager.monitorCalls, hasLength(2));
+      final probe = manager.monitorCalls.last;
+      expect(probe.checkSessionIframe, Uri.parse(_checkSessionIframe));
+      expect(probe.request.sessionState, 'sess-live-1');
+      expect(probe.request.clientId, 'client-1');
+      expect(manager.op.live, isEmpty, reason: 'probe torn down after answer');
+    });
+
+    test('OP session still alive (logout did not take) -> unchanged', () async {
+      final manager = await _signedIn(opEndsSession: false);
+      final events = _collect(manager);
+
+      await manager.logout();
+      await pumpEventQueue();
+
+      expect(manager.currentUser, isNull, reason: 'local logout still happens');
+      expect(events.map((e) => e.outcome), [
+        OidcEndSessionConfirmationOutcome.unchanged,
+      ]);
+    });
+
+    test('OP iframe answers error -> error', () async {
+      final manager = await _signedIn();
+      final events = _collect(manager);
+      manager.op.answerOverride = () => const OidcErrorMonitorSessionResult();
+
+      await manager.logout();
+      await pumpEventQueue();
+
+      expect(events.single.outcome, OidcEndSessionConfirmationOutcome.error);
+      expect(events.single.result, isA<OidcErrorMonitorSessionResult>());
+    });
+
+    test('OP iframe answers a non-spec value -> error', () async {
+      final manager = await _signedIn();
+      final events = _collect(manager);
+      manager.op.answerOverride = () =>
+          const OidcUnknownMonitorSessionResult(data: 'bogus');
+
+      await manager.logout();
+      await pumpEventQueue();
+
+      expect(events.single.outcome, OidcEndSessionConfirmationOutcome.error);
+      expect(events.single.result, isA<OidcUnknownMonitorSessionResult>());
+    });
+
+    test('probe stream errors -> error carrying the error', () async {
+      final manager = await _signedIn();
+      final events = _collect(manager);
+      manager.monitorStreamFactory = () => Stream.error(StateError('boom'));
+
+      await manager.logout();
+      await pumpEventQueue();
+
+      expect(manager.currentUser, isNull);
+      expect(events.single.outcome, OidcEndSessionConfirmationOutcome.error);
+      expect(events.single.error, isA<StateError>());
+    });
+
+    test('monitorSessionStatus throwing synchronously does not fail logout '
+        '-> error', () async {
+      final manager = await _signedIn();
+      final events = _collect(manager);
+      manager.monitorStreamFactory = () => throw StateError('sync boom');
+
+      await expectLater(manager.logout(), completes);
+      await pumpEventQueue();
+
+      expect(manager.currentUser, isNull);
+      expect(events.single.outcome, OidcEndSessionConfirmationOutcome.error);
+      expect(events.single.error, isA<StateError>());
     });
 
     test(
-      'a non-responding OP iframe does not hang logout '
-      '(bounded, best-effort probe)',
+      'no answer within endSessionConfirmationTimeout -> timedOut, and the '
+      'probe is torn down',
       () async {
-        final manager = _build();
-        await manager.init();
-        manager.seed(await _user(sessionState: 'sess-live-1'));
-        manager.onEndSession = (request) async =>
-            OidcEndSessionResponse.fromJson({'state': request.state});
-        // Never emits and never completes: simulates a check_session_iframe
-        // that loaded but whose OP never answers the postMessage.
-        manager.monitorStreamFactory = () =>
-            StreamController<OidcMonitorSessionResult>().stream;
+        final manager = await _signedIn(
+          endSessionConfirmationTimeout: const Duration(milliseconds: 50),
+        );
+        final events = _collect(manager);
+        final silent = StreamController<OidcMonitorSessionResult>();
+        manager.monitorStreamFactory = () => silent.stream;
 
-        await manager.logout().timeout(const Duration(seconds: 10));
+        await manager.logout();
+        expect(events, isEmpty, reason: 'logout did not wait for the timeout');
 
-        // Pre-logout (regular monitoring) + post-logout (confirmation) --
-        // see the sibling test above for why this is 2, not 1.
-        expect(manager.monitorCalls, hasLength(2));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        expect(
+          events.single.outcome,
+          OidcEndSessionConfirmationOutcome.timedOut,
+        );
+        expect(events.single.result, isNull);
+        expect(silent.hasListener, isFalse);
+      },
+    );
+
+    test('a platform without session monitoring (empty stream) emits no '
+        'event', () async {
+      final manager = await _signedIn(
+        endSessionConfirmationTimeout: const Duration(milliseconds: 50),
+      );
+      final events = _collect(manager);
+      manager.monitorStreamFactory = Stream.empty;
+
+      await manager.logout();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(manager.currentUser, isNull);
+      expect(events, isEmpty);
+    });
+  });
+
+  group('post-logout probe does not block logout', () {
+    test(
+      'forgetUser + userChanges(null) happen while the OP has not answered',
+      () async {
+        final manager = await _signedIn(
+          endSessionConfirmationTimeout: const Duration(hours: 1),
+        );
+        final events = _collect(manager);
+        final silent = StreamController<OidcMonitorSessionResult>();
+        manager.monitorStreamFactory = () => silent.stream;
+        final userChanges = <OidcUser?>[];
+        final sub = manager.userChanges().listen(userChanges.add);
+        addTearDown(sub.cancel);
+
+        await manager.logout().timeout(const Duration(seconds: 2));
+        await pumpEventQueue();
+
         expect(manager.currentUser, isNull);
+        expect(userChanges.last, isNull);
+        expect(events, isEmpty);
+        expect(silent.hasListener, isTrue, reason: 'probe still waiting');
+
+        await manager.dispose();
+        expect(silent.hasListener, isFalse, reason: 'dispose stops the probe');
       },
     );
   });
 
-  group('post-logout session-state confirmation (web samePage: '
-      'getEndSessionResponse resolves later, from a reloaded page)', () {
+  group('B-1: the regular monitor must not see the probe answer', () {
     test(
-      'a resumed end-session response still performs the post-logout probe, '
-      "using the persisted session_state -- it cannot read currentUser's "
-      'session_state, because this manager never had the user loaded',
+      "an OP answer delivered to every live monitor (the browser's shared "
+      'window.onMessage) does not trigger a prompt=none re-authorization '
+      'mid-logout',
       () async {
-        final store = OidcMemoryStore();
-
-        // Simulate the page that was alive when logout() was called: it built
-        // and persisted the OidcEndSessionState (capturing session_state from
-        // its then-current user) and then navigated away -- exactly what
-        // oidc_web_core's samePage mode does, and what left a stale cached
-        // user + a pending end-session state + response sitting in the store.
-        final endSessionState = OidcEndSessionState(
-          postLogoutRedirectUri: Uri.parse('com.example.app://logged-out'),
-          originalUri: null,
-          options: const {},
-          sessionState: 'sess-reload-1',
-        );
-        await store.setStateData(
-          state: endSessionState.id,
-          stateData: endSessionState.toStorageString(),
-        );
-        await store.setStateResponseData(
-          state: endSessionState.id,
-          stateData: Uri.parse(
-            'com.example.app://logged-out',
-          ).replace(queryParameters: {'state': endSessionState.id}).toString(),
+        final manager = await _signedIn();
+        final events = _collect(manager);
+        expect(
+          manager.op.live,
+          hasLength(1),
+          reason: 'the regular monitor is running before logout',
         );
 
-        // The "fresh page load" manager: a brand new instance, seeded only
-        // with the stale cached user a real reload would still have on disk
-        // (logout()'s forgetUser() on the OLD page never got to run -- the
-        // browser navigated away first).
-        final manager = _build(store: store);
-        await manager.saveUserRaw(await _user(sessionState: 'sess-reload-1'));
-
-        await manager.init();
+        await manager.logout();
+        await pumpEventQueue();
 
         expect(
-          manager.monitorCalls,
-          hasLength(1),
+          manager.authorizeRequests,
+          isEmpty,
           reason:
-              'the resumed end-session response must still probe once, '
-              'using the session_state persisted at logout time -- '
-              'currentUser is unavailable on this path by construction '
-              '(loadStateResult short-circuits loadCachedTokens)',
+              'the regular monitor must be stopped before the probe, '
+              "otherwise it reads the probe's `changed` and calls "
+              'reAuthorizeUser() (prompt=none)',
         );
+        expect(events.map((e) => e.outcome), [
+          OidcEndSessionConfirmationOutcome.changed,
+        ]);
+        expect(manager.op.live, isEmpty);
+      },
+    );
+  });
+
+  group('gating: apps that did not opt in see no change', () {
+    test(
+      'session management disabled (the default): no probe, no event, and '
+      'no session_state persisted in the end-session state',
+      () async {
+        final manager = await _signedIn(sessionManagementEnabled: false);
+        final events = _collect(manager);
+        String? persistedSessionState = 'unset';
+        manager.onEndSession = (request) async {
+          final raw = await manager.store.getStateData(request.state!);
+          persistedSessionState =
+              (OidcState.fromStorageString(raw!) as OidcEndSessionState)
+                  .sessionState;
+          return OidcEndSessionResponse.fromJson({'state': request.state});
+        };
+
+        await manager.logout();
+        await pumpEventQueue();
+
+        expect(manager.monitorCalls, isEmpty);
+        expect(events, isEmpty);
+        expect(persistedSessionState, isNull);
+        expect(manager.currentUser, isNull);
+      },
+    );
+
+    test('session_state is persisted when session management is '
+        'enabled', () async {
+      final manager = await _signedIn();
+      String? persistedSessionState;
+      manager.onEndSession = (request) async {
+        final raw = await manager.store.getStateData(request.state!);
+        persistedSessionState =
+            (OidcState.fromStorageString(raw!) as OidcEndSessionState)
+                .sessionState;
+        return OidcEndSessionResponse.fromJson({'state': request.state});
+      };
+
+      await manager.logout();
+
+      expect(persistedSessionState, 'sess-live-1');
+    });
+
+    test('no check_session_iframe: no probe, no event', () async {
+      final manager = await _signedIn(withCheckSessionIframe: false);
+      final events = _collect(manager);
+
+      await manager.logout();
+      await pumpEventQueue();
+
+      expect(manager.monitorCalls, isEmpty);
+      expect(events, isEmpty);
+      expect(manager.currentUser, isNull);
+    });
+
+    test('no session_state from the OP: no probe, no event', () async {
+      final manager = await _signedIn(sessionState: null);
+      final events = _collect(manager);
+
+      await manager.logout();
+      await pumpEventQueue();
+
+      expect(manager.monitorCalls, isEmpty);
+      expect(events, isEmpty);
+      expect(manager.currentUser, isNull);
+    });
+  });
+
+  group('web samePage: the end-session response is resumed on a reloaded '
+      'page', () {
+    /// The page that called logout() persisted the end-session state (with
+    /// the ending session_state) and navigated away; this builds the fresh
+    /// page's manager, with only that state, the OP's response and the stale
+    /// cached user on disk.
+    Future<_SessionManager> resumed({required bool enabled}) async {
+      final store = OidcMemoryStore();
+      final endSessionState = OidcEndSessionState(
+        postLogoutRedirectUri: Uri.parse('com.example.app://logged-out'),
+        originalUri: null,
+        options: const {},
+        sessionState: 'sess-reload-1',
+      );
+      await store.setStateData(
+        state: endSessionState.id,
+        stateData: endSessionState.toStorageString(),
+      );
+      await store.setStateResponseData(
+        state: endSessionState.id,
+        stateData: Uri.parse(
+          'com.example.app://logged-out',
+        ).replace(queryParameters: {'state': endSessionState.id}).toString(),
+      );
+      final manager = _build(store: store, sessionManagementEnabled: enabled);
+      addTearDown(manager.dispose);
+      manager.op.sessionAlive = false;
+      await manager.saveUserRaw(await _user(sessionState: 'sess-reload-1'));
+      return manager;
+    }
+
+    test(
+      'the resumed response still probes with the persisted session_state '
+      'and reports the outcome',
+      () async {
+        final manager = await resumed(enabled: true);
+        final events = _collect(manager);
+
+        await manager.init();
+        await pumpEventQueue();
+
+        expect(manager.monitorCalls, hasLength(1));
         expect(
           manager.monitorCalls.single.request.sessionState,
           'sess-reload-1',
         );
+        expect(manager.currentUser, isNull);
+        expect(
+          events.single.outcome,
+          OidcEndSessionConfirmationOutcome.changed,
+        );
+        expect(events.single.sessionState, 'sess-reload-1');
+      },
+    );
+
+    test(
+      'a persisted session_state does not probe when session management is '
+      'disabled',
+      () async {
+        final manager = await resumed(enabled: false);
+        final events = _collect(manager);
+
+        await manager.init();
+        await pumpEventQueue();
+
+        expect(manager.monitorCalls, isEmpty);
+        expect(events, isEmpty);
         expect(manager.currentUser, isNull);
       },
     );

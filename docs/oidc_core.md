@@ -63,6 +63,10 @@ The base class for all events, this contains an `at` property that stores when t
 
 Occurs before a user is forgotten, either via `forgetUser()` or via `logout()`.
 
+### OidcEndSessionConfirmationEvent
+
+Occurs after an RP-initiated `logout()` when session management is enabled, the OP advertises a `check_session_iframe` and the ended session had a `session_state`. It carries what the OP's `check_session_iframe` answered for the ended session (OpenID Connect Session Management 1.0 §3.1): `outcome` is `changed` (the OP-side logout took effect), `unchanged` (the OP session is still alive), `error`, or `timedOut` (see `OidcSessionManagementSettings.endSessionConfirmationTimeout`). Logout does not wait for it, and the manager does not act on it.
+
 ## OidcPkcePair
 
 you can use this to generate PKCE key pairs.

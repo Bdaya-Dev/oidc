@@ -617,6 +617,7 @@ class OidcSessionManagementSettings {
     this.enabled = false,
     this.interval = const Duration(seconds: 5),
     this.stopIfErrorReceived = true,
+    this.endSessionConfirmationTimeout = const Duration(seconds: 10),
   });
 
   /// pass `true` if you want to enable the session checking.
@@ -633,4 +634,19 @@ class OidcSessionManagementSettings {
   ///
   /// by default this is true.
   final bool stopIfErrorReceived;
+
+  /// How long the one-off `check_session_iframe` probe made after an
+  /// RP-initiated logout waits for the OP's answer before reporting
+  /// [OidcEndSessionConfirmationOutcome.timedOut] on
+  /// [OidcUserManagerBase.events] (see [OidcEndSessionConfirmationEvent]).
+  ///
+  /// The probe never delays logout (it runs after the user is forgotten), so
+  /// this only bounds how long its hidden iframe may linger and when the
+  /// event is emitted. It covers loading the OP iframe document over the
+  /// network plus a postMessage round trip; the probe re-sends its
+  /// postMessage every [interval], so the default (twice the default
+  /// [interval]) leaves room for one retry.
+  ///
+  /// default is 10 seconds.
+  final Duration endSessionConfirmationTimeout;
 }
