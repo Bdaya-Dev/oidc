@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-10-05
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_macos` - `v0.8.0+4`](#oidc_macos---v0804)
+
+---
+
+#### `oidc_macos` - `v0.8.0+4`
+
+ - **FIX**(oidc_macos): drop unnecessary FlutterFramework dependency ([#450](https://github.com/Bdaya-Dev/oidc/issues/450)). ([7c32b00c](https://github.com/Bdaya-Dev/oidc/commit/7c32b00c3959b0e37423fe922129af51407b5a11))
+ - **FIX**(oidc_macos): backport Flutter SwiftPM plugin layout to 0.8.x ([#450](https://github.com/Bdaya-Dev/oidc/issues/450)). ([d5b89965](https://github.com/Bdaya-Dev/oidc/commit/d5b89965fdd5f43e5f77371765f706ce64666346))
+
+
 ## 2026-02-10
 
 ### Changes
