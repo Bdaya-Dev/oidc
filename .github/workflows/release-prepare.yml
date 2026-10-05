@@ -23,6 +23,16 @@ jobs:
         with:
           fetch-depth: 0
       - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # Pinned to the Flutter version this 0.8.x line was released and
+          # tested with (see .github/actions/flutter_base's default on this
+          # branch). The release workflows previously had no version pin, so
+          # they always installed the latest stable Flutter/Dart, whose newer
+          # lints (e.g. unawaited_return_in_try_block, added after this
+          # branch's era) fail `dart pub publish --dry-run` against
+          # oidc_core's frozen 0.8.x-era source. #450
+          flutter-version: 3.35.4
       # see https://github.com/invertase/melos/issues/796
       - uses: bluefireteam/melos-action@main
         continue-on-error: true
