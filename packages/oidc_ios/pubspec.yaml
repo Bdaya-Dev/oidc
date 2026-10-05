@@ -1,6 +1,6 @@
 name: oidc_ios
 description: iOS implementation of the oidc plugin
-version: 0.8.0+4
+version: 0.8.0+3
 repository: https://github.com/Bdaya-Dev/oidc/tree/main/packages/oidc_ios
 homepage: https://bdaya-dev.github.io/oidc/
 topics: ["oidc", "openidconnect", "oauth", "authentication"]
