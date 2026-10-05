@@ -3,6 +3,101 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-10-05
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - [`oidc` - `v5.0.0`](#oidc---v500)
+ - [`oidc_core` - `v4.0.0`](#oidc_core---v400)
+ - [`oidc_default_store` - `v2.0.0`](#oidc_default_store---v200)
+
+Packages with other changes:
+
+ - [`jose_plus` - `v1.0.1`](#jose_plus---v101)
+ - [`oidc_loopback_listener` - `v1.1.1`](#oidc_loopback_listener---v111)
+ - [`oidc_web_core` - `v1.2.1`](#oidc_web_core---v121)
+ - [`oidc_android` - `v3.0.1`](#oidc_android---v301)
+ - [`oidc_cli` - `v1.0.4`](#oidc_cli---v104)
+ - [`oidc_desktop` - `v1.1.1`](#oidc_desktop---v111)
+ - [`oidc_darwin` - `v1.1.3`](#oidc_darwin---v113)
+ - [`oidc_linux` - `v1.0.4`](#oidc_linux---v104)
+ - [`oidc_platform_interface` - `v1.0.4`](#oidc_platform_interface---v104)
+ - [`oidc_web` - `v1.0.4`](#oidc_web---v104)
+ - [`oidc_windows` - `v1.0.4`](#oidc_windows---v104)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_android` - `v3.0.1`
+ - `oidc_cli` - `v1.0.4`
+ - `oidc_desktop` - `v1.1.1`
+ - `oidc_darwin` - `v1.1.3`
+ - `oidc_linux` - `v1.0.4`
+ - `oidc_platform_interface` - `v1.0.4`
+ - `oidc_web` - `v1.0.4`
+ - `oidc_windows` - `v1.0.4`
+
+---
+
+#### `oidc` - `v5.0.0`
+
+ - **FIX**(example): stop corrupting the web conformance POST through cors-proxy. ([4eea7cd8](https://github.com/Bdaya-Dev/oidc/commit/4eea7cd840c208582eaf873a0d34ce54e7e2a95e))
+ - **FIX**(oidc): rethrow platform OidcException from getPlatformEndSessionResponse unwrapped. ([ab422b70](https://github.com/Bdaya-Dev/oidc/commit/ab422b70d38093ab4e85a56176df78908780ba71))
+ - **FIX**: await futures returned inside try blocks (unawaited_return_in_try_block). ([452d6ee1](https://github.com/Bdaya-Dev/oidc/commit/452d6ee121674dee760f2d698f2a7d5565ad6600))
+ - **FIX**(example): register the RP's true application_type with the test plan. ([1253d9be](https://github.com/Bdaya-Dev/oidc/commit/1253d9be404bd36ed5d8f83521ce74efb3ca73f1))
+ - **FEAT**(oidc_core): mTLS transport, end-to-end alias routing and web guard ([#386](https://github.com/Bdaya-Dev/oidc/issues/386)). ([d3bd7213](https://github.com/Bdaya-Dev/oidc/commit/d3bd721399ddf579067791f12c536b2fb4022ad5))
+ - **FEAT**(oidc_core): adopt and persist RFC 7592 credential rotation through the manager ([#385](https://github.com/Bdaya-Dev/oidc/issues/385)). ([0b6f57c1](https://github.com/Bdaya-Dev/oidc/commit/0b6f57c199bc3d8b76bf05845b5a0b13c1d9bcd8))
+ - **BREAKING** **FIX**(oidc_core): reject a discovery document whose issuer does not match. ([fab65a06](https://github.com/Bdaya-Dev/oidc/commit/fab65a069d2b4bd4ac8d41fc78e6c194702f32b4))
+ - **BREAKING** **FEAT**(oidc_default_store): bump flutter_secure_storage to ^11 ([#451](https://github.com/Bdaya-Dev/oidc/issues/451)). ([166f394e](https://github.com/Bdaya-Dev/oidc/commit/166f394ed7d937f1098a558b92f325fc52043700))
+
+#### `oidc_core` - `v4.0.0`
+
+ - **FIX**(oidc_core): probe check_session_iframe once more after RP-initiated logout. ([c3540c22](https://github.com/Bdaya-Dev/oidc/commit/c3540c2242b6aa19589e7ac2996e3b27141e78a1))
+ - **FIX**(oidc_core): require at_hash on the implicit id_token token response. ([6cd96cd0](https://github.com/Bdaya-Dev/oidc/commit/6cd96cd0a5d6d629a82f9e473cdfc829a8bc71d0))
+ - **FIX**(oidc_core): settle userChangesAfterInit from inside init(), not via initFuture ([#453](https://github.com/Bdaya-Dev/oidc/issues/453)). ([a349ae98](https://github.com/Bdaya-Dev/oidc/commit/a349ae98f337ef013f8e3b3a2d943edd98df97ec))
+ - **FIX**(oidc_core): userChangesAfterInit — single init attachment, closed-controller guards ([#453](https://github.com/Bdaya-Dev/oidc/issues/453)). ([e239f8a3](https://github.com/Bdaya-Dev/oidc/commit/e239f8a3e9d1e81e27ec1c51f6398b55f9f5453e))
+ - **FIX**: await futures returned inside try blocks (unawaited_return_in_try_block). ([452d6ee1](https://github.com/Bdaya-Dev/oidc/commit/452d6ee121674dee760f2d698f2a7d5565ad6600))
+ - **FIX**(oidc_core): close mTLS phase 2 review gaps ([#386](https://github.com/Bdaya-Dev/oidc/issues/386)). ([85bc47c8](https://github.com/Bdaya-Dev/oidc/commit/85bc47c88bf9e294ed6c3f759f2979286b25489c))
+ - **FIX**(oidc_core): don't retain userChangesAfterInit listeners until dispose ([#453](https://github.com/Bdaya-Dev/oidc/issues/453)). ([c0d8c48f](https://github.com/Bdaya-Dev/oidc/commit/c0d8c48f6422c2d746ead72db6c9063be30561bc))
+ - **FIX**(oidc_core): require c_hash and at_hash on the hybrid front-channel id_token. ([7b3b2ec6](https://github.com/Bdaya-Dev/oidc/commit/7b3b2ec669cf21ef268d79ed55bc786c903e8be0))
+ - **FEAT**(oidc_core): report the post-logout session check as OidcEndSessionConfirmationEvent. ([457e32c5](https://github.com/Bdaya-Dev/oidc/commit/457e32c53ea0b59ac293dd57dd5e5ae79016766a))
+ - **FEAT**(oidc_core): mTLS transport, end-to-end alias routing and web guard ([#386](https://github.com/Bdaya-Dev/oidc/issues/386)). ([d3bd7213](https://github.com/Bdaya-Dev/oidc/commit/d3bd721399ddf579067791f12c536b2fb4022ad5))
+ - **FEAT**(oidc_core): adopt and persist RFC 7592 credential rotation through the manager ([#385](https://github.com/Bdaya-Dev/oidc/issues/385)). ([0b6f57c1](https://github.com/Bdaya-Dev/oidc/commit/0b6f57c199bc3d8b76bf05845b5a0b13c1d9bcd8))
+ - **FEAT**(oidc_core): add userChangesAfterInit() to tell "not initialized" from "signed out". ([29b09f77](https://github.com/Bdaya-Dev/oidc/commit/29b09f77f71e249f7de5a4b102014edb65f4f400))
+ - **DOCS**(oidc_core): do not present `changed` as proof the OP logout worked. ([333d0a64](https://github.com/Bdaya-Dev/oidc/commit/333d0a645aa3d123b4e37d29cb4687f07a73e6be))
+ - **DOCS**(oidc_core): document Azure AD B2C and Entra options for strict issuer validation. ([c9ca9cdd](https://github.com/Bdaya-Dev/oidc/commit/c9ca9cdd8c3cc73dd0b74608a8c2794e71393221))
+ - **DOCS**(oidc_core): state the exact DCR carry-over set ([#385](https://github.com/Bdaya-Dev/oidc/issues/385)). ([9282adaa](https://github.com/Bdaya-Dev/oidc/commit/9282adaaf6d6716f24542f69228d8858b3d87b5d))
+ - **DOCS**(oidc_core): align DCR dartdoc with manager-driven rotation ([#385](https://github.com/Bdaya-Dev/oidc/issues/385)). ([43b3eeba](https://github.com/Bdaya-Dev/oidc/commit/43b3eeba665e99af6bdf682ec305fe4fddcb5b3a))
+ - **BREAKING** **FIX**(oidc_core): re-verify the restored session when a background discovery refresh is rejected. ([80381f47](https://github.com/Bdaya-Dev/oidc/commit/80381f476d6afc6571ece70acc5c249ece02ac22))
+ - **BREAKING** **FIX**(oidc_core): never keep or use a rejected discovery document. ([14db08c2](https://github.com/Bdaya-Dev/oidc/commit/14db08c276595973011135b3beced8221c073d07))
+ - **BREAKING** **FIX**(oidc_core): reject a discovery document whose issuer does not match. ([fab65a06](https://github.com/Bdaya-Dev/oidc/commit/fab65a069d2b4bd4ac8d41fc78e6c194702f32b4))
+ - **BREAKING** **FIX**(oidc_core): judge id_token hash requiredness from the response's own tokens ([#466](https://github.com/Bdaya-Dev/oidc/issues/466)). ([88d922b6](https://github.com/Bdaya-Dev/oidc/commit/88d922b6b079a8327f7c3ae0fdd5040a38d85ad7))
+ - **BREAKING** **FEAT**(oidc_core): OidcIdTokenValidationContext for flow-aware id_token validation. ([d5538e50](https://github.com/Bdaya-Dev/oidc/commit/d5538e50423f29fa545c5b8108a6724c069d7576))
+
+#### `oidc_default_store` - `v2.0.0`
+
+ - **FIX**: await futures returned inside try blocks (unawaited_return_in_try_block). ([452d6ee1](https://github.com/Bdaya-Dev/oidc/commit/452d6ee121674dee760f2d698f2a7d5565ad6600))
+ - **BREAKING** **FEAT**(oidc_default_store): bump flutter_secure_storage to ^11 ([#451](https://github.com/Bdaya-Dev/oidc/issues/451)). ([166f394e](https://github.com/Bdaya-Dev/oidc/commit/166f394ed7d937f1098a558b92f325fc52043700))
+
+#### `jose_plus` - `v1.0.1`
+
+ - **FIX**(jose_plus): pass apu/apv to the ECDH-ES Concat KDF in build(). ([aa20db62](https://github.com/Bdaya-Dev/oidc/commit/aa20db62140e7a43cf60224f2a163515aa101314))
+
+#### `oidc_loopback_listener` - `v1.1.1`
+
+ - **FIX**(oidc_loopback_listener): never relay a POST; its body is the response. ([db4381a7](https://github.com/Bdaya-Dev/oidc/commit/db4381a70c2063ffacad25b49531ca894b8981f1))
+
+#### `oidc_web_core` - `v1.2.1`
+
+ - **FIX**(oidc_web_core): require event.source to match a monitor's own iframe ([#474](https://github.com/Bdaya-Dev/oidc/issues/474)). ([b4346936](https://github.com/Bdaya-Dev/oidc/commit/b4346936cc6df00a6902c471cb8a6eaaf722180e))
+ - **FIX**(oidc_web_core): each session monitor owns its own iframe ([#474](https://github.com/Bdaya-Dev/oidc/issues/474)). ([4771e740](https://github.com/Bdaya-Dev/oidc/commit/4771e74092858963581a7d571a6d9a2075a6bb73))
+
+
 ## 2026-08-01
 
 ### Changes
