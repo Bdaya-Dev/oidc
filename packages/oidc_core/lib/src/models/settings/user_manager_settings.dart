@@ -233,6 +233,31 @@ class OidcUserManagerSettings {
   /// discovery `issuer` genuinely differs from the URL it is served at (e.g.
   /// Azure AD B2C) need [expectedIssuer] set to that issuer.
   ///
+  /// **Azure AD B2C** is the common case of a genuinely different issuer: with
+  /// its default token-compatibility setting (the "Issuer (iss) claim"
+  /// property, `AuthorityAndTenantGuid`), a discovery document fetched at
+  /// `https://fabrikamb2c.b2clogin.com/fabrikamb2c.onmicrosoft.com/B2C_1_susi/v2.0/.well-known/openid-configuration`
+  /// advertises
+  /// `"issuer": "https://fabrikamb2c.b2clogin.com/775527ff-9a37-4307-8b3d-cc311f58d925/v2.0/"`
+  /// — the tenant domain replaced by the tenant GUID, the policy segment
+  /// dropped, with a trailing slash (see Microsoft's [token compatibility
+  /// settings](https://learn.microsoft.com/azure/active-directory-b2c/tokens-overview#compatibility)
+  /// and, for custom policies, [`IssuanceClaimPattern`](https://learn.microsoft.com/azure/active-directory-b2c/jwt-issuer-technical-profile)).
+  /// Three ways to handle this, most to least preferred:
+  ///
+  ///  1. Switch the user flow/custom policy's "Issuer (iss) claim"
+  ///     (`IssuanceClaimPattern` in custom policies) to `AuthorityWithTfp`,
+  ///     and use the matching `/tfp/.../.well-known/openid-configuration`
+  ///     discovery URL. This makes the issuer
+  ///     `https://<host>/tfp/<tenant-GUID>/<policy>/v2.0/`, which is what that
+  ///     discovery URL derives to by default (no [expectedIssuer] needed).
+  ///     Microsoft documents this as the option for OpenID Connect
+  ///     Discovery 1.0-compliant issuers.
+  ///  2. Keep B2C's default issuer format and set [expectedIssuer] to the
+  ///     actual issuer B2C returns, e.g. the GUID-form issuer shown above.
+  ///  3. Last resort: set this to `false`, which only warns instead of
+  ///     rejecting the document.
+  ///
   /// When `false`, a mismatch is only logged as a warning and the document is
   /// still used. This was the default before; it lets a provider that is not
   /// the one the RP configured supply every endpoint, so only opt out when
@@ -291,7 +316,10 @@ class OidcUserManagerSettings {
   /// Set this for issuers that contain a trailing slash, for custom/non-standard
   /// discovery URLs (e.g. Entra `?appid=` query, RFC 8414 insert-layout), or
   /// when constructing the manager with an eagerly-supplied `discoveryDocument`
-  /// (no `discoveryDocumentUri` to derive from).
+  /// (no `discoveryDocumentUri` to derive from). It is also how Azure AD B2C
+  /// users pin [strictIssuerValidation] to B2C's actual (GUID-form) issuer
+  /// instead of relaxing that check — see [strictIssuerValidation] for the
+  /// full set of options, including the spec-compliant `/tfp/` issuer format.
   ///
   /// Comparison against the discovery `issuer` is the spec-mandated
   /// simple-string match via [OidcUtils.discoveryIssuerMatches] (case-folds

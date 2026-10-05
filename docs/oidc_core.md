@@ -230,6 +230,39 @@ Behavior changes:
 - When `init()` refreshes the stored session and the revalidation that follows fails, the refreshed user is now signed out
   even if `shouldRemoveInvalidToken` keeps the session in the store.
 
+## Discovery document issuer validation
+
+Per OIDC Discovery 1.0 §4.3 / RFC 8414 §3.3, `OidcUserManagerSettings.strictIssuerValidation` (default `true`) rejects a
+discovery document whose `issuer` does not match the issuer it was expected to describe, throwing before the document is
+persisted or used for any request. Set `OidcUserManagerSettings.expectedIssuer` when a provider's issuer cannot be derived
+from the discovery URL; `strictIssuerValidation: false` only warns instead of rejecting, for providers `expectedIssuer`
+cannot describe either.
+
+### Azure AD B2C
+
+With B2C's default "Issuer (iss) claim" setting, the discovery `issuer` is not the discovery URL's prefix: the tenant
+domain is replaced by the tenant GUID, the policy segment is dropped, and a trailing slash is added. For example,
+`https://fabrikamb2c.b2clogin.com/fabrikamb2c.onmicrosoft.com/B2C_1_susi/v2.0/.well-known/openid-configuration` returns
+`"issuer": "https://fabrikamb2c.b2clogin.com/775527ff-9a37-4307-8b3d-cc311f58d925/v2.0/"`. See Microsoft's
+[token compatibility settings](https://learn.microsoft.com/azure/active-directory-b2c/tokens-overview#compatibility) and,
+for custom policies, [`IssuanceClaimPattern`](https://learn.microsoft.com/azure/active-directory-b2c/jwt-issuer-technical-profile).
+
+Options, most to least preferred:
+
+1. Switch the user flow/custom policy's "Issuer (iss) claim" (`IssuanceClaimPattern` in custom policies) to
+   `AuthorityWithTfp`, and use the matching `/tfp/.../.well-known/openid-configuration` discovery URL. The resulting
+   issuer (`https://<host>/tfp/<tenant-GUID>/<policy>/v2.0/`) is exactly what that URL derives to, so no `expectedIssuer`
+   is needed. This is Microsoft's documented option for OpenID Connect Discovery 1.0 compliance.
+2. Keep B2C's default issuer format and set `expectedIssuer` to the actual issuer B2C returns (as in the example above).
+3. Last resort: set `strictIssuerValidation: false`.
+
+### Microsoft Entra ID multi-tenant (`/common`, `/organizations`)
+
+Entra's multi-tenant discovery `issuer` is a template (`https://login.microsoftonline.com/{tenantid}/v2.0`) rather than a
+concrete URL. `OidcUtils.discoveryIssuerMatches` matches that template against an `expectedIssuer` pinned to a concrete
+tenant (`https://login.microsoftonline.com/<tenant>/v2.0`), so pinning `expectedIssuer` is all a multi-tenant RP needs; see
+[#389](https://github.com/Bdaya-Dev/oidc/issues/389).
+
 ## OidcException
 
 Most of the errors thrown by this library are of type `OidcException`.
