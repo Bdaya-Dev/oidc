@@ -787,6 +787,12 @@ jobs:
             --predicate 'process == "runningboardd" AND eventMessage CONTAINS "com.apple.WebKit.WebContent"' \
             > "$D/launches.log" 2>&1 || true
           wc -l "$D/runner.log" "$D/launches.log" || true
+          # ReportCrash was among the host's top RSS/CPU users mid-run (210 MB
+          # in run 37435756354). Name what it was reporting on.
+          echo "Crash reports written during the job:"
+          find "$HOME/Library/Logs/DiagnosticReports" /Library/Logs/DiagnosticReports \
+            -newer "$D/tests-start-utc.txt" -type f 2>/dev/null \
+            | sed 's#.*/##' | sed -E 's/[-_][0-9].*//' | sort | uniq -c | sort -rn | head -20 || true
           python3 "$GITHUB_WORKSPACE/.github/scripts/ios_ci_metrics.py" \
             --runner-log "$D/runner.log" --launch-log "$D/launches.log" \
             --host-load "$D/host-load.log" | tee "$D/metrics.txt" || true
