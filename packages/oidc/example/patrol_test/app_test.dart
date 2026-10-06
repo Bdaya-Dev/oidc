@@ -24,69 +24,109 @@ import 'package:bdaya_shared_value/bdaya_shared_value.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:oidc/oidc.dart' show OidcAppleHostApi;
 import 'package:patrol_plus/patrol.dart';
 
 import '../integration_test/shared_e2e.dart';
 
-/// Native apps whose on-screen UI the stall probe reads: SpringBoard owns
-/// system alerts, and the app itself hosts the ASWebAuthenticationSession
-/// sheet (and any alert presented over it).
-const _probedApps = {
-  'springboard': 'com.apple.springboard',
-  'app': null, // the app under test
-};
+/// The queries the stall probe runs, each as (name, selector, appId).
+///
+/// Selector queries, deliberately. With a null selector Patrol's iOS
+/// automator snapshots the FOREGROUND app and ignores `appId`
+/// (`IOSAutomator.getUITreeRoots`), so the first version of this probe read
+/// the app twice and never SpringBoard. It also only ever reported
+/// `application:'Example'`. A query is
+/// `app.descendants(matching: .any).matching(predicate)` in the named app
+/// (`IOSAutomator.getNativeViews`), which does honour the bundle.
+///
+/// * SpringBoard alerts: system alerts, including the
+///   "'App' Wants to Use '…' to Sign In" consent prompt of a non-ephemeral
+///   ASWebAuthenticationSession.
+/// * App alerts: anything presented over the app.
+/// * Browser sheet: the ASWebAuthenticationSession sheet shows the page's
+///   host ("certification.openid.net") in its toolbar, so a match proves
+///   the sheet is on screen and visible to this probe.
+final _probeQueries = <(String, IOSSelector, String?)>[
+  (
+    'springboard alerts',
+    IOSSelector(elementType: IOSElementType.alert),
+    'com.apple.springboard',
+  ),
+  ('app alerts', IOSSelector(elementType: IOSElementType.alert), null),
+  ('browser sheet', IOSSelector(textContains: 'certification'), null),
+];
 
-/// Flattens [roots] into "type:'text'" entries for the nodes that carry any
-/// text, alerts first (with everything inside them), capped so one probe
-/// stays one readable line.
-String _describeNativeTree(List<IOSNativeView> roots, {int cap = 40}) {
-  final alerts = <String>[];
-  final others = <String>[];
-  void visit(IOSNativeView view, {required bool inAlert}) {
-    final isAlert =
-        view.elementType == IOSElementType.alert ||
-        view.elementType == IOSElementType.sheet;
-    final texts = {
-      view.label,
-      view.title,
-      view.value ?? '',
-      view.identifier,
-    }.where((t) => t.trim().isNotEmpty).toList();
-    if (texts.isNotEmpty || isAlert) {
-      final entry = "${view.elementType.name}:'${texts.join(' | ')}'";
-      (inAlert || isAlert ? alerts : others).add(entry);
+/// The texts in [views] and everything inside them, as one short string.
+String _describeViews(List<IOSNativeView> views, {int cap = 12}) {
+  final texts = <String>{};
+  void visit(IOSNativeView view) {
+    for (final t in [view.label, view.title, view.value ?? '']) {
+      if (t.trim().isNotEmpty) {
+        texts.add("${view.elementType.name}:'${t.trim()}'");
+      }
     }
-    for (final child in view.children) {
-      visit(child, inAlert: inAlert || isAlert);
-    }
+    view.children.forEach(visit);
   }
 
-  for (final root in roots) {
-    visit(root, inAlert: false);
-  }
-  final shown = [...alerts, ...others.toSet()];
-  return '${alerts.isEmpty ? 'no alert/sheet' : 'ALERT/SHEET ${alerts.length}'}'
-      ' [${shown.take(cap).join(', ')}'
-      '${shown.length > cap ? ', +${shown.length - cap} more' : ''}]';
+  views.forEach(visit);
+  return '${views.length} [${texts.take(cap).join(', ')}'
+      '${texts.length > cap ? ', +${texts.length - cap} more' : ''}]';
 }
 
-/// What is natively on screen right now, for [nativeScreenProbe].
+/// What is natively on screen right now, for [nativeScreenProbe]. Each query
+/// gets its own deadline, so a hung one is named instead of swallowing the
+/// rest.
 Future<String> _describeNativeScreen(PatrolIntegrationTester $) async {
   final parts = <String>[];
-  for (final MapEntry(key: name, value: appId) in _probedApps.entries) {
+  for (final (name, selector, appId) in _probeQueries) {
+    final stopwatch = Stopwatch()..start();
     try {
-      final response = await $.platform.ios.getNativeViews(null, appId: appId);
-      parts.add('$name: ${_describeNativeTree(response.roots)}');
+      final response = await $.platform.ios
+          .getNativeViews(selector, appId: appId)
+          .timeout(const Duration(seconds: 8));
+      parts.add(
+        '$name: ${_describeViews(response.roots)} '
+        '(${stopwatch.elapsedMilliseconds}ms)',
+      );
     } on Object catch (e) {
-      parts.add('$name: unreadable ($e)');
+      parts.add(
+        '$name: unreadable after ${stopwatch.elapsedMilliseconds}ms '
+        '(${e.runtimeType})',
+      );
     }
   }
   return parts.join(' || ');
 }
 
+/// Positive control for "SpringBoard alerts": opens a NON-ephemeral
+/// ASWebAuthenticationSession, which iOS gates behind its
+/// "'App' Wants to Use '…' to Sign In" consent alert, probes the screen
+/// while that alert is up, and lets flowTimeoutSeconds cancel the session.
+/// Nothing reaches the conformance suite; example.com is only the URL the
+/// alert names.
+Future<String> _probeKnownSystemAlert(PatrolIntegrationTester $) async {
+  final session = OidcAppleHostApi()
+      .authorizeApple(
+        'https://example.com/',
+        null,
+        'com.bdayadev.oidc.example',
+        false,
+        {'flowTimeoutSeconds': 10},
+      )
+      .then<Object?>((value) => value, onError: (Object e) => e);
+  await Future<void>.delayed(const Duration(seconds: 3));
+  final screen = await _describeNativeScreen($);
+  final outcome = await session.timeout(
+    const Duration(seconds: 15),
+    onTimeout: () => 'still pending',
+  );
+  return '$screen; consent session ended: $outcome';
+}
+
 Future<void> _launch(PatrolIntegrationTester $) async {
   if (!kIsWeb && Platform.isIOS) {
     nativeScreenProbe = () => _describeNativeScreen($);
+    knownSystemAlertProbe = () => _probeKnownSystemAlert($);
   }
   // Mirror the part of example main() the OIDC flow relies on, without
   // re-running runApp (Patrol already bootstrapped the engine). wrapApp() sets

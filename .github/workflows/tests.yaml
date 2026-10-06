@@ -653,10 +653,20 @@ jobs:
         # info level, not debug, to keep the artifact a sane size. It also
         # takes any process's line that mentions an alert.
         #
-        # The harness prints "[e2e] STALL-PROBE" while a login is still
-        # pending far past a healthy one. A watcher takes a simulator
-        # screenshot each time, so the artifact shows what was on screen at
-        # that moment.
+        # Screenshots: when the harness wants the screen recorded (a stalled
+        # login, or the probe's positive controls), it drops a marker file in
+        # the app's tmp/. On the host that directory is inside the
+        # simulator's data directory. A watcher polls for markers every 0.5s
+        # and takes a screenshot per marker. The file name carries the
+        # harness's own UTC timestamp and tag. A .txt beside each screenshot
+        # records when the marker was seen and when the screenshot started and
+        # ended, so a slow screenshot is itself measured. (The first version
+        # grepped the streamed log for a marker. Log buffering made those
+        # screenshots land about a minute late.)
+        #
+        # host-load.log samples the macOS host (load, memory, disk) every 2s.
+        # When a process launch inside the simulator stalls for 30-150s, this
+        # shows whether the host was starved at that moment.
         run: |
           mkdir -p "$RUNNER_TEMP/simlog/screenshots"
           nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level debug \
@@ -668,12 +678,36 @@ jobs:
             > "$RUNNER_TEMP/simlog/system.log" 2>&1 &
           echo $! >> "$RUNNER_TEMP/simlog/pids"
           nohup bash -c '
-            tail -n 0 -F "$0/simulator.log" 2>/dev/null \
-              | grep --line-buffered "\[e2e\] STALL-PROBE" \
-              | while read -r _; do
-                  xcrun simctl io "$1" screenshot "$0/screenshots/stall-$(date -u +%H%M%S).png" >/dev/null 2>&1 || true
-                done
+            out="$0"; udid="$1"
+            data="$HOME/Library/Developer/CoreSimulator/Devices/$udid/data/Containers/Data/Application"
+            # BSD date has no %N; millisecond UTC stamps come from python3.
+            ts() { python3 -c "import datetime;print(datetime.datetime.utcnow().strftime(\"%H:%M:%S.%f\")[:-3])"; }
+            while true; do
+              find "$data" -maxdepth 3 -path "*/tmp/e2e-shot-*.marker" 2>/dev/null | sort | while read -r m; do
+                name="$(basename "$m" .marker)"
+                seen="$(ts)"
+                content="$(cat "$m" 2>/dev/null)"
+                rm -f "$m"
+                start="$(ts)"
+                xcrun simctl io "$udid" screenshot "$out/screenshots/$name.png" >/dev/null 2>&1 || true
+                end="$(ts)"
+                printf "harness: %s\nmarker seen: %s\nscreenshot start: %s\nscreenshot end: %s\n" \
+                  "$content" "$seen" "$start" "$end" > "$out/screenshots/$name.txt"
+              done
+              sleep 0.5
+            done
           ' "$RUNNER_TEMP/simlog" "$SIMULATOR_UDID" > /dev/null 2>&1 &
+          echo $! >> "$RUNNER_TEMP/simlog/pids"
+          nohup bash -c '
+            while true; do
+              echo "=== $(date -u +%H:%M:%S)"
+              sysctl -n vm.loadavg
+              top -l 1 -n 6 -o cpu -stats pid,command,cpu,mem 2>/dev/null | sed -n "1,4p;12,20p"
+              vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageouts|Swapouts"
+              iostat -d -c 1 2>/dev/null | tail -1
+              sleep 2
+            done
+          ' > "$RUNNER_TEMP/simlog/host-load.log" 2>&1 &
           echo $! >> "$RUNNER_TEMP/simlog/pids"
       - name: Integration Tests (Patrol)
         run: |
@@ -705,9 +739,10 @@ jobs:
           # on-screen native UI; they are long, so they are not cut.
           grep -E 'flutter: .*(\[e2e\]|Suite verdict|Login flow threw|Starting login)' \
             "$RUNNER_TEMP/simlog/simulator.log" | grep -v 'STALL-PROBE\|SCREEN-PROBE' | cut -c1-400 || true
-          grep -E 'flutter: \[e2e\] (STALL-PROBE|SCREEN-PROBE)' "$RUNNER_TEMP/simlog/simulator.log" || true
+          grep -E 'flutter: \[e2e\] (STALL-PROBE|SCREEN-PROBE|SHEET-PROBE|ALERT-PROBE)' "$RUNNER_TEMP/simlog/simulator.log" || true
           ls -la "$RUNNER_TEMP/simlog/screenshots" || true
-          gzip -9 "$RUNNER_TEMP/simlog/simulator.log" "$RUNNER_TEMP/simlog/system.log" || true
+          for t in "$RUNNER_TEMP"/simlog/screenshots/*.txt; do [ -f "$t" ] && { echo "--- $(basename "$t")"; cat "$t"; }; done
+          gzip -9 "$RUNNER_TEMP/simlog/simulator.log" "$RUNNER_TEMP/simlog/system.log" "$RUNNER_TEMP/simlog/host-load.log" || true
           ls -la "$RUNNER_TEMP/simlog" || true
       - name: Upload simulator log
         if: always()

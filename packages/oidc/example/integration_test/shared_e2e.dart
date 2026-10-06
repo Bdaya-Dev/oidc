@@ -386,6 +386,34 @@ Future<void> _recordModuleVerdict({
 /// a login that is taking far longer than a healthy one (#469).
 Future<String> Function()? nativeScreenProbe;
 
+/// Shows the probe a KNOWN system alert and returns what it saw (set by the
+/// Patrol entrypoint, iOS only). Without that, a probe reporting "no alert"
+/// during a stall could just mean it cannot see alerts.
+Future<String> Function()? knownSystemAlertProbe;
+
+/// Asks the iOS job's screenshot watcher for a simulator screenshot now.
+///
+/// The watcher polls the simulator's data directory on the host for these
+/// files. On iOS, [Directory.systemTemp] is the app's tmp/ inside that
+/// directory, so the request skips the unified log, whose buffering made
+/// the first screenshots land a minute late. A no-op wherever
+/// [nativeScreenProbe] is unset.
+void requestStallScreenshot(String tag) {
+  if (nativeScreenProbe == null) {
+    return;
+  }
+  try {
+    final now = DateTime.now().toUtc();
+    final stamp = now.toIso8601String().replaceAll(RegExp('[^0-9]'), '');
+    final safeTag = tag.replaceAll(RegExp('[^A-Za-z0-9_.-]'), '_');
+    File(
+      '${Directory.systemTemp.path}/e2e-shot-$stamp-$safeTag.marker',
+    ).writeAsStringSync('${now.toIso8601String()} $tag\n');
+  } on Object catch (e) {
+    print('[e2e] could not request a screenshot for $tag: $e');
+  }
+}
+
 /// When a still-pending login gets its on-screen state probed. A healthy iOS
 /// login takes ~3-5s (median 3.3s, p90 4.7s in run 37384969496), so the first
 /// probe only fires on a login that has already stalled. The last one fires
@@ -730,6 +758,23 @@ Future<void> runOidcConformanceTest(
     }
     print('[e2e] SCREEN-PROBE-SELFTEST ($planName): $screen');
   }
+  // The alert half of the positive control, once per job (Basic RP runs
+  // first): put a known system alert on screen and show the probe sees it.
+  final alertProbe = knownSystemAlertProbe;
+  if (alertProbe != null &&
+      planName == 'oidcc-client-basic-certification-test-plan') {
+    requestStallScreenshot('alert-control');
+    String result;
+    try {
+      result = await alertProbe().timeout(const Duration(seconds: 45));
+    } on Object catch (e) {
+      result = 'probe failed: $e';
+    }
+    print('[e2e] ALERT-PROBE-CONTROL ($planName): $result');
+  }
+  // The sheet half: probe once during the plan's first healthy login, while
+  // the browser sheet is on screen (see below).
+  var sheetControlDone = false;
 
   // The plan mixes positive modules with negative ones such as
   // oidcc-client-test-invalid-iss, where the OP returns a deliberately broken
@@ -1029,6 +1074,26 @@ Future<void> runOidcConformanceTest(
         // workflow's simulator screenshot.
         final probe = nativeScreenProbe;
         var loginDone = false;
+        if (probe != null && !sheetControlDone) {
+          sheetControlDone = true;
+          unawaited(
+            Future<void>.delayed(const Duration(milliseconds: 1500), () async {
+              requestStallScreenshot('sheet-control-$moduleName');
+              String screen;
+              try {
+                screen = await probe().timeout(const Duration(seconds: 30));
+              } on Object catch (e) {
+                screen = 'probe failed: $e';
+              }
+              print(
+                '[e2e] SHEET-PROBE-CONTROL $moduleName ($testInstanceId) at '
+                '+1.5s (login ${loginDone ? 'had already finished' : 'still '
+                          'pending'} when it returned; browser events '
+                '[${browserTimeline.join(', ')}]): $screen',
+              );
+            }),
+          );
+        }
         final stallProbes = [
           if (probe != null)
             for (final offset in loginStallProbeOffsets)
@@ -1038,6 +1103,9 @@ Future<void> runOidcConformanceTest(
                 }
                 // Printed first so the workflow's screenshot watcher captures
                 // the screen before the probe itself touches anything.
+                requestStallScreenshot(
+                  'stall-$moduleName-$testInstanceId-${offset.inSeconds}s',
+                );
                 print(
                   '[e2e] STALL-PROBE-START $moduleName ($testInstanceId) '
                   'at +${offset.inSeconds}s',
