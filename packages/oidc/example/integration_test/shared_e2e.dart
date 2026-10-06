@@ -378,41 +378,18 @@ Future<void> _recordModuleVerdict({
   }
 }
 
-/// Describes what is natively on screen (alerts, sheets, their texts), or null
-/// on platforms where the runner cannot see native UI.
+/// When a still-pending login is reported as stalled, with a LOGIN-PENDING
+/// line.
+/// A healthy iOS login takes ~3-5s (median 3.3s, p90 4.7s in run
+/// 37384969496), so the first report only fires on a login that has already
+/// stalled. The lines are timestamps for the iOS job's screen recording, which
+/// shows what was on screen.
 ///
-/// Set by the Patrol entrypoint, which owns the native automator; this file
-/// stays harness-agnostic. Used to answer "did a dialog block the login?" for
-/// a login that is taking far longer than a healthy one (#469).
-Future<String> Function()? nativeScreenProbe;
-
-/// Asks the iOS job's screenshot watcher for a simulator screenshot now.
-///
-/// The watcher polls the simulator's data directory on the host for these
-/// files. On iOS, [Directory.systemTemp] is the app's tmp/ inside that
-/// directory, so the request skips the unified log, whose buffering made
-/// the first screenshots land a minute late. A no-op wherever
-/// [nativeScreenProbe] is unset.
-void requestStallScreenshot(String tag) {
-  if (nativeScreenProbe == null) {
-    return;
-  }
-  try {
-    final now = DateTime.now().toUtc();
-    final stamp = now.toIso8601String().replaceAll(RegExp('[^0-9]'), '');
-    final safeTag = tag.replaceAll(RegExp('[^A-Za-z0-9_.-]'), '_');
-    File(
-      '${Directory.systemTemp.path}/e2e-shot-$stamp-$safeTag.marker',
-    ).writeAsStringSync('${now.toIso8601String()} $tag\n');
-  } on Object catch (e) {
-    print('[e2e] could not request a screenshot for $tag: $e');
-  }
-}
-
-/// When a still-pending login gets its on-screen state probed. A healthy iOS
-/// login takes ~3-5s (median 3.3s, p90 4.7s in run 37384969496), so the first
-/// probe only fires on a login that has already stalled. The last one fires
-/// before iOS's 90s flowTimeoutSeconds would cancel the browser.
+/// A plain print, deliberately: an earlier version queried the native UI
+/// through Patrol's XCUITest automator. While a browser sheet was up, those
+/// queries took 8s+ or timed out, and XCTest recorded unmatched queries as
+/// test failures. That failed plans that had passed (runs 37428137698,
+/// 37430662455). A diagnostic must not change the outcome it observes.
 const loginStallProbeOffsets = [
   Duration(seconds: 20),
   Duration(seconds: 50),
@@ -1037,41 +1014,19 @@ Future<void> runOidcConformanceTest(
         loginStopwatch
           ..reset()
           ..start();
-        // While the login is still pending, record what is on screen. print(),
-        // because the iOS job only shows print output (via the simulator log
-        // capture). requestStallScreenshot asks the workflow for a simulator
-        // screenshot at the same moment.
-        final probe = nativeScreenProbe;
-        var loginDone = false;
-        final stallProbes = [
-          if (probe != null)
-            for (final offset in loginStallProbeOffsets)
-              Future<void>.delayed(offset, () async {
-                if (loginDone) {
-                  return;
-                }
-                // Printed first so the workflow's screenshot watcher captures
-                // the screen before the probe itself touches anything.
-                requestStallScreenshot(
-                  'stall-$moduleName-$testInstanceId-${offset.inSeconds}s',
-                );
-                print(
-                  '[e2e] STALL-PROBE-START $moduleName ($testInstanceId) '
-                  'at +${offset.inSeconds}s',
-                );
-                String screen;
-                try {
-                  screen = await probe().timeout(const Duration(seconds: 15));
-                } on Object catch (e) {
-                  screen = 'probe failed: $e';
-                }
-                print(
-                  '[e2e] STALL-PROBE $moduleName ($testInstanceId): login '
-                  '${loginDone ? 'finished while probing' : 'still pending'} '
-                  'after ${offset.inSeconds}s; browser events '
-                  '[${browserTimeline.join(', ')}]; on screen: $screen',
-                );
-              }),
+        // A login still pending far past a healthy one is reported with a
+        // timestamp, so the iOS screen recording can be read at that moment
+        // (see loginStallProbeOffsets). print(), because the iOS job only
+        // keeps print output (via the simulator log capture).
+        final stallReports = [
+          for (final offset in loginStallProbeOffsets)
+            Timer(offset, () {
+              print(
+                '[e2e] LOGIN-PENDING $moduleName ($testInstanceId) after '
+                '${offset.inSeconds}s; browser events '
+                '[${browserTimeline.join(', ')}]',
+              );
+            }),
         ];
         try {
           if (!hasCode) {
@@ -1093,10 +1048,9 @@ Future<void> runOidcConformanceTest(
           return null;
         } finally {
           loginStopwatch.stop();
-          loginDone = true;
-          // Not awaited: a probe that has not fired yet would hold the module
-          // for up to 80s. Each one checks loginDone before doing anything.
-          unawaited(Future.wait(stallProbes));
+          for (final report in stallReports) {
+            report.cancel();
+          }
         }
       }
 
