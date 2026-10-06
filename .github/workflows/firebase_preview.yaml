@@ -49,7 +49,14 @@ jobs:
         with:
           channel: stable
           cache: true
-          cache-key: flutter-:os:-:channel:-:arch:-:hash:-${{ hashFiles('**/pubspec.lock') }}
+          # See deploy_firebase.yaml's identical fix / .github/actions/
+          # flutter_base's comment for the full story: unscoped
+          # `hashFiles('**/pubspec.lock')` observed failing on a macOS
+          # runner elsewhere in this repo's CI, and the dead
+          # `flutter-linux-stable-x64-<hash>-` cache entries are that same
+          # failure degrading silently on Linux.
+          pub-cache: "false"
+          cache-key: "flutter-:os:-:channel:-:arch:-:hash:"
 
       - name: Setup Python
         if: steps.filter.outputs.docs == 'true'

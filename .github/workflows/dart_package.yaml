@@ -79,7 +79,21 @@ jobs:
           flutter-version: ${{inputs.flutter_version}}
           channel: ${{inputs.flutter_channel}}
           cache: true
-          cache-key: flutter-:os:-:channel:-:version:-:arch:-:hash:-${{ hashFiles('**/pubspec.lock') }}
+          # Dropped the trailing `-${{ hashFiles('**/pubspec.lock') }}`: the
+          # SDK binary's cache content never varies with this repo's
+          # lockfile, so tying its key to it only added needless
+          # invalidation on every dependency bump, PLUS an unscoped
+          # repo-root `**` glob that has been observed to fail outright
+          # ("hashFiles('**/pubspec.lock') couldn't finish within 120
+          # seconds") on a macOS runner elsewhere in this repo's CI. Also
+          # disables flutter-action's own internal pub-cache step (default
+          # ON whenever `cache: true` and `pub-cache` is unset), which
+          # independently appends that same unscoped hashFiles call to ITS
+          # key -- this reusable workflow isn't currently invoked by
+          # anything in this repo, so there's no replacement pub-cache
+          # step here, just removal of the failure mode.
+          pub-cache: "false"
+          cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
 
       - uses: bluefireteam/melos-action@v3
 

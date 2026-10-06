@@ -55,7 +55,18 @@ jobs:
         with:
           channel: stable
           cache: true
-          cache-key: flutter-:os:-:channel:-:arch:-:hash:-${{ hashFiles('**/pubspec.lock') }}
+          # See .github/actions/flutter_base's comment for the full story:
+          # the SDK cache doesn't need to vary with the lockfile, and the
+          # unscoped `hashFiles('**/pubspec.lock')` glob this key used to
+          # require has been observed to fail ("couldn't finish within 120
+          # seconds") on a macOS runner elsewhere in this repo's CI; the
+          # dead `flutter-linux-stable-x64-<hash>-` cache entries (trailing
+          # dash, empty hash segment) in this repo's cache list are that
+          # same failure degrading silently on Linux. pub-cache: "false"
+          # disables flutter-action's own internal pub-cache step, which
+          # independently used the same unscoped hashFiles call.
+          pub-cache: "false"
+          cache-key: "flutter-:os:-:channel:-:arch:-:hash:"
 
       - name: Build Example (Flutter web + wasm)
         shell: bash
