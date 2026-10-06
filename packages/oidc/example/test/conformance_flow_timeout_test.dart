@@ -57,6 +57,24 @@ void main() {
     expect(options.android.flowTimeoutSeconds, isNotNull);
   });
 
+  // #469: on the iOS CI simulator, SafariViewService has been measured taking
+  // ~49.5s to start loading the authorize URL. A timeout shorter than that
+  // cancels a browser that is merely slow, and the module is left at
+  // status=WAITING while the library did nothing wrong.
+  test('the iOS timeout outlasts the slowest simulator browser start seen', () {
+    expect(options.ios.flowTimeoutSeconds, iosConformanceFlowTimeoutSeconds);
+    expect(
+      iosConformanceFlowTimeoutSeconds,
+      greaterThanOrEqualTo(observedIosBrowserStartSeconds * 1.5),
+      reason:
+          'leave a margin over the worst observed start; at 30s the '
+          'Hybrid RP plan failed intermittently on ios only',
+    );
+    // The ios job's budget (timeout-minutes: 60) still has to absorb a run in
+    // which a few modules really do hang.
+    expect(iosConformanceFlowTimeoutSeconds, lessThanOrEqualTo(120));
+  });
+
   test('the timeout is short enough to fail before the CI job is killed', () {
     // The linux job was killed at ~10 min. A per-module timeout has to leave
     // room for the remaining modules to still run, otherwise the first hang

@@ -694,6 +694,20 @@ jobs:
         # patrol_cli_plus >= 5.4.1 defaults xcodebuild -destination-timeout to 30s,
         # fixing the exit-70 device-resolution race on the slow macos-26 simulator.
         run: dart pub global activate patrol_cli_plus
+      - name: Start simulator log capture
+        # patrol forwards none of the app's Dart print/logging output on iOS,
+        # even with --verbose (the other jobs all show it), so a conformance
+        # module that fails here had only its failure line to go on (#469).
+        # Flutter writes print() to the unified log as "flutter: ...", so
+        # stream the app's log -- plus the AuthenticationServices / Safari
+        # view-service side of ASWebAuthenticationSession -- to a file and
+        # upload it below.
+        run: |
+          mkdir -p "$RUNNER_TEMP/simlog"
+          nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level debug \
+            --predicate 'process == "Runner" OR process == "SafariViewService" OR subsystem BEGINSWITH "com.apple.AuthenticationServices"' \
+            > "$RUNNER_TEMP/simlog/simulator.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/simlog/pid"
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
@@ -730,6 +744,26 @@ jobs:
         working-directory: packages/oidc/example
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
+      - name: Stop simulator log capture
+        if: always()
+        run: |
+          kill "$(cat "$RUNNER_TEMP/simlog/pid")" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/simlog/pid"
+          # Conformance lines only, so the job log answers the common question
+          # without downloading the artifact.
+          grep -E 'flutter: .*(\[e2e\]|Suite verdict|Login flow threw|Starting login)' \
+            "$RUNNER_TEMP/simlog/simulator.log" | cut -c1-400 || true
+      # Per-shard name: this job is sharded 2 ways (see the job comment
+      # above), and actions/upload-artifact requires unique artifact names
+      # within one workflow run -- both shards would otherwise collide on a
+      # bare "ios-simulator-log".
+      - name: Upload simulator log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-${{ matrix.shard }}-simulator-log
+          path: ${{ runner.temp }}/simlog/simulator.log
+          if-no-files-found: warn
       # Diagnostics only: this used to run unconditionally on every job, ahead
       # of the tests, costing ~148s (run 37346215172) for information that is
       # only ever useful once something has already gone wrong. Moved after

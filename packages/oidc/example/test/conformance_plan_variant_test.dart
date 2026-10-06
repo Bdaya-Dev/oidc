@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oidc/oidc.dart';
 
@@ -579,6 +580,61 @@ void main() {
         ),
         isFalse,
       );
+    });
+  });
+
+  // OpenID Connect Session Management is kept web-only by design (oidc#467,
+  // user-approved after research): RFC 8252 section 8.12 forbids an embedded
+  // WebView for login on native platforms, and even granting one purely for
+  // session monitoring, OIDC Session Management 1.0 section 3.2 ties
+  // check_session_iframe's answer to the OP session cookie held by the
+  // EXTERNAL user-agent that §8.12 required login to run in -- a cookie no
+  // app-controlled frame on android/ios/macos/linux/windows has access to.
+  // Confirmed against the suite's own public log (run 37273454165): the RP's
+  // request sequence on linux/windows was discovery -> authorize -> token ->
+  // jwks -> userinfo -> end_session_endpoint, with ZERO requests to
+  // check_session_iframe at any point.
+  group('session management stays web-only', () {
+    test(
+      'the basic/hybrid/implicit session-management plans are recognised',
+      () {
+        for (final plan in [
+          'oidcc-client-rp-session-management-rp-basic',
+          // Not wired yet; must still be recognised the day they are, same
+          // convention as isLogoutConformancePlan's own family.
+          'oidcc-client-rp-session-management-rp-hybrid',
+          'oidcc-client-rp-session-management-rp-implicit',
+        ]) {
+          expect(
+            isSessionManagementConformancePlan(plan),
+            isTrue,
+            reason: plan,
+          );
+        }
+      },
+    );
+
+    test('other logout-family plans are not session-management plans', () {
+      for (final plan in [
+        'oidcc-client-rp-initiated-logout-rp-basic',
+        'oidcc-client-front-channel-logout-rp-basic',
+        'oidcc-client-back-channel-logout-rp-basic',
+        'oidcc-client-basic-certification-test-plan',
+      ]) {
+        expect(isSessionManagementConformancePlan(plan), isFalse, reason: plan);
+      }
+    });
+
+    test('supportsSessionManagement is exactly kIsWeb, which is false on this '
+        'VM test run', () {
+      // supportsSessionManagement is a direct alias for kIsWeb (by design:
+      // the capability IS "are we running as a web page", nothing more
+      // nuanced than that), so there is no independent logic to exercise
+      // beyond pinning that identity; a VM test can only observe the false
+      // branch, the true branch is exercised by this plan actually running
+      // on the web CI job.
+      expect(supportsSessionManagement, isFalse);
+      expect(supportsSessionManagement, kIsWeb);
     });
   });
 
