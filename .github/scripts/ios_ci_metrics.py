@@ -20,6 +20,13 @@ Metrics:
                     that job's uuid with a pid ("Now tracking process").
                     Healthy launches take ~1.5s.
   host              load average (1m), free pages, swapouts.
+  rss               peak resident size of the processes that matter most
+                    for memory (the app, the browser, SpringBoard, the crash
+                    reporter, widget renderers), as seen in the sampler's
+                    top-RSS lists; a process absent from every list is "-".
+  cpu               CPU-seconds the log-plumbing processes (log, diagnosticd)
+                    were seen using in the sampler's top-CPU lists, a lower
+                    bound since only the top 7 are listed per sample.
 """
 
 import argparse
@@ -78,8 +85,11 @@ def launches(path):
 
 
 def host(path):
-    load, free, swap = [], [], []
+    load, free, swap, sim = [], [], [], []
     for line in open(path, encoding='utf-8', errors='replace'):
+        m = re.match(r'Simulator RSS KB:\s+(\d+)', line)
+        if m:
+            sim.append(int(m.group(1)) // 1024)
         m = re.match(r'\{ ([\d.]+) ', line)
         if m:
             load.append(float(m.group(1)))
@@ -89,7 +99,34 @@ def host(path):
         m = re.match(r'Swapouts:\s+(\d+)', line)
         if m:
             swap.append(int(m.group(1)))
-    return load, free, swap
+    return load, free, swap, sim
+
+
+RSS_WATCH = ('Runner', 'SafariViewService', 'SpringBoard', 'ReportCrash',
+             'WidgetRenderer_Default')
+CPU_WATCH = ('log', 'diagnosticd')
+
+
+def processes(path):
+    """Peak RSS (KB) per watched process, CPU-seconds per watched process."""
+    rss, cpu, section = {}, {}, None
+    interval = 3  # the sampler's sleep, see "Start iOS diagnostics"
+    for line in open(path, encoding='utf-8', errors='replace'):
+        if line.startswith('==='):
+            section = 'cpu'
+            continue
+        if line.startswith('-- top RSS'):
+            section = 'rss'
+            continue
+        m = re.match(r'\s*([\d.]+)\s+([\d.]+)\s+(.+)$', line.rstrip('\n'))
+        if not m or section is None:
+            continue
+        name = m.group(3).rsplit('/', 1)[-1]
+        if section == 'cpu' and name in CPU_WATCH:
+            cpu[name] = cpu.get(name, 0.0) + float(m.group(1)) * interval / 100
+        elif section == 'rss' and name in RSS_WATCH:
+            rss[name] = max(rss.get(name, 0), int(m.group(1)))
+    return rss, cpu
 
 
 def _dist(values):
@@ -128,7 +165,7 @@ def main():
             out.append(f'WebContent launch: unreadable ({e})')
     if a.host_load:
         try:
-            load, free, swap = host(a.host_load)
+            load, free, swap, sim = host(a.host_load)
             if load:
                 out.append(
                     f'host: load1 median={statistics.median(load):.0f} '
@@ -136,6 +173,15 @@ def main():
                     f'{statistics.median(free) if free else "?"} '
                     f'min={min(free) if free else "?"}; swapouts end='
                     f'{swap[-1] if swap else "?"}')
+            if sim:
+                out.append(f'simulator rss total: median='
+                           f'{statistics.median(sim):.0f}MB max={max(sim)}MB')
+            rss, cpu = processes(a.host_load)
+            out.append('rss peak: ' + ', '.join(
+                f'{n}={rss[n] // 1024}MB' if n in rss else f'{n}=-'
+                for n in RSS_WATCH))
+            out.append('cpu seen: ' + ', '.join(
+                f'{n}={cpu.get(n, 0):.0f}s' for n in CPU_WATCH))
         except OSError as e:
             out.append(f'host: unreadable ({e})')
     print('\n'.join('[ios-metrics] ' + line for line in out))

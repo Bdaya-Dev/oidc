@@ -24,6 +24,10 @@ on:
         description: "iOS job, test-only: conformance module whose first attempt is forced to stall, to prove the gated rerun (empty = off)"
         type: string
         default: ""
+      ios_trim:
+        description: "iOS job, experiment: comma list of logshim,reportcrash,simdaemons (empty = none)"
+        type: string
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -1050,6 +1054,7 @@ jobs:
       IOS_HEAVY_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_heavy_diagnostics }}
       # Test-only; empty (off) unless set by hand on a workflow_dispatch run.
       IOS_FORCE_STALL_MODULE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_force_stall_module || '' }}
+      IOS_TRIM: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_trim || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1136,6 +1141,61 @@ jobs:
         run: |
           xcrun simctl bootstatus "${SIMULATOR_UDID:?Simulator UDID was not exported}" -b
           echo "Simulator is ready."
+      - name: Trim host and simulator (experiment)
+        if: env.IOS_TRIM != ''
+        run: |
+          D="$RUNNER_TEMP/simlog"
+          mkdir -p "$D"
+          snap() {
+            echo "--- snapshot: $1"
+            vm_stat | grep -E "Pages free|Swapouts" || true
+            ps -Ao rss,comm | awk '/RuntimeRoot/ {s+=$1; n++} END {printf "sim processes: n=%d rss=%dMB\n", n, s/1024}'
+            ps -Ao rss,comm | awk '/ReportCrash/ {printf "ReportCrash rss=%dMB\n", $1/1024}'
+            ps -Ao rss,comm -m | grep RuntimeRoot | head -12 | sed -E 's#^ *([0-9]+) .*/#\1 #' || true
+          }
+          snap before
+          case ",$IOS_TRIM," in *,logshim,*)
+            mkdir -p "$RUNNER_TEMP/logshim"
+            printf '%s\n' '#!/bin/bash' \
+              'if [ "$#" -eq 1 ] && [ "$1" = "stream" ]; then' \
+              '  exec /usr/bin/log stream --predicate '"'"'process == "Runner"'"'" \
+              'fi' \
+              'exec /usr/bin/log "$@"' > "$RUNNER_TEMP/logshim/log"
+            chmod +x "$RUNNER_TEMP/logshim/log"
+            cat "$RUNNER_TEMP/logshim/log"
+            echo "$RUNNER_TEMP/logshim" >> "$GITHUB_PATH"
+            ;;
+          esac
+          case ",$IOS_TRIM," in *,reportcrash,*)
+            uid="$(id -u)"
+            launchctl bootout "gui/$uid/com.apple.ReportCrash" 2>&1 || true
+            launchctl disable "gui/$uid/com.apple.ReportCrash" 2>&1 || true
+            sudo launchctl bootout system/com.apple.ReportCrash.Root 2>&1 || true
+            sudo launchctl disable system/com.apple.ReportCrash.Root 2>&1 || true
+            launchctl print "gui/$uid/com.apple.ReportCrash" > /dev/null 2>&1 \
+              && echo "ReportCrash (gui) still loaded" || echo "ReportCrash (gui) not loaded"
+            sudo launchctl print system/com.apple.ReportCrash.Root > /dev/null 2>&1 \
+              && echo "ReportCrash.Root still loaded" || echo "ReportCrash.Root not loaded"
+            ;;
+          esac
+          case ",$IOS_TRIM," in *,simdaemons,*)
+            xcrun simctl spawn "$SIMULATOR_UDID" launchctl list > "$D/sim-launchctl-before.log" 2>&1 || true
+            echo "simulator launchctl list: $(wc -l < "$D/sim-launchctl-before.log") lines"
+            PAT='chronod|com\.apple\.news|[Ww]idget|assistantd|[Ss]iri|voiced|[Tt][Tt][Ss]|healthd|[Ff]itness|passd|photoanalysisd|mediaanalysisd|suggestd|[Ss]potlight|navd|ScreenTime|[Ww]eather|ReportCrash|duetexpertd|knowledge'
+            awk 'NR>1 {print $3}' "$D/sim-launchctl-before.log" | grep -E "$PAT" | while read -r label; do
+              out="$(xcrun simctl spawn "$SIMULATOR_UDID" launchctl remove "$label" 2>&1)"
+              echo "remove $label -> rc=$? $out"
+            done
+            # Widget/intents extensions are launched on demand (not launchd
+            # jobs), so kill the running ones; whether they come back is what
+            # the after-snapshot shows.
+            ps -Ao pid,comm | grep RuntimeRoot | grep -E '\.appex/|WidgetRenderer' | grep -vE 'Safari|WebKit|Authentication' \
+              | while read -r pid comm; do echo "kill $pid ${comm##*/}"; kill "$pid" 2>/dev/null || true; done
+            ;;
+          esac
+          sleep 20
+          snap "after 20s"
+          xcrun simctl spawn "$SIMULATOR_UDID" launchctl list > "$D/sim-launchctl-after.log" 2>&1 || true
       - name: Start iOS diagnostics
         # patrol forwards none of the app's Dart print/logging output on iOS,
         # even with --verbose (the other jobs all show it), so a conformance
@@ -1170,6 +1230,7 @@ jobs:
               echo "-- top RSS"
               ps -Ao rss,pcpu,comm -m | head -8
               vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageouts|Swapouts"
+              ps -Ao rss,comm | grep RuntimeRoot | awk "{s+=\$1} END {print \"Simulator RSS KB:\", s}"
               sleep 3
             done
           ' > "$D/host-load.log" 2>&1 &
@@ -1192,6 +1253,7 @@ jobs:
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
+          echo "log resolves to: $(command -v log)"
           # Maps this job's shard label to the CONFORMANCE_SHARD tag set
           # patrol_test/app_test.dart understands (a comma-separated set of
           # its _knownShards tags) -- see the job comment above for the
