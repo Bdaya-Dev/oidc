@@ -81,8 +81,21 @@ jobs:
   # Format + analyze (stable only, unchanged) + VM tests (both channels) +
   # VM coverage formatting (stable only). The "analyze+VM" leg from the
   # design doc: Set up 31s + Analyze 63s + Test VM 188s in the baseline.
+  # timeout-minutes (job level): measured max ~7m16s end-to-end (setup +
+  # format + analyze + VM + coverage format/upload, across several runs on
+  # both channels). 25m is ~3.4x that, with headroom above the VM step's
+  # own 12m bound for setup/format/analyze. Added after run 37486189186's
+  # unit_core (beta) job hung 85+ minutes in "Test Dart packages [VM]" with
+  # NO bound at all (GitHub's default job timeout is 360 minutes) until a
+  # human cancelled it -- every package had already printed its own
+  # "N tests passed" summary (oidc_core's, the last one, at the 4-minute
+  # mark), so the hang was melos's exec wrapper never returning after an
+  # orphaned `dart:test.dart-` process from a mid-run "Connection reset by
+  # peer" on x509_plus's VM-service websocket. See the VM step below for
+  # the matching per-step bound.
   unit_core:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -103,8 +116,16 @@ jobs:
       - name: "[Verify step] 🕵️ Analyze packages"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run analyze
+      # timeout -k 10 600 bounds the hang above (an orphaned `dart test`
+      # kept the step alive after every package had printed its summary).
+      # Without --foreground, GNU timeout runs melos in its own process
+      # group and signals the whole group (TERM at 600s, KILL 10s later),
+      # which reaches the per-package `dart test` children; --foreground
+      # would signal melos alone. Normal runs take well under 4 minutes.
+      # The step timeout-minutes is a backstop.
       - name: "[Verify step] Test Dart packages [VM]"
-        run: melos run test:vm
+        timeout-minutes: 12
+        run: timeout -k 10 600 melos run test:vm
       - name: "[Coverage] Format VM coverage for each package"
         if: ${{ matrix.sdk == 'stable' }}
         run: |
@@ -139,8 +160,15 @@ jobs:
   # collected on this leg in either scope -- unchanged from the original job
   # (see test:web:single's comment on #372 for why browser coverage is
   # collected separately, per-file, for oidc_web_core only).
+  # timeout-minutes (job level): a pure backstop above this job's OWN
+  # step-level bounds (18m PR-scope, 150m push-scope full sweep -- see
+  # below), sized at step-max + setup/checkout overhead so it never fires
+  # ahead of those; it only protects against something ELSE hanging (e.g.
+  # checkout or melos bootstrap) with no bound of its own. Measured actual
+  # durations are far smaller (~2-4m PR-scope, ~4-7m push-scope).
   unit_chrome:
     runs-on: ubuntu-latest
+    timeout-minutes: 160
     strategy:
       fail-fast: false
       matrix:
@@ -192,8 +220,12 @@ jobs:
   # ~57s when the freeze doesn't strike. Chrome stays blocking; full Firefox
   # signal still runs on every main push via the push-scope step below,
   # which has NO continue-on-error (unchanged).
+  # timeout-minutes (job level): same reasoning as unit_chrome above -- a
+  # backstop above this job's own step-level bounds (18m PR-scope, 150m
+  # push-scope), not the primary gate.
   unit_firefox:
     runs-on: ubuntu-latest
+    timeout-minutes: 160
     strategy:
       fail-fast: false
       matrix:
@@ -428,8 +460,11 @@ jobs:
   # oidc_web (#370): the only Flutter *plugin* package with browser-only lib
   # code. Runs on both PR and push (unchanged); no coverage collected here
   # (the original step has no --coverage flag either).
+  # timeout-minutes (job level): backstop above the 10m step-level bound
+  # already on the test step below (setup overhead ~2-3m).
   unit_oidc_web_chrome:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -452,8 +487,14 @@ jobs:
   # test signal only, not part of CI's coverage upload -- unchanged from the
   # original job). `flutter test --coverage` writes lcov.info directly, no
   # format_coverage step needed (unchanged).
+  # timeout-minutes (job level): this job had NO timeout at all (step or
+  # job) before this change. Measured max ~2m08s end-to-end across
+  # several runs; 10m is ~5x that -- generous because `flutter test` on
+  # the example app is the one step here that hasn't been individually
+  # measured in isolation.
   unit_flutter:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -511,8 +552,14 @@ jobs:
   # dependency being 'skipped' while still requiring unit_core/unit_flutter
   # to have actually succeeded -- otherwise a real failure upstream would be
   # masked by `always()`.
+  # timeout-minutes (job level): this job had NO timeout at all before this
+  # change. Measured max ~57s-1m end-to-end across several runs; 10m is a
+  # generous margin given the artifact download and dart pub global
+  # activate steps are network-dependent and not purely CPU-bound like the
+  # measured samples.
   unit_tests_coverage:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: [unit_core, unit_flutter, unit_webcore_coverage]
     if: |
       always() &&
