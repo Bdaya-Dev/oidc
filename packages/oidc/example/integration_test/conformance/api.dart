@@ -926,6 +926,36 @@ Future<bool> waitForSuiteLogEntry({
   }
 }
 
+/// The `since` value for the next `api/log/{id}` read, and the entries of
+/// [batch] not already in [seenIds] (which it updates).
+///
+/// The suite returns only entries with `time > since` (LogApi.getTestResults),
+/// and several entries routinely share one millisecond. Asking from the last
+/// seen time itself would drop any entry written later in that same
+/// millisecond -- e.g. `Setup Done` -- forever, so the next read starts one
+/// millisecond earlier and already-seen entries are filtered out by `_id`.
+({int? since, List<Map<String, dynamic>> fresh}) takeUnseenLogEntries(
+  List<Map<String, dynamic>> batch,
+  Set<Object> seenIds, {
+  int? since,
+}) {
+  final fresh = <Map<String, dynamic>>[];
+  var next = since;
+  for (final entry in batch) {
+    if (entry['_id'] case final Object id when !seenIds.add(id)) {
+      continue;
+    }
+    fresh.add(entry);
+    if (entry['time'] case final int time) {
+      final overlapping = time - 1;
+      if (next == null || overlapping > next) {
+        next = overlapping;
+      }
+    }
+  }
+  return (since: next, fresh: fresh);
+}
+
 Stream<List<Map<String, dynamic>>> monitorTestLogs({
   required Dio dio,
   required String instanceId,
@@ -934,6 +964,7 @@ Stream<List<Map<String, dynamic>>> monitorTestLogs({
   late StreamController<List<Map<String, dynamic>>> controller;
   Timer? timer;
   int? since;
+  final seenIds = <Object>{};
 
   Future<void> fetchLogs() async {
     try {
@@ -946,14 +977,14 @@ Stream<List<Map<String, dynamic>>> monitorTestLogs({
       );
 
       final response = await dio.getUri<List<dynamic>>(uri);
-      final logs = (response.data ?? []).cast<Map<String, dynamic>>();
-
-      if (logs.isNotEmpty && !controller.isClosed) {
-        final lastLog = logs.last;
-        if (lastLog['time'] case final int lastLogTime) {
-          since = lastLogTime;
-        }
-        controller.add(logs);
+      final batch = takeUnseenLogEntries(
+        (response.data ?? []).cast<Map<String, dynamic>>(),
+        seenIds,
+        since: since,
+      );
+      since = batch.since;
+      if (batch.fresh.isNotEmpty && !controller.isClosed) {
+        controller.add(batch.fresh);
       }
     } catch (error, st) {
       if (!controller.isClosed) {

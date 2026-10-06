@@ -7,6 +7,7 @@
 // The ONLY coupling to the test harness is a `pumpAndSettle` callback, so the
 // exact same conformance flow runs everywhere.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -764,10 +765,16 @@ Future<void> runOidcConformanceTest(
     final setupStopwatch = Stopwatch()..start();
     var pollCount = 0;
     monitorLogsLoop:
-    await for (final logs in monitorTestLogs(
-      dio: dio,
-      instanceId: testInstanceId,
-    )) {
+    await for (final logs
+        in monitorTestLogs(dio: dio, instanceId: testInstanceId).timeout(
+          const Duration(minutes: 2),
+          onTimeout: (sink) => sink.addError(
+            TimeoutException(
+              '$moduleName ($testInstanceId): no new suite log entry for 2 '
+              'minutes while waiting for "Setup Done"',
+            ),
+          ),
+        )) {
       pollCount += 1;
       if (pollCount % 5 == 0) {
         logger.info(
