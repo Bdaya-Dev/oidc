@@ -15,6 +15,15 @@ on:
     paths-ignore:
       - "**.md"
   workflow_dispatch:
+    inputs:
+      ios_reduce_load:
+        description: "iOS job: reduce host/simulator load (#469)"
+        type: boolean
+        default: true
+      ios_heavy_diagnostics:
+        description: "iOS job: stream simulator logs and record the screen (adds load)"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -561,12 +570,33 @@ jobs:
     # actually registered.
     runs-on: macos-26
     timeout-minutes: 60
+    env:
+      # Both are workflow_dispatch inputs (see `on:`), so a load experiment
+      # can run without a code change. Push/PR runs get the defaults: reduce
+      # load, no heavy diagnostics.
+      IOS_REDUCE_LOAD: ${{ github.event_name != 'workflow_dispatch' || inputs.ios_reduce_load }}
+      IOS_HEAVY_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_heavy_diagnostics }}
     defaults:
       run:
         working-directory: packages/oidc/example
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
+      - name: Host specs and load reduction
+        # The host's own background work competes with the simulator for 3
+        # vCPUs and 7 GB. In run 37430662455 mdworker_shared and
+        # spotlightknowledged.updater (Spotlight) were among the host's top
+        # CPU users while the tests ran. Spotlight indexing is turned off with
+        # mdutil, Apple's supported switch for it (man mdutil: "-i on | off
+        # Turn indexing on or off").
+        run: |
+          echo "IOS_REDUCE_LOAD=$IOS_REDUCE_LOAD IOS_HEAVY_DIAGNOSTICS=$IOS_HEAVY_DIAGNOSTICS"
+          sysctl -n hw.ncpu hw.memsize machdep.cpu.brand_string || true
+          sysctl -n vm.loadavg; vm_stat | head -12
+          ps -Ao pcpu,rss,comm -r | head -12
+          if [ "$IOS_REDUCE_LOAD" = "true" ]; then
+            sudo mdutil -a -i off || true
+          fi
       - name: Select Xcode 26.6
         # The macos-26 image ships several Xcode versions side by side; its
         # default is 26.5. The patrol#15 XCUITest terminate flake is markedly
@@ -606,13 +636,43 @@ jobs:
         # the device (if needed) and blocks until CoreSimulatorService
         # reports it has *actually* finished booting, closing this race at
         # the source instead of relying on `simctl list` polling downstream.
+        #
+        # IOS_REDUCE_LOAD (#469): the iOS browser stalls (WebKit WebContent
+        # launches of 27-155s) happen on a starved host. In run 37430662455
+        # the 1-minute load average sat at 200-500 and free memory at about
+        # 4k pages, and swapouts climbed 0 -> 152744. GitHub's standard
+        # macos-26 arm64 runner is 3 vCPU / 7 GB RAM / 14 GB SSD
+        # (docs.github.com/en/actions/reference/runners/github-hosted-runners).
+        # With the flag on:
+        #   * any other booted simulator is shut down first; only the test
+        #     device should hold memory;
+        #   * the smallest iPhone the runtime offers is preferred over the
+        #     first one listed (an iPhone 17 Pro-class 1206x2622 screen).
+        #     Fewer pixels for SimRenderServer/SimMetalHost to render and
+        #     hold, and both were in the host's top CPU users.
         run: |
+          echo "Booted before this step:"; xcrun simctl list devices booted || true
+          if [ "$IOS_REDUCE_LOAD" = "true" ]; then
+            xcrun simctl shutdown all || true
+          fi
           SIM_JSON="$(xcrun simctl list devices available --json)"
           RUNTIME_KEY="$(echo "$SIM_JSON" | jq -r '.devices | to_entries[] | select(.key|test("SimRuntime.iOS")) | select([.value[]|select(.name|startswith("iPhone"))]|length>0) | .key' | head -n 1)"
-          UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
+          UDID=""
+          if [ "$IOS_REDUCE_LOAD" = "true" ]; then
+            for NAME in "iPhone SE (3rd generation)" "iPhone 17e" "iPhone 16e"; do
+              UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" --arg n "$NAME" '.devices[$rt][] | select(.name==$n) | .udid' | head -n 1)"
+              [ -n "$UDID" ] && break
+            done
+          fi
+          if [ -z "$UDID" ]; then
+            UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
+          fi
+          echo "Available iPhones on $RUNTIME_KEY:"
+          echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | "  " + .name'
           OS_VER="$(echo "$RUNTIME_KEY" | sed -E 's/.*SimRuntime\.iOS-([0-9]+)-([0-9]+).*/\1.\2/')"
-          echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY)"
+          echo "Booting UDID=$UDID ($(echo "$SIM_JSON" | jq -r --arg u "$UDID" '.devices[][] | select(.udid==$u) | .name')) on iOS $OS_VER (runtime $RUNTIME_KEY)"
           xcrun simctl bootstatus "${UDID:?No available iPhone simulator found}" -b
+          echo "Booted after this step:"; xcrun simctl list devices booted || true
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
           echo "SIMULATOR_OS=${OS_VER:?Could not parse simulator OS version}" >> "$GITHUB_ENV"
       - name: Wait for Simulator to be Ready
@@ -637,45 +697,25 @@ jobs:
         # patrol_cli_plus >= 5.4.1 defaults xcodebuild -destination-timeout to 30s,
         # fixing the exit-70 device-resolution race on the slow macos-26 simulator.
         run: dart pub global activate patrol_cli_plus
-      - name: Start simulator log capture
-        # patrol forwards none of the app's Dart print/logging output on iOS,
-        # even with --verbose (the other jobs all show it), so a conformance
-        # module that fails here had only its failure line to go on (#469).
-        # Flutter writes print() to the unified log as "flutter: ...", so
-        # stream the app's log -- plus the AuthenticationServices / Safari
-        # view-service side of ASWebAuthenticationSession -- to a file and
-        # upload it below.
+      - name: Start iOS diagnostics
+        # Cheap by default, because the host is the thing under suspicion
+        # (#469): a 3s ps/vm_stat sampler (host-load.log) and nothing else
+        # while the tests run. The browser-flow evidence is read from the
+        # simulator's persisted unified log AFTER the tests (see "Collect iOS
+        # diagnostics"), which adds no load during them.
         #
-        # A second stream covers the system side (#469: "did a dialog block
-        # the login?"): SpringBoard presents system alerts, and backboardd /
-        # runningboardd launch and kill the browser's processes (one
-        # SafariViewService was killed by the watchdog mid-login). It runs at
-        # info level, not debug, to keep the artifact a sane size. It also
-        # takes any process's line that mentions an alert.
-        #
-        # The app's stream runs at info level, not debug. The debug firehose
-        # cost "log" plus diagnosticd 40-60% CPU on a 3-vCPU host (host-load
-        # in run 37430662455), and that host was already starved.
-        #
-        # What was on screen comes from a continuous screen recording (below),
-        # not from screenshots on request. Marker-triggered screenshots arrived
-        # 13s late and took 37s. Querying the native UI through XCUITest
-        # failed the very plans it observed.
-        #
-        # host-load.log samples the macOS host (load, top CPU, top RSS,
-        # memory, swap) every 3s. Run 37430662455 showed load averages of
-        # 200-500 and swapouts climbing 0 -> 152744 across the job. The
-        # browser stalls line up with those swap bursts.
+        # IOS_HEAVY_DIAGNOSTICS (workflow_dispatch input) adds what is too
+        # expensive to run every time: live log streams of the app,
+        # SafariViewService, SpringBoard/backboardd/runningboardd, and a
+        # continuous screen recording. In run 37430662455 "log" plus
+        # diagnosticd alone took 40-60% CPU, and the recording keeps
+        # SimRenderServer busy. That recording is what ruled out a dialog:
+        # during a 45s stall it showed the browser sheet with a blank page
+        # and no alert.
         run: |
-          mkdir -p "$RUNNER_TEMP/simlog/screenshots"
-          nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level info \
-            --predicate 'process == "Runner" OR process == "SafariViewService" OR subsystem BEGINSWITH "com.apple.AuthenticationServices"' \
-            > "$RUNNER_TEMP/simlog/simulator.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/simlog/pids"
-          nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level info \
-            --predicate 'process == "SpringBoard" OR process == "backboardd" OR process == "runningboardd" OR eventMessage CONTAINS[c] "UIAlertController" OR eventMessage CONTAINS[c] "SBUserNotification" OR subsystem == "com.apple.SpringBoard.alerts"' \
-            > "$RUNNER_TEMP/simlog/system.log" 2>&1 &
-          echo $! >> "$RUNNER_TEMP/simlog/pids"
+          mkdir -p "$RUNNER_TEMP/simlog"
+          : > "$RUNNER_TEMP/simlog/pids"
+          date -u +"%Y-%m-%d %H:%M:%S" > "$RUNNER_TEMP/simlog/tests-start-utc.txt"
           nohup bash -c '
             while true; do
               echo "=== $(date -u +%H:%M:%S)"
@@ -690,14 +730,21 @@ jobs:
             done
           ' > "$RUNNER_TEMP/simlog/host-load.log" 2>&1 &
           echo $! >> "$RUNNER_TEMP/simlog/pids"
-          # A continuous screen recording: the screenshot watcher above can
-          # only be as prompt as the host is, and in run 37428137698 the
-          # marker was seen 13s late and the screenshot took 37s. A video has
-          # no request latency. recordVideo prints its own start time, kept
-          # in recordVideo.log, to map video time to wall-clock time.
-          nohup xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 --force             "$RUNNER_TEMP/simlog/screen.mp4" > "$RUNNER_TEMP/simlog/recordVideo.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/simlog/video.pid"
-          date -u +%Y-%m-%dT%H:%M:%S > "$RUNNER_TEMP/simlog/video-requested-utc.txt"
+          if [ "$IOS_HEAVY_DIAGNOSTICS" = "true" ]; then
+            nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level info \
+              --predicate 'process == "Runner" OR process == "SafariViewService" OR subsystem BEGINSWITH "com.apple.AuthenticationServices"' \
+              > "$RUNNER_TEMP/simlog/simulator.log" 2>&1 &
+            echo $! >> "$RUNNER_TEMP/simlog/pids"
+            nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level info \
+              --predicate 'process == "SpringBoard" OR process == "backboardd" OR process == "runningboardd"' \
+              > "$RUNNER_TEMP/simlog/system.log" 2>&1 &
+            echo $! >> "$RUNNER_TEMP/simlog/pids"
+            # recordVideo needs SIGINT to finalise the mp4, so its pid is kept
+            # apart from the plain kill list.
+            nohup xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 --force \
+              "$RUNNER_TEMP/simlog/screen.mp4" > "$RUNNER_TEMP/simlog/recordVideo.log" 2>&1 &
+            echo $! > "$RUNNER_TEMP/simlog/video.pid"
+          fi
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
@@ -716,38 +763,46 @@ jobs:
         working-directory: packages/oidc/example
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
-      - name: Stop simulator log capture
+      - name: Collect iOS diagnostics
         if: always()
         run: |
-          # The final screen, whatever the outcome.
-          xcrun simctl io "$SIMULATOR_UDID" screenshot "$RUNNER_TEMP/simlog/screenshots/final.png" || true
-          # SIGINT lets recordVideo finalise the mp4; give it time to.
-          vpid="$(cat "$RUNNER_TEMP/simlog/video.pid" 2>/dev/null)"
+          D="$RUNNER_TEMP/simlog"
+          if [ "${{ job.status }}" != "success" ]; then
+            xcrun simctl io "$SIMULATOR_UDID" screenshot "$D/final.png" || true
+          fi
+          vpid="$(cat "$D/video.pid" 2>/dev/null)"
           if [ -n "$vpid" ]; then
             kill -INT "$vpid" 2>/dev/null || true
             for _ in $(seq 1 60); do kill -0 "$vpid" 2>/dev/null || break; sleep 1; done
           fi
-          cat "$RUNNER_TEMP/simlog/recordVideo.log" || true
-          while read -r pid; do kill "$pid" 2>/dev/null || true; done < "$RUNNER_TEMP/simlog/pids"
-          rm -f "$RUNNER_TEMP/simlog/pids"
-          # Conformance lines only, so the job log answers the common question
-          # without downloading the artifact. LOGIN-PENDING lines time stalls
-          # for reading the screen recording.
-          grep -E 'flutter: .*(\[e2e\]|Suite verdict|Login flow threw|Starting login)' \
-            "$RUNNER_TEMP/simlog/simulator.log" | cut -c1-400 || true
-          gzip -9 "$RUNNER_TEMP/simlog/simulator.log" "$RUNNER_TEMP/simlog/system.log" "$RUNNER_TEMP/simlog/host-load.log" || true
-          ls -la "$RUNNER_TEMP/simlog" || true
-      - name: Upload simulator log
+          while read -r pid; do kill "$pid" 2>/dev/null || true; done < "$D/pids"
+          # Read the evidence back from the simulator's persisted unified log,
+          # now that the tests are done. Both kinds of line are logged at
+          # default level, which the log store persists: the harness's
+          # "flutter: " print lines and runningboardd's launch lines.
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 2h \
+            --predicate 'process == "Runner" AND eventMessage CONTAINS "flutter: "' \
+            > "$D/runner.log" 2>&1 || true
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 2h \
+            --predicate 'process == "runningboardd" AND eventMessage CONTAINS "com.apple.WebKit.WebContent"' \
+            > "$D/launches.log" 2>&1 || true
+          wc -l "$D/runner.log" "$D/launches.log" || true
+          python3 "$GITHUB_WORKSPACE/.github/scripts/ios_ci_metrics.py" \
+            --runner-log "$D/runner.log" --launch-log "$D/launches.log" \
+            --host-load "$D/host-load.log" | tee "$D/metrics.txt" || true
+          grep -E 'flutter: \[e2e\]' "$D/runner.log" | cut -c1-400 || true
+          gzip -9 "$D"/*.log || true
+          ls -la "$D" || true
+      - name: Upload iOS diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-simulator-log
+          name: ios-diagnostics
           path: |
             ${{ runner.temp }}/simlog/*.log.gz
-            ${{ runner.temp }}/simlog/screenshots/
+            ${{ runner.temp }}/simlog/metrics.txt
+            ${{ runner.temp }}/simlog/final.png
             ${{ runner.temp }}/simlog/screen.mp4
-            ${{ runner.temp }}/simlog/recordVideo.log
-            ${{ runner.temp }}/simlog/video-requested-utc.txt
           if-no-files-found: warn
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v7
