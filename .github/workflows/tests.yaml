@@ -107,24 +107,16 @@ jobs:
       - name: "[Verify step] 🕵️ Analyze packages"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run analyze
-      # timeout --foreground -k 10 600: the actual fix for the hang above.
-      # `--coverage=coverage/vm` opens a VM-service websocket per package
-      # under test; melos exec runs up to `Platform.numberOfProcessors`
-      # packages concurrently (unchanged by the unit_tests split -- same
-      # runner, same formula, before and after; see pubspec.yaml's test:vm
-      # script for the concurrency cap added alongside this). Normal runs
-      # finish this step in well under 4 minutes (baseline measured 188s
-      # for the same command in the old single job); 600s is ~2-3x that.
-      # `--foreground` + `-k 10` makes GNU timeout signal the whole process
-      # GROUP (TERM at 600s, KILL 10s later) -- the same mechanism needed
-      # to reap the orphaned dart:test.dart- process that survived the
-      # visible melos output in the hang this guards against. The
-      # step-level timeout-minutes below is a pure backstop in case even
-      # that SIGKILL somehow doesn't land; it should never be the one that
-      # fires.
+      # timeout -k 10 600 bounds the hang above (an orphaned `dart test`
+      # kept the step alive after every package had printed its summary).
+      # Without --foreground, GNU timeout runs melos in its own process
+      # group and signals the whole group (TERM at 600s, KILL 10s later),
+      # which reaches the per-package `dart test` children; --foreground
+      # would signal melos alone. Normal runs take well under 4 minutes.
+      # The step timeout-minutes is a backstop.
       - name: "[Verify step] Test Dart packages [VM]"
         timeout-minutes: 12
-        run: timeout --foreground -k 10 600 melos run test:vm
+        run: timeout -k 10 600 melos run test:vm
       - name: "[Coverage] Format VM coverage for each package"
         if: ${{ matrix.sdk == 'stable' }}
         run: |
