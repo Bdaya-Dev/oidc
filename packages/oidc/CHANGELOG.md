@@ -1,3 +1,7 @@
+## 5.0.2
+
+ - **FIX**(ci): respect GitHub's 5-concurrent-macOS-jobs cap, un-shard macos. ([79e50312](https://github.com/Bdaya-Dev/oidc/commit/79e50312fe385d5cf27f1c304c2bf0ee989d2254))
+
 ## 5.0.1
 
  - Update a dependency to the latest release.
