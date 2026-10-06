@@ -702,13 +702,22 @@ jobs:
             while true; do
               echo "=== $(date -u +%H:%M:%S)"
               sysctl -n vm.loadavg
-              top -l 1 -n 6 -o cpu -stats pid,command,cpu,mem 2>/dev/null | sed -n "1,4p;12,20p"
+              # ps, not top: top -l costs about a CPU-second per sample on a
+              # 3-vCPU runner, enough to perturb what it measures.
+              ps -Ao pcpu,rss,comm -r | head -8
               vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageouts|Swapouts"
-              iostat -d -c 1 2>/dev/null | tail -1
-              sleep 2
+              sleep 3
             done
           ' > "$RUNNER_TEMP/simlog/host-load.log" 2>&1 &
           echo $! >> "$RUNNER_TEMP/simlog/pids"
+          # A continuous screen recording: the screenshot watcher above can
+          # only be as prompt as the host is, and in run 37428137698 the
+          # marker was seen 13s late and the screenshot took 37s. A video has
+          # no request latency. recordVideo prints its own start time, kept
+          # in recordVideo.log, to map video time to wall-clock time.
+          nohup xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 --force             "$RUNNER_TEMP/simlog/screen.mp4" > "$RUNNER_TEMP/simlog/recordVideo.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/simlog/video.pid"
+          date -u +%Y-%m-%dT%H:%M:%S > "$RUNNER_TEMP/simlog/video-requested-utc.txt"
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
@@ -732,6 +741,13 @@ jobs:
         run: |
           # The final screen, whatever the outcome.
           xcrun simctl io "$SIMULATOR_UDID" screenshot "$RUNNER_TEMP/simlog/screenshots/final.png" || true
+          # SIGINT lets recordVideo finalise the mp4; give it time to.
+          vpid="$(cat "$RUNNER_TEMP/simlog/video.pid" 2>/dev/null)"
+          if [ -n "$vpid" ]; then
+            kill -INT "$vpid" 2>/dev/null || true
+            for _ in $(seq 1 60); do kill -0 "$vpid" 2>/dev/null || break; sleep 1; done
+          fi
+          cat "$RUNNER_TEMP/simlog/recordVideo.log" || true
           while read -r pid; do kill "$pid" 2>/dev/null || true; done < "$RUNNER_TEMP/simlog/pids"
           rm -f "$RUNNER_TEMP/simlog/pids"
           # Conformance lines only, so the job log answers the common question
@@ -752,6 +768,9 @@ jobs:
           path: |
             ${{ runner.temp }}/simlog/*.log.gz
             ${{ runner.temp }}/simlog/screenshots/
+            ${{ runner.temp }}/simlog/screen.mp4
+            ${{ runner.temp }}/simlog/recordVideo.log
+            ${{ runner.temp }}/simlog/video-requested-utc.txt
           if-no-files-found: warn
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v7

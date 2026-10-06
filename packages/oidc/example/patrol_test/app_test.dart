@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print -- the probe controls report via print(), the only output the iOS job keeps.
+//
 // Patrol entrypoint (patrolTest) — used by the android/iOS/web/linux/windows CI
 // jobs. macOS runs the same shared flow via `flutter test integration_test`.
 // On web, Patrol drives Chromium via Playwright (no flutter-drive/DWDS), which
@@ -18,6 +20,7 @@
 // ../integration_test/shared_e2e.dart, so the Patrol and flutter-test harnesses
 // run identical tests.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
@@ -46,14 +49,33 @@ import '../integration_test/shared_e2e.dart';
 /// * Browser sheet: the ASWebAuthenticationSession sheet shows the page's
 ///   host ("certification.openid.net") in its toolbar, so a match proves
 ///   the sheet is on screen and visible to this probe.
-final _probeQueries = <(String, IOSSelector, String?)>[
+///
+/// The app is named by its REAL bundle id. Patrol's default (`resolvedAppId`)
+/// comes from `patrol_plus: ios: bundle_id` in pubspec.yaml,
+/// `com.bdayadev.oidc.example`, but the iOS Runner target builds
+/// `com.bdayadev` (project.pbxproj PRODUCT_BUNDLE_IDENTIFIER). Querying the
+/// wrong one makes XCTest record "Failed to resolve query: Application
+/// com.bdayadev.oidc.example is not running" as a TEST FAILURE. The XCUITest
+/// then tears the test down and terminates the app mid-plan. That is how
+/// run 37428137698 lost Basic, Config, Hybrid and Implicit RP.
+const _iosAppBundleId = 'com.bdayadev';
+
+final _probeQueries = <(String, IOSSelector, String)>[
   (
     'springboard alerts',
     IOSSelector(elementType: IOSElementType.alert),
     'com.apple.springboard',
   ),
-  ('app alerts', IOSSelector(elementType: IOSElementType.alert), null),
-  ('browser sheet', IOSSelector(textContains: 'certification'), null),
+  (
+    'app alerts',
+    IOSSelector(elementType: IOSElementType.alert),
+    _iosAppBundleId,
+  ),
+  (
+    'browser sheet',
+    IOSSelector(textContains: 'certification'),
+    _iosAppBundleId,
+  ),
 ];
 
 /// The texts in [views] and everything inside them, as one short string.
@@ -98,35 +120,62 @@ Future<String> _describeNativeScreen(PatrolIntegrationTester $) async {
   return parts.join(' || ');
 }
 
-/// Positive control for "SpringBoard alerts": opens a NON-ephemeral
-/// ASWebAuthenticationSession, which iOS gates behind its
-/// "'App' Wants to Use '…' to Sign In" consent alert, probes the screen
-/// while that alert is up, and lets flowTimeoutSeconds cancel the session.
-/// Nothing reaches the conformance suite; example.com is only the URL the
-/// alert names.
-Future<String> _probeKnownSystemAlert(PatrolIntegrationTester $) async {
+/// A positive control: opens an ASWebAuthenticationSession on [url] and
+/// polls the probe once a second for up to [pollFor], until the [expect]
+/// query finds something. Then flowTimeoutSeconds cancels the session.
+///
+/// It polls rather than taking one snapshot because the sheet, and any
+/// alert, appear asynchronously. The first control (run 37428137698) probed
+/// once at +3s and could not tell "the alert never appeared" from "not yet".
+/// Each poll is timed from the session start. A screenshot is requested at
+/// the start and again at the first match.
+Future<String> _positiveControl(
+  PatrolIntegrationTester $, {
+  required String name,
+  required String url,
+  required bool ephemeral,
+  required String expect,
+  Duration pollFor = const Duration(seconds: 20),
+}) async {
+  final started = DateTime.now();
+  String at() =>
+      '+${(DateTime.now().difference(started).inMilliseconds / 1000).toStringAsFixed(1)}s';
+  requestStallScreenshot('$name-start');
   final session = OidcAppleHostApi()
       .authorizeApple(
-        'https://example.com/',
+        url,
         null,
+        // The redirect scheme; never reached, the session is only ever
+        // cancelled.
         'com.bdayadev.oidc.example',
-        false,
-        {'flowTimeoutSeconds': 10},
+        ephemeral,
+        {'flowTimeoutSeconds': pollFor.inSeconds + 5},
       )
       .then<Object?>((value) => value, onError: (Object e) => e);
-  await Future<void>.delayed(const Duration(seconds: 3));
-  final screen = await _describeNativeScreen($);
+  var ended = false;
+  unawaited(session.whenComplete(() => ended = true));
+  final polls = <String>[];
+  var found = false;
+  while (!found && !ended && DateTime.now().difference(started) < pollFor) {
+    await Future<void>.delayed(const Duration(seconds: 1));
+    final screen = await _describeNativeScreen($);
+    polls.add('${at()} $screen');
+    found = RegExp('$expect: [1-9]').hasMatch(screen);
+    if (found) {
+      requestStallScreenshot('$name-found');
+    }
+  }
   final outcome = await session.timeout(
-    const Duration(seconds: 15),
+    pollFor + const Duration(seconds: 15),
     onTimeout: () => 'still pending',
   );
-  return '$screen; consent session ended: $outcome';
+  return '${found ? 'FOUND' : 'NOT FOUND'} "$expect" (session ended at '
+      '${at()}: $outcome); polls: ${polls.join(' ;; ')}';
 }
 
 Future<void> _launch(PatrolIntegrationTester $) async {
   if (!kIsWeb && Platform.isIOS) {
     nativeScreenProbe = () => _describeNativeScreen($);
-    knownSystemAlertProbe = () => _probeKnownSystemAlert($);
   }
   // Mirror the part of example main() the OIDC flow relies on, without
   // re-running runApp (Patrol already bootstrapped the engine). wrapApp() sets
@@ -273,4 +322,38 @@ void main() {
       );
     });
   }
+
+  // Positive controls for the iOS stall probe (#469): before a "no alert"
+  // from a STALL-PROBE can mean anything, the probe has to be shown seeing
+  // the browser sheet and a known system alert. This runs in its own test,
+  // named to sort after every "OIDC Conformance" test (patrol runs them in
+  // name order), so the browser sessions it opens can never touch a plan.
+  // It is a diagnostic: it reports and never fails.
+  patrolTest('zz iOS native probe positive controls', ($) async {
+    await _launch($);
+    if (kIsWeb || !Platform.isIOS) {
+      return;
+    }
+    // A healthy ephemeral session like the harness's own: its sheet shows
+    // the host in its toolbar.
+    final sheet = await _positiveControl(
+      $,
+      name: 'sheet-control',
+      url: 'https://www.certification.openid.net/',
+      ephemeral: true,
+      expect: 'browser sheet',
+    );
+    print('[e2e] SHEET-PROBE-CONTROL: $sheet');
+    // A non-ephemeral session is gated by iOS's "'App' Wants to Use '…' to
+    // Sign In" consent alert, a known system alert. Wherever iOS 26 draws
+    // it, one of the alert queries has to report it.
+    final alert = await _positiveControl(
+      $,
+      name: 'alert-control',
+      url: 'https://example.com/',
+      ephemeral: false,
+      expect: '(springboard|app) alerts',
+    );
+    print('[e2e] ALERT-PROBE-CONTROL: $alert');
+  });
 }
