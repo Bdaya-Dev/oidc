@@ -22,14 +22,25 @@
 // every `patrol_test/*_test.dart` file in one `patrol test` invocation, so the
 // 13 conformance plans below used to run sequentially in a single job -- the
 // Hybrid RP plan alone takes ~262s, and all 13 together take ~13-14 minutes.
-// `--dart-define=CONFORMANCE_SHARD=<name>` lets a CI matrix split them across
-// parallel jobs instead. Every call below goes through [_registerPlan], which
-// tags the plan with one of [_knownShards]; a job that doesn't shard passes
-// nothing and gets the 'all' default, which registers every plan exactly as
-// before sharding existed. A skipped/absent plan must never look like a pass,
-// so an unknown shard tag or an unknown --dart-define value throws
-// immediately, and a shard that selects zero plans fails loudly at the end of
-// main() instead of letting `patrol test` report a quiet, empty green.
+// `--dart-define=CONFORMANCE_SHARD=<tag>[,<tag>...]` lets a CI matrix split
+// them across parallel jobs instead. Every call below goes through
+// [_registerPlan], which tags the plan with one of [_knownShards]; a job that
+// doesn't shard passes nothing and gets the 'all' default, which registers
+// every plan exactly as before sharding existed.
+//
+// The value is a COMMA-SEPARATED SET of tags, not a single tag: android,
+// linux and windows draw from GitHub's large general-purpose runner pool and
+// shard 4 ways (one tag each). iOS shares Apple's much smaller "concurrent
+// macOS jobs" pool (5 on most plans -- see
+// https://docs.github.com/en/actions/reference/limits, "Usage limits") with
+// the macOS job, so it shards only 2 ways, each requesting two tags at once
+// (e.g. "hybrid,implicit"), to keep this workflow's own macOS-pool demand low
+// enough that its shards don't queue behind each other.
+//
+// A skipped/absent plan must never look like a pass, so an unknown shard tag
+// or an unknown --dart-define value throws immediately, and a requested set
+// that selects zero plans fails loudly at the end of main() instead of
+// letting `patrol test` report a quiet, empty green.
 
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
 import 'package:flutter/material.dart';
@@ -55,19 +66,26 @@ Future<void> _launch(PatrolIntegrationTester $) async {
   );
 }
 
-/// Which slice of the conformance plans this process should register. Read
-/// once from `--dart-define=CONFORMANCE_SHARD=<name>`. See the file doc
-/// comment above for why this exists.
+/// The raw value of `--dart-define=CONFORMANCE_SHARD=<tag>[,<tag>...]`. See
+/// the file doc comment above for why this exists and its syntax.
 const String _requestedShard = String.fromEnvironment(
   'CONFORMANCE_SHARD',
   defaultValue: 'all',
 );
 
-/// Every shard id a CI matrix is allowed to request, besides the 'all'
+/// Every shard tag a CI matrix is allowed to request, besides the 'all'
 /// (unsharded) default.
 const Set<String> _knownShards = {'basic', 'implicit', 'hybrid', 'rest'};
 
-/// How many plans [_requestedShard] selected so far. Checked at the end of
+/// [_requestedShard] split on commas, or null for the 'all' (unsharded)
+/// default. Validated once at the top of [main]: every element must be a
+/// known shard tag, so a typo'd --dart-define value fails immediately rather
+/// than silently matching nothing.
+final Set<String>? _requestedShardSet = _requestedShard == 'all'
+    ? null
+    : _requestedShard.split(',').map((s) => s.trim()).toSet();
+
+/// How many plans [_requestedShardSet] selected so far. Checked at the end of
 /// [main] -- see [_registerPlan].
 int _selectedPlanCount = 0;
 
@@ -89,7 +107,7 @@ void _registerPlan(
       'expected one of $_knownShards.',
     );
   }
-  if (_requestedShard != 'all' && _requestedShard != shard) {
+  if (_requestedShardSet != null && !_requestedShardSet!.contains(shard)) {
     return;
   }
   _selectedPlanCount++;
@@ -99,10 +117,11 @@ void _registerPlan(
 void main() {
   ensureLoggingConfigured();
 
-  if (_requestedShard != 'all' && !_knownShards.contains(_requestedShard)) {
+  if (_requestedShardSet != null &&
+      _requestedShardSet!.any((tag) => !_knownShards.contains(tag))) {
     throw StateError(
-      'Unknown CONFORMANCE_SHARD "$_requestedShard" - expected "all" or one '
-      'of $_knownShards.',
+      'Unknown CONFORMANCE_SHARD "$_requestedShard" - expected "all" or a '
+      'comma-separated set drawn from $_knownShards.',
     );
   }
 
