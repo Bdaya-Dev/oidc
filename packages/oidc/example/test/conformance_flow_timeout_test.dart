@@ -75,6 +75,26 @@ void main() {
     expect(iosConformanceFlowTimeoutSeconds, lessThanOrEqualTo(120));
   });
 
+  // A plan's FIRST desktop login pays for the CI runner's browser
+  // cold-starting. One took 30.07s to reach the suite (main run 37502027906,
+  // linux implicit) against a 30s timeout, and the module was left WAITING
+  // while the library did nothing wrong. Every later login took <= 7.9s.
+  test('the desktop timeout outlasts the slowest first login seen', () {
+    for (final (name, seconds) in [
+      ('linux', options.linux.flowTimeoutSeconds),
+      ('windows', options.windows.flowTimeoutSeconds),
+    ]) {
+      expect(seconds, desktopConformanceFlowTimeoutSeconds, reason: name);
+    }
+    expect(
+      desktopConformanceFlowTimeoutSeconds,
+      greaterThanOrEqualTo(observedDesktopFirstLoginSeconds * 1.5),
+      reason:
+          'leave a margin over the worst observed first login; at 30s the '
+          'Implicit RP plan failed on linux',
+    );
+  });
+
   test('the timeout is short enough to fail before the CI job is killed', () {
     // The linux job was killed at ~10 min. A per-module timeout has to leave
     // room for the remaining modules to still run, otherwise the first hang
