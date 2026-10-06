@@ -20,6 +20,10 @@ on:
         description: "iOS job: stream simulator logs and record the screen (adds load)"
         type: boolean
         default: false
+      ios_force_stall_module:
+        description: "iOS job, test-only: conformance module whose first attempt is forced to stall, to prove the gated rerun (empty = off)"
+        type: string
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -612,9 +616,11 @@ jobs:
     # today; revisit if required checks are ever turned on for this branch.
     #
     # The simulator boot is kicked off in the background (`simctl boot &`,
-    # detached with `disown`) right after selecting Xcode, so it overlaps
-    # "Set up Environment" and "Run flutter precache" instead of blocking
-    # ahead of them. `simctl bootstatus -b` right before the tests step is the
+    # detached with `disown`) right AFTER "Set up Environment", so it overlaps
+    # only "Run flutter precache" and the Patrol CLI activation. It used to
+    # start before setup, and booting alongside the Flutter install made that
+    # install 3-4x slower (see the note on the boot step). `simctl
+    # bootstatus -b` right before the tests step is the
     # actual gate: it boots the device if the background kick-off hasn't
     # finished yet, and either way blocks until CoreSimulatorService reports
     # the device as *actually* registered -- see the note on that step for
@@ -628,15 +634,23 @@ jobs:
     #   * sharding (#492);
     #   * macos-26-intel (4 vCPU / 14 GB): setup and tests ran 2-3x slower and
     #     both shards hit the 60-minute timeout.
-    # So the harness reruns a module once, and only when the suite's own log
-    # proves the browser never reached it (shouldRerunModuleOnFreshInstance,
-    # integration_test/conformance/api.dart).
+    # So the harness reruns a module once, on a fresh instance, and only when
+    # the suite still reports that instance WAITING and its log shows no
+    # authorization request ever arriving (refused requests count as
+    # arrived). The gate is shouldRerunModuleOnFreshInstance in
+    # integration_test/conformance/api.dart. It applies on every platform;
+    # only this simulator's stalls have been seen to meet it. The
+    # CONFORMANCE_FORCE_STALL_MODULE dart-define (workflow_dispatch input
+    # ios_force_stall_module, empty by default) forces one such stall to
+    # prove the path end to end.
     runs-on: macos-26
     timeout-minutes: 60
     env:
       # workflow_dispatch input; push/PR runs never pay for heavy diagnostics.
       # See "Start iOS diagnostics".
       IOS_HEAVY_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_heavy_diagnostics }}
+      # Test-only; empty (off) unless set by hand on a workflow_dispatch run.
+      IOS_FORCE_STALL_MODULE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_force_stall_module || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -807,6 +821,7 @@ jobs:
             --verbose \
             --dart-define=CI=true \
             --dart-define=CONFORMANCE_SHARD="$CONFORMANCE_SHARD_VALUE" \
+            --dart-define=CONFORMANCE_FORCE_STALL_MODULE="${IOS_FORCE_STALL_MODULE:-}" \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
           cp coverage/patrol_lcov.info "coverage/ios-${{ matrix.shard }}-coverage.info"
         working-directory: packages/oidc/example
@@ -826,7 +841,9 @@ jobs:
             kill -INT "$vpid" 2>/dev/null || true
             for _ in $(seq 1 60); do kill -0 "$vpid" 2>/dev/null || break; sleep 1; done
           fi
-          while read -r pid; do kill "$pid" 2>/dev/null || true; done < "$D/pids"
+          if [ -f "$D/pids" ]; then
+            while read -r pid; do kill "$pid" 2>/dev/null || true; done < "$D/pids"
+          fi
           # Read the evidence back from the simulator's persisted unified log
           # now that the tests are done. Both kinds of line are logged at
           # default level, which the log store persists.

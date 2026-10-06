@@ -35,6 +35,16 @@ const String oidcConformanceToken = String.fromEnvironment(
 
 final Logger _testLogger = Logger('oidc.conformance');
 
+/// Test-only: the module whose first attempt is made to stall (see its use in
+/// [runOidcConformanceTest]). Empty, the default, disables it.
+const String conformanceForceStallModule = String.fromEnvironment(
+  'CONFORMANCE_FORCE_STALL_MODULE',
+);
+
+/// The forced stall happens once per process, not once per matching module
+/// variant.
+bool _forcedStallUsed = false;
+
 /// The Config RP module whose correct outcome is `init()` throwing: the RP
 /// must stop after fetching a discovery document with the wrong `issuer`.
 const discoveryIssuerMismatchModule =
@@ -1020,24 +1030,56 @@ Future<void> runOidcConformanceTest(
         }
       }
 
-      final authResult = await attemptLogin();
+      // CONFORMANCE_FORCE_STALL_MODULE (test-only, off by default): the first
+      // attempt of the first matching module never opens the browser, so the
+      // suite sees no authorization request: exactly what a stalled iOS
+      // browser leaves behind. It exists to prove the rerun path end to end
+      // in CI.
+      final forceStall =
+          attempt == 1 &&
+          !_forcedStallUsed &&
+          conformanceForceStallModule.isNotEmpty &&
+          moduleName == conformanceForceStallModule;
+      final OidcUser? authResult;
+      if (forceStall) {
+        _forcedStallUsed = true;
+        loginStartedAtMs = DateTime.now().millisecondsSinceEpoch;
+        loginStopwatch.reset();
+        loginError =
+            'forced stall (CONFORMANCE_FORCE_STALL_MODULE=$moduleName): the '
+            'browser was never opened';
+        print('[e2e] $moduleName -> $loginError');
+        authResult = null;
+      } else {
+        authResult = await attemptLogin();
+      }
       if (authResult == null && attempt <= maxModuleReruns) {
         // Did the browser reach the suite at all? Only the suite's own log can
         // say, and only a "no" from it lets this instance be discarded (see
         // shouldRerunModuleOnFreshInstance for why that cannot hide a verdict).
-        final suiteLog = await fetchTestLogs(
-          dio: dio,
-          instanceId: testInstanceId,
-        );
+        // The status first: a FINISHED/INTERRUPTED instance has a verdict
+        // and is never discarded, so its log need not even be read.
+        Map<String, dynamic> summary;
+        try {
+          summary = await getTestSummary(dio: dio, instanceId: testInstanceId);
+        } on Object catch (e) {
+          summary = {'pollError': '$e'};
+        }
+        final suiteStatus = summary['status'] as String?;
+        final suiteLog = suiteStatus == 'WAITING'
+            ? await fetchTestLogs(dio: dio, instanceId: testInstanceId)
+            : const <Map<String, dynamic>>[];
         if (shouldRerunModuleOnFreshInstance(
           loggedIn: false,
           attempt: attempt,
+          suiteStatus: suiteStatus,
           suiteLog: suiteLog,
         )) {
           rerunNote =
-              'RERUN: instance $testInstanceId was discarded because the suite '
-              'received NO authorization request (client: no user after '
-              '${loginStopwatch.elapsed.inMilliseconds}ms'
+              'RERUN: instance $testInstanceId (suite status=$suiteStatus, '
+              'result=${summary['result']}) was discarded because its suite '
+              'log shows NO authorization request arriving (client: no user '
+              'after ${loginStopwatch.elapsed.inMilliseconds}ms'
               '${loginError == null ? '' : ', login threw: $loginError'}'
               '; browser events [${browserTimeline.join(', ')}])';
           // print(), not logger: logger output is invisible in the iOS job log.

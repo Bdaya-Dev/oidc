@@ -118,62 +118,101 @@ void main() {
       ...noAuthorize,
       {'msg': 'Authorization endpoint', 'startBlock': true, 'time': 3},
     ];
+    // What a REFUSED authorization request leaves: the dispatcher's arrival
+    // line, then a failure, and no "Authorization endpoint" block (e.g. an
+    // instance already FINISHED throwing "Illegal test state change", or
+    // OIDCCClientTestDiscoveryIssuerMismatch throwing before the block).
+    final refusedAuthorize = <Map<String, dynamic>>[
+      ...noAuthorize,
+      {'msg': 'Incoming HTTP request to /test/abc/authorize', 'time': 3},
+      {
+        'msg': 'Illegal test state change: FINISHED -> RUNNING',
+        'result': 'FAILURE',
+        'time': 4,
+      },
+    ];
 
-    test('reruns once when the suite received no authorization request', () {
+    bool rerun({
+      bool loggedIn = false,
+      int attempt = 1,
+      String? status = 'WAITING',
+      List<Map<String, dynamic>>? log,
+    }) => shouldRerunModuleOnFreshInstance(
+      loggedIn: loggedIn,
+      attempt: attempt,
+      suiteStatus: status,
+      suiteLog: log ?? noAuthorize,
+    );
+
+    test('reruns once when the instance is still WAITING and no '
+        'authorization request ever arrived', () {
+      expect(rerun(), isTrue);
+    });
+
+    test('never reruns once an authorization request was handled '
+        '(every negative module ends like this)', () {
+      expect(rerun(log: withAuthorize), isFalse);
+    });
+
+    test('a request the suite REFUSED still arrived, so no rerun', () {
+      expect(suiteLogShowsAuthorizationRequest(refusedAuthorize), isTrue);
+      expect(rerun(log: refusedAuthorize), isFalse);
+    });
+
+    test('the arrival line counts with a query string too', () {
       expect(
-        shouldRerunModuleOnFreshInstance(
-          loggedIn: false,
-          attempt: 1,
-          suiteLog: noAuthorize,
-        ),
+        suiteLogShowsAuthorizationRequest([
+          {
+            'msg': 'Incoming HTTP request to /test/abc/authorize?state=x',
+            'time': 1,
+          },
+        ]),
         isTrue,
       );
     });
 
-    test('never reruns once an authorization request reached the suite '
-        '(every negative module ends like this)', () {
+    test('other endpoints arriving do not count', () {
       expect(
-        shouldRerunModuleOnFreshInstance(
-          loggedIn: false,
-          attempt: 1,
-          suiteLog: withAuthorize,
-        ),
+        suiteLogShowsAuthorizationRequest([
+          {'msg': 'Incoming HTTP request to /test/abc/jwks', 'time': 1},
+          {
+            'msg': [
+              'Incoming HTTP request to /test/abc',
+              '.well-known/openid-configuration',
+            ].join('/'),
+            'time': 2,
+          },
+        ]),
         isFalse,
       );
+    });
+
+    for (final (status, result) in [
+      ('FINISHED', 'FAILED'),
+      ('FINISHED', 'PASSED'),
+      ('INTERRUPTED', 'FAILED'),
+    ]) {
+      test('never reruns an instance that has a verdict '
+          '($status/$result), whatever its log shows', () {
+        expect(rerun(status: status), isFalse);
+      });
+    }
+
+    test('an unknown status (summary unreadable) proves nothing', () {
+      expect(rerun(status: null), isFalse);
     });
 
     test('never reruns a rerun', () {
       expect(maxModuleReruns, 1);
-      expect(
-        shouldRerunModuleOnFreshInstance(
-          loggedIn: false,
-          attempt: 2,
-          suiteLog: noAuthorize,
-        ),
-        isFalse,
-      );
+      expect(rerun(attempt: 2), isFalse);
     });
 
     test('never reruns a login that succeeded', () {
-      expect(
-        shouldRerunModuleOnFreshInstance(
-          loggedIn: true,
-          attempt: 1,
-          suiteLog: noAuthorize,
-        ),
-        isFalse,
-      );
+      expect(rerun(loggedIn: true), isFalse);
     });
 
     test('an unreadable (empty) log proves nothing, so no rerun', () {
-      expect(
-        shouldRerunModuleOnFreshInstance(
-          loggedIn: false,
-          attempt: 1,
-          suiteLog: const [],
-        ),
-        isFalse,
-      );
+      expect(rerun(log: const []), isFalse);
     });
 
     test('a log line that merely mentions authorization is not a request '

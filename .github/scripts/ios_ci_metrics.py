@@ -48,7 +48,10 @@ def logins(path):
         if m:
             start, name = ts, m.group(1)
             continue
-        m = re.search(r'\[e2e\] ([\w-]+) -> authResult', line)
+        # A discarded first attempt (the harness's gated rerun) never prints
+        # authResult; its RERUN line closes it instead, so the stall it was
+        # discarded for still counts here.
+        m = re.search(r'\[e2e\] ([\w-]+) -> (?:authResult|RERUN:)', line)
         if m and start is not None and m.group(1) == name:
             rows.append(((ts - start).total_seconds(), name, start))
             start = None
