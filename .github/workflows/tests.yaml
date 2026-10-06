@@ -645,12 +645,36 @@ jobs:
         # stream the app's log -- plus the AuthenticationServices / Safari
         # view-service side of ASWebAuthenticationSession -- to a file and
         # upload it below.
+        #
+        # A second stream covers the system side (#469: "did a dialog block
+        # the login?"): SpringBoard presents system alerts, and backboardd /
+        # runningboardd launch and kill the browser's processes (one
+        # SafariViewService was killed by the watchdog mid-login). It runs at
+        # info level, not debug, to keep the artifact a sane size. It also
+        # takes any process's line that mentions an alert.
+        #
+        # The harness prints "[e2e] STALL-PROBE" while a login is still
+        # pending far past a healthy one. A watcher takes a simulator
+        # screenshot each time, so the artifact shows what was on screen at
+        # that moment.
         run: |
-          mkdir -p "$RUNNER_TEMP/simlog"
+          mkdir -p "$RUNNER_TEMP/simlog/screenshots"
           nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level debug \
             --predicate 'process == "Runner" OR process == "SafariViewService" OR subsystem BEGINSWITH "com.apple.AuthenticationServices"' \
             > "$RUNNER_TEMP/simlog/simulator.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/simlog/pid"
+          echo $! > "$RUNNER_TEMP/simlog/pids"
+          nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level info \
+            --predicate 'process == "SpringBoard" OR process == "backboardd" OR process == "runningboardd" OR eventMessage CONTAINS[c] "UIAlertController" OR eventMessage CONTAINS[c] "SBUserNotification" OR subsystem == "com.apple.SpringBoard.alerts"' \
+            > "$RUNNER_TEMP/simlog/system.log" 2>&1 &
+          echo $! >> "$RUNNER_TEMP/simlog/pids"
+          nohup bash -c '
+            tail -n 0 -F "$0/simulator.log" 2>/dev/null \
+              | grep --line-buffered "\[e2e\] STALL-PROBE" \
+              | while read -r _; do
+                  xcrun simctl io "$1" screenshot "$0/screenshots/stall-$(date -u +%H%M%S).png" >/dev/null 2>&1 || true
+                done
+          ' "$RUNNER_TEMP/simlog" "$SIMULATOR_UDID" > /dev/null 2>&1 &
+          echo $! >> "$RUNNER_TEMP/simlog/pids"
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
@@ -672,18 +696,27 @@ jobs:
       - name: Stop simulator log capture
         if: always()
         run: |
-          kill "$(cat "$RUNNER_TEMP/simlog/pid")" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/simlog/pid"
+          # The final screen, whatever the outcome.
+          xcrun simctl io "$SIMULATOR_UDID" screenshot "$RUNNER_TEMP/simlog/screenshots/final.png" || true
+          while read -r pid; do kill "$pid" 2>/dev/null || true; done < "$RUNNER_TEMP/simlog/pids"
+          rm -f "$RUNNER_TEMP/simlog/pids"
           # Conformance lines only, so the job log answers the common question
-          # without downloading the artifact.
+          # without downloading the artifact. STALL-PROBE lines carry the
+          # on-screen native UI; they are long, so they are not cut.
           grep -E 'flutter: .*(\[e2e\]|Suite verdict|Login flow threw|Starting login)' \
-            "$RUNNER_TEMP/simlog/simulator.log" | cut -c1-400 || true
+            "$RUNNER_TEMP/simlog/simulator.log" | grep -v 'STALL-PROBE\|SCREEN-PROBE' | cut -c1-400 || true
+          grep -E 'flutter: \[e2e\] (STALL-PROBE|SCREEN-PROBE)' "$RUNNER_TEMP/simlog/simulator.log" || true
+          ls -la "$RUNNER_TEMP/simlog/screenshots" || true
+          gzip -9 "$RUNNER_TEMP/simlog/simulator.log" "$RUNNER_TEMP/simlog/system.log" || true
+          ls -la "$RUNNER_TEMP/simlog" || true
       - name: Upload simulator log
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ios-simulator-log
-          path: ${{ runner.temp }}/simlog/simulator.log
+          path: |
+            ${{ runner.temp }}/simlog/*.log.gz
+            ${{ runner.temp }}/simlog/screenshots/
           if-no-files-found: warn
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v7

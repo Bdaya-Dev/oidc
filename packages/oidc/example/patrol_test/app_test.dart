@@ -18,14 +18,76 @@
 // ../integration_test/shared_e2e.dart, so the Patrol and flutter-test harnesses
 // run identical tests.
 
+import 'dart:io';
+
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:patrol_plus/patrol.dart';
 
 import '../integration_test/shared_e2e.dart';
 
+/// Native apps whose on-screen UI the stall probe reads: SpringBoard owns
+/// system alerts, and the app itself hosts the ASWebAuthenticationSession
+/// sheet (and any alert presented over it).
+const _probedApps = {
+  'springboard': 'com.apple.springboard',
+  'app': null, // the app under test
+};
+
+/// Flattens [roots] into "type:'text'" entries for the nodes that carry any
+/// text, alerts first (with everything inside them), capped so one probe
+/// stays one readable line.
+String _describeNativeTree(List<IOSNativeView> roots, {int cap = 40}) {
+  final alerts = <String>[];
+  final others = <String>[];
+  void visit(IOSNativeView view, {required bool inAlert}) {
+    final isAlert =
+        view.elementType == IOSElementType.alert ||
+        view.elementType == IOSElementType.sheet;
+    final texts = {
+      view.label,
+      view.title,
+      view.value ?? '',
+      view.identifier,
+    }.where((t) => t.trim().isNotEmpty).toList();
+    if (texts.isNotEmpty || isAlert) {
+      final entry = "${view.elementType.name}:'${texts.join(' | ')}'";
+      (inAlert || isAlert ? alerts : others).add(entry);
+    }
+    for (final child in view.children) {
+      visit(child, inAlert: inAlert || isAlert);
+    }
+  }
+
+  for (final root in roots) {
+    visit(root, inAlert: false);
+  }
+  final shown = [...alerts, ...others.toSet()];
+  return '${alerts.isEmpty ? 'no alert/sheet' : 'ALERT/SHEET ${alerts.length}'}'
+      ' [${shown.take(cap).join(', ')}'
+      '${shown.length > cap ? ', +${shown.length - cap} more' : ''}]';
+}
+
+/// What is natively on screen right now, for [nativeScreenProbe].
+Future<String> _describeNativeScreen(PatrolIntegrationTester $) async {
+  final parts = <String>[];
+  for (final MapEntry(key: name, value: appId) in _probedApps.entries) {
+    try {
+      final response = await $.platform.ios.getNativeViews(null, appId: appId);
+      parts.add('$name: ${_describeNativeTree(response.roots)}');
+    } on Object catch (e) {
+      parts.add('$name: unreadable ($e)');
+    }
+  }
+  return parts.join(' || ');
+}
+
 Future<void> _launch(PatrolIntegrationTester $) async {
+  if (!kIsWeb && Platform.isIOS) {
+    nativeScreenProbe = () => _describeNativeScreen($);
+  }
   // Mirror the part of example main() the OIDC flow relies on, without
   // re-running runApp (Patrol already bootstrapped the engine). wrapApp() sets
   // the static SharedValue.didWrap flag and installs the StateManagerWidget, so

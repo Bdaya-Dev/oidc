@@ -7,6 +7,7 @@
 // The ONLY coupling to the test harness is a `pumpAndSettle` callback, so the
 // exact same conformance flow runs everywhere.
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -377,6 +378,24 @@ Future<void> _recordModuleVerdict({
   }
 }
 
+/// Describes what is natively on screen (alerts, sheets, their texts), or null
+/// on platforms where the runner cannot see native UI.
+///
+/// Set by the Patrol entrypoint, which owns the native automator; this file
+/// stays harness-agnostic. Used to answer "did a dialog block the login?" for
+/// a login that is taking far longer than a healthy one (#469).
+Future<String> Function()? nativeScreenProbe;
+
+/// When a still-pending login gets its on-screen state probed. A healthy iOS
+/// login takes ~3-5s (median 3.3s, p90 4.7s in run 37384969496), so the first
+/// probe only fires on a login that has already stalled. The last one fires
+/// before iOS's 90s flowTimeoutSeconds would cancel the browser.
+const loginStallProbeOffsets = [
+  Duration(seconds: 20),
+  Duration(seconds: 50),
+  Duration(seconds: 80),
+];
+
 /// A short label for a native browser-layer event, for a failure line.
 String describeNativeBrowserEvent(OidcNativeBrowserEvent event) =>
     switch (event) {
@@ -698,6 +717,20 @@ Future<void> runOidcConformanceTest(
 
   final archive = Archive();
 
+  // Positive control for the stall probe below: prove once per plan that it
+  // can actually see native UI, so a stall probe that reports "no alert" is
+  // known to be looking.
+  final selfTestProbe = nativeScreenProbe;
+  if (selfTestProbe != null) {
+    String screen;
+    try {
+      screen = await selfTestProbe().timeout(const Duration(seconds: 15));
+    } on Object catch (e) {
+      screen = 'probe failed: $e';
+    }
+    print('[e2e] SCREEN-PROBE-SELFTEST ($planName): $screen');
+  }
+
   // The plan mixes positive modules with negative ones such as
   // oidcc-client-test-invalid-iss, where the OP returns a deliberately broken
   // response and a null result is the correct outcome. No single module can be
@@ -990,6 +1023,39 @@ Future<void> runOidcConformanceTest(
         loginStopwatch
           ..reset()
           ..start();
+        // While the login is still pending, record what is on screen. print(),
+        // because the iOS job only shows print output (via the simulator log
+        // capture), and the "[e2e] STALL-PROBE" marker also triggers the
+        // workflow's simulator screenshot.
+        final probe = nativeScreenProbe;
+        var loginDone = false;
+        final stallProbes = [
+          if (probe != null)
+            for (final offset in loginStallProbeOffsets)
+              Future<void>.delayed(offset, () async {
+                if (loginDone) {
+                  return;
+                }
+                // Printed first so the workflow's screenshot watcher captures
+                // the screen before the probe itself touches anything.
+                print(
+                  '[e2e] STALL-PROBE-START $moduleName ($testInstanceId) '
+                  'at +${offset.inSeconds}s',
+                );
+                String screen;
+                try {
+                  screen = await probe().timeout(const Duration(seconds: 15));
+                } on Object catch (e) {
+                  screen = 'probe failed: $e';
+                }
+                print(
+                  '[e2e] STALL-PROBE $moduleName ($testInstanceId): login '
+                  '${loginDone ? 'finished while probing' : 'still pending'} '
+                  'after ${offset.inSeconds}s; browser events '
+                  '[${browserTimeline.join(', ')}]; on screen: $screen',
+                );
+              }),
+        ];
         try {
           if (!hasCode) {
             // No code comes back, so there is nothing to exchange. Deprecated in
@@ -1010,6 +1076,10 @@ Future<void> runOidcConformanceTest(
           return null;
         } finally {
           loginStopwatch.stop();
+          loginDone = true;
+          // Not awaited: a probe that has not fired yet would hold the module
+          // for up to 80s. Each one checks loginDone before doing anything.
+          unawaited(Future.wait(stallProbes));
         }
       }
 
