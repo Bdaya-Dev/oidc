@@ -11,6 +11,18 @@ const iosConformanceFlowTimeoutSeconds = 90;
 /// [iosConformanceFlowTimeoutSeconds] has to stay clear of it.
 const observedIosBrowserStartSeconds = 49.5;
 
+/// The linux/windows conformance flow timeout. Why it is longer than 30s is
+/// written up at its use in [conformanceManager].
+const desktopConformanceFlowTimeoutSeconds = 60;
+
+/// The slowest desktop login that still ended in a redirect: a plan's FIRST
+/// login, measured from "Starting login" to the suite's first authorization
+/// request (linux implicit, oidcc-client-test, main run 37502027906 attempt
+/// 1: 30.07s, just past the old 30s timeout). Every later login in a plan
+/// took at most 7.9s. [desktopConformanceFlowTimeoutSeconds] has to stay
+/// clear of it.
+const observedDesktopFirstLoginSeconds = 30.4;
+
 // Future<Map<String, dynamic>> prepareConformanceTest(String token) async {}
 OidcUserManager conformanceManager(
   String issuer, {
@@ -104,8 +116,31 @@ OidcUserManager conformanceManager(
       // dead at oidcc-client-test-discovery-issuer-mismatch and GitHub Actions
       // killed the job ten minutes later. Same listener on both, so both get
       // the same bound.
-      linux: OidcPlatformSpecificOptions_Native(flowTimeoutSeconds: 30),
-      windows: OidcPlatformSpecificOptions_Native(flowTimeoutSeconds: 30),
+      //
+      // 30s was too tight for a plan's FIRST login, which pays for the CI
+      // runner's system browser cold-starting. Login durations ("Starting
+      // login" -> "[e2e] ... authResult") across 6 runs' linux/windows legs
+      // (37456369562, 37479380276, 37485961901, 37486189186, 37502027906
+      // attempts 1+2), as first login of each plan vs every other login:
+      //   linux    first n=46  max 30.4s (+24.6, 12.7, 12.3, 12.1)  others max 7.7s
+      //   windows  first n=45  max 15.2s (+13.3, 10.2, 8.7)          others max 7.9s
+      // The 30.4s one is the failure that prompted this (main run
+      // 37502027906, linux implicit): the authorization request reached the
+      // suite 30.07s after the login started, the listener gave up at 30s,
+      // and the module was left WAITING. The same module's next attempt
+      // took 1.9s.
+      //
+      // 60s is about twice the worst first login seen. It costs nothing when
+      // the browser is healthy, because the flow ends at the redirect. It
+      // also stays inside the "fail before the CI job is killed" bound that
+      // test/conformance_flow_timeout_test.dart enforces. macOS stays at 30s:
+      // its worst first login in the same runs was 14.0s.
+      linux: OidcPlatformSpecificOptions_Native(
+        flowTimeoutSeconds: desktopConformanceFlowTimeoutSeconds,
+      ),
+      windows: OidcPlatformSpecificOptions_Native(
+        flowTimeoutSeconds: desktopConformanceFlowTimeoutSeconds,
+      ),
       // Web hung the same way and had no knob at all until now:
       // hiddenIframeTimeout bounds the silent-renew iframe, not the popup the
       // interactive flow actually uses.
