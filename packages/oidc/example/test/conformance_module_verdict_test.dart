@@ -106,6 +106,87 @@ void main() {
     });
   });
 
+  // A module is run again on a fresh instance only when the suite itself
+  // proves it never saw the browser: anything else could replace a real
+  // verdict with a luckier one.
+  group('shouldRerunModuleOnFreshInstance', () {
+    final noAuthorize = <Map<String, dynamic>>[
+      {'msg': 'Setup Done', 'time': 1},
+      {'msg': 'Discovery endpoint', 'startBlock': true, 'time': 2},
+    ];
+    final withAuthorize = <Map<String, dynamic>>[
+      ...noAuthorize,
+      {'msg': 'Authorization endpoint', 'startBlock': true, 'time': 3},
+    ];
+
+    test('reruns once when the suite received no authorization request', () {
+      expect(
+        shouldRerunModuleOnFreshInstance(
+          loggedIn: false,
+          attempt: 1,
+          suiteLog: noAuthorize,
+        ),
+        isTrue,
+      );
+    });
+
+    test('never reruns once an authorization request reached the suite '
+        '(every negative module ends like this)', () {
+      expect(
+        shouldRerunModuleOnFreshInstance(
+          loggedIn: false,
+          attempt: 1,
+          suiteLog: withAuthorize,
+        ),
+        isFalse,
+      );
+    });
+
+    test('never reruns a rerun', () {
+      expect(maxModuleReruns, 1);
+      expect(
+        shouldRerunModuleOnFreshInstance(
+          loggedIn: false,
+          attempt: 2,
+          suiteLog: noAuthorize,
+        ),
+        isFalse,
+      );
+    });
+
+    test('never reruns a login that succeeded', () {
+      expect(
+        shouldRerunModuleOnFreshInstance(
+          loggedIn: true,
+          attempt: 1,
+          suiteLog: noAuthorize,
+        ),
+        isFalse,
+      );
+    });
+
+    test('an unreadable (empty) log proves nothing, so no rerun', () {
+      expect(
+        shouldRerunModuleOnFreshInstance(
+          loggedIn: false,
+          attempt: 1,
+          suiteLog: const [],
+        ),
+        isFalse,
+      );
+    });
+
+    test('a log line that merely mentions authorization is not a request '
+        'block', () {
+      expect(
+        suiteLogShowsAuthorizationRequest([
+          {'msg': 'Authorization endpoint response params', 'time': 1},
+        ]),
+        isFalse,
+      );
+    });
+  });
+
   // #469: on iOS the per-module failure line is the only harness output in
   // the job log, so it has to say by itself whether the suite ever received
   // the authorization request -- the question a stuck `status=WAITING`
