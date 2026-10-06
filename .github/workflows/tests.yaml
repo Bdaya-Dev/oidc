@@ -1186,6 +1186,9 @@ jobs:
               out="$(xcrun simctl spawn "$SIMULATOR_UDID" launchctl remove "$label" 2>&1)"
               echo "remove $label -> rc=$? $out"
             done
+            ;;
+          esac
+          case ",$IOS_TRIM," in *,simkill,*)
             # Widget/intents extensions are launched on demand (not launchd
             # jobs), so kill the running ones; whether they come back is what
             # the after-snapshot shows.
