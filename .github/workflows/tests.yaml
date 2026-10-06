@@ -541,6 +541,17 @@ jobs:
       # packages/<pkg>/coverage/lcov.info here makes combine_coverage see
       # the exact directory layout it always saw in the old single job, for
       # both path styles.
+      #
+      # `mv`, not `cp`, and an explicit `rm -rf` of the whole download
+      # directory afterward: independent review on PR #494 (run
+      # 37476666335) caught that a `cp` here left the original flat files
+      # sitting in coverage/flat-merged/ too, so combine_coverage's
+      # recursive scan ingested BOTH the restored packages/<pkg>/coverage/
+      # copy AND the stale flat one -- the flat one resolves to the same
+      # bogus "/coverage/<relative-path>" phantom SF: entries described
+      # above, since it's no longer sitting in a per-package directory.
+      # That run's package-coverage artifact had 254 SF: lines for 139
+      # unique files (115 duplicates) and 11 phantom /coverage/... paths.
       - name: "[Coverage] Restore package-relative coverage layout"
         run: |
           set -e
@@ -548,8 +559,9 @@ jobs:
           for f in coverage/flat-merged/*.info; do
             pkg="$(basename "$f" .info)"
             mkdir -p "packages/$pkg/coverage"
-            cp "$f" "packages/$pkg/coverage/lcov.info"
+            mv "$f" "packages/$pkg/coverage/lcov.info"
           done
+          rm -rf coverage/flat-merged
           find packages -maxdepth 3 -name lcov.info
       - name: "[Coverage] Combine & convert coverage report"
         env:
@@ -560,6 +572,39 @@ jobs:
           dart pub global activate remove_from_coverage
           dart pub global run combine_coverage --repo-path="$REPO_PATH"
           dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$' -r 'oidc_cli/lib/src/version\.dart$'
+      # Structural guard added alongside the mv/rm fix above: catches this
+      # exact failure mode (and anything similar) directly, instead of
+      # relying only on the package-specific guards below, which can pass
+      # even with duplicate/phantom entries polluting the file (as they did
+      # on run 37476666335 -- the Flutter-package guard below matched fine
+      # because the CORRECT entries were also present, just alongside 115
+      # duplicates it never looked for).
+      - name: "[Coverage] Assert no duplicate or phantom SF entries"
+        run: |
+          set -e
+          total=$(grep -c '^SF:' coverage/lcov.info || true)
+          total=${total:-0}
+          unique=$(grep '^SF:' coverage/lcov.info | sort -u | wc -l | tr -d ' ')
+          echo "guard: SF total=$total unique=$unique"
+          if [ "$total" -ne "$unique" ]; then
+            echo "::error::coverage/lcov.info has $((total - unique)) duplicate SF: line(s) out of $total - a source file's coverage was recorded more than once (a stale intermediate coverage artifact leaking into the merge?)"
+            echo "guard: duplicated SF: entries:"
+            grep '^SF:' coverage/lcov.info | sort | uniq -c | awk '$1>1 {print}' | head -20
+            exit 1
+          fi
+          missing=0
+          while IFS= read -r sf; do
+            p="${sf#SF:}"
+            p="${p#/}"
+            if [ -z "$p" ] || [ ! -f "$p" ]; then
+              echo "::error::coverage/lcov.info references a path that doesn't exist in this checkout: $sf"
+              missing=1
+            fi
+          done < <(grep '^SF:' coverage/lcov.info | sort -u)
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "guard: all $total SF: entries are unique and point to real files in the checkout"
       - name: "[Coverage] Assert Flutter package coverage survived"
         # Regression guard, unchanged from the original job. `flutter test
         # --coverage` writes coverage/lcov.info directly; running
