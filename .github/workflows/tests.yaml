@@ -524,12 +524,38 @@ jobs:
           path: coverage/flat-merged/
           pattern: "unit-coverage-*-stable"
           merge-multiple: true
+      # Restores each flattened packages/<pkg>/coverage/lcov.info back to its
+      # NATURAL on-disk location before merging. Confirmed live (run
+      # 37464828887) that skipping this and running combine_coverage
+      # straight over the flat files breaks the Flutter packages: combine_
+      # coverage resolves each file's SF: entries relative to the directory
+      # the file is found in whenever those entries are already
+      # package-relative (not absolute) -- which is exactly how `flutter
+      # test --coverage` writes them (e.g. "SF:lib/facade.dart", no
+      # "packages/<pkg>/" prefix, unlike the VM/format_coverage-generated
+      # files, whose SF: entries are already absolute and therefore survive
+      # being read from anywhere). Flat in coverage/flat-merged/, the four
+      # Flutter packages' guard matched 0 ("SF:/coverage/lib/src/facade.dart"
+      # -- repo-path + "/coverage" + the relative path, with the
+      # "packages/<pkg>/" segment lost entirely). Rebuilding
+      # packages/<pkg>/coverage/lcov.info here makes combine_coverage see
+      # the exact directory layout it always saw in the old single job, for
+      # both path styles.
+      - name: "[Coverage] Restore package-relative coverage layout"
+        run: |
+          set -e
+          shopt -s nullglob
+          for f in coverage/flat-merged/*.info; do
+            pkg="$(basename "$f" .info)"
+            mkdir -p "packages/$pkg/coverage"
+            cp "$f" "packages/$pkg/coverage/lcov.info"
+          done
+          find packages -maxdepth 3 -name lcov.info
       - name: "[Coverage] Combine & convert coverage report"
         env:
           REPO_PATH: ${{ github.workspace }}
         run: |
           set -e
-          ls -la coverage/flat-merged
           dart pub global activate combine_coverage
           dart pub global activate remove_from_coverage
           dart pub global run combine_coverage --repo-path="$REPO_PATH"
