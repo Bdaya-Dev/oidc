@@ -770,7 +770,9 @@ jobs:
           if [ "${{ job.status }}" != "success" ]; then
             xcrun simctl io "$SIMULATOR_UDID" screenshot "$D/final.png" || true
           fi
-          vpid="$(cat "$D/video.pid" 2>/dev/null)"
+          # `|| true`: this step runs under bash -e, and video.pid only exists
+          # with heavy diagnostics on.
+          vpid="$(cat "$D/video.pid" 2>/dev/null || true)"
           if [ -n "$vpid" ]; then
             kill -INT "$vpid" 2>/dev/null || true
             for _ in $(seq 1 60); do kill -0 "$vpid" 2>/dev/null || break; sleep 1; done
