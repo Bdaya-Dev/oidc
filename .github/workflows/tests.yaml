@@ -16,19 +16,10 @@ on:
       - "**.md"
   workflow_dispatch:
     inputs:
-      ios_reduce_load:
-        description: "iOS job: reduce host/simulator load (#469)"
-        type: boolean
-        default: true
       ios_heavy_diagnostics:
         description: "iOS job: stream simulator logs and record the screen (adds load)"
         type: boolean
         default: false
-      ios_runner:
-        description: "iOS job: runner label (macos-26 = 3 vCPU/7 GB arm64; macos-26-intel = 4 vCPU/14 GB x64)"
-        type: choice
-        options: [macos-26, macos-26-intel]
-        default: macos-26
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -629,21 +620,22 @@ jobs:
     # the device as *actually* registered -- see the note on that step for
     # why a bare `boot` is not enough on its own.
     #
-    # The runner label is a workflow_dispatch input (ios_runner) so that runner
-    # classes can be compared without a code change. Push/PR runs use
-    # macos-26: GitHub's standard arm64 runner, 3 vCPU / 7 GB RAM. The
-    # x64 macos-26-intel runner is 4 vCPU / 14 GB
-    # (docs.github.com/en/actions/reference/runners/github-hosted-runners).
-    # It carries the same Xcode 26.6 and iOS 26.4 simulator runtime
-    # (actions/runner-images images/macos/macos-26-Readme.md).
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.ios_runner) || 'macos-26' }}
+    # #469: on this runner (macos-26: GitHub's standard arm64 runner, 3 vCPU /
+    # 7 GB RAM) the simulator's browser intermittently takes 30-150s to start,
+    # or never does: WebKit process launches stall while the host swaps. None
+    # of the following made the stalls go away, measured over 2+ iOS runs each:
+    #   * Spotlight indexing off, other simulators shut down, smallest iPhone;
+    #   * sharding (#492);
+    #   * macos-26-intel (4 vCPU / 14 GB): setup and tests ran 2-3x slower and
+    #     both shards hit the 60-minute timeout.
+    # So the harness reruns a module once, and only when the suite's own log
+    # proves the browser never reached it (shouldRerunModuleOnFreshInstance,
+    # integration_test/conformance/api.dart).
+    runs-on: macos-26
     timeout-minutes: 60
     env:
-      # #469: the iOS browser stalls are slow process launches on a starved
-      # host. See "Host load reduction" and "Start iOS diagnostics". Both are
-      # workflow_dispatch inputs, so a load experiment needs no code change.
-      # Push/PR runs get the defaults: reduce load, no heavy diagnostics.
-      IOS_REDUCE_LOAD: ${{ github.event_name != 'workflow_dispatch' || inputs.ios_reduce_load }}
+      # workflow_dispatch input; push/PR runs never pay for heavy diagnostics.
+      # See "Start iOS diagnostics".
       IOS_HEAVY_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_heavy_diagnostics }}
     strategy:
       fail-fast: false
@@ -655,19 +647,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
-      - name: Host specs and load reduction
-        # The host's own background work competes with the simulator for its
-        # few cores and its RAM. In run 37430662455 mdworker_shared and
-        # spotlightknowledged.updater (Spotlight) were among the host's top
-        # CPU users while the tests ran. mdutil is Apple's supported switch
-        # for Spotlight indexing ("-i on | off  Turn indexing on or off").
-        run: |
-          echo "IOS_REDUCE_LOAD=$IOS_REDUCE_LOAD IOS_HEAVY_DIAGNOSTICS=$IOS_HEAVY_DIAGNOSTICS runner=${{ runner.arch }}"
-          sysctl -n hw.ncpu hw.memsize machdep.cpu.brand_string || true
-          sysctl -n vm.loadavg
-          if [ "$IOS_REDUCE_LOAD" = "true" ]; then
-            sudo mdutil -a -i off || true
-          fi
       - name: Select Xcode 26.6
         # The macos-26 image ships several Xcode versions side by side; its
         # default is 26.5. The patrol#15 XCUITest terminate flake is markedly
@@ -701,34 +680,14 @@ jobs:
         # the step exits -- the job's later "Wait for Simulator" step is the
         # actual synchronization point (see that step for why it uses
         # `bootstatus -b`, not a `simctl list | grep Booted` poll).
-        #
-        # With IOS_REDUCE_LOAD (#469), any other booted simulator is shut down
-        # first, so that only the test device holds memory. The smallest iPhone
-        # the runtime offers is preferred over the first one listed (a
-        # 1206x2622 iPhone 17 Pro). Fewer pixels for SimRenderServer and
-        # SimMetalHost to render and hold, and both were among the host's top
-        # CPU users.
         run: |
-          echo "Booted before this step:"; xcrun simctl list devices booted || true
-          if [ "$IOS_REDUCE_LOAD" = "true" ]; then
-            xcrun simctl shutdown all || true
-          fi
           SIM_JSON="$(xcrun simctl list devices available --json)"
           RUNTIME_KEY="$(echo "$SIM_JSON" | jq -r '.devices | to_entries[] | select(.key|test("SimRuntime.iOS")) | select([.value[]|select(.name|startswith("iPhone"))]|length>0) | .key' | head -n 1)"
-          UDID=""
-          if [ "$IOS_REDUCE_LOAD" = "true" ]; then
-            for NAME in "iPhone SE (3rd generation)" "iPhone 17e" "iPhone 16e"; do
-              UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" --arg n "$NAME" '.devices[$rt][] | select(.name==$n) | .udid' | head -n 1)"
-              [ -n "$UDID" ] && break
-            done
-          fi
-          if [ -z "$UDID" ]; then
-            UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
-          fi
+          UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
           OS_VER="$(echo "$RUNTIME_KEY" | sed -E 's/.*SimRuntime\.iOS-([0-9]+)-([0-9]+).*/\1.\2/')"
           : "${UDID:?No available iPhone simulator found}"
           : "${OS_VER:?Could not parse simulator OS version}"
-          echo "Booting UDID=$UDID ($(echo "$SIM_JSON" | jq -r --arg u "$UDID" '.devices[][] | select(.udid==$u) | .name')) on iOS $OS_VER (runtime $RUNTIME_KEY) in the background"
+          echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY) in the background"
           nohup xcrun simctl boot "$UDID" > "$RUNNER_TEMP/simctl-boot.log" 2>&1 &
           disown
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
