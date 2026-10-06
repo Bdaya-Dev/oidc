@@ -856,6 +856,50 @@ String describeSuiteLogForFailure(
       '[$requestBlocks]; last ${tail.length}: $tailText';
 }
 
+/// Whether [suiteLog] ([fetchTestLogs]) records that the suite received at
+/// least one authorization request.
+bool suiteLogShowsAuthorizationRequest(List<Map<String, dynamic>> suiteLog) =>
+    suiteLog.any(
+      (e) =>
+          e['startBlock'] == true &&
+          '${e['msg']}'.startsWith(_authorizationEndpointBlock),
+    );
+
+/// The most times a module is run on a fresh instance after its browser never
+/// reached the suite. See [shouldRerunModuleOnFreshInstance].
+const maxModuleReruns = 1;
+
+/// Whether a module attempt should be discarded and the module run again on a
+/// fresh suite instance.
+///
+/// This is for the iOS CI simulator, where the browser sometimes never
+/// delivers the authorization request at all (#469). In run 37395358046 the
+/// SafariViewService process hosting the session stopped responding and was
+/// killed by the watchdog (`0x8badf00d`), and the session never recovered: no
+/// timeout is long enough for a browser that is gone. Other runs had WebKit
+/// WebContent launches taking 27-56s before the request left the simulator.
+///
+/// The rerun can never hide a verdict, because it requires ALL of:
+///   * the client did not log in ([loggedIn] false);
+///   * the suite's own log for the instance is readable and records NO
+///     authorization request ([suiteLogShowsAuthorizationRequest]). The suite
+///     observed nothing and so judged nothing. A module whose authorization
+///     request did arrive, and whose response the client then rejected (every
+///     negative module), is never rerun;
+///   * this is not already a rerun ([attempt] counts from 1;
+///     [maxModuleReruns] caps it).
+/// An empty log means it could not be read, which proves nothing, so it does
+/// not qualify either.
+bool shouldRerunModuleOnFreshInstance({
+  required bool loggedIn,
+  required int attempt,
+  required List<Map<String, dynamic>> suiteLog,
+}) =>
+    !loggedIn &&
+    attempt <= maxModuleReruns &&
+    suiteLog.isNotEmpty &&
+    !suiteLogShowsAuthorizationRequest(suiteLog);
+
 /// Whether suite log entry message [msg] confirms the OP's
 /// `check_session_iframe` page completed one postMessage round trip with the
 /// RP (`LogGetSessionStateRequest`, openid-certification/conformance-suite:
