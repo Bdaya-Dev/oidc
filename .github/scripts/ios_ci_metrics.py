@@ -20,7 +20,14 @@ Metrics:
                     that job's uuid with a pid ("Now tracking process").
                     Healthy launches take ~1.5s.
   host              load average (1m), free pages, swapouts.
-  rss               peak resident size of the processes that matter most
+  slow launch swap  for each WebContent launch >10s, how many swapouts the
+                    host did while it was pending. Needs both --launch-log
+                    and --host-load; the sampler's times and the log's are
+                    both the runner's clock (UTC).
+  simulator rss     sum of RSS over the simulator's processes per sample
+                    (shared pages count once per process, so it overstates
+                    real use; compare it between runs, not with RAM size).
+  rss              peak resident size of the processes that matter most
                     for memory (the app, the browser, SpringBoard, the crash
                     reporter, widget renderers), as seen in the sampler's
                     top-RSS lists; a process absent from every list is "-".
@@ -102,6 +109,28 @@ def host(path):
     return load, free, swap, sim
 
 
+def swap_timeline(path):
+    """(seconds since midnight, cumulative swapouts) per sampler sample."""
+    rows, t = [], None
+    for line in open(path, encoding='utf-8', errors='replace'):
+        m = re.match(r'=== (\d\d):(\d\d):(\d\d)', line)
+        if m:
+            h, mi, s = map(int, m.groups())
+            t = h * 3600 + mi * 60 + s
+            continue
+        m = re.match(r'Swapouts:\s+(\d+)', line)
+        if m and t is not None:
+            rows.append((t, int(m.group(1))))
+    return rows
+
+
+def swaps_during(timeline, end, secs):
+    """Swapouts between end-secs and end, or None if no sample fell in it."""
+    stop = end.hour * 3600 + end.minute * 60 + end.second
+    inside = [v for t, v in timeline if stop - secs <= t <= stop]
+    return inside[-1] - inside[0] if inside else None
+
+
 RSS_WATCH = ('Runner', 'SafariViewService', 'SpringBoard', 'ReportCrash',
              'WidgetRenderer_Default')
 CPU_WATCH = ('log', 'diagnosticd')
@@ -161,6 +190,15 @@ def main():
             d = [r[0] for r in rows]
             out.append(f'WebContent launch: {_dist(d)}; >10s: '
                        f'{sum(x > 10 for x in d)}')
+            if a.host_load:
+                timeline = swap_timeline(a.host_load)
+                for secs, end in sorted(rows, reverse=True)[:8]:
+                    if secs <= 10:
+                        break
+                    n = swaps_during(timeline, end, secs)
+                    out.append(f'  slow launch {secs:6.1f}s @{end:%H:%M:%S}: '
+                               f'swapouts during it '
+                               f'{"?" if n is None else n}')
         except OSError as e:
             out.append(f'WebContent launch: unreadable ({e})')
     if a.host_load:
