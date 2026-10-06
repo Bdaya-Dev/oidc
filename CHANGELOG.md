@@ -3,6 +3,36 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 2026-10-06
+
+### Changes
+
+---
+
+Packages with breaking changes:
+
+ - There are no breaking changes in this release.
+
+Packages with other changes:
+
+ - [`oidc_web_core` - `v1.2.2`](#oidc_web_core---v122)
+ - [`oidc_web` - `v1.0.5`](#oidc_web---v105)
+ - [`oidc` - `v5.0.1`](#oidc---v501)
+
+Packages with dependency updates only:
+
+> Packages listed below depend on other packages in this workspace that have had changes. Their versions have been incremented to bump the minimum dependency versions of the packages they depend upon in this project.
+
+ - `oidc_web` - `v1.0.5`
+ - `oidc` - `v5.0.1`
+
+---
+
+#### `oidc_web_core` - `v1.2.2`
+
+ - **FIX**(oidc_web_core): compare the session iframe's window by JS identity. ([1dc7598f](https://github.com/Bdaya-Dev/oidc/commit/1dc7598fa5eb74d015d2a0e8dfe7f673711ba41e))
+
+
 ## 2026-10-05
 
 ### Changes
