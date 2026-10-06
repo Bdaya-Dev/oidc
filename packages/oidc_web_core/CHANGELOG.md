@@ -1,3 +1,7 @@
+## 1.2.2
+
+ - **FIX**(oidc_web_core): compare the session iframe's window by JS identity. ([1dc7598f](https://github.com/Bdaya-Dev/oidc/commit/1dc7598fa5eb74d015d2a0e8dfe7f673711ba41e))
+
 ## 1.2.1
 
  - **FIX**(oidc_web_core): require event.source to match a monitor's own iframe ([#474](https://github.com/Bdaya-Dev/oidc/issues/474)). ([b4346936](https://github.com/Bdaya-Dev/oidc/commit/b4346936cc6df00a6902c471cb8a6eaaf722180e))
