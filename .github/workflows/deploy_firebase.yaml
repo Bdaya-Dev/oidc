@@ -50,23 +50,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Resolve cache coordinates without installing -- see
+      # .github/actions/flutter_base's comment for the full story:
+      # flutter-action's OWN `cache: true` step is a long-standing,
+      # still-open upstream bug on macOS/Windows runners (subosito/
+      # flutter-action#350); this job runs on ubuntu-latest only so it
+      # isn't directly hit, but its own internal pub-cache step's unscoped
+      # `hashFiles('**/pubspec.lock')` was observed failing ("couldn't
+      # finish within 120 seconds") on a macOS runner elsewhere in this
+      # repo's CI. Also drops the custom `cache-key` that omitted
+      # `:version:` -- it produced a cache entry duplicating (same bytes,
+      # different key: `flutter-linux-stable-x64-<hash>`) the one
+      # flutter_base already populates for the same channel/version/arch/
+      # hash; using flutter-action's own default key (via dry-run below)
+      # unifies with that entry instead of duplicating it, which matters
+      # under this repo's 10GB total cache cap.
+      - name: Resolve Flutter SDK version + cache coordinates
+        id: flutter_sdk_info
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+          pub-cache: "false"
+          dry-run: true
+
+      - name: Cache Flutter SDK
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}
+          key: ${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
-          # See .github/actions/flutter_base's comment for the full story:
-          # the SDK cache doesn't need to vary with the lockfile, and the
-          # unscoped `hashFiles('**/pubspec.lock')` glob this key used to
-          # require has been observed to fail ("couldn't finish within 120
-          # seconds") on a macOS runner elsewhere in this repo's CI; the
-          # dead `flutter-linux-stable-x64-<hash>-` cache entries (trailing
-          # dash, empty hash segment) in this repo's cache list are that
-          # same failure degrading silently on Linux. pub-cache: "false"
-          # disables flutter-action's own internal pub-cache step, which
-          # independently used the same unscoped hashFiles call.
+          cache: false
           pub-cache: "false"
-          cache-key: "flutter-:os:-:channel:-:arch:-:hash:"
 
       - name: Build Example (Flutter web + wasm)
         shell: bash

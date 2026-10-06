@@ -14,28 +14,80 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # Resolve the exact (channel, version, arch, hash) this run will use,
+    # and the cache coordinates subosito/flutter-action would itself use for
+    # them, WITHOUT installing anything yet. `dry-run: true` short-circuits
+    # only flutter-action's own "Run setup script" step; its "Set action
+    # inputs" step always runs in print-only mode regardless and is what
+    # sets the CACHE-PATH/CACHE-KEY outputs read below. `cache`/`pub-cache`
+    # are both false here: we only want these outputs, never flutter-
+    # action's own cache steps -- see the next step's comment for why.
+    - name: Resolve Flutter SDK version + cache coordinates
+      id: flutter_sdk_info
+      uses: subosito/flutter-action@v2
+      with:
+        channel: ${{ inputs.channel }}
+        flutter-version: ${{ inputs.flutter-version }}
+        cache: false
+        pub-cache: "false"
+        dry-run: true
+
+    # subosito/flutter-action's OWN `cache: true` (an internal actions/cache
+    # step keyed on the same CACHE-KEY/CACHE-PATH resolved above) is broken
+    # on macOS and Windows runners: a long-standing, still-open upstream bug
+    # (subosito/flutter-action#350 -- multiple independent reporters,
+    # including one whose experience exactly matches ours: "Caches
+    # perfectly for android builds ('linux') but fails for macOS"). By the
+    # time its cache step's POST (save) phase runs at the end of the job, it
+    # cannot re-resolve the `${{ steps.flutter-action.outputs.CACHE-PATH }}`
+    # expression its own `with: path:` depends on, logs "Input required and
+    # not supplied: path", and silently no-ops -- so the SDK is NEVER
+    # persisted and every run on those OSes re-downloads+extracts it from
+    # scratch (65s+ on macOS, worse under load). Confirmed live on this
+    # repo's own main-branch runs (e.g. run 37523659563, 2026-10-06): the
+    # windows/macos/ios "Cache Flutter" POST step prints exactly that
+    # warning every time, while the Linux jobs (unit_core, linux, android,
+    # web) -- which go through this exact same flutter_base action -- cache
+    # and restore it just fine, because they hit an already-warm cache and
+    # never even reach the broken save path; there's no evidence Linux's
+    # save path is actually any more reliable, just untested since cold.
+    # Routing the same key/path through our OWN actions/cache step below
+    # (identical pattern to the pub-cache step further down, whose POST logs
+    # a real "Failed to save: ... another job may be creating this cache"
+    # race rather than an empty-input warning -- proof its inputs DO resolve
+    # correctly cross-OS) sidesteps the bug entirely: this step is a direct
+    # child of flutter_base, not nested inside a third-party composite
+    # action, so its own POST input-replay works reliably on every OS.
+    - name: Cache Flutter SDK
+      id: flutter_sdk_cache
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}
+        key: ${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}
+
     - name: Set up Flutter
       uses: subosito/flutter-action@v2
       with:
-        cache: true
-        # `cache: true` with no explicit `pub-cache` input ALSO silently
-        # enables flutter-action's OWN internal pub-cache step (its
-        # action.yaml: `if: (inputs.pub-cache == '' && inputs.cache ==
-        # 'true') || ...`), whose key unconditionally appends
-        # `${{ hashFiles('**/pubspec.lock') }}` -- an UNSCOPED glob from the
-        # repo root, not the narrower `packages/**/pubspec.yaml` below.
-        # Confirmed live: a run on this exact composite action (reached by
-        # every tests.yaml job via integration_test_base -> flutter_base)
-        # hit "hashFiles('**/pubspec.lock') couldn't finish within 120
-        # seconds" on a macOS leg, and the GH Actions cache listing
-        # (`gh api repos/Bdaya-Dev/oidc/actions/caches`) shows a
-        # `flutter-linux-...-<hash>-` key with an EMPTY trailing segment --
-        # the same hashFiles call degrading to "" on Linux too, just not
-        # fatally there. Explicitly disabling it here (we run our own
-        # narrowly-scoped pub cache below instead) removes that failure
-        # mode for every job that goes through this action, including
+        # Both false: the SDK cache is handled entirely by our own step
+        # above (flutter-action's internal version is the broken one on
+        # macOS/Windows -- see that step's comment). `cache: true` with no
+        # explicit `pub-cache` input would ALSO silently enable flutter-
+        # action's OWN internal pub-cache step (its action.yaml: `if:
+        # (inputs.pub-cache == '' && inputs.cache == 'true') || ...`), whose
+        # key unconditionally appends `${{ hashFiles('**/pubspec.lock') }}`
+        # -- an UNSCOPED glob from the repo root, not the narrower
+        # `packages/**/pubspec.yaml` below. Confirmed live: a run on this
+        # exact composite action hit "hashFiles('**/pubspec.lock') couldn't
+        # finish within 120 seconds" on a macOS leg, and the GH Actions
+        # cache listing (`gh api repos/Bdaya-Dev/oidc/actions/caches`)
+        # showed a `flutter-linux-...-<hash>-` key with an EMPTY trailing
+        # segment -- the same hashFiles call degrading to "" on Linux too,
+        # just not fatally there. pub-cache: "false" keeps that disabled
+        # regardless (we run our own narrowly-scoped pub cache below
+        # instead) for every job that goes through this action, including
         # ios/macos/android/web/linux/windows via integration_test_base --
         # without changing anything those jobs own.
+        cache: false
         pub-cache: "false"
         channel: ${{ inputs.channel }}
         flutter-version: ${{ inputs.flutter-version }}
