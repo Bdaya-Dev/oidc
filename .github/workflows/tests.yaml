@@ -15,6 +15,15 @@ on:
     paths-ignore:
       - "**.md"
   workflow_dispatch:
+    inputs:
+      ios_heavy_diagnostics:
+        description: "iOS job: stream simulator logs and record the screen (adds load)"
+        type: boolean
+        default: false
+      ios_force_stall_module:
+        description: "iOS job, test-only: conformance module whose first attempt is forced to stall, to prove the gated rerun (empty = off)"
+        type: string
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -959,15 +968,41 @@ jobs:
     # today; revisit if required checks are ever turned on for this branch.
     #
     # The simulator boot is kicked off in the background (`simctl boot &`,
-    # detached with `disown`) right after selecting Xcode, so it overlaps
-    # "Set up Environment" and "Run flutter precache" instead of blocking
-    # ahead of them. `simctl bootstatus -b` right before the tests step is the
+    # detached with `disown`) right AFTER "Set up Environment", so it overlaps
+    # only "Run flutter precache" and the Patrol CLI activation. It used to
+    # start before setup, and booting alongside the Flutter install made that
+    # install 3-4x slower (see the note on the boot step). `simctl
+    # bootstatus -b` right before the tests step is the
     # actual gate: it boots the device if the background kick-off hasn't
     # finished yet, and either way blocks until CoreSimulatorService reports
     # the device as *actually* registered -- see the note on that step for
     # why a bare `boot` is not enough on its own.
+    #
+    # #469: on this runner (macos-26: GitHub's standard arm64 runner, 3 vCPU /
+    # 7 GB RAM) the simulator's browser intermittently takes 30-150s to start,
+    # or never does: WebKit process launches stall while the host swaps. None
+    # of the following made the stalls go away, measured over 2+ iOS runs each:
+    #   * Spotlight indexing off, other simulators shut down, smallest iPhone;
+    #   * sharding (#492);
+    #   * macos-26-intel (4 vCPU / 14 GB): setup and tests ran 2-3x slower and
+    #     both shards hit the 60-minute timeout.
+    # So the harness reruns a module once, on a fresh instance, and only when
+    # the suite still reports that instance WAITING and its log shows no
+    # authorization request ever arriving (refused requests count as
+    # arrived). The gate is shouldRerunModuleOnFreshInstance in
+    # integration_test/conformance/api.dart. It applies on every platform;
+    # only this simulator's stalls have been seen to meet it. The
+    # CONFORMANCE_FORCE_STALL_MODULE dart-define (workflow_dispatch input
+    # ios_force_stall_module, empty by default) forces one such stall to
+    # prove the path end to end.
     runs-on: macos-26
     timeout-minutes: 60
+    env:
+      # workflow_dispatch input; push/PR runs never pay for heavy diagnostics.
+      # See "Start iOS diagnostics".
+      IOS_HEAVY_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_heavy_diagnostics }}
+      # Test-only; empty (off) unless set by hand on a workflow_dispatch run.
+      IOS_FORCE_STALL_MODULE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_force_stall_module || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -990,10 +1025,23 @@ jobs:
             ls -d /Applications/Xcode_*.app || true
           fi
           xcodebuild -version
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+        # with:
+        #   channel: master
+        #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Start Simulator (boot in background)
-        # Kicks off the boot and returns immediately so the next steps (Set
-        # up Environment, flutter precache) run while the simulator boots in
-        # parallel, instead of waiting on it first. `nohup ... & disown`
+        # Kicks off the boot and returns immediately, so the next steps
+        # (flutter precache, Patrol CLI activation) run while the simulator
+        # boots, instead of waiting on it first.
+        #
+        # It deliberately starts AFTER "Set up Environment", not before.
+        # Booting alongside the Flutter install made that install 3-4x slower
+        # on the 3-vCPU runner: setup script 65s with a synchronous boot vs
+        # 178-273s concurrently, and cache-pub's hashFiles 0.5s vs 27-125s.
+        # That net-lost 80-240s per leg (main 6ada33a jobs 112244868347/381 vs
+        # c171634 job 112065979344). The steps it overlaps now are cheap.
+        # `nohup ... & disown`
         # detaches the boot from this step's shell so it keeps running after
         # the step exits -- the job's later "Wait for Simulator" step is the
         # actual synchronization point (see that step for why it uses
@@ -1010,13 +1058,12 @@ jobs:
           disown
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
           echo "SIMULATOR_OS=$OS_VER" >> "$GITHUB_ENV"
-      - name: Set up Environment
-        uses: ./.github/actions/integration_test_base
-        # with:
-        #   channel: master
-        #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Run flutter precache
         run: flutter precache -v
+      - name: Activate Patrol CLI (patrol_cli_plus)
+        # patrol_cli_plus >= 5.4.1 defaults xcodebuild -destination-timeout to 30s,
+        # fixing the exit-70 device-resolution race on the slow macos-26 simulator.
+        run: dart pub global activate patrol_cli_plus
       - name: Wait for Simulator to be Ready
         # `xcrun simctl boot` (kicked off above, in the background) only
         # *initiates* the boot and returns almost immediately; `simctl list
@@ -1042,24 +1089,59 @@ jobs:
         run: |
           xcrun simctl bootstatus "${SIMULATOR_UDID:?Simulator UDID was not exported}" -b
           echo "Simulator is ready."
-      - name: Activate Patrol CLI (patrol_cli_plus)
-        # patrol_cli_plus >= 5.4.1 defaults xcodebuild -destination-timeout to 30s,
-        # fixing the exit-70 device-resolution race on the slow macos-26 simulator.
-        run: dart pub global activate patrol_cli_plus
-      - name: Start simulator log capture
+      - name: Start iOS diagnostics
         # patrol forwards none of the app's Dart print/logging output on iOS,
         # even with --verbose (the other jobs all show it), so a conformance
         # module that fails here had only its failure line to go on (#469).
-        # Flutter writes print() to the unified log as "flutter: ...", so
-        # stream the app's log -- plus the AuthenticationServices / Safari
-        # view-service side of ASWebAuthenticationSession -- to a file and
-        # upload it below.
+        #
+        # Cheap by default, because the host is the thing under suspicion: a
+        # 3s ps/vm_stat sampler (host-load.log) and nothing else while the
+        # tests run. The app's "flutter: " lines and runningboardd's WebKit
+        # launch lines are read back from the simulator's persisted unified
+        # log AFTER the tests ("Collect iOS diagnostics"), which adds no load
+        # during them. The debug-level live stream this replaces cost "log"
+        # plus diagnosticd 40-60% CPU on a host already at load 200-500 (run
+        # 37430662455).
+        #
+        # IOS_HEAVY_DIAGNOSTICS (workflow_dispatch input) brings back live
+        # streams of the app, SafariViewService and SpringBoard/backboardd/
+        # runningboardd, plus a continuous screen recording. That recording
+        # ruled out a dialog: during a 45s stall it showed the browser sheet
+        # with a blank page and no alert.
         run: |
-          mkdir -p "$RUNNER_TEMP/simlog"
-          nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level debug \
-            --predicate 'process == "Runner" OR process == "SafariViewService" OR subsystem BEGINSWITH "com.apple.AuthenticationServices"' \
-            > "$RUNNER_TEMP/simlog/simulator.log" 2>&1 &
-          echo $! > "$RUNNER_TEMP/simlog/pid"
+          D="$RUNNER_TEMP/simlog"
+          mkdir -p "$D"
+          : > "$D/pids"
+          touch "$D/tests-start"
+          nohup bash -c '
+            while true; do
+              echo "=== $(date -u +%H:%M:%S)"
+              sysctl -n vm.loadavg
+              # ps, not top: top -l costs about a CPU-second per sample on a
+              # 3-vCPU runner, enough to perturb what it measures.
+              ps -Ao pcpu,rss,comm -r | head -8
+              echo "-- top RSS"
+              ps -Ao rss,pcpu,comm -m | head -8
+              vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageouts|Swapouts"
+              sleep 3
+            done
+          ' > "$D/host-load.log" 2>&1 &
+          echo $! >> "$D/pids"
+          if [ "$IOS_HEAVY_DIAGNOSTICS" = "true" ]; then
+            nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level info \
+              --predicate 'process == "Runner" OR process == "SafariViewService" OR subsystem BEGINSWITH "com.apple.AuthenticationServices"' \
+              > "$D/simulator.log" 2>&1 &
+            echo $! >> "$D/pids"
+            nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level info \
+              --predicate 'process == "SpringBoard" OR process == "backboardd" OR process == "runningboardd"' \
+              > "$D/system.log" 2>&1 &
+            echo $! >> "$D/pids"
+            # recordVideo needs SIGINT to finalise the mp4, so its pid is kept
+            # apart from the plain kill list.
+            nohup xcrun simctl io "$SIMULATOR_UDID" recordVideo --codec=h264 --force \
+              "$D/screen.mp4" > "$D/recordVideo.log" 2>&1 &
+            echo $! > "$D/video.pid"
+          fi
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
@@ -1091,30 +1173,63 @@ jobs:
             --verbose \
             --dart-define=CI=true \
             --dart-define=CONFORMANCE_SHARD="$CONFORMANCE_SHARD_VALUE" \
+            --dart-define=CONFORMANCE_FORCE_STALL_MODULE="${IOS_FORCE_STALL_MODULE:-}" \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
           cp coverage/patrol_lcov.info "coverage/ios-${{ matrix.shard }}-coverage.info"
         working-directory: packages/oidc/example
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
-      - name: Stop simulator log capture
+      - name: Collect iOS diagnostics
         if: always()
         run: |
-          kill "$(cat "$RUNNER_TEMP/simlog/pid")" 2>/dev/null || true
-          rm -f "$RUNNER_TEMP/simlog/pid"
+          D="$RUNNER_TEMP/simlog"
+          if [ "${{ job.status }}" != "success" ]; then
+            xcrun simctl io "$SIMULATOR_UDID" screenshot "$D/final.png" || true
+          fi
+          # `|| true` throughout: this shell runs with -e and pipefail, and
+          # video.pid only exists with heavy diagnostics on.
+          vpid="$(cat "$D/video.pid" 2>/dev/null || true)"
+          if [ -n "$vpid" ]; then
+            kill -INT "$vpid" 2>/dev/null || true
+            for _ in $(seq 1 60); do kill -0 "$vpid" 2>/dev/null || break; sleep 1; done
+          fi
+          if [ -f "$D/pids" ]; then
+            while read -r pid; do kill "$pid" 2>/dev/null || true; done < "$D/pids"
+          fi
+          # Read the evidence back from the simulator's persisted unified log
+          # now that the tests are done. Both kinds of line are logged at
+          # default level, which the log store persists.
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 2h \
+            --predicate 'process == "Runner" AND eventMessage CONTAINS "flutter: "' \
+            > "$D/runner.log" 2>&1 || true
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --style compact --last 2h \
+            --predicate 'process == "runningboardd" AND eventMessage CONTAINS "com.apple.WebKit.WebContent"' \
+            > "$D/launches.log" 2>&1 || true
+          echo "Crash reports written during the tests:"
+          find "$HOME/Library/Logs/DiagnosticReports" /Library/Logs/DiagnosticReports \
+            -newer "$D/tests-start" -type f 2>/dev/null \
+            | sed 's#.*/##' | sed -E 's/[-_][0-9].*//' | sort | uniq -c | sort -rn | head -20 || true
+          python3 "$GITHUB_WORKSPACE/.github/scripts/ios_ci_metrics.py" \
+            --runner-log "$D/runner.log" --launch-log "$D/launches.log" \
+            --host-load "$D/host-load.log" | tee "$D/metrics.txt" || true
           # Conformance lines only, so the job log answers the common question
           # without downloading the artifact.
-          grep -E 'flutter: .*(\[e2e\]|Suite verdict|Login flow threw|Starting login)' \
-            "$RUNNER_TEMP/simlog/simulator.log" | cut -c1-400 || true
+          grep -E 'flutter: .*(\[e2e\]|Suite verdict|Login flow threw)' \
+            "$D/runner.log" | cut -c1-400 || true
+          gzip -9 "$D"/*.log || true
       # Per-shard name: this job is sharded 2 ways (see the job comment
       # above), and actions/upload-artifact requires unique artifact names
-      # within one workflow run -- both shards would otherwise collide on a
-      # bare "ios-simulator-log".
-      - name: Upload simulator log
+      # within one workflow run.
+      - name: Upload iOS diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-${{ matrix.shard }}-simulator-log
-          path: ${{ runner.temp }}/simlog/simulator.log
+          name: ios-${{ matrix.shard }}-diagnostics
+          path: |
+            ${{ runner.temp }}/simlog/*.log.gz
+            ${{ runner.temp }}/simlog/metrics.txt
+            ${{ runner.temp }}/simlog/final.png
+            ${{ runner.temp }}/simlog/screen.mp4
           if-no-files-found: warn
       # Diagnostics only: this used to run unconditionally on every job, ahead
       # of the tests, costing ~148s (run 37346215172) for information that is

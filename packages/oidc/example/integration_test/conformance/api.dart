@@ -856,6 +856,78 @@ String describeSuiteLogForFailure(
       '[$requestBlocks]; last ${tail.length}: $tailText';
 }
 
+/// The suite dispatcher's line for every HTTP request a test instance
+/// receives, written before the module handles it (TestDispatcher.java logs
+/// "Incoming HTTP request to <path>").
+final _incomingAuthorizeRequest = RegExp(
+  r'^Incoming HTTP request to \S*/authorize(?:[?#\s]|$)',
+);
+
+/// Whether [suiteLog] ([fetchTestLogs]) records that at least one
+/// authorization request ARRIVED at the suite, whether or not the suite went
+/// on to handle it.
+///
+/// Two kinds of entry count:
+///   * the dispatcher's "Incoming HTTP request to …/authorize" line, written
+///     on arrival, before the module runs. A request the module then refuses
+///     leaves only this line. Examples: an instance already FINISHED or
+///     INTERRUPTED throws "Illegal test state change" when it is moved to
+///     RUNNING (AbstractTestModule.setStatusInternal), and
+///     OIDCCClientTestDiscoveryIssuerMismatch throws before opening a block;
+///   * the module's own "Authorization endpoint" start block
+///     (AbstractOIDCCClientTest.getAuthorizationEndpointBlockText).
+bool suiteLogShowsAuthorizationRequest(List<Map<String, dynamic>> suiteLog) =>
+    suiteLog.any((e) {
+      final msg = '${e['msg']}';
+      return _incomingAuthorizeRequest.hasMatch(msg) ||
+          (e['startBlock'] == true &&
+              msg.startsWith(_authorizationEndpointBlock));
+    });
+
+/// The most times a module is run on a fresh instance after its browser never
+/// reached the suite. See [shouldRerunModuleOnFreshInstance].
+const maxModuleReruns = 1;
+
+/// Whether a module attempt should be discarded and the module run again on a
+/// fresh suite instance.
+///
+/// The gate is platform-agnostic: the harness applies it on every platform.
+/// The case it exists for is the iOS CI simulator, whose browser sometimes
+/// never delivers the authorization request at all (#469). In run 37395358046
+/// the SafariViewService process hosting the session stopped responding and
+/// was killed by the watchdog (`0x8badf00d`), and the session never
+/// recovered: no timeout is long enough for a browser that is gone. Other
+/// runs had WebKit WebContent launches taking 27-155s before the request left
+/// the simulator. Elsewhere the conditions below simply never all hold.
+///
+/// It requires ALL of:
+///   * the client did not log in ([loggedIn] false);
+///   * the suite still reports the instance as WAITING ([suiteStatus], from
+///     `GET api/info/{id}`, [getTestSummary]). That is the stall's signature:
+///     a module waiting for a request that never came. A FINISHED or
+///     INTERRUPTED instance has a verdict, and a verdict is never discarded,
+///     whatever the log says;
+///   * the suite's own log for the instance is readable and shows NO
+///     authorization request arriving ([suiteLogShowsAuthorizationRequest]).
+///     Arriving counts, not just being handled, so a request the suite
+///     refused is not mistaken for one that never came. Every negative
+///     module's request arrives, so negative modules are never rerun;
+///   * this is not already a rerun ([attempt] counts from 1;
+///     [maxModuleReruns] caps it).
+/// An empty log means it could not be read, which proves nothing, so it does
+/// not qualify either.
+bool shouldRerunModuleOnFreshInstance({
+  required bool loggedIn,
+  required int attempt,
+  required String? suiteStatus,
+  required List<Map<String, dynamic>> suiteLog,
+}) =>
+    !loggedIn &&
+    attempt <= maxModuleReruns &&
+    suiteStatus == 'WAITING' &&
+    suiteLog.isNotEmpty &&
+    !suiteLogShowsAuthorizationRequest(suiteLog);
+
 /// Whether suite log entry message [msg] confirms the OP's
 /// `check_session_iframe` page completed one postMessage round trip with the
 /// RP (`LogGetSessionStateRequest`, openid-certification/conformance-suite:

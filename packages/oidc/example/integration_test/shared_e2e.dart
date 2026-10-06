@@ -35,6 +35,16 @@ const String oidcConformanceToken = String.fromEnvironment(
 
 final Logger _testLogger = Logger('oidc.conformance');
 
+/// Test-only: the module whose first attempt is made to stall (see its use in
+/// [runOidcConformanceTest]). Empty, the default, disables it.
+const String conformanceForceStallModule = String.fromEnvironment(
+  'CONFORMANCE_FORCE_STALL_MODULE',
+);
+
+/// The forced stall happens once per process, not once per matching module
+/// variant.
+bool _forcedStallUsed = false;
+
 /// The Config RP module whose correct outcome is `init()` throwing: the RP
 /// must stop after fetching a discovery document with the wrong `issuer`.
 const discoveryIssuerMismatchModule =
@@ -721,156 +731,202 @@ Future<void> runOidcConformanceTest(
   // Null when the plan has no discovery-issuer-mismatch module.
   bool? issuerMismatchRejected;
 
+  moduleLoop:
   for (final testPlanModule
       in testPlanModules.whereType<Map<String, dynamic>>()) {
     final moduleName = testPlanModule['testModule'] as String;
     final variant =
         testPlanModule['variant'] as Map<String, dynamic>? ??
         <String, dynamic>{};
+    // Set when an earlier instance of this module was discarded because its
+    // browser never reached the suite (shouldRerunModuleOnFreshInstance,
+    // api.dart). Carried into this module's verdict line so a rerun is never
+    // invisible.
+    String? rerunNote;
 
-    final testInstance = await createTestModuleInstance(
-      dio: dio,
-      planId: testPlanId,
-      moduleName: moduleName,
-      clientAuthType:
-          variant['client_auth_type'] as String? ?? 'client_secret_basic',
-      responseType: variant['response_type'] as String? ?? 'code',
-      responseMode: variant['response_mode'] as String? ?? 'default',
-      // Dynamic RP sends no variant at all: every dimension stated here becomes
-      // an equality the plan's stored module entry must satisfy, and one it
-      // recorded differently makes the attach match nothing.
-      variantFromPlan: moduleVariantComesFromPlan(planName),
-      // Module-level variants are NOT the same as plan-level ones. Dynamic RP
-      // rejects client_registration at api/plan and requires it at api/runner.
-      extraVariant: moduleVariantFor(planName),
-    );
-
-    final testInstanceId = testInstance['id'] as String;
-    final logger = Logger('oidc.conformance.$moduleName.$testInstanceId');
-    final logsToWrite = <String>[];
-    final sub = Logger.root.onRecord.listen((record) {
-      final message =
-          '[${record.time} ${record.level.name}][${record.loggerName}]: ${record.message}';
-      logsToWrite.add(message);
-    });
-    final url = testInstance['url'] as String;
-    logger
-      ..info('Module starting. Variant: $variant')
-      ..info('Test instance created: $testInstance')
-      ..info('Test Instance ID: $testInstanceId, URL: $url')
-      ..info(
-        'Monitoring logs for test instance to wait for ready state: '
-        '$testInstanceId',
+    // Each pass runs the module on its own fresh suite instance. Every path
+    // ends the pass with `break` (or `continue moduleLoop`) except the one
+    // rerun shouldRerunModuleOnFreshInstance allows.
+    for (var attempt = 1; ; attempt++) {
+      final testInstance = await createTestModuleInstance(
+        dio: dio,
+        planId: testPlanId,
+        moduleName: moduleName,
+        clientAuthType:
+            variant['client_auth_type'] as String? ?? 'client_secret_basic',
+        responseType: variant['response_type'] as String? ?? 'code',
+        responseMode: variant['response_mode'] as String? ?? 'default',
+        // Dynamic RP sends no variant at all: every dimension stated here becomes
+        // an equality the plan's stored module entry must satisfy, and one it
+        // recorded differently makes the attach match nothing.
+        variantFromPlan: moduleVariantComesFromPlan(planName),
+        // Module-level variants are NOT the same as plan-level ones. Dynamic RP
+        // rejects client_registration at api/plan and requires it at api/runner.
+        extraVariant: moduleVariantFor(planName),
       );
-    final setupStopwatch = Stopwatch()..start();
-    var pollCount = 0;
-    monitorLogsLoop:
-    await for (final logs
-        in monitorTestLogs(dio: dio, instanceId: testInstanceId).timeout(
-          const Duration(minutes: 2),
-          onTimeout: (sink) => sink.addError(
-            TimeoutException(
-              '$moduleName ($testInstanceId): no new suite log entry for 2 '
-              'minutes while waiting for "Setup Done"',
-            ),
-          ),
-        )) {
-      pollCount += 1;
-      if (pollCount % 5 == 0) {
-        logger.info(
-          'Still waiting for setup... polls=$pollCount, elapsed=${setupStopwatch.elapsed}.',
+
+      final testInstanceId = testInstance['id'] as String;
+      final logger = Logger('oidc.conformance.$moduleName.$testInstanceId');
+      final logsToWrite = <String>[];
+      final sub = Logger.root.onRecord.listen((record) {
+        final message =
+            '[${record.time} ${record.level.name}][${record.loggerName}]: ${record.message}';
+        logsToWrite.add(message);
+      });
+      final url = testInstance['url'] as String;
+      logger
+        ..info('Module starting. Variant: $variant')
+        ..info('Test instance created: $testInstance')
+        ..info('Test Instance ID: $testInstanceId, URL: $url')
+        ..info(
+          'Monitoring logs for test instance to wait for ready state: '
+          '$testInstanceId',
         );
-      }
-      for (final log in logs) {
-        logger.fine('Log: $log');
-        if (log['msg'] == 'Setup Done') {
-          logger.info('Test instance setup done: $testInstanceId');
-          break monitorLogsLoop;
+      final setupStopwatch = Stopwatch()..start();
+      var pollCount = 0;
+      monitorLogsLoop:
+      await for (final logs
+          in monitorTestLogs(dio: dio, instanceId: testInstanceId).timeout(
+            const Duration(minutes: 2),
+            onTimeout: (sink) => sink.addError(
+              TimeoutException(
+                '$moduleName ($testInstanceId): no new suite log entry for 2 '
+                'minutes while waiting for "Setup Done"',
+              ),
+            ),
+          )) {
+        pollCount += 1;
+        if (pollCount % 5 == 0) {
+          logger.info(
+            'Still waiting for setup... polls=$pollCount, elapsed=${setupStopwatch.elapsed}.',
+          );
+        }
+        for (final log in logs) {
+          logger.fine('Log: $log');
+          if (log['msg'] == 'Setup Done') {
+            logger.info('Test instance setup done: $testInstanceId');
+            break monitorLogsLoop;
+          }
         }
       }
-    }
-    setupStopwatch.stop();
-    logger.info(
-      'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
-    );
+      setupStopwatch.stop();
+      logger.info(
+        'Setup completed after ${setupStopwatch.elapsed} (polls=$pollCount).',
+      );
 
-    // The WebFinger modules do NOT issue at the URL above. The suite appends a
-    // random per-run suffix to the issuer for exactly these two modules, and
-    // hands the result out only through the WebFinger response -- so this
-    // lookup is load-bearing: skip it and discovery goes to the wrong issuer.
-    //
-    // Resolved through the library rather than the harness's Dio on purpose.
-    // These modules test whether the RELYING PARTY can do WebFinger; a lookup
-    // written here would pass while package:oidc still could not.
-    //
-    // It runs AFTER the setup wait, not before: the suite's dispatcher refuses
-    // a WebFinger lookup for a test still in CREATED state ("Please wait for
-    // the test to be in WAITING state"), and every other suite request this
-    // loop makes is already gated behind the same wait -- the manager is lazy,
-    // so its discovery fetch happens at init() below.
-    var issuer = url;
-    final webFingerIdentifier = webFingerIdentifierFor(
-      moduleName: moduleName,
-      alias: conformanceAlias(planName: planName, platform: platform),
-      host: Uri.parse(baseUrl).host,
-    );
-    if (webFingerIdentifier != null) {
-      logger.info('Resolving issuer via WebFinger: $webFingerIdentifier');
-      // The suite is a live third party and this Dio carries no timeout, so an
-      // unbounded lookup would hang the job rather than fail it -- the exact
-      // failure mode manager.dart's flowTimeoutSeconds exists to prevent, but
-      // that bounds the browser flow only, not a bare GET.
-      final resolved = await OidcEndpoints.getIssuerViaWebFinger(
-        webFingerIdentifier,
-      ).timeout(const Duration(seconds: 30));
-      issuer = resolved.toString();
-      logger.info('WebFinger resolved issuer: $issuer');
-    }
+      // The WebFinger modules do NOT issue at the URL above. The suite appends a
+      // random per-run suffix to the issuer for exactly these two modules, and
+      // hands the result out only through the WebFinger response -- so this
+      // lookup is load-bearing: skip it and discovery goes to the wrong issuer.
+      //
+      // Resolved through the library rather than the harness's Dio on purpose.
+      // These modules test whether the RELYING PARTY can do WebFinger; a lookup
+      // written here would pass while package:oidc still could not.
+      //
+      // It runs AFTER the setup wait, not before: the suite's dispatcher refuses
+      // a WebFinger lookup for a test still in CREATED state ("Please wait for
+      // the test to be in WAITING state"), and every other suite request this
+      // loop makes is already gated behind the same wait -- the manager is lazy,
+      // so its discovery fetch happens at init() below.
+      var issuer = url;
+      final webFingerIdentifier = webFingerIdentifierFor(
+        moduleName: moduleName,
+        alias: conformanceAlias(planName: planName, platform: platform),
+        host: Uri.parse(baseUrl).host,
+      );
+      if (webFingerIdentifier != null) {
+        logger.info('Resolving issuer via WebFinger: $webFingerIdentifier');
+        // The suite is a live third party and this Dio carries no timeout, so an
+        // unbounded lookup would hang the job rather than fail it -- the exact
+        // failure mode manager.dart's flowTimeoutSeconds exists to prevent, but
+        // that bounds the browser flow only, not a bare GET.
+        final resolved = await OidcEndpoints.getIssuerViaWebFinger(
+          webFingerIdentifier,
+        ).timeout(const Duration(seconds: 30));
+        issuer = resolved.toString();
+        logger.info('WebFinger resolved issuer: $issuer');
+      }
 
-    final manager = conformanceManager(
-      issuer,
-      clientId: clientId,
-      clientSecret: clientSecret,
-      redirectUri: redirectUri,
-      postLogoutRedirectUri: redirectUri,
-      frontChannelLogoutUri: Uri(path: 'redirect.html'),
-      // See moduleFinishesBeforeUserinfo (api.dart): this one module's suite
-      // instance finishes the moment the client has fetched discovery + jwks,
-      // and the manager's own (otherwise-automatic) userinfo call arrives
-      // after that, which the suite answers with an "Illegal test state
-      // change" error that flips an otherwise-correct login to FAILED.
-      sendUserInfoRequest: !moduleFinishesBeforeUserinfo(moduleName),
-      // See requiresSessionManagementMonitoring (api.dart): OidcSessionManagementSettings.enabled
-      // defaults to false, and this module needs it true to get ANY
-      // check_session_iframe traffic at all -- the automatic post-login
-      // monitor and the post-logout probe are both gated on it.
-      sessionManagementEnabled: requiresSessionManagementMonitoring(moduleName),
-    );
-    app_state.managersRx.update((managers) => managers..add(manager));
-    app_state.currentManagerRx.$ = manager;
+      final manager = conformanceManager(
+        issuer,
+        clientId: clientId,
+        clientSecret: clientSecret,
+        redirectUri: redirectUri,
+        postLogoutRedirectUri: redirectUri,
+        frontChannelLogoutUri: Uri(path: 'redirect.html'),
+        // See moduleFinishesBeforeUserinfo (api.dart): this one module's suite
+        // instance finishes the moment the client has fetched discovery + jwks,
+        // and the manager's own (otherwise-automatic) userinfo call arrives
+        // after that, which the suite answers with an "Illegal test state
+        // change" error that flips an otherwise-correct login to FAILED.
+        sendUserInfoRequest: !moduleFinishesBeforeUserinfo(moduleName),
+        // See requiresSessionManagementMonitoring (api.dart): OidcSessionManagementSettings.enabled
+        // defaults to false, and this module needs it true to get ANY
+        // check_session_iframe traffic at all -- the automatic post-login
+        // monitor and the post-logout probe are both gated on it.
+        sessionManagementEnabled: requiresSessionManagementMonitoring(
+          moduleName,
+        ),
+      );
+      app_state.managersRx.update((managers) => managers..add(manager));
+      app_state.currentManagerRx.$ = manager;
 
-    logger.info('Initializing manager for test instance: $testInstanceId');
-    // NOTE (merge with #469, test/467-per-module-conformance): this module's
-    // correct outcome is init() itself throwing -- the RP must stop after
-    // fetching discovery (OIDC Discovery §4.3) -- so it is the one module whose
-    // init failure is caught here instead of aborting the whole plan.
-    if (moduleName == discoveryIssuerMismatchModule) {
-      var rejected = false;
-      try {
+      logger.info('Initializing manager for test instance: $testInstanceId');
+      // NOTE (merge with #469, test/467-per-module-conformance): this module's
+      // correct outcome is init() itself throwing -- the RP must stop after
+      // fetching discovery (OIDC Discovery §4.3) -- so it is the one module whose
+      // init failure is caught here instead of aborting the whole plan.
+      if (moduleName == discoveryIssuerMismatchModule) {
+        var rejected = false;
+        try {
+          await manager.init();
+          logger.severe(
+            'init() accepted a discovery document with a bad issuer',
+          );
+        } on OidcException catch (e) {
+          // Only the issuer rejection counts; anything else (e.g. the discovery
+          // fetch failing) is a real failure and aborts as for other modules.
+          if (!e.message.contains('Issuer mismatch')) {
+            rethrow;
+          }
+          rejected = true;
+          logger.info('Rejected at discovery, as the module requires: $e');
+        }
+        issuerMismatchRejected = rejected;
+        print('[e2e] $moduleName -> rejected at discovery: $rejected');
+        if (rejected) {
+          final verdict = await pollConformanceModuleVerdict(
+            dio: dio,
+            instanceId: testInstanceId,
+          );
+          await _recordModuleVerdict(
+            dio: dio,
+            instanceId: testInstanceId,
+            moduleFailures: moduleFailures,
+            logger: logger,
+            moduleName: moduleName,
+            verdict: verdict,
+            authDescription: 'rejected at discovery (expected)',
+          );
+          await sub.cancel();
+          app_state.currentManagerRx.$ = app_state.managersRx.$.first;
+          app_state.managersRx.update((managers) => managers..remove(manager));
+          if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
+            archive.addFile(
+              ArchiveFile.bytes(
+                '$moduleName.log',
+                utf8.encode(logsToWrite.join('\n')),
+              ),
+            );
+          }
+          continue moduleLoop;
+        }
+      } else {
         await manager.init();
-        logger.severe('init() accepted a discovery document with a bad issuer');
-      } on OidcException catch (e) {
-        // Only the issuer rejection counts; anything else (e.g. the discovery
-        // fetch failing) is a real failure and aborts as for other modules.
-        if (!e.message.contains('Issuer mismatch')) {
-          rethrow;
-        }
-        rejected = true;
-        logger.info('Rejected at discovery, as the module requires: $e');
       }
-      issuerMismatchRejected = rejected;
-      print('[e2e] $moduleName -> rejected at discovery: $rejected');
-      if (rejected) {
+      expect(manager.didInit, true);
+      logger.info('Manager initialized');
+      if (moduleName == 'oidcc-client-test-discovery-openid-config') {
         final verdict = await pollConformanceModuleVerdict(
           dio: dio,
           instanceId: testInstanceId,
@@ -882,27 +938,314 @@ Future<void> runOidcConformanceTest(
           logger: logger,
           moduleName: moduleName,
           verdict: verdict,
-          authDescription: 'rejected at discovery (expected)',
+          authDescription: 'not driven (discovery-only module)',
         );
-        await sub.cancel();
         app_state.currentManagerRx.$ = app_state.managersRx.$.first;
         app_state.managersRx.update((managers) => managers..remove(manager));
-        if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
-          archive.addFile(
-            ArchiveFile.bytes(
-              '$moduleName.log',
-              utf8.encode(logsToWrite.join('\n')),
-            ),
+        await sub.cancel();
+        continue moduleLoop;
+      }
+      // Recorded rather than discarded: swallowing the result here would let the
+      // suite pass whether or not the browser can capture a redirect at all. Not
+      // asserted per-module, since a negative module ends with no user by design.
+      // Which flow to drive is the module's decision, not ours: the suite states
+      // it in the variant, and the Basic/Config plans simply always say `code`.
+      // Hardcoding the code flow is why the hybrid and implicit plans could not
+      // be run at all -- every module would have been driven with the wrong
+      // response_type and failed for a reason that had nothing to do with the
+      // library.
+      final responseTypes = (variant['response_type'] as String? ?? 'code')
+          .split(' ')
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final hasCode = responseTypes.contains('code');
+      final hasFrontChannelToken =
+          responseTypes.contains('id_token') || responseTypes.contains('token');
+      final flowName = hasCode
+          ? (hasFrontChannelToken ? 'hybrid' : 'authorization code')
+          : 'implicit';
+      logger.info(
+        'Starting login $flowName flow (${responseTypes.join(' ')})...',
+      );
+      // Extracted so [requiresSecondLoginForKeyRotation] modules can call it a
+      // SECOND time below: the suite rotates its signing key only once a second
+      // `authorize` request arrives, so without a second real interaction here
+      // the module waits forever for one the harness never made (#467).
+      // What the CLIENT saw, carried into the per-module failure line: on iOS
+      // that line is the only output that reaches the job log (see
+      // describeSuiteLogForFailure, api.dart).
+      String? loginError;
+      int? loginStartedAtMs;
+      final loginStopwatch = Stopwatch();
+      // The native browser layer's own events (oidc_android / oidc_darwin; empty
+      // elsewhere), timed from the login start: they show whether the browser
+      // opened promptly, and whether the flow ended in a redirect or in
+      // flowTimeoutSeconds' cancel.
+      //
+      // Subscribed for the whole module rather than per attempt: the native
+      // event channel and the method reply that completes the login are
+      // separate channels, so the final event can land just after the login's
+      // Future does. It is cancelled once the verdict is recorded.
+      final browserTimeline = <String>[];
+      var loginStartedAt = DateTime.now();
+      final browserEvents = manager.events().listen((event) {
+        if (event is! OidcNativeBrowserEvent) {
+          return;
+        }
+        final offset =
+            event.at.difference(loginStartedAt).inMilliseconds / 1000;
+        browserTimeline.add(
+          '${describeNativeBrowserEvent(event)}@'
+          '${offset >= 0 ? '+' : ''}${offset.toStringAsFixed(2)}s',
+        );
+      });
+      Future<OidcUser?> attemptLogin() async {
+        browserTimeline.clear();
+        loginError = null;
+        loginStartedAt = DateTime.now();
+        loginStartedAtMs = loginStartedAt.millisecondsSinceEpoch;
+        loginStopwatch
+          ..reset()
+          ..start();
+        try {
+          if (!hasCode) {
+            // No code comes back, so there is nothing to exchange. Deprecated in
+            // the library and by the OAuth Security BCP, but the Implicit RP
+            // profile is defined in terms of it.
+            // ignore: deprecated_member_use
+            return await manager.loginImplicitFlow(responseType: responseTypes);
+          }
+          if (hasFrontChannelToken) {
+            return await manager.loginHybridFlow(responseType: responseTypes);
+          }
+          return await manager.loginAuthorizationCodeFlow();
+        } catch (e, stackTrace) {
+          // Expected for the negative modules, whose broken responses the client
+          // must reject, so record it rather than failing the run here.
+          logger.severe('Login flow threw for $moduleName', e, stackTrace);
+          loginError = '$e';
+          return null;
+        } finally {
+          loginStopwatch.stop();
+        }
+      }
+
+      // CONFORMANCE_FORCE_STALL_MODULE (test-only, off by default): the first
+      // attempt of the first matching module never opens the browser, so the
+      // suite sees no authorization request: exactly what a stalled iOS
+      // browser leaves behind. It exists to prove the rerun path end to end
+      // in CI.
+      final forceStall =
+          attempt == 1 &&
+          !_forcedStallUsed &&
+          conformanceForceStallModule.isNotEmpty &&
+          moduleName == conformanceForceStallModule;
+      final OidcUser? authResult;
+      if (forceStall) {
+        _forcedStallUsed = true;
+        loginStartedAtMs = DateTime.now().millisecondsSinceEpoch;
+        loginStopwatch.reset();
+        loginError =
+            'forced stall (CONFORMANCE_FORCE_STALL_MODULE=$moduleName): the '
+            'browser was never opened';
+        print('[e2e] $moduleName -> $loginError');
+        authResult = null;
+      } else {
+        authResult = await attemptLogin();
+      }
+      if (authResult == null && attempt <= maxModuleReruns) {
+        // Did the browser reach the suite at all? Only the suite's own log can
+        // say, and only a "no" from it lets this instance be discarded (see
+        // shouldRerunModuleOnFreshInstance for why that cannot hide a verdict).
+        // The status first: a FINISHED/INTERRUPTED instance has a verdict
+        // and is never discarded, so its log need not even be read.
+        Map<String, dynamic> summary;
+        try {
+          summary = await getTestSummary(dio: dio, instanceId: testInstanceId);
+        } on Object catch (e) {
+          summary = {'pollError': '$e'};
+        }
+        final suiteStatus = summary['status'] as String?;
+        final suiteLog = suiteStatus == 'WAITING'
+            ? await fetchTestLogs(dio: dio, instanceId: testInstanceId)
+            : const <Map<String, dynamic>>[];
+        if (shouldRerunModuleOnFreshInstance(
+          loggedIn: false,
+          attempt: attempt,
+          suiteStatus: suiteStatus,
+          suiteLog: suiteLog,
+        )) {
+          rerunNote =
+              'RERUN: instance $testInstanceId (suite status=$suiteStatus, '
+              'result=${summary['result']}) was discarded because its suite '
+              'log shows NO authorization request arriving (client: no user '
+              'after ${loginStopwatch.elapsed.inMilliseconds}ms'
+              '${loginError == null ? '' : ', login threw: $loginError'}'
+              '; browser events [${browserTimeline.join(', ')}])';
+          // print(), not logger: logger output is invisible in the iOS job log.
+          print(
+            '[e2e] $moduleName -> $rerunNote; running it once more on a '
+            'fresh instance',
+          );
+          logger.warning(rerunNote);
+          try {
+            // Stop the abandoned instance rather than leave it WAITING on the
+            // suite.
+            await cancelTest(dio: dio, instanceId: testInstanceId);
+          } on Object catch (e) {
+            logger.warning('Could not stop instance $testInstanceId: $e');
+          }
+          await browserEvents.cancel();
+          await sub.cancel();
+          app_state.currentManagerRx.$ = app_state.managersRx.$.first;
+          app_state.managersRx.update((managers) => managers..remove(manager));
+          continue;
+        }
+      }
+      if (authResult != null) {
+        successfulLogins++;
+        // oidcc-client-test-signing-key-rotation (see
+        // requiresSecondLoginForKeyRotation, api.dart) only rotates its signing
+        // key, and only finishes, once it sees a SECOND full authorization
+        // interaction. package:oidc_core already self-heals a rotated key on
+        // its own (one rate-limited, cache-busting jwks refetch on a kid miss --
+        // OIDC Core §10.1.1); the harness just has to actually issue the second
+        // login the module is waiting for.
+        if (requiresSecondLoginForKeyRotation(moduleName)) {
+          logger.info(
+            'Signing-key-rotation module: issuing a second login to trigger '
+            'the key rotation and re-verification...',
+          );
+          final secondAuthResult = await attemptLogin();
+          logger.info(
+            secondAuthResult == null
+                ? 'Second login for $moduleName did not complete; the suite '
+                      'verdict below will most likely be non-terminal.'
+                : 'Second login completed: '
+                      '${_describeToken(secondAuthResult.token)}',
           );
         }
-        continue;
+        // oidcc-client-test-session-management (see
+        // requiresSessionManagementMonitoring, api.dart) will not finish unless
+        // the suite observes a check_session_iframe postMessage round trip
+        // BEFORE logout, and `listenToUserSessionIfSupported`'s automatic
+        // monitor runs on its own schedule (iframe load, then
+        // sessionManagementSettings.interval) -- calling logout() immediately
+        // after login, as every other module does, would very likely race it.
+        // Poll the suite's own log for its confirmation instead of guessing a
+        // sleep duration that either races the monitor or wastes every other
+        // module's time budget.
+        if (requiresSessionManagementMonitoring(moduleName)) {
+          logger.info(
+            'Session management module: waiting for the suite to observe the '
+            'pre-logout check_session_iframe round trip...',
+          );
+          final sawPreLogoutCheck = await waitForSuiteLogEntry(
+            dio: dio,
+            instanceId: testInstanceId,
+            matches: (entry) =>
+                isSessionCheckPostMessageLogEntry(entry['msg'] as String?),
+          );
+          logger.info(
+            sawPreLogoutCheck
+                ? 'Suite confirmed the pre-logout check_session_iframe round '
+                      'trip.'
+                : 'Suite log never showed the pre-logout check_session_iframe '
+                      'round trip within the wait budget; logging out anyway so '
+                      'the suite verdict below names the real failure instead '
+                      'of the harness hanging silently.',
+          );
+        }
+        // The logout profiles are two-step: log in, THEN initiate logout, and the
+        // module only completes once it observes the end-session request. This
+        // harness drove the login and stopped, so every logout module sat waiting
+        // for a logout that never came, timed out at flowTimeoutSeconds, and
+        // reported no user -- four plans failing for one missing call, not four
+        // separate defects.
+        //
+        // postLogoutRedirectUri and frontChannelLogoutUri were already configured
+        // on the plan request, which is exactly why this looked wired.
+        if (isLogoutConformancePlan(planName)) {
+          logger.info('Logout profile: initiating RP-initiated logout...');
+          try {
+            await manager.logout();
+            successfulLogouts++;
+            logger.info('Logout completed.');
+          } catch (e, stackTrace) {
+            // Some logout modules deliberately break the end-session response;
+            // record it rather than failing the whole plan here, matching how the
+            // login step treats its own negative modules.
+            logger.severe('Logout threw for $moduleName', e, stackTrace);
+          }
+        }
       }
-    } else {
-      await manager.init();
-    }
-    expect(manager.didInit, true);
-    logger.info('Manager initialized');
-    if (moduleName == 'oidcc-client-test-discovery-openid-config') {
+      // print(), not logger: logger output goes into the certification archive
+      // rather than CI stdout. patrol also drops test stdout unless --verbose.
+      print(
+        '[e2e] $moduleName -> authResult ${authResult == null ? 'NULL' : 'ok'}',
+      );
+      if (authResult == null) {
+        // "No user returned" is all the client can say, and it is not enough: a
+        // login that silently timed out and a negative module the client
+        // correctly rejected produce the identical line. The suite knows which
+        // happened -- ask it, rather than inferring from the client side.
+        //
+        // This is what the logout modules needed: each spent ~33s in
+        // loginAuthorizationCodeFlow and returned nothing, with no exception, so
+        // there was no way to tell whether the OP was waiting on the client or
+        // the client was waiting on the OP.
+        try {
+          final status = await getTestStatus(
+            dio: dio,
+            instanceId: testInstanceId,
+          );
+          // Log the WHOLE payload. The first version of this read
+          // status['status'] and status['result'] -- key names invented rather
+          // than looked up -- and printed "status=null result=null" for every
+          // module. A diagnostic added to stop guessing that was itself a guess.
+          // Print what the endpoint actually returns, then read real keys off a
+          // real response.
+          logger.info('Suite status for $moduleName: $status');
+        } on Object catch (e) {
+          logger.warning('Could not read suite status for $moduleName: $e');
+        }
+        // `status` says WHETHER the suite issued a response; its log says WHY it
+        // did not. The harness already fetches this endpoint via monitorTestLogs
+        // and stops at "Setup Done", so every entry the suite wrote DURING the
+        // module was retrieved and discarded -- which is how 75 web fragment
+        // modules failed with nothing but a client-side timeout to go on.
+        //
+        // Tail only: the head is the setup chatter already seen, and the
+        // refusal, when there is one, is the last thing written.
+        final suiteLog = await fetchTestLogs(
+          dio: dio,
+          instanceId: testInstanceId,
+        );
+        if (suiteLog.isEmpty) {
+          logger.info('Suite log for $moduleName: empty.');
+        } else {
+          final tail = suiteLog.length <= 12
+              ? suiteLog
+              : suiteLog.sublist(suiteLog.length - 12);
+          logger.info(
+            'Suite log tail for $moduleName (${tail.length} of '
+            '${suiteLog.length} entries):',
+          );
+          for (final entry in tail) {
+            logger.info(
+              '  [${entry['result'] ?? '-'}] ${entry['msg']}'
+              '${entry['error'] == null ? '' : ' | error: ${entry['error']}'}',
+            );
+          }
+        }
+      }
+      // Ask the suite itself whether THIS module is one it considers passed,
+      // regardless of what the client observed. authResult alone cannot tell a
+      // negative module that correctly saw no user from one that WRONGLY logged
+      // in -- successfulLogins only counts the latter case as a win -- and a
+      // module that is supposed to log in could still fail a suite-side check
+      // (e.g. a required requirement) after the client's own flow looked clean.
+      // See #467.
       final verdict = await pollConformanceModuleVerdict(
         dio: dio,
         instanceId: testInstanceId,
@@ -914,275 +1257,37 @@ Future<void> runOidcConformanceTest(
         logger: logger,
         moduleName: moduleName,
         verdict: verdict,
-        authDescription: 'not driven (discovery-only module)',
+        clientLoginStartedAtMs: loginStartedAtMs,
+        authDescription:
+            '${authResult == null ? 'no user' : 'logged in'} after '
+            '${loginStopwatch.elapsed.inMilliseconds}ms'
+            '${loginError == null ? '' : ', login threw: $loginError'}'
+            '; browser events [${browserTimeline.join(', ')}]'
+            '${rerunNote == null ? '' : '; $rerunNote'}',
       );
+      if (rerunNote != null) {
+        print(
+          '[e2e] $moduleName -> rerun on $testInstanceId: suite status='
+          '${verdict['status']} result=${verdict['result']}',
+        );
+      }
+      logger
+        ..info(
+          authResult == null
+              ? 'No user returned (expected for a negative module).'
+              : 'Login successful: ${_describeToken(authResult.token)}',
+        )
+        ..info('Cleaning up manager for test instance: $testInstanceId');
+      await browserEvents.cancel();
+      await sub.cancel();
       app_state.currentManagerRx.$ = app_state.managersRx.$.first;
       app_state.managersRx.update((managers) => managers..remove(manager));
-      await sub.cancel();
-      continue;
-    }
-    // Recorded rather than discarded: swallowing the result here would let the
-    // suite pass whether or not the browser can capture a redirect at all. Not
-    // asserted per-module, since a negative module ends with no user by design.
-    // Which flow to drive is the module's decision, not ours: the suite states
-    // it in the variant, and the Basic/Config plans simply always say `code`.
-    // Hardcoding the code flow is why the hybrid and implicit plans could not
-    // be run at all -- every module would have been driven with the wrong
-    // response_type and failed for a reason that had nothing to do with the
-    // library.
-    final responseTypes = (variant['response_type'] as String? ?? 'code')
-        .split(' ')
-        .where((e) => e.isNotEmpty)
-        .toList();
-    final hasCode = responseTypes.contains('code');
-    final hasFrontChannelToken =
-        responseTypes.contains('id_token') || responseTypes.contains('token');
-    final flowName = hasCode
-        ? (hasFrontChannelToken ? 'hybrid' : 'authorization code')
-        : 'implicit';
-    logger.info(
-      'Starting login $flowName flow (${responseTypes.join(' ')})...',
-    );
-    // Extracted so [requiresSecondLoginForKeyRotation] modules can call it a
-    // SECOND time below: the suite rotates its signing key only once a second
-    // `authorize` request arrives, so without a second real interaction here
-    // the module waits forever for one the harness never made (#467).
-    // What the CLIENT saw, carried into the per-module failure line: on iOS
-    // that line is the only output that reaches the job log (see
-    // describeSuiteLogForFailure, api.dart).
-    String? loginError;
-    int? loginStartedAtMs;
-    final loginStopwatch = Stopwatch();
-    // The native browser layer's own events (oidc_android / oidc_darwin; empty
-    // elsewhere), timed from the login start: they show whether the browser
-    // opened promptly, and whether the flow ended in a redirect or in
-    // flowTimeoutSeconds' cancel.
-    //
-    // Subscribed for the whole module rather than per attempt: the native
-    // event channel and the method reply that completes the login are
-    // separate channels, so the final event can land just after the login's
-    // Future does. It is cancelled once the verdict is recorded.
-    final browserTimeline = <String>[];
-    var loginStartedAt = DateTime.now();
-    final browserEvents = manager.events().listen((event) {
-      if (event is! OidcNativeBrowserEvent) {
-        return;
+      if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
+        final strToWrite = logsToWrite.join('\n');
+        final data = utf8.encode(strToWrite);
+        archive.addFile(ArchiveFile.bytes('$moduleName.log', data));
       }
-      final offset = event.at.difference(loginStartedAt).inMilliseconds / 1000;
-      browserTimeline.add(
-        '${describeNativeBrowserEvent(event)}@'
-        '${offset >= 0 ? '+' : ''}${offset.toStringAsFixed(2)}s',
-      );
-    });
-    Future<OidcUser?> attemptLogin() async {
-      browserTimeline.clear();
-      loginError = null;
-      loginStartedAt = DateTime.now();
-      loginStartedAtMs = loginStartedAt.millisecondsSinceEpoch;
-      loginStopwatch
-        ..reset()
-        ..start();
-      try {
-        if (!hasCode) {
-          // No code comes back, so there is nothing to exchange. Deprecated in
-          // the library and by the OAuth Security BCP, but the Implicit RP
-          // profile is defined in terms of it.
-          // ignore: deprecated_member_use
-          return await manager.loginImplicitFlow(responseType: responseTypes);
-        }
-        if (hasFrontChannelToken) {
-          return await manager.loginHybridFlow(responseType: responseTypes);
-        }
-        return await manager.loginAuthorizationCodeFlow();
-      } catch (e, stackTrace) {
-        // Expected for the negative modules, whose broken responses the client
-        // must reject, so record it rather than failing the run here.
-        logger.severe('Login flow threw for $moduleName', e, stackTrace);
-        loginError = '$e';
-        return null;
-      } finally {
-        loginStopwatch.stop();
-      }
-    }
-
-    final authResult = await attemptLogin();
-    if (authResult != null) {
-      successfulLogins++;
-      // oidcc-client-test-signing-key-rotation (see
-      // requiresSecondLoginForKeyRotation, api.dart) only rotates its signing
-      // key, and only finishes, once it sees a SECOND full authorization
-      // interaction. package:oidc_core already self-heals a rotated key on
-      // its own (one rate-limited, cache-busting jwks refetch on a kid miss --
-      // OIDC Core §10.1.1); the harness just has to actually issue the second
-      // login the module is waiting for.
-      if (requiresSecondLoginForKeyRotation(moduleName)) {
-        logger.info(
-          'Signing-key-rotation module: issuing a second login to trigger '
-          'the key rotation and re-verification...',
-        );
-        final secondAuthResult = await attemptLogin();
-        logger.info(
-          secondAuthResult == null
-              ? 'Second login for $moduleName did not complete; the suite '
-                    'verdict below will most likely be non-terminal.'
-              : 'Second login completed: '
-                    '${_describeToken(secondAuthResult.token)}',
-        );
-      }
-      // oidcc-client-test-session-management (see
-      // requiresSessionManagementMonitoring, api.dart) will not finish unless
-      // the suite observes a check_session_iframe postMessage round trip
-      // BEFORE logout, and `listenToUserSessionIfSupported`'s automatic
-      // monitor runs on its own schedule (iframe load, then
-      // sessionManagementSettings.interval) -- calling logout() immediately
-      // after login, as every other module does, would very likely race it.
-      // Poll the suite's own log for its confirmation instead of guessing a
-      // sleep duration that either races the monitor or wastes every other
-      // module's time budget.
-      if (requiresSessionManagementMonitoring(moduleName)) {
-        logger.info(
-          'Session management module: waiting for the suite to observe the '
-          'pre-logout check_session_iframe round trip...',
-        );
-        final sawPreLogoutCheck = await waitForSuiteLogEntry(
-          dio: dio,
-          instanceId: testInstanceId,
-          matches: (entry) =>
-              isSessionCheckPostMessageLogEntry(entry['msg'] as String?),
-        );
-        logger.info(
-          sawPreLogoutCheck
-              ? 'Suite confirmed the pre-logout check_session_iframe round '
-                    'trip.'
-              : 'Suite log never showed the pre-logout check_session_iframe '
-                    'round trip within the wait budget; logging out anyway so '
-                    'the suite verdict below names the real failure instead '
-                    'of the harness hanging silently.',
-        );
-      }
-      // The logout profiles are two-step: log in, THEN initiate logout, and the
-      // module only completes once it observes the end-session request. This
-      // harness drove the login and stopped, so every logout module sat waiting
-      // for a logout that never came, timed out at flowTimeoutSeconds, and
-      // reported no user -- four plans failing for one missing call, not four
-      // separate defects.
-      //
-      // postLogoutRedirectUri and frontChannelLogoutUri were already configured
-      // on the plan request, which is exactly why this looked wired.
-      if (isLogoutConformancePlan(planName)) {
-        logger.info('Logout profile: initiating RP-initiated logout...');
-        try {
-          await manager.logout();
-          successfulLogouts++;
-          logger.info('Logout completed.');
-        } catch (e, stackTrace) {
-          // Some logout modules deliberately break the end-session response;
-          // record it rather than failing the whole plan here, matching how the
-          // login step treats its own negative modules.
-          logger.severe('Logout threw for $moduleName', e, stackTrace);
-        }
-      }
-    }
-    // print(), not logger: logger output goes into the certification archive
-    // rather than CI stdout. patrol also drops test stdout unless --verbose.
-    print(
-      '[e2e] $moduleName -> authResult ${authResult == null ? 'NULL' : 'ok'}',
-    );
-    if (authResult == null) {
-      // "No user returned" is all the client can say, and it is not enough: a
-      // login that silently timed out and a negative module the client
-      // correctly rejected produce the identical line. The suite knows which
-      // happened -- ask it, rather than inferring from the client side.
-      //
-      // This is what the logout modules needed: each spent ~33s in
-      // loginAuthorizationCodeFlow and returned nothing, with no exception, so
-      // there was no way to tell whether the OP was waiting on the client or
-      // the client was waiting on the OP.
-      try {
-        final status = await getTestStatus(
-          dio: dio,
-          instanceId: testInstanceId,
-        );
-        // Log the WHOLE payload. The first version of this read
-        // status['status'] and status['result'] -- key names invented rather
-        // than looked up -- and printed "status=null result=null" for every
-        // module. A diagnostic added to stop guessing that was itself a guess.
-        // Print what the endpoint actually returns, then read real keys off a
-        // real response.
-        logger.info('Suite status for $moduleName: $status');
-      } on Object catch (e) {
-        logger.warning('Could not read suite status for $moduleName: $e');
-      }
-      // `status` says WHETHER the suite issued a response; its log says WHY it
-      // did not. The harness already fetches this endpoint via monitorTestLogs
-      // and stops at "Setup Done", so every entry the suite wrote DURING the
-      // module was retrieved and discarded -- which is how 75 web fragment
-      // modules failed with nothing but a client-side timeout to go on.
-      //
-      // Tail only: the head is the setup chatter already seen, and the
-      // refusal, when there is one, is the last thing written.
-      final suiteLog = await fetchTestLogs(
-        dio: dio,
-        instanceId: testInstanceId,
-      );
-      if (suiteLog.isEmpty) {
-        logger.info('Suite log for $moduleName: empty.');
-      } else {
-        final tail = suiteLog.length <= 12
-            ? suiteLog
-            : suiteLog.sublist(suiteLog.length - 12);
-        logger.info(
-          'Suite log tail for $moduleName (${tail.length} of '
-          '${suiteLog.length} entries):',
-        );
-        for (final entry in tail) {
-          logger.info(
-            '  [${entry['result'] ?? '-'}] ${entry['msg']}'
-            '${entry['error'] == null ? '' : ' | error: ${entry['error']}'}',
-          );
-        }
-      }
-    }
-    // Ask the suite itself whether THIS module is one it considers passed,
-    // regardless of what the client observed. authResult alone cannot tell a
-    // negative module that correctly saw no user from one that WRONGLY logged
-    // in -- successfulLogins only counts the latter case as a win -- and a
-    // module that is supposed to log in could still fail a suite-side check
-    // (e.g. a required requirement) after the client's own flow looked clean.
-    // See #467.
-    final verdict = await pollConformanceModuleVerdict(
-      dio: dio,
-      instanceId: testInstanceId,
-    );
-    await _recordModuleVerdict(
-      dio: dio,
-      instanceId: testInstanceId,
-      moduleFailures: moduleFailures,
-      logger: logger,
-      moduleName: moduleName,
-      verdict: verdict,
-      clientLoginStartedAtMs: loginStartedAtMs,
-      authDescription:
-          '${authResult == null ? 'no user' : 'logged in'} after '
-          '${loginStopwatch.elapsed.inMilliseconds}ms'
-          '${loginError == null ? '' : ', login threw: $loginError'}'
-          '; browser events [${browserTimeline.join(', ')}]',
-    );
-    logger
-      ..info(
-        authResult == null
-            ? 'No user returned (expected for a negative module).'
-            : 'Login successful: ${_describeToken(authResult.token)}',
-      )
-      ..info('Cleaning up manager for test instance: $testInstanceId');
-    await browserEvents.cancel();
-    await sub.cancel();
-    app_state.currentManagerRx.$ = app_state.managersRx.$.first;
-    app_state.managersRx.update((managers) => managers..remove(manager));
-    if (!kIsWeb && Platform.isLinux && !Platform.isAndroid) {
-      final strToWrite = logsToWrite.join('\n');
-      final data = utf8.encode(strToWrite);
-      archive.addFile(ArchiveFile.bytes('$moduleName.log', data));
+      break;
     }
   }
 
