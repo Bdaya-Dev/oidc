@@ -971,15 +971,26 @@ jobs:
     # Sharded like the other native jobs (see the ios job's comment), but
     # WITHOUT touching packages/oidc/example/integration_test/: those harness
     # files are shared with (and actively being changed by) another in-flight
-    # branch, so this job filters by `flutter test --name` from the workflow
-    # instead of a dart-define read inside the test file, the way
-    # patrol_test/app_test.dart does it for android/iOS/linux/windows. Because
-    # the shard assignment lives here instead of in Dart, nothing can throw
-    # loudly from inside the test process if a plan's name ever drifts from
-    # the --name pattern below -- the exact-count assertion in the step below
-    # is what stands between a typo and a silently-empty shard reporting
-    # green, so (unlike the android/ios/linux/windows floor checks) it checks
-    # for an EXACT match, not just "at least one".
+    # branch, so this job filters by `flutter test --plain-name` from the
+    # workflow instead of a dart-define read inside the test file, the way
+    # patrol_test/app_test.dart does it for android/iOS/linux/windows.
+    #
+    # One `flutter test` invocation PER PLAN, not one invocation with a
+    # --name regex matching several plans: `flutter test -d macos --name
+    # '<alternation>'` was tried first and is a trap -- confirmed live on run
+    # 37394788100's macos (rest) leg, it drove exactly ONE of the 10 matched
+    # tests (the last one) and silently reported the other 9 as skipped
+    # ("00:37 +1 ~9: All tests passed!"), which is itself proof the exact-
+    # count guard below is load-bearing: a plain floor check would have
+    # waved that through as a pass. Looping one exact `--plain-name` match
+    # per plan sidesteps the multi-match skip behavior entirely and turns
+    # the per-plan result into a real pass/fail instead of a parsed count.
+    #
+    # Because the shard assignment lives here instead of in Dart, nothing can
+    # throw loudly from inside the test process if a plan's name ever drifts
+    # from the list below -- the per-plan assertions in the step below (ran
+    # exactly 1, exit 0) are what stand between a typo and a silently-empty
+    # shard reporting green.
     strategy:
       fail-fast: false
       matrix:
@@ -1000,56 +1011,80 @@ jobs:
           # Work around flaky desktop integration test runs when executing
           # multiple test entrypoints in a single `flutter test integration_test`.
 
-          # Maps this job's shard to the subset of
-          # integration_test/app_test.dart's testWidgets() descriptions it
-          # should run, and exactly how many it must match -- see the job
-          # comment above for why this lives here instead of in the Dart file.
+          # Maps this job's shard to the exact
+          # integration_test/app_test.dart testWidgets() descriptions it
+          # should run -- see the job comment above for why this lives here
+          # instead of in the Dart file, and why it's a per-plan array rather
+          # than a single combined --name regex.
           case "${{ matrix.shard }}" in
-            basic)    NAME_FILTER='OIDC Conformance: Basic RP';    EXPECTED=1 ;;
-            implicit) NAME_FILTER='OIDC Conformance: Implicit RP'; EXPECTED=1 ;;
-            hybrid)   NAME_FILTER='OIDC Conformance: Hybrid RP';   EXPECTED=1 ;;
+            basic)    PLAN_NAMES=('OIDC Conformance: Basic RP') ;;
+            implicit) PLAN_NAMES=('OIDC Conformance: Implicit RP') ;;
+            hybrid)   PLAN_NAMES=('OIDC Conformance: Hybrid RP') ;;
             rest)
-              NAME_FILTER='OIDC Conformance: (RP-Initiated Logout|Front-Channel Logout|Back-Channel Logout|Session Management|Form Post Basic RP|Form Post Hybrid RP|Form Post Implicit RP|3rd Party-Init Login RP|Dynamic RP|Config RP)$'
-              EXPECTED=10
+              PLAN_NAMES=(
+                'OIDC Conformance: RP-Initiated Logout'
+                'OIDC Conformance: Front-Channel Logout'
+                'OIDC Conformance: Back-Channel Logout'
+                'OIDC Conformance: Session Management'
+                'OIDC Conformance: Form Post Basic RP'
+                'OIDC Conformance: Form Post Hybrid RP'
+                'OIDC Conformance: Form Post Implicit RP'
+                'OIDC Conformance: 3rd Party-Init Login RP'
+                'OIDC Conformance: Dynamic RP'
+                'OIDC Conformance: Config RP'
+              )
               ;;
             *)
               echo "::error::unknown matrix.shard '${{ matrix.shard }}' - expected one of basic/implicit/hybrid/rest"
               exit 1
               ;;
           esac
+          EXPECTED=${#PLAN_NAMES[@]}
+          if [ "$EXPECTED" -eq 0 ]; then
+            echo "::error::shard ${{ matrix.shard }} maps to zero plans - a skipped/absent plan must never look like a pass."
+            exit 1
+          fi
 
           if [ -z "$OIDC_CONFORMANCE_TOKEN" ]; then
             # No live token (e.g. a dependabot PR, which gets a secret store
             # without it): the Dart side falls back to its single smoke test
-            # regardless of --name, which NAME_FILTER above would not match.
-            # Run unfiltered in every shard rather than trying to dedupe to
-            # one -- the smoke test is trivial, so the duplication is cheap.
+            # regardless of --plain-name, which PLAN_NAMES above would not
+            # match. Run unfiltered in every shard rather than trying to
+            # dedupe to one -- the smoke test is trivial, so the duplication
+            # is cheap.
             echo "OIDC_CONFORMANCE_TOKEN is empty; running the smoke-test path unfiltered for shard ${{ matrix.shard }}."
             flutter test integration_test/app_test.dart \
               --coverage --branch-coverage --coverage-package "^(oidc|jose_plus|x509_plus|crypto_keys_plus)" \
-              -d macos --coverage-path "coverage/macos-app-${{ matrix.shard }}-coverage.info" \
+              -d macos --coverage-path "coverage/macos-app-${{ matrix.shard }}-0-coverage.info" \
               --dart-define=CI=true \
               -r expanded
           else
-            set +e
-            flutter test integration_test/app_test.dart \
-              --coverage --branch-coverage --coverage-package "^(oidc|jose_plus|x509_plus|crypto_keys_plus)" \
-              -d macos --coverage-path "coverage/macos-app-${{ matrix.shard }}-coverage.info" \
-              --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} \
-              --name "$NAME_FILTER" \
-              -r expanded 2>&1 | tee "macos-app-test-${{ matrix.shard }}.log"
-            TEST_RC=${PIPESTATUS[0]}
-            set -e
-            RAN="$(grep -oE '\+[0-9]+' "macos-app-test-${{ matrix.shard }}.log" | tail -1 | tr -d '+')"
-            RAN=${RAN:-0}
-            echo "shard ${{ matrix.shard }}: ran $RAN test(s) via --name filter, expected exactly $EXPECTED."
-            if [ "$RAN" -ne "$EXPECTED" ]; then
-              echo "::error::shard ${{ matrix.shard }} ran $RAN test(s), expected exactly $EXPECTED - a conformance plan may be missing from, or duplicated across, the --name filters in this workflow step. A skipped/absent plan must never look like a pass."
+            FAILED_PLANS=()
+            i=0
+            for PLAN in "${PLAN_NAMES[@]}"; do
+              i=$((i + 1))
+              echo "::group::[$i/$EXPECTED] $PLAN"
+              set +e
+              flutter test integration_test/app_test.dart \
+                --coverage --branch-coverage --coverage-package "^(oidc|jose_plus|x509_plus|crypto_keys_plus)" \
+                -d macos --coverage-path "coverage/macos-app-${{ matrix.shard }}-$i-coverage.info" \
+                --dart-define=CI=true --dart-define=OIDC_CONFORMANCE_TOKEN=${{env.OIDC_CONFORMANCE_TOKEN}} \
+                --plain-name "$PLAN" \
+                -r expanded 2>&1 | tee "macos-app-test-${{ matrix.shard }}-$i.log"
+              TEST_RC=${PIPESTATUS[0]}
+              set -e
+              echo "::endgroup::"
+              RAN="$(grep -oE '\+[0-9]+' "macos-app-test-${{ matrix.shard }}-$i.log" | tail -1 | tr -d '+')"
+              RAN=${RAN:-0}
+              echo "shard ${{ matrix.shard }} [$i/$EXPECTED] '$PLAN': ran $RAN test(s) (exit $TEST_RC)."
+              if [ "$RAN" -ne 1 ] || [ "$TEST_RC" -ne 0 ]; then
+                echo "::error::shard ${{ matrix.shard }} plan '$PLAN' ran $RAN test(s) (exit $TEST_RC), expected exactly 1 - either the plan name has drifted from integration_test/app_test.dart, or the test itself failed. A skipped/absent plan must never look like a pass."
+                FAILED_PLANS+=("$PLAN")
+              fi
+            done
+            if [ "${#FAILED_PLANS[@]}" -ne 0 ]; then
+              echo "::error::shard ${{ matrix.shard }} failed ${#FAILED_PLANS[@]}/$EXPECTED plan(s): ${FAILED_PLANS[*]}"
               exit 1
-            fi
-            if [ "$TEST_RC" -ne 0 ]; then
-              echo "::error::flutter test failed (exit $TEST_RC) for shard ${{ matrix.shard }}; see the test output above."
-              exit "$TEST_RC"
             fi
           fi
 
@@ -1064,7 +1099,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.shard }}-integration-coverage
-          path: packages/oidc/example/coverage/macos-*-${{ matrix.shard }}-coverage.info
+          path: packages/oidc/example/coverage/macos-*-coverage.info
           include-hidden-files: true
           if-no-files-found: error
   linux:
