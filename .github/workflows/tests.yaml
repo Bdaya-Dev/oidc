@@ -680,10 +680,23 @@ jobs:
             ls -d /Applications/Xcode_*.app || true
           fi
           xcodebuild -version
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+        # with:
+        #   channel: master
+        #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Start Simulator (boot in background)
-        # Kicks off the boot and returns immediately so the next steps (Set
-        # up Environment, flutter precache) run while the simulator boots in
-        # parallel, instead of waiting on it first. `nohup ... & disown`
+        # Kicks off the boot and returns immediately, so the next steps
+        # (flutter precache, Patrol CLI activation) run while the simulator
+        # boots, instead of waiting on it first.
+        #
+        # It deliberately starts AFTER "Set up Environment", not before.
+        # Booting alongside the Flutter install made that install 3-4x slower
+        # on the 3-vCPU runner: setup script 65s with a synchronous boot vs
+        # 178-273s concurrently, and cache-pub's hashFiles 0.5s vs 27-125s.
+        # That net-lost 80-240s per leg (main 6ada33a jobs 112244868347/381 vs
+        # c171634 job 112065979344). The steps it overlaps now are cheap.
+        # `nohup ... & disown`
         # detaches the boot from this step's shell so it keeps running after
         # the step exits -- the job's later "Wait for Simulator" step is the
         # actual synchronization point (see that step for why it uses
@@ -720,13 +733,12 @@ jobs:
           disown
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
           echo "SIMULATOR_OS=$OS_VER" >> "$GITHUB_ENV"
-      - name: Set up Environment
-        uses: ./.github/actions/integration_test_base
-        # with:
-        #   channel: master
-        #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Run flutter precache
         run: flutter precache -v
+      - name: Activate Patrol CLI (patrol_cli_plus)
+        # patrol_cli_plus >= 5.4.1 defaults xcodebuild -destination-timeout to 30s,
+        # fixing the exit-70 device-resolution race on the slow macos-26 simulator.
+        run: dart pub global activate patrol_cli_plus
       - name: Wait for Simulator to be Ready
         # `xcrun simctl boot` (kicked off above, in the background) only
         # *initiates* the boot and returns almost immediately; `simctl list
@@ -752,10 +764,6 @@ jobs:
         run: |
           xcrun simctl bootstatus "${SIMULATOR_UDID:?Simulator UDID was not exported}" -b
           echo "Simulator is ready."
-      - name: Activate Patrol CLI (patrol_cli_plus)
-        # patrol_cli_plus >= 5.4.1 defaults xcodebuild -destination-timeout to 30s,
-        # fixing the exit-70 device-resolution race on the slow macos-26 simulator.
-        run: dart pub global activate patrol_cli_plus
       - name: Start iOS diagnostics
         # patrol forwards none of the app's Dart print/logging output on iOS,
         # even with --verbose (the other jobs all show it), so a conformance
