@@ -111,6 +111,17 @@ melos:
         melos run test:flutter
     test:vm:
       name: Dart VM tests
+      # Explicit `melos exec -c 2` (a `run:` script invoking melos exec
+      # itself), not the plain `exec:` shorthand -- same proven pattern the
+      # `pana` script above already uses (`run: melos exec -c 1 "pana"`).
+      # An `exec: {concurrency, command}` map form exists in melos's source
+      # (confirmed in the melos-v8.9.0 tag this repo's CI actually
+      # activates) but threw `MissingScriptCommandException` live in CI
+      # (run 37502004205) despite matching that source exactly -- not
+      # trusted further here. Flags replicate the packageFilters below
+      # exactly (melos exec supports the same filters as CLI options):
+      # --no-flutter, --dir-exists=test, --ignore="*web*".
+      #
       # concurrency: 2 -- defense-in-depth, not a proven root-cause fix.
       # Without it, melos exec defaults to `Platform.numberOfProcessors`
       # concurrent packages, each opening its own VM-service websocket for
@@ -131,19 +142,12 @@ melos:
       # the reset-then-hang, at a modest cost to this step's own wall time
       # for its 6 small-to-medium packages (not worth doing for every exec
       # script -- only this one opens VM-service connections for coverage).
-      exec:
-        concurrency: 2
-        command: |
-          if [ "$TARGET_DART_SDK" = "min" ]; then
-            dart test --chain-stack-traces
-          else
-            dart test --coverage=coverage/vm --chain-stack-traces
-          fi
-      packageFilters:
-        flutter: false
-        dirExists: test
-        ignore:
-          - "*web*"
+      run: |
+        if [ "$TARGET_DART_SDK" = "min" ]; then
+          melos exec -c 2 --no-flutter --dir-exists=test --ignore="*web*" -- "dart test --chain-stack-traces"
+        else
+          melos exec -c 2 --no-flutter --dir-exists=test --ignore="*web*" -- "dart test --coverage=coverage/vm --chain-stack-traces"
+        fi
     test:web:
       name: Dart Web tests
       run: |
