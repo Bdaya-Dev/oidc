@@ -1,6 +1,16 @@
 import 'package:oidc/oidc.dart';
 import 'package:oidc_default_store/oidc_default_store.dart';
 
+/// iOS's conformance flow timeout. Why it is longer than the other
+/// platforms' 30s is written up at its use in [conformanceManager].
+const iosConformanceFlowTimeoutSeconds = 90;
+
+/// The slowest iOS-simulator browser start seen so far: seconds from the
+/// login starting to the authorization request reaching the suite
+/// (oidcc-client-test-idtoken-sig-none, CI run 37380923417).
+/// [iosConformanceFlowTimeoutSeconds] has to stay clear of it.
+const observedIosBrowserStartSeconds = 49.5;
+
 // Future<Map<String, dynamic>> prepareConformanceTest(String token) async {}
 OidcUserManager conformanceManager(
   String issuer, {
@@ -9,6 +19,23 @@ OidcUserManager conformanceManager(
   required Uri redirectUri,
   Uri? postLogoutRedirectUri,
   Uri? frontChannelLogoutUri,
+  // oidcc-client-test-discovery-jwks-uri-keys (see
+  // moduleFinishesBeforeUserinfo in conformance/api.dart) finishes the moment
+  // the client has fetched BOTH the discovery document and jwks_uri -- before
+  // a normal login's own userinfo call. Defaulting to true keeps every other
+  // module's existing behaviour unchanged; only that one module's manager is
+  // built with this false.
+  bool sendUserInfoRequest = true,
+  // OidcSessionManagementSettings.enabled defaults to false, and gates EVERY
+  // OIDC Session Management 1.0 behaviour the manager has: capturing
+  // session_state into the logout state, listenToUserSessionIfSupported's
+  // automatic post-login check_session_iframe monitor, AND
+  // startEndSessionConfirmation's post-logout probe (user_manager_base.dart).
+  // Leaving it false is why oidcc-client-test-session-management (see
+  // requiresSessionManagementMonitoring in conformance/api.dart) saw none of
+  // the check_session_iframe traffic it waits for. True only for that
+  // module's manager; every other module is unaffected.
+  bool sessionManagementEnabled = false,
 }) => OidcUserManager.lazy(
   discoveryDocumentUri: OidcUtils.getOpenIdConfigWellKnownUri(
     Uri.parse(issuer),
@@ -41,9 +68,34 @@ OidcUserManager conformanceManager(
         prefersEphemeralWebBrowserSession: true,
         flowTimeoutSeconds: 30,
       ),
+      // iOS gets longer than the others because on the CI simulator the
+      // browser itself can take that long to START (#469). Each
+      // ASWebAuthenticationSession is hosted by the long-lived
+      // SafariViewService, and that process sometimes takes tens of seconds
+      // to get a WebKit WebContent process to load the authorize URL in.
+      // Simulator unified log, run 37384969496,
+      // oidcc-client-test-missing-iat (hybrid):
+      //   23:09:53.86  session presented
+      //   23:10:15.47  runningboard: launch request for WebKit.WebContent
+      //   23:10:21.10  launch response
+      //   23:10:23.41  decidePolicyForNavigationAction .../authorize   (+29.6s)
+      //   23:10:24.31  redirect to com.bdayadev.oidc.example:/oauth2redirect
+      // At 30s that is a coin flip against this timeout. Lose it and the
+      // session is cancelled before the authorization request leaves the
+      // simulator ("NO authorization request received", missing-iat in run
+      // 37380923417), or after Safari already started it, so it reaches the
+      // suite ~49.5s in, long after the client gave up (idtoken-sig-none, same
+      // run). Either way the module sits at status=WAITING and the plan fails,
+      // while the library under test did nothing wrong. Positive and negative
+      // modules are equally exposed; the reports named only negative ones
+      // because they were the majority of the plan.
+      //
+      // 90s is just under twice the worst start observed (~49.5s). It costs
+      // nothing when the browser is healthy: the flow ends at the redirect,
+      // and no iOS conformance module legitimately goes without one.
       ios: OidcNativeOptionsApple(
         prefersEphemeralWebBrowserSession: true,
-        flowTimeoutSeconds: 30,
+        flowTimeoutSeconds: iosConformanceFlowTimeoutSeconds,
       ),
       android: OidcNativeOptionsAndroid(flowTimeoutSeconds: 30),
       // Desktop was assumed to complete on its own because the loopback
@@ -86,5 +138,11 @@ OidcUserManager conformanceManager(
       OidcConstants_Scopes.address,
       OidcConstants_Scopes.phone,
     ],
+    userInfoSettings: OidcUserInfoSettings(
+      sendUserInfoRequest: sendUserInfoRequest,
+    ),
+    sessionManagementSettings: OidcSessionManagementSettings(
+      enabled: sessionManagementEnabled,
+    ),
   ),
 );

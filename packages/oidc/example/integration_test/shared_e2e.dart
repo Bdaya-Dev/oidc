@@ -140,6 +140,48 @@ bool isBackChannelLogoutPlan(String planName) =>
 /// origin for `session_state` to be computed from in the first place.
 bool canGenerateSessionState(Uri redirectUri) => redirectUri.host.isNotEmpty;
 
+/// Whether [planName] is an OpenID Connect Session Management RP profile
+/// (`oidcc-client-rp-session-management-rp-basic`, plus the not-yet-wired
+/// `-rp-hybrid`/`-rp-implicit` variants, matched the same way
+/// [isLogoutConformancePlan] matches its own substring family).
+bool isSessionManagementConformancePlan(String planName) =>
+    planName.contains('-session-management-');
+
+/// Whether this platform can satisfy OpenID Connect Session Management's
+/// RP-side session-status check: hosting `check_session_iframe` in a frame
+/// the RP controls, posting `"$clientId $sessionState"` into it, and reading
+/// back the OP's postMessage result.
+///
+/// This is `true` ONLY on web (`package:oidc`'s decision, made and verified
+/// with the user, oidc#467): two independent reasons, either one sufficient
+/// on its own, rule out every other platform:
+///
+/// * RFC 8252 section 8.12 requires native apps to perform the authorization
+///   request in an external user-agent (the system browser), explicitly
+///   forbidding an embedded WebView for login. So on android/ios/macos/
+///   linux/windows, package:oidc's login flow never runs inside any
+///   app-controlled browser surface at all -- there is no WebView around,
+///   embedded or otherwise, for the app to host a frame in.
+/// * Even granting an embedded WebView purely for session monitoring (a
+///   SEPARATE browser surface from the one that performed login), OpenID
+///   Connect Session Management 1.0 section 3.2 computes `check_session_iframe`'s
+///   answer from the OP SESSION COOKIE held by whichever user-agent is
+///   loading it. That cookie lives in the EXTERNAL user-agent the §8.12 login
+///   happened in (the system browser), not in any separate surface the app
+///   might create -- a second, app-controlled WebView would carry no OP
+///   session cookie and could only ever answer "changed"/"error", which is
+///   not a meaningful session check, it is a permanently-broken one.
+///
+/// `monitorSessionStatus` reflects exactly this split today:
+/// `oidc_web_core`'s implementation does the real iframe + postMessage dance
+/// (the web page IS the browser the login ran in, so the cookie is right
+/// there); `oidc_desktop`/`oidc_android`/`oidc_darwin` each return
+/// `Stream.empty()`, tested explicitly in their own `library_surface_test.dart`
+/// files. See `packages/oidc/README.md`'s Session Management section for the
+/// native-platform alternatives (`OidcTokenRefreshFailedEvent`,
+/// `OidcUserInfoFailedEvent`, back-channel logout, OpenID Connect Native SSO).
+bool get supportsSessionManagement => kIsWeb;
+
 /// The OIDC Registration 1.0 section 2 `application_type` this platform's RP
 /// truthfully is.
 ///
@@ -272,6 +314,81 @@ String _describeToken(OidcToken token) {
       'expiresIn=${token.expiresIn?.inSeconds}s '
       'scope=${token.scope?.join(' ')}';
 }
+
+/// Appends a failure line to [moduleFailures] when [verdict] (from
+/// [pollConformanceModuleVerdict]) is not one this harness accepts for
+/// [moduleName], and always logs what the suite reported.
+///
+/// [authDescription] is purely descriptive context for the log/failure
+/// message (what the CLIENT observed -- logged in, no user, or not driven at
+/// all for the discovery-only module) and plays no part in the verdict: the
+/// decision is the suite's own `result`, not what package:oidc returned.
+///
+/// A rejected verdict also carries [describeSuiteLogForFailure]'s digest of
+/// the module's suite log, fetched from [dio] only on that path: the failure
+/// line is the one piece of output every platform's job log shows (iOS shows
+/// nothing else), and "WAITING, no user" alone cannot say whether the suite
+/// ever received the authorization request.
+Future<void> _recordModuleVerdict({
+  required Dio dio,
+  required String instanceId,
+  required List<String> moduleFailures,
+  required Logger logger,
+  required String moduleName,
+  required Map<String, dynamic> verdict,
+  required String authDescription,
+  int? clientLoginStartedAtMs,
+}) async {
+  final status = verdict['status'] as String?;
+  final result = verdict['result'] as String?;
+  // Set only when every poll inside pollConformanceModuleVerdict exhausted its
+  // retries (or hit a non-transient error) -- see _pollSummaryTolerant in
+  // api.dart. Surfaced here, not swallowed, so a transient-poll-induced
+  // non-terminal status is distinguishable from a module that is genuinely
+  // stuck.
+  final pollError = verdict['pollError'] as String?;
+  logger.info(
+    'Suite verdict for $moduleName: status=$status result=$result '
+    '(client: $authDescription)'
+    '${pollError == null ? '' : ', last poll error: $pollError'}.',
+  );
+  final terminal = isTerminalConformanceStatus(status);
+  if (terminal && isAcceptableConformanceResult(result)) {
+    return;
+  }
+  final suiteLog = describeSuiteLogForFailure(
+    await fetchTestLogs(dio: dio, instanceId: instanceId),
+    clientLoginStartedAtMs: clientLoginStartedAtMs,
+  );
+  if (!terminal) {
+    moduleFailures.add(
+      '$moduleName: suite status never reached FINISHED/INTERRUPTED within '
+      'the poll timeout (last status=$status, result=$result; client: '
+      '$authDescription)'
+      '${pollError == null ? '' : ' -- the last poll of it failed: $pollError'}'
+      '. $suiteLog',
+    );
+  } else {
+    moduleFailures.add(
+      '$moduleName: suite result was $result (status=$status; client: '
+      '$authDescription). Acceptable results are PASSED, WARNING, REVIEW, '
+      'SKIPPED. $suiteLog',
+    );
+  }
+}
+
+/// A short label for a native browser-layer event, for a failure line.
+String describeNativeBrowserEvent(OidcNativeBrowserEvent event) =>
+    switch (event) {
+      OidcBrowserOpeningEvent() => 'opening',
+      OidcBrowserOpenedEvent() => 'opened',
+      OidcBrowserRedirectReceivedEvent() => 'redirectReceived',
+      // On darwin/android this is also what flowTimeoutSeconds produces.
+      OidcBrowserFlowCancelledEvent() => 'cancelled',
+      final OidcBrowserFlowFailedEvent e =>
+        'failed(${e.error.kind.name}: ${e.error.message})',
+      OidcBrowserNativeWarningEvent() => 'warning',
+    };
 
 /// Smoke path used when no conformance token is supplied: just initialize the
 /// example's default manager.
@@ -458,6 +575,32 @@ Future<void> runOidcConformanceTest(
     return;
   }
 
+  if (isSessionManagementConformancePlan(planName) &&
+      !supportsSessionManagement) {
+    // Confirmed against the suite's own public log (oidc#467, CI run
+    // 37273454165, linux instance LGM4mkXj5oBdTTq / windows instance
+    // 4l3cX3OUWBhPQYg): the RP's observed request sequence was discovery ->
+    // authorize -> token -> jwks -> userinfo -> end_session_endpoint, with
+    // ZERO requests to check_session_iframe before or after logout, so the
+    // module sits at status=WAITING forever -- no poll timeout fixes a
+    // module waiting on an interaction that structurally never happens on
+    // this platform. See [supportsSessionManagement] for why.
+    markTestSkipped(
+      '$planName needs the RP to host check_session_iframe in a frame it '
+      'controls and read back its postMessage result. RFC 8252 section 8.12 '
+      'requires $platform to run login in an external user-agent (no '
+      'embedded WebView), and OpenID Connect Session Management 1.0 section '
+      "3.2 ties check_session_iframe's answer to the OP session cookie held "
+      'by THAT external user-agent -- a cookie this app has no access to and '
+      'no frame to host against. package:oidc implements session-status '
+      "monitoring for web only; see packages/oidc/README.md's Session "
+      'Management section for native alternatives '
+      '(OidcTokenRefreshFailedEvent, OidcUserInfoFailedEvent, back-channel '
+      'logout, OpenID Connect Native SSO).',
+    );
+    return;
+  }
+
   if (isLogoutConformancePlan(planName) &&
       !canGenerateSessionState(getPlatformRedirectUri())) {
     // Not a client defect and not a skipped failure: the suite aborts before it
@@ -566,6 +709,14 @@ Future<void> runOidcConformanceTest(
   // 30 seconds", and the plan still passed. An assertion that cannot observe
   // the thing the plan exists to test is not a test of it.
   var successfulLogouts = 0;
+  // Per-module suite verdicts this harness rejects, collected across the
+  // whole plan rather than failing at the first one. Neither aggregate above
+  // can see this: a negative module that WRONGLY logs in still increments
+  // successfulLogins, so the plan stayed green through #447's CI even though
+  // oidcc-client-test-missing-athash should have ended with no user (#467).
+  // Asking the suite itself for each module's result (not just login/no-login
+  // on the client side) is what catches that.
+  final moduleFailures = <String>[];
   // Null when the plan has no discovery-issuer-mismatch module.
   bool? issuerMismatchRejected;
 
@@ -676,6 +827,17 @@ Future<void> runOidcConformanceTest(
       redirectUri: redirectUri,
       postLogoutRedirectUri: redirectUri,
       frontChannelLogoutUri: Uri(path: 'redirect.html'),
+      // See moduleFinishesBeforeUserinfo (api.dart): this one module's suite
+      // instance finishes the moment the client has fetched discovery + jwks,
+      // and the manager's own (otherwise-automatic) userinfo call arrives
+      // after that, which the suite answers with an "Illegal test state
+      // change" error that flips an otherwise-correct login to FAILED.
+      sendUserInfoRequest: !moduleFinishesBeforeUserinfo(moduleName),
+      // See requiresSessionManagementMonitoring (api.dart): OidcSessionManagementSettings.enabled
+      // defaults to false, and this module needs it true to get ANY
+      // check_session_iframe traffic at all -- the automatic post-login
+      // monitor and the post-logout probe are both gated on it.
+      sessionManagementEnabled: requiresSessionManagementMonitoring(moduleName),
     );
     app_state.managersRx.update((managers) => managers..add(manager));
     app_state.currentManagerRx.$ = manager;
@@ -702,6 +864,19 @@ Future<void> runOidcConformanceTest(
       issuerMismatchRejected = rejected;
       print('[e2e] $moduleName -> rejected at discovery: $rejected');
       if (rejected) {
+        final verdict = await pollConformanceModuleVerdict(
+          dio: dio,
+          instanceId: testInstanceId,
+        );
+        await _recordModuleVerdict(
+          dio: dio,
+          instanceId: testInstanceId,
+          moduleFailures: moduleFailures,
+          logger: logger,
+          moduleName: moduleName,
+          verdict: verdict,
+          authDescription: 'rejected at discovery (expected)',
+        );
         await sub.cancel();
         app_state.currentManagerRx.$ = app_state.managersRx.$.first;
         app_state.managersRx.update((managers) => managers..remove(manager));
@@ -721,6 +896,19 @@ Future<void> runOidcConformanceTest(
     expect(manager.didInit, true);
     logger.info('Manager initialized');
     if (moduleName == 'oidcc-client-test-discovery-openid-config') {
+      final verdict = await pollConformanceModuleVerdict(
+        dio: dio,
+        instanceId: testInstanceId,
+      );
+      await _recordModuleVerdict(
+        dio: dio,
+        instanceId: testInstanceId,
+        moduleFailures: moduleFailures,
+        logger: logger,
+        moduleName: moduleName,
+        verdict: verdict,
+        authDescription: 'not driven (discovery-only module)',
+      );
       app_state.currentManagerRx.$ = app_state.managersRx.$.first;
       app_state.managersRx.update((managers) => managers..remove(manager));
       await sub.cancel();
@@ -748,7 +936,45 @@ Future<void> runOidcConformanceTest(
     logger.info(
       'Starting login $flowName flow (${responseTypes.join(' ')})...',
     );
-    final authResult = await () async {
+    // Extracted so [requiresSecondLoginForKeyRotation] modules can call it a
+    // SECOND time below: the suite rotates its signing key only once a second
+    // `authorize` request arrives, so without a second real interaction here
+    // the module waits forever for one the harness never made (#467).
+    // What the CLIENT saw, carried into the per-module failure line: on iOS
+    // that line is the only output that reaches the job log (see
+    // describeSuiteLogForFailure, api.dart).
+    String? loginError;
+    int? loginStartedAtMs;
+    final loginStopwatch = Stopwatch();
+    // The native browser layer's own events (oidc_android / oidc_darwin; empty
+    // elsewhere), timed from the login start: they show whether the browser
+    // opened promptly, and whether the flow ended in a redirect or in
+    // flowTimeoutSeconds' cancel.
+    //
+    // Subscribed for the whole module rather than per attempt: the native
+    // event channel and the method reply that completes the login are
+    // separate channels, so the final event can land just after the login's
+    // Future does. It is cancelled once the verdict is recorded.
+    final browserTimeline = <String>[];
+    var loginStartedAt = DateTime.now();
+    final browserEvents = manager.events().listen((event) {
+      if (event is! OidcNativeBrowserEvent) {
+        return;
+      }
+      final offset = event.at.difference(loginStartedAt).inMilliseconds / 1000;
+      browserTimeline.add(
+        '${describeNativeBrowserEvent(event)}@'
+        '${offset >= 0 ? '+' : ''}${offset.toStringAsFixed(2)}s',
+      );
+    });
+    Future<OidcUser?> attemptLogin() async {
+      browserTimeline.clear();
+      loginError = null;
+      loginStartedAt = DateTime.now();
+      loginStartedAtMs = loginStartedAt.millisecondsSinceEpoch;
+      loginStopwatch
+        ..reset()
+        ..start();
       try {
         if (!hasCode) {
           // No code comes back, so there is nothing to exchange. Deprecated in
@@ -765,11 +991,68 @@ Future<void> runOidcConformanceTest(
         // Expected for the negative modules, whose broken responses the client
         // must reject, so record it rather than failing the run here.
         logger.severe('Login flow threw for $moduleName', e, stackTrace);
+        loginError = '$e';
         return null;
+      } finally {
+        loginStopwatch.stop();
       }
-    }();
+    }
+
+    final authResult = await attemptLogin();
     if (authResult != null) {
       successfulLogins++;
+      // oidcc-client-test-signing-key-rotation (see
+      // requiresSecondLoginForKeyRotation, api.dart) only rotates its signing
+      // key, and only finishes, once it sees a SECOND full authorization
+      // interaction. package:oidc_core already self-heals a rotated key on
+      // its own (one rate-limited, cache-busting jwks refetch on a kid miss --
+      // OIDC Core §10.1.1); the harness just has to actually issue the second
+      // login the module is waiting for.
+      if (requiresSecondLoginForKeyRotation(moduleName)) {
+        logger.info(
+          'Signing-key-rotation module: issuing a second login to trigger '
+          'the key rotation and re-verification...',
+        );
+        final secondAuthResult = await attemptLogin();
+        logger.info(
+          secondAuthResult == null
+              ? 'Second login for $moduleName did not complete; the suite '
+                    'verdict below will most likely be non-terminal.'
+              : 'Second login completed: '
+                    '${_describeToken(secondAuthResult.token)}',
+        );
+      }
+      // oidcc-client-test-session-management (see
+      // requiresSessionManagementMonitoring, api.dart) will not finish unless
+      // the suite observes a check_session_iframe postMessage round trip
+      // BEFORE logout, and `listenToUserSessionIfSupported`'s automatic
+      // monitor runs on its own schedule (iframe load, then
+      // sessionManagementSettings.interval) -- calling logout() immediately
+      // after login, as every other module does, would very likely race it.
+      // Poll the suite's own log for its confirmation instead of guessing a
+      // sleep duration that either races the monitor or wastes every other
+      // module's time budget.
+      if (requiresSessionManagementMonitoring(moduleName)) {
+        logger.info(
+          'Session management module: waiting for the suite to observe the '
+          'pre-logout check_session_iframe round trip...',
+        );
+        final sawPreLogoutCheck = await waitForSuiteLogEntry(
+          dio: dio,
+          instanceId: testInstanceId,
+          matches: (entry) =>
+              isSessionCheckPostMessageLogEntry(entry['msg'] as String?),
+        );
+        logger.info(
+          sawPreLogoutCheck
+              ? 'Suite confirmed the pre-logout check_session_iframe round '
+                    'trip.'
+              : 'Suite log never showed the pre-logout check_session_iframe '
+                    'round trip within the wait budget; logging out anyway so '
+                    'the suite verdict below names the real failure instead '
+                    'of the harness hanging silently.',
+        );
+      }
       // The logout profiles are two-step: log in, THEN initiate logout, and the
       // module only completes once it observes the end-session request. This
       // harness drove the login and stopped, so every logout module sat waiting
@@ -853,6 +1136,31 @@ Future<void> runOidcConformanceTest(
         }
       }
     }
+    // Ask the suite itself whether THIS module is one it considers passed,
+    // regardless of what the client observed. authResult alone cannot tell a
+    // negative module that correctly saw no user from one that WRONGLY logged
+    // in -- successfulLogins only counts the latter case as a win -- and a
+    // module that is supposed to log in could still fail a suite-side check
+    // (e.g. a required requirement) after the client's own flow looked clean.
+    // See #467.
+    final verdict = await pollConformanceModuleVerdict(
+      dio: dio,
+      instanceId: testInstanceId,
+    );
+    await _recordModuleVerdict(
+      dio: dio,
+      instanceId: testInstanceId,
+      moduleFailures: moduleFailures,
+      logger: logger,
+      moduleName: moduleName,
+      verdict: verdict,
+      clientLoginStartedAtMs: loginStartedAtMs,
+      authDescription:
+          '${authResult == null ? 'no user' : 'logged in'} after '
+          '${loginStopwatch.elapsed.inMilliseconds}ms'
+          '${loginError == null ? '' : ', login threw: $loginError'}'
+          '; browser events [${browserTimeline.join(', ')}]',
+    );
     logger
       ..info(
         authResult == null
@@ -860,6 +1168,7 @@ Future<void> runOidcConformanceTest(
             : 'Login successful: ${_describeToken(authResult.token)}',
       )
       ..info('Cleaning up manager for test instance: $testInstanceId');
+    await browserEvents.cancel();
     await sub.cancel();
     app_state.currentManagerRx.$ = app_state.managersRx.$.first;
     app_state.managersRx.update((managers) => managers..remove(manager));
@@ -897,6 +1206,24 @@ Future<void> runOidcConformanceTest(
         "Android intent-filter, and the real cause was the suite's "
         'GenerateSessionState throwing on a host-less redirect_uri, on macOS '
         'as much as on Android.',
+  );
+
+  // The per-module gate the aggregate above cannot be: successfulLogins only
+  // ever moves in the direction a negative module must NOT move, so a
+  // negative module that wrongly logs in stays invisible to it as long as any
+  // other module in the plan still passes. Asking the suite for each module's
+  // own result closes that gap (#467) -- including for the implicit-flow
+  // oidcc-client-test-missing-athash module that PR #447's CI let through.
+  expect(
+    moduleFailures,
+    isEmpty,
+    reason:
+        'The conformance suite itself rejected these $planName modules on '
+        '${getPlatformName()} (status/result read from GET api/info/{id}; '
+        'acceptable results are PASSED, WARNING, REVIEW, SKIPPED -- the same '
+        'set certification.openid.net itself accepts -- FAILED and a '
+        'non-terminal status after the poll timeout are not):\n'
+        '${moduleFailures.join('\n')}',
   );
 
   // The logout plans exist to exercise logout, so a login-only gate cannot

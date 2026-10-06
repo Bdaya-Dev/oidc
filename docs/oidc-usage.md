@@ -432,6 +432,22 @@ This can be done by calling `logout` with the following optional parameters:
 - `options`: platform-specific navigation options, which are the same as `settings.options`.
 - `extraParameters`: extra parameters to pass to the logout request.
 
+### Session Management
+
+[OpenID Connect Session Management 1.0](https://openid.net/specs/openid-connect-session-1_0.html) lets the RP poll whether the user's session at the OP is still alive, by embedding `check_session_iframe` in a frame it controls and reading back the OP's `postMessage` answer ("unchanged" / "changed" / "error"). `package:oidc` implements this **on web only** — this is a deliberate, permanent scoping decision, not a gap awaiting a native implementation:
+
+!!! Note
+    On native platforms (Android, iOS, macOS, Linux, Windows), [RFC 8252 §8.12](https://datatracker.ietf.org/doc/html/rfc8252#section-8.12) requires login to run in an **external** user-agent (the system browser), never an embedded WebView — so the app has no browser surface of its own to host `check_session_iframe` in. And even an app-controlled WebView created purely to poll the session would not work around this: [OpenID Connect Session Management 1.0 §3.2](https://openid.net/specs/openid-connect-session-1_0.html#RPiframe) computes the answer from the OP session **cookie** held by whichever user-agent is loading the iframe, and that cookie lives in the EXTERNAL browser the §8.12 login happened in — a separate, freshly-created WebView carries no such cookie and could only ever report "changed".
+
+    Detect a session that ended at the OP on native platforms through other signals instead:
+
+    - `OidcTokenRefreshFailedEvent` on `manager.events()` — a terminal automatic token-refresh failure (e.g. `invalid_grant`) surfaces the next time the token is refreshed.
+    - `OidcUserInfoFailedEvent` on `manager.events()` — a `401` from the userinfo endpoint surfaces the next time it's called.
+    - Front-Channel Logout / Back-Channel Logout, if your OP can push the logout to the app directly.
+    - [OpenID Connect Native SSO for Mobile Apps](https://openid.net/specs/openid-connect-native-sso-1_0.html), if several apps from the same vendor need to share a signed-out state.
+
+    None of these are instant the way `check_session_iframe` polling is on web — they surface on the *next* token use, not the moment the OP session actually ends.
+
 ### Listening to currentUser changes
 
 Whenever a user logs in, logs out, or a token gets refreshed automatically, an event is added to the `userChanges()` stream.

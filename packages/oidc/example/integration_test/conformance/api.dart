@@ -201,6 +201,90 @@ String? webFingerIdentifierFor({
   _ => null,
 };
 
+/// Whether [moduleName] finishes as soon as the RP has fetched BOTH the
+/// discovery document and the (randomized-path) `jwks_uri`, before any
+/// userinfo call.
+///
+/// `OIDCCClientTestDiscoveryJwksUriKeys`
+/// (openid-certification/conformance-suite,
+/// `src/main/java/net/openid/conformance/openid/client/config/OIDCCClientTestDiscoveryJwksUriKeys.java`)
+/// overrides `finishTestIfAllRequestsAreReceived` to call `fireTestFinished()`
+/// the instant `receivedDiscoveryRequest && receivedJwksRequest` are both
+/// true -- i.e. right after the client verifies the id_token's signature
+/// against the freshly-fetched jwks_uri, well before a normal login's own
+/// userinfo call. `OidcUserInfoSettings.sendUserInfoRequest` (package:oidc)
+/// defaults to `true`, so the manager's own userinfo call used to arrive
+/// AFTER the suite had already finished the module, and the suite answered it
+/// with "Illegal test state change: FINISHED -> RUNNING" -- confirmed on CI
+/// run 37252425838 (linux instance Bji4pEGUaWavYTg, windows instance
+/// sGDQlFZLvzCkkUY), which turned an otherwise-correct login into a FAILED
+/// verdict. `runOidcConformanceTest` in shared_e2e.dart builds exactly this
+/// module's manager with userinfo disabled rather than weakening the
+/// per-module assertion; see oidc#467.
+bool moduleFinishesBeforeUserinfo(String moduleName) =>
+    moduleName == 'oidcc-client-test-discovery-jwks-uri-keys';
+
+/// Whether [moduleName] requires a SECOND full authorization interaction
+/// after the first one succeeds.
+///
+/// `OIDCCClientTestSigningKeyRotation`
+/// (openid-certification/conformance-suite,
+/// `src/main/java/net/openid/conformance/openid/client/config/OIDCCClientTestSigningKeyRotation.java`)
+/// rotates its signing key only once a SECOND `authorize` request arrives
+/// (`handleClientRequestForPath` sets `receivedSecondAuthorizationRequest` and
+/// calls `configureServerJWKS()` again at exactly that point, not before), and
+/// its `finishTestIfAllRequestsAreReceived` override will not fire finished
+/// for the CODE response type -- the one this harness drives it with in the
+/// Config RP plan -- until BOTH `receivedSecondUserinfoRequest` and
+/// `receivedSecondJwksRequest` are true. That needs a second complete login:
+/// a second token exchange whose id_token is signed by the ROTATED key (so
+/// `package:oidc_core`'s own kid-miss forced-refetch self-heal -- OIDC Core
+/// §10.1.1, see `OidcUser.fromIdToken` -- fetches the jwks a second time) and
+/// a second userinfo call with the new access_token. Confirmed stuck at
+/// `status=WAITING result=null` after only ONE login on CI run 37252425838
+/// (linux instance A8MLwlTP0UizYW0, windows instance WmGCI7Zvht0bmZl) because
+/// the harness never issued that second interaction. See oidc#467.
+bool requiresSecondLoginForKeyRotation(String moduleName) =>
+    moduleName == 'oidcc-client-test-signing-key-rotation';
+
+/// Whether [moduleName] needs OpenID Connect Session Management 1.0 actually
+/// turned on for the manager driving it, and a wait for the suite to observe
+/// the PRE-logout `check_session_iframe` round trip before logging out.
+///
+/// `OIDCCClientTestSessionManagement`
+/// (openid-certification/conformance-suite,
+/// `src/main/java/net/openid/conformance/openid/client/logout/OIDCCClientTestSessionManagement.java`,
+/// extending `AbstractOIDCCClientLogoutTest`) will not fire finished until
+/// `receivedAuthorizationRequest && receivedEndSessionRequest &&
+/// receivedCheckSessionRequestBeforeLogout &&
+/// receivedCheckSessionRequestAfterLogout` are ALL true. The suite sets the
+/// latter two only from `handleGetSessionStateViaAjaxRequest`: the OP's
+/// `check_session_iframe` page itself calls back to `get_session_state`
+/// (`check_session_ajax_url`) the moment it RECEIVES a postMessage from the
+/// RP, logging "OP iframe received postMessage request from RP iframe" --
+/// see [isSessionCheckPostMessageLogEntry]. Loading the iframe alone
+/// ("The client requested check_session_iframe") is not enough.
+///
+/// `package:oidc`'s own `OidcSessionManagementSettings.enabled` defaults to
+/// `false` and gates EVERY piece of this: capturing `session_state` into the
+/// logout state, the automatic post-login monitor
+/// (`listenToUserSessionIfSupported`, wired to `userChanges` in
+/// `user_manager_base.dart`), and the post-logout probe
+/// (`startEndSessionConfirmation`, called from `handleEndSessionResponse`
+/// right before `forgetUser()`). Confirmed on CI (oidc#467): with it left at
+/// the default, login was immediately followed by logout with no
+/// `check_session_iframe` traffic at all, and the module sat at
+/// `status=WAITING result=null` forever. `conformanceManager`'s
+/// `sessionManagementEnabled` parameter is `true` for exactly this module.
+///
+/// Even with it enabled, the regular monitor's first postMessage lands on its
+/// OWN schedule (iframe load, then `sessionManagementSettings.interval`) --
+/// calling `logout()` immediately after login would very likely race it. The
+/// harness polls the suite's log for [isSessionCheckPostMessageLogEntry]
+/// before logging out, rather than sleeping a guessed duration.
+bool requiresSessionManagementMonitoring(String moduleName) =>
+    moduleName == 'oidcc-client-test-session-management';
+
 (String path, Map<String, dynamic> body) prepareTestPlanRequest({
   // oidcc-client-basic-certification-test-plan
   required String planName,
@@ -461,6 +545,202 @@ Future<Map<String, dynamic>> getTestSummary({
   return response.data ?? {};
 }
 
+/// `TestModule.Result` values (the suite's own source,
+/// `net.openid.conformance.testmodule.TestModule`) this harness accepts for
+/// ANY module, positive or negative.
+///
+/// PASSED is the obvious case. WARNING, REVIEW and SKIPPED are accepted too,
+/// matching what certification itself accepts: a profile can be certified
+/// with PASSED, REVIEW, WARNING or SKIPPED results, and cannot be certified
+/// with FAILED or INTERRUPTED. REVIEW usually asks a human to confirm
+/// something like a screenshot; this harness runs unattended and cannot act
+/// on it, so treating it as a failure would fail module categories the suite
+/// itself does not consider broken. SKIPPED means the suite decided the
+/// module could not run against this configuration (e.g. a server-side
+/// feature the plan variant does not exercise), not a client defect.
+const acceptableConformanceResults = {'PASSED', 'WARNING', 'REVIEW', 'SKIPPED'};
+
+/// `TestModule.Status` values after which `TestModule.Result` is final --
+/// the module will not take any further RP-observable step.
+///
+/// `TestModule.Status` also has `NOT_YET_CREATED`, `CREATED`, `CONFIGURED`,
+/// `RUNNING` and `WAITING`, all non-terminal: the suite can still change its
+/// mind about the result while a module is in any of those.
+const terminalConformanceStatuses = {'FINISHED', 'INTERRUPTED'};
+
+/// Whether the suite's own verdict for a module is one this harness accepts.
+///
+/// `null` is never accepted: either the field was absent, or the module's
+/// result is still the suite's own `UNKNOWN` ("not yet known, probably still
+/// running"), neither of which is a verdict.
+bool isAcceptableConformanceResult(String? result) =>
+    result != null && acceptableConformanceResults.contains(result);
+
+/// Whether [status] is one of `TestModule.Status` after which the module's
+/// result will not change further. See [terminalConformanceStatuses].
+bool isTerminalConformanceStatus(String? status) =>
+    status != null && terminalConformanceStatuses.contains(status);
+
+/// Whether [error], raised by a [getTestSummary] call inside
+/// [pollConformanceModuleVerdict], is worth retrying rather than letting it
+/// end the poll outright.
+///
+/// A transient network hiccup or a suite-side 5xx against ONE poll must not
+/// take the rest of the plan down with it: CodeRabbit and a human reviewer
+/// both flagged that an uncaught exception here used to propagate out of
+/// `pollConformanceModuleVerdict` -- an uncaught `Future` error inside the
+/// `testWidgets`/`patrolTest` body running `runOidcConformanceTest` -- failing
+/// the whole plan and losing every module after the one being polled, not
+/// just the single bad request. A 4xx, a malformed response, or any other
+/// non-transient error is NOT retried: retrying cannot change a deterministic
+/// failure, and masking it behind a retry delay would only slow the run down
+/// before it fails anyway.
+bool isTransientConformancePollError(Object error) {
+  if (error is! DioException) {
+    return false;
+  }
+  switch (error.type) {
+    case DioExceptionType.connectionTimeout:
+    case DioExceptionType.sendTimeout:
+    case DioExceptionType.receiveTimeout:
+    case DioExceptionType.connectionError:
+      return true;
+    case DioExceptionType.badResponse:
+      final statusCode = error.response?.statusCode;
+      return statusCode != null && statusCode >= 500;
+    case DioExceptionType.cancel:
+    case DioExceptionType.badCertificate:
+    case DioExceptionType.unknown:
+      return false;
+    // A timeout while Dio's own response transformer (JSON decode) was
+    // running, not a network condition -- not expected for this endpoint's
+    // tiny JSON body, so treated conservatively as non-transient rather than
+    // retried blind.
+    case DioExceptionType.transformTimeout:
+      return false;
+  }
+}
+
+/// Retries [poll] while it fails with a transient error
+/// ([isTransientConformancePollError]), up to [maxAttempts] attempts total,
+/// waiting `initialDelay * 2^(attempt - 1)` between tries.
+///
+/// The last error is rethrown once attempts are exhausted, or immediately for
+/// a non-transient error: this function only decides whether to retry, not
+/// what an exhausted/non-transient failure means for the caller's verdict --
+/// see [pollConformanceModuleVerdict], which turns that rethrow into a verdict
+/// map rather than letting it escape.
+///
+/// [maxAttempts] and [initialDelay] are parameters (not hardcoded) so a test
+/// can keep this fast and deterministic without mocking Dio or the clock: the
+/// retry COUNT and the transient/non-transient DECISION are the pure logic
+/// worth pinning down, and a millisecond-scale [initialDelay] exercises both
+/// without a real wait.
+Future<T> retryTransientConformancePollErrors<T>(
+  Future<T> Function() poll, {
+  int maxAttempts = 3,
+  Duration initialDelay = const Duration(milliseconds: 500),
+}) async {
+  var attempt = 0;
+  while (true) {
+    try {
+      return await poll();
+    } on Object catch (e) {
+      attempt++;
+      if (attempt >= maxAttempts || !isTransientConformancePollError(e)) {
+        rethrow;
+      }
+      await Future<void>.delayed(initialDelay * (1 << (attempt - 1)));
+    }
+  }
+}
+
+/// One [getTestSummary] read, tolerant of a failure that survives
+/// [retryTransientConformancePollErrors]: rather than letting it escape (and
+/// taking the rest of the plan down with it), it is folded into a verdict map
+/// carrying `pollError`. `isTerminalConformanceStatus(null)` is false, so
+/// [pollConformanceModuleVerdict]'s own timeout loop, and
+/// `_recordModuleVerdict`'s "never reached FINISHED/INTERRUPTED" message in
+/// shared_e2e.dart, already handle a map shaped like this; `pollError` just
+/// explains why THIS read could not refresh it. [previous] (the last summary
+/// that DID succeed, if any) is carried forward so a poll that fails after the
+/// module already reported something is not reported as if nothing had ever
+/// been read.
+Future<Map<String, dynamic>> _pollSummaryTolerant({
+  required Dio dio,
+  required String instanceId,
+  Map<String, dynamic>? previous,
+}) async {
+  try {
+    return await retryTransientConformancePollErrors(
+      () => getTestSummary(dio: dio, instanceId: instanceId),
+    );
+  } on Object catch (e) {
+    return {
+      'status': previous?['status'],
+      'result': previous?['result'],
+      'pollError': '$e',
+    };
+  }
+}
+
+/// Polls `GET api/info/{id}` ([getTestSummary]) until the suite reports a
+/// terminal `TestModule.Status` ([isTerminalConformanceStatus]) or [timeout]
+/// elapses, returning whatever the last poll read either way.
+///
+/// This is `api/info`, deliberately NOT `api/runner` ([getTestStatus]):
+/// confirmed against real CI output (oidc#467) that `api/runner/{id}` --
+/// which this harness already called for null-result diagnostics below --
+/// returns only the TestRunner's live browser-interaction state (`owner`,
+/// `created`, `browser`, `name`, `exposed`, `id`, `error`, `updated`), with
+/// no `status` or `result` key at all; that is why an earlier version of this
+/// harness read `status['status']`/`status['result']` and got `null` for
+/// every module, a payload-shape guess that was never corrected. The suite's
+/// own OpenAPI document (`frontend/src/api/openapi.json` in
+/// openid/conformance-suite) says outright: "Read the outcome from GET
+/// /api/info/{id} (status and result)". `TestInfoResponse.status`/`.result`
+/// there enumerate exactly `TestModule.Status`/`TestModule.Result`.
+///
+/// [timeout] defaults to 30s, widened from an earlier 15s: CI run 37252425838
+/// (the same run that exposed the jwks-uri-keys and signing-key-rotation
+/// gaps above) hit `status=WAITING result=null` at the OLD 15s bound for
+/// `oidcc-client-test-session-management` on BOTH linux and windows, and that
+/// module passed on an unrelated retry -- i.e. the suite was still working,
+/// not stuck, when the old bound gave up on it.
+/// `AbstractOIDCCClientTest.waitTimeoutSeconds` defaults to 5s in the suite's
+/// own source -- the longest a module legitimately waits on purpose, for a
+/// negative module expecting the RP to detect a problem and go silent -- so
+/// 30s leaves a 6x margin for suite-side load/poll jitter, including the
+/// extra round trip [requiresSecondLoginForKeyRotation] modules now make
+/// through this same poll budget.
+///
+/// Each read is retried through [retryTransientConformancePollErrors]
+/// ([_pollSummaryTolerant]) rather than letting a single transient failure
+/// (network blip, suite-side 5xx) escape and fail the rest of the plan; a read
+/// that still fails after that degrades to a non-terminal verdict map instead
+/// of throwing, so a timeout (transient-poll-induced or genuine) still ends in
+/// the SAME named per-module failure `_recordModuleVerdict` already produces,
+/// rather than an uncaught exception with no module name attached.
+Future<Map<String, dynamic>> pollConformanceModuleVerdict({
+  required Dio dio,
+  required String instanceId,
+  Duration timeout = const Duration(seconds: 30),
+  Duration interval = const Duration(seconds: 1),
+}) async {
+  final stopwatch = Stopwatch()..start();
+  var summary = await _pollSummaryTolerant(dio: dio, instanceId: instanceId);
+  while (!isTerminalConformanceStatus(summary['status'] as String?) &&
+      stopwatch.elapsed < timeout) {
+    await Future<void>.delayed(interval);
+    summary = await _pollSummaryTolerant(
+      dio: dio,
+      instanceId: instanceId,
+      previous: summary,
+    );
+  }
+  return summary;
+}
+
 /// The suite's own log for [instanceId].
 ///
 /// `public: false` is the authenticated view. The public one omits the entries
@@ -490,6 +770,159 @@ Future<List<Map<String, dynamic>>> fetchTestLogs({
     return (response.data ?? []).cast<Map<String, dynamic>>();
   } on Object {
     return const [];
+  }
+}
+
+/// The block name `AbstractOIDCCClientTest.getAuthorizationEndpointBlockText`
+/// opens for every authorization request the suite receives.
+const _authorizationEndpointBlock = 'Authorization endpoint';
+
+/// A one-line digest of a module's suite log ([fetchTestLogs]) for a
+/// per-module FAILURE line, i.e. for the one channel every platform's job log
+/// shows.
+///
+/// The iOS job prints no Dart `print`/`logging` output at all -- patrol only
+/// forwards the failure the test throws -- so a module stuck at
+/// `status=WAITING` there could not say whether the suite ever received its
+/// authorization request (the client never reached the OP), or received it
+/// and the client's later requests raced the suite's own negative-module
+/// timer (`AbstractOIDCCClientTest.startWaitingForTimeout`, which finishes the
+/// module only if the status is still WAITING the instant
+/// `waitTimeoutSeconds` elapses after the authorization request). The two
+/// need opposite fixes, and the suite's log tells them apart.
+///
+/// Lists every request block the suite opened (`startBlock` entries:
+/// "Discovery endpoint", "Authorization endpoint", "Jwks endpoint", ...)
+/// with its time relative to the FIRST authorization request -- both clocks
+/// are the suite's, so there is no client/server skew in these offsets --
+/// followed by the last [tailLength] entries verbatim (truncated).
+///
+/// [clientLoginStartedAtMs] (the client's epoch ms when it started the login,
+/// if it did) adds when the first authorization request reached the suite
+/// relative to that. That offset compares the suite's clock with the
+/// client's (both NTP-synced, so expect about a second of skew). Good enough
+/// to tell "arrived right away" from "arrived 25s in" from "arrived after the
+/// client's flowTimeoutSeconds had already cancelled the browser".
+String describeSuiteLogForFailure(
+  List<Map<String, dynamic>> entries, {
+  int tailLength = 3,
+  int? clientLoginStartedAtMs,
+}) {
+  if (entries.isEmpty) {
+    return 'suite log: empty or unreadable';
+  }
+  int? timeOf(Map<String, dynamic> entry) => (entry['time'] as num?)?.toInt();
+  String clip(Object? value, int max) {
+    final text = '$value'.replaceAll(RegExp(r'\s+'), ' ');
+    return text.length <= max ? text : '${text.substring(0, max)}...';
+  }
+
+  final blocks = entries.where((e) => e['startBlock'] == true).toList();
+  final authorize = blocks
+      .where((e) => '${e['msg']}'.startsWith(_authorizationEndpointBlock))
+      .firstOrNull;
+  final anchor = authorize == null ? null : timeOf(authorize);
+  String offset(Map<String, dynamic> entry) {
+    final time = timeOf(entry);
+    if (anchor == null || time == null) {
+      return '';
+    }
+    final seconds = (time - anchor) / 1000;
+    return '@${seconds >= 0 ? '+' : ''}${seconds.toStringAsFixed(2)}s';
+  }
+
+  final requestBlocks = blocks
+      .map((e) => '${clip(e['msg'], 60)}${offset(e)}')
+      .join(', ');
+  final tail = entries.length <= tailLength
+      ? entries
+      : entries.sublist(entries.length - tailLength);
+  final tailText = tail
+      .map(
+        (e) =>
+            '[${e['result'] ?? '-'}]${offset(e)} ${clip(e['msg'], 140)}'
+            '${e['error'] == null ? '' : ' | error: ${clip(e['error'], 140)}'}',
+      )
+      .join(' / ');
+  final crossClock = anchor == null || clientLoginStartedAtMs == null
+      ? ''
+      : 'first authorization request arrived '
+            '${((anchor - clientLoginStartedAtMs) / 1000).toStringAsFixed(2)}s '
+            'after the client started the login (suite vs client clock); ';
+  return 'suite log (${entries.length} entries): '
+      '${authorize == null ? 'NO authorization request received; ' : ''}'
+      '$crossClock'
+      'request blocks (relative to the first authorization request) '
+      '[$requestBlocks]; last ${tail.length}: $tailText';
+}
+
+/// Whether suite log entry message [msg] confirms the OP's
+/// `check_session_iframe` page completed one postMessage round trip with the
+/// RP (`LogGetSessionStateRequest`, openid-certification/conformance-suite:
+/// `src/main/java/net/openid/conformance/condition/as/logout/LogGetSessionStateRequest.java`).
+///
+/// This is the suite's OWN confirmation that `get_session_state` -- the ajax
+/// call `check_session_iframe`'s page makes back to the suite the instant it
+/// RECEIVES a postMessage (`AbstractOIDCCClientLogoutTest.handleGetSessionStateViaAjaxRequest`)
+/// -- actually fired, which is exactly what flips
+/// `receivedCheckSessionRequestBeforeLogout`/`...AfterLogout`
+/// (see [requiresSessionManagementMonitoring]). The suite logs one of two
+/// messages depending on whether a user happens to be logged in at that
+/// instant; both still flip the boolean, so both are matched by this shared
+/// prefix:
+///   - "OP iframe received postMessage request from RP iframe"
+///   - "OP iframe received postMessage request from RP iframe but the user
+///     is not logged in"
+///
+/// A weaker "The client requested check_session_iframe" entry
+/// (`LogCheckSessionIframeRequest`) only confirms the RP loaded the iframe,
+/// not that a postMessage reached it, so it is deliberately NOT matched here.
+bool isSessionCheckPostMessageLogEntry(String? msg) =>
+    msg != null &&
+    msg.startsWith('OP iframe received postMessage request from RP iframe');
+
+/// Polls the suite's own log for [instanceId] ([fetchTestLogs]) until an
+/// entry satisfies [matches] or [timeout] elapses, returning whether one was
+/// found.
+///
+/// Used instead of a blind `Future.delayed` to learn when
+/// `monitorSessionStatus`'s periodic `check_session_iframe` postMessage has
+/// actually landed (oidcc-client-test-session-management,
+/// [requiresSessionManagementMonitoring], oidc#467): the monitor runs on its
+/// own schedule (iframe load, then `sessionManagementSettings.interval`), so
+/// a guessed sleep either races it (too short, logging out before the suite
+/// observed the PRE-logout check) or wastes the run's time budget on every
+/// other module (too long). Polling the suite's own confirmation is exact
+/// either way, and fails closed: if nothing ever matches, this still returns
+/// after [timeout] rather than hanging, and the caller proceeds to logout
+/// regardless so [pollConformanceModuleVerdict]'s verdict names the real
+/// suite-reported failure rather than the harness hanging silently.
+Future<bool> waitForSuiteLogEntry({
+  required Dio dio,
+  required String instanceId,
+  required bool Function(Map<String, dynamic> entry) matches,
+  Duration timeout = const Duration(seconds: 20),
+  Duration interval = const Duration(seconds: 1),
+}) async {
+  final stopwatch = Stopwatch()..start();
+  while (true) {
+    // A failed read counts as "not seen yet": the module's own verdict poll
+    // still decides pass/fail, so a network blip must not abort the plan.
+    List<Map<String, dynamic>> logs;
+    try {
+      logs = await retryTransientConformancePollErrors(
+        () => fetchTestLogs(dio: dio, instanceId: instanceId),
+      );
+    } on Object {
+      logs = const [];
+    }
+    if (logs.any(matches)) {
+      return true;
+    }
+    if (stopwatch.elapsed >= timeout) {
+      return false;
+    }
+    await Future<void>.delayed(interval);
   }
 }
 
