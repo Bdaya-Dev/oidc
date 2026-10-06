@@ -299,8 +299,22 @@ jobs:
   # integration tests
   android:
     runs-on: ubuntu-latest
+    # Sharded 4 ways (not 2, like ios -- see that job's comment): this job
+    # runs on ubuntu-latest, drawing from GitHub's large general-purpose
+    # concurrent-job pool (20-60 depending on plan), not the much smaller
+    # 5-job *concurrent macOS jobs* cap that constrains ios/macos, so there's
+    # no cross-job concurrency budget to conserve here. CONFORMANCE_SHARD,
+    # read by patrol_test/app_test.dart, splits the 13 conformance plans into
+    # 4 parallel matrix legs instead of one job running them all sequentially.
+    # The AVD cache key below is intentionally NOT shard-scoped: the snapshot
+    # itself doesn't depend on which plans a leg runs, so every shard shares
+    # it (concurrent cache restores are fine; a cold-cache run may have more
+    # than one shard attempt to save the same key, which is a harmless no-op
+    # for whichever shard loses that race).
     strategy:
+      fail-fast: false
       matrix:
+        shard: [basic, implicit, hybrid, rest]
         api-level: [33]
         arch: [x86_64]
         # google_apis, not `default`: the AOSP image ships no browser, so the
@@ -382,8 +396,6 @@ jobs:
           script: echo "Generated AVD snapshot for caching."
       - name: Run flutter precache
         run: flutter precache -v
-      - name: Run flutter doctor
-        run: flutter doctor -v
       - name: Activate Patrol CLI (patrol_cli_plus)
         run: dart pub global activate patrol_cli_plus
       - name: Prepare Android integration script
@@ -451,6 +463,7 @@ jobs:
             -d "$EMU_ID" \
             --verbose \
             --dart-define=CI=true \
+            --dart-define=CONFORMANCE_SHARD=${CONFORMANCE_SHARD} \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN} \
             2>&1 | tee patrol-android.log
           PATROL_RC=${PIPESTATUS[0]}
@@ -494,8 +507,11 @@ jobs:
             echo "::error::patrol executed $TOTAL test(s), expected at least 4 (app_test + 3 offline_mode_test)."
             exit 1
           fi
-          # patrol writes coverage/patrol_lcov.info; rename for the combine step.
-          cp coverage/patrol_lcov.info coverage/android-coverage.info
+          # patrol writes coverage/patrol_lcov.info; rename for the combine
+          # step. Shard-suffixed so the 4 matrix legs' coverage files don't
+          # collide once upload-coverage's merge-multiple download flattens
+          # every *-integration-coverage artifact into one directory.
+          cp coverage/patrol_lcov.info "coverage/android-${CONFORMANCE_SHARD}-coverage.info"
 
           # Deferred above so the diagnostics always run. The count ratchet is an
           # additional gate, not a replacement: a run can execute every test and
@@ -510,6 +526,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
+          CONFORMANCE_SHARD: ${{ matrix.shard }}
         with:
           working-directory: packages/oidc/example
           api-level: ${{ matrix.api-level }}
@@ -520,6 +537,12 @@ jobs:
           emulator-boot-timeout: 900
           target: ${{ matrix.target }}
           script: ./android_emulator_ci.sh
+      # Diagnostics only, same reasoning as the iOS job: moved off the normal
+      # path and gated on failure so it no longer costs anything when the run
+      # is healthy.
+      - name: Run flutter doctor
+        if: failure()
+        run: flutter doctor -v
       - name: Find .info files and files in coverage folders
         run: |
           echo "Listing all .info files and files inside any coverage/ directory:"
@@ -529,8 +552,8 @@ jobs:
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v7
         with:
-          name: android-integration-coverage
-          path: packages/oidc/example/coverage/android-coverage.info
+          name: android-${{ matrix.shard }}-integration-coverage
+          path: packages/oidc/example/coverage/android-${{ matrix.shard }}-coverage.info
           include-hidden-files: true
           if-no-files-found: error
 
@@ -552,15 +575,51 @@ jobs:
     # (not the image default 26.5) is selected because the XCUITest relaunch
     # flake is markedly rarer on 26.6.
     #
-    # The Start Simulator step uses `simctl bootstatus -b` (not `simctl boot`)
-    # to close a separate CoreSimulatorService registration race: `simctl
-    # boot` returns before the device is registered with Xcode's destination
-    # resolver, so `xcodebuild -destination id=<udid>` can fail with "Unable
-    # to find a device matching the provided destination specifier" (exit 70)
-    # for a booted UDID. `bootstatus -b` boots and blocks until the device is
-    # actually registered.
+    # Sharded, but only 2 ways, not 4 -- the 13 conformance plans used to run
+    # sequentially in one job (~1326s of the ~29min job on run 37346215172 --
+    # Hybrid RP alone is ~262s). CONFORMANCE_SHARD (read by
+    # patrol_test/app_test.dart) splits them into 2 parallel matrix legs,
+    # "heavy" (Hybrid RP + Implicit RP, the two slowest plans, ~445s by the
+    # same run's per-plan timing) and "light" (Basic RP + everything else,
+    # ~364s), chosen to land close to half the total each.
+    #
+    # 2 ways, not 4: GitHub caps *concurrent macOS jobs* at 5 on Free/Pro/Team
+    # (shared across standard AND larger runners -- see
+    # https://docs.github.com/en/actions/reference/limits, "Usage limits"),
+    # separately from and far below the general concurrent-job limit (20-60).
+    # This job and `macos` are the only two macOS-pool consumers in this
+    # workflow. A first attempt sharded both 4 ways each (8 concurrent
+    # macOS-pool requests against a cap of 5): run 37398194429 measured iOS
+    # shards starting at 01:15:08/01:18:23/01:29:43/01:39:46 and finishing at
+    # 01:57:49 -- 42 minutes end-to-end, WORSE than the ~29min unsharded
+    # baseline, because 3 of the 4 shards queued behind the cap instead of
+    # running in parallel. At 2 shards here + macos' now-single job (see that
+    # job's comment -- it reverted to unsharded), this workflow's own
+    # macOS-pool demand is 3, comfortably under 5.
+    #
+    # `needs: [... ios ...]` on upload-coverage already waits for every
+    # matrix leg and skips if any fails/cancels -- no separate aggregator job
+    # is needed for that. No branch-protection required status check
+    # currently names "ios" on this repo (checked via `gh api
+    # repos/Bdaya-Dev/oidc/branches/main/protection` -> 404 "Required status
+    # checks not enabled"), so the per-shard context names ("ios (heavy)" /
+    # "ios (light)" instead of a single "ios") are not a breaking change
+    # today; revisit if required checks are ever turned on for this branch.
+    #
+    # The simulator boot is kicked off in the background (`simctl boot &`,
+    # detached with `disown`) right after selecting Xcode, so it overlaps
+    # "Set up Environment" and "Run flutter precache" instead of blocking
+    # ahead of them. `simctl bootstatus -b` right before the tests step is the
+    # actual gate: it boots the device if the background kick-off hasn't
+    # finished yet, and either way blocks until CoreSimulatorService reports
+    # the device as *actually* registered -- see the note on that step for
+    # why a bare `boot` is not enough on its own.
     runs-on: macos-26
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [heavy, light]
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -579,60 +638,58 @@ jobs:
             ls -d /Applications/Xcode_*.app || true
           fi
           xcodebuild -version
-      - name: Set up Environment
-        uses: ./.github/actions/integration_test_base
-        # with:
-        #   channel: master
-        #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
-      - name: Start Simulator
-        # `xcrun simctl boot` only *initiates* the boot and returns almost
-        # immediately; `simctl list devices` can report "Booted" before
-        # CoreSimulatorService has actually finished registering the device
-        # with Xcode's destination resolver. patrol_cli_plus's
-        # `test-without-building` invocation targets the simulator by exact
-        # UDID (`-destination id=<udid>`, unambiguous, no `--ios`/OS-string
-        # matching involved for simulators as of patrol_cli_plus 5.2.0) but
-        # pairs it with a hardcoded `-destination-timeout 1` (one second).
-        # On run 28667951809 (macos-26, no --coverage) that 1s window was
-        # enough -- xcodebuild found the device (even logging a "multiple
-        # matching destinations" WARNING for duplicate arm64/x86_64 entries)
-        # and proceeded. On PR #344's first macos-26 canary run
-        # (job 85040957868) the same boot-then-poll-for-"Booted" pattern lost
-        # that race: xcodebuild reported "Unable to find a device matching
-        # the provided destination specifier" for the exact same booted UDID
-        # (exit 70, before any test ran) -- a CoreSimulatorService
-        # registration race, not a destination-string mismatch. `simctl
-        # bootstatus <udid> -b` is Apple's CI-safe boot primitive: it boots
-        # the device (if needed) and blocks until CoreSimulatorService
-        # reports it has *actually* finished booting, closing this race at
-        # the source instead of relying on `simctl list` polling downstream.
+      - name: Start Simulator (boot in background)
+        # Kicks off the boot and returns immediately so the next steps (Set
+        # up Environment, flutter precache) run while the simulator boots in
+        # parallel, instead of waiting on it first. `nohup ... & disown`
+        # detaches the boot from this step's shell so it keeps running after
+        # the step exits -- the job's later "Wait for Simulator" step is the
+        # actual synchronization point (see that step for why it uses
+        # `bootstatus -b`, not a `simctl list | grep Booted` poll).
         run: |
           SIM_JSON="$(xcrun simctl list devices available --json)"
           RUNTIME_KEY="$(echo "$SIM_JSON" | jq -r '.devices | to_entries[] | select(.key|test("SimRuntime.iOS")) | select([.value[]|select(.name|startswith("iPhone"))]|length>0) | .key' | head -n 1)"
           UDID="$(echo "$SIM_JSON" | jq -r --arg rt "$RUNTIME_KEY" '.devices[$rt][] | select(.name|startswith("iPhone")) | .udid' | head -n 1)"
           OS_VER="$(echo "$RUNTIME_KEY" | sed -E 's/.*SimRuntime\.iOS-([0-9]+)-([0-9]+).*/\1.\2/')"
-          echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY)"
-          xcrun simctl bootstatus "${UDID:?No available iPhone simulator found}" -b
+          : "${UDID:?No available iPhone simulator found}"
+          : "${OS_VER:?Could not parse simulator OS version}"
+          echo "Booting UDID=$UDID on iOS $OS_VER (runtime $RUNTIME_KEY) in the background"
+          nohup xcrun simctl boot "$UDID" > "$RUNNER_TEMP/simctl-boot.log" 2>&1 &
+          disown
           echo "SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
-          echo "SIMULATOR_OS=${OS_VER:?Could not parse simulator OS version}" >> "$GITHUB_ENV"
-      - name: Wait for Simulator to be Ready
-        run: |
-          COUNT=0
-          MAX_RETRIES=12  # Wait for a maximum of 12 * 5 = 60 seconds
-          until xcrun simctl list devices | grep -q "Booted"; do
-            if [ $COUNT -ge $MAX_RETRIES ]; then
-              echo "Simulator did not boot within the expected time."
-              exit 1
-            fi
-            echo "Waiting for simulator to boot... Attempt: $((COUNT+1))"
-            sleep 20
-            COUNT=$((COUNT+1))
-          done
-          echo "Simulator is ready."
+          echo "SIMULATOR_OS=$OS_VER" >> "$GITHUB_ENV"
+      - name: Set up Environment
+        uses: ./.github/actions/integration_test_base
+        # with:
+        #   channel: master
+        #   flutter-version: "ca758ac49b0e93798ce3fbe49e2c8ce290d5e136"
       - name: Run flutter precache
         run: flutter precache -v
-      - name: Run flutter doctor
-        run: flutter doctor -v
+      - name: Wait for Simulator to be Ready
+        # `xcrun simctl boot` (kicked off above, in the background) only
+        # *initiates* the boot and returns almost immediately; `simctl list
+        # devices` can report "Booted" before CoreSimulatorService has
+        # actually finished registering the device with Xcode's destination
+        # resolver. patrol_cli_plus's `test-without-building` invocation
+        # targets the simulator by exact UDID (`-destination id=<udid>`,
+        # unambiguous, no `--ios`/OS-string matching involved for simulators
+        # as of patrol_cli_plus 5.2.0) but pairs it with a hardcoded
+        # `-destination-timeout 1` (one second) on older releases. On PR
+        # #344's first macos-26 canary run (job 85040957868), a
+        # boot-then-poll-for-"Booted" pattern lost that race: xcodebuild
+        # reported "Unable to find a device matching the provided destination
+        # specifier" for the exact same booted UDID (exit 70, before any test
+        # ran) -- a CoreSimulatorService registration race, not a
+        # destination-string mismatch. `simctl bootstatus <udid> -b` is
+        # Apple's CI-safe boot primitive: it boots the device if it isn't
+        # already booting/booted, and blocks until CoreSimulatorService
+        # reports it has *actually* finished booting, closing this race at
+        # the source. Calling it here (after the background kick-off above)
+        # is idempotent: if the device is already booted it returns
+        # immediately, and if it's still booting it waits the remainder.
+        run: |
+          xcrun simctl bootstatus "${SIMULATOR_UDID:?Simulator UDID was not exported}" -b
+          echo "Simulator is ready."
       - name: Activate Patrol CLI (patrol_cli_plus)
         # patrol_cli_plus >= 5.4.1 defaults xcodebuild -destination-timeout to 30s,
         # fixing the exit-70 device-resolution race on the slow macos-26 simulator.
@@ -654,8 +711,25 @@ jobs:
       - name: Integration Tests (Patrol)
         run: |
           export PATH="$PATH:$HOME/.pub-cache/bin"
+          # Maps this job's shard label to the CONFORMANCE_SHARD tag set
+          # patrol_test/app_test.dart understands (a comma-separated set of
+          # its _knownShards tags) -- see the job comment above for the
+          # 2-way, time-balanced split and why it's 2 shards, not 4.
+          case "${{ matrix.shard }}" in
+            heavy) CONFORMANCE_SHARD_VALUE="hybrid,implicit" ;;
+            light) CONFORMANCE_SHARD_VALUE="basic,rest" ;;
+            *)
+              echo "::error::unknown matrix.shard '${{ matrix.shard }}' - expected heavy or light"
+              exit 1
+              ;;
+          esac
           # Runs every patrol_test/*_test.dart (conformance + e2e + offline) on
           # the iOS simulator and collects Dart coverage via the VM service.
+          # CONFORMANCE_SHARD (read by patrol_test/app_test.dart) restricts
+          # which of the 13 conformance plans this matrix leg registers; the 3
+          # offline-mode tests in patrol_test/offline_mode_test.dart are not
+          # sharded and run in every leg (they're fast and run no network
+          # conformance flow).
           patrol_plus test \
             --coverage \
             --coverage-ignore="**/*.g.dart" \
@@ -664,8 +738,9 @@ jobs:
             --ios "${SIMULATOR_OS:?Simulator OS was not exported}" \
             --verbose \
             --dart-define=CI=true \
+            --dart-define=CONFORMANCE_SHARD="$CONFORMANCE_SHARD_VALUE" \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${OIDC_CONFORMANCE_TOKEN}
-          cp coverage/patrol_lcov.info coverage/ios-coverage.info
+          cp coverage/patrol_lcov.info "coverage/ios-${{ matrix.shard }}-coverage.info"
         working-directory: packages/oidc/example
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
@@ -678,18 +753,30 @@ jobs:
           # without downloading the artifact.
           grep -E 'flutter: .*(\[e2e\]|Suite verdict|Login flow threw|Starting login)' \
             "$RUNNER_TEMP/simlog/simulator.log" | cut -c1-400 || true
+      # Per-shard name: this job is sharded 2 ways (see the job comment
+      # above), and actions/upload-artifact requires unique artifact names
+      # within one workflow run -- both shards would otherwise collide on a
+      # bare "ios-simulator-log".
       - name: Upload simulator log
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-simulator-log
+          name: ios-${{ matrix.shard }}-simulator-log
           path: ${{ runner.temp }}/simlog/simulator.log
           if-no-files-found: warn
+      # Diagnostics only: this used to run unconditionally on every job, ahead
+      # of the tests, costing ~148s (run 37346215172) for information that is
+      # only ever useful once something has already gone wrong. Moved after
+      # the test step and gated on failure so the normal path doesn't pay for
+      # it, now 2x per shard instead of once.
+      - name: Run flutter doctor
+        if: failure()
+        run: flutter doctor -v
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v7
         with:
-          name: ios-integration-coverage
-          path: packages/oidc/example/coverage/ios-coverage.info
+          name: ios-${{ matrix.shard }}-integration-coverage
+          path: packages/oidc/example/coverage/ios-${{ matrix.shard }}-coverage.info
           include-hidden-files: true
           if-no-files-found: error
 
@@ -949,6 +1036,33 @@ jobs:
   macos:
     runs-on: macos-latest
     timeout-minutes: 60
+    # Deliberately NOT sharded, unlike android/ios/linux/windows -- two
+    # reasons, both confirmed live rather than assumed:
+    #
+    # 1. It's already fast. Baseline run 37346215172: macos finished in
+    #    7m51s (17:08:52 -> 17:16:43), far below ios's ~29min for the same 13
+    #    plans. Most of the plans that make ios slow are either quick here or
+    #    (per integration_test/shared_e2e.dart's skip logic) not runnable on
+    #    macOS at all -- e.g. the 4 logout plans skip because macOS's
+    #    com.bdayadev.oidc.example:/oauth2redirect custom scheme has no
+    #    authority for GenerateSessionState to build an origin from, and the
+    #    3 form-post plans skip because macOS can't receive an HTTP POST.
+    #    Sharding has nothing worth parallelizing here.
+    # 2. It would actively hurt. This job and `ios` are the only two
+    #    consumers, in this workflow, of GitHub's *concurrent macOS jobs*
+    #    pool, which is capped at 5 on Free/Pro/Team regardless of the much
+    #    larger general concurrent-job limit (see
+    #    https://docs.github.com/en/actions/reference/limits, "Usage
+    #    limits"). An earlier version of this job sharded 4 ways, which
+    #    together with ios's own 4 shards asked for 8 concurrent macOS-pool
+    #    slots at once. Measured live on run 37398194429: ios shards started
+    #    at 01:15:08 / 01:18:23 / 01:29:43 / 01:39:46 and the run didn't
+    #    finish until 01:57:49 -- 42 minutes end-to-end, WORSE than the
+    #    unsharded baseline, because most shards queued behind the cap
+    #    instead of running in parallel. Leaving this job as the single
+    #    consumer it always was, plus ios's reduced 2-way split (see that
+    #    job's comment), brings this workflow's own macOS-pool demand down
+    #    to 3 -- comfortably under 5.
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -986,6 +1100,15 @@ jobs:
           if-no-files-found: error
   linux:
     runs-on: ubuntu-latest
+    # Sharded 4 ways like android (see that job's comment on why 4, not the
+    # 2 ios uses): setup here is cheap (apt packages + flutter precache, no
+    # emulator/simulator), so the 13 conformance plans running in parallel
+    # matrix legs instead of one sequential job is close to a pure wall-time
+    # win, with no macOS-pool-style concurrency budget to conserve.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [basic, implicit, hybrid, rest]
     # container:
     #   image: selenium/standalone-chrome:latest
     #   options: --user root
@@ -1035,24 +1158,32 @@ jobs:
             -d linux \
             --verbose \
             --dart-define=CI=true \
+            --dart-define=CONFORMANCE_SHARD=${{ matrix.shard }} \
             --dart-define=OIDC_CONFORMANCE_TOKEN=$OIDC_CONFORMANCE_TOKEN
-          cp coverage/patrol_lcov.info coverage/linux-coverage.info
+          cp coverage/patrol_lcov.info "coverage/linux-${{ matrix.shard }}-coverage.info"
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v7
         with:
-          name: linux-integration-coverage
-          path: packages/oidc/example/coverage/linux-coverage.info
+          name: linux-${{ matrix.shard }}-integration-coverage
+          path: packages/oidc/example/coverage/linux-${{ matrix.shard }}-coverage.info
           include-hidden-files: true
           if-no-files-found: error
       - name: Upload Conformance Logs
         uses: actions/upload-artifact@v7
         with:
-          name: oidc-client-logs
+          name: oidc-client-logs-${{ matrix.shard }}
           path: packages/oidc/example/client-logs/final.zip
           include-hidden-files: true
           if-no-files-found: warn
   windows:
     runs-on: windows-latest
+    # Sharded like linux (see that job's comment): cheap setup, so splitting
+    # the 13 conformance plans into parallel matrix legs is close to a pure
+    # wall-time win.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [basic, implicit, hybrid, rest]
     defaults:
       run:
         working-directory: packages/oidc/example
@@ -1088,16 +1219,17 @@ jobs:
             -d windows \
             --verbose \
             --dart-define=CI=true \
+            --dart-define=CONFORMANCE_SHARD=${{ matrix.shard }} \
             --dart-define=OIDC_CONFORMANCE_TOKEN=${{ env.OIDC_CONFORMANCE_TOKEN }}
-          cp coverage/patrol_lcov.info coverage/windows-coverage.info
+          cp coverage/patrol_lcov.info "coverage/windows-${{ matrix.shard }}-coverage.info"
         env:
           OIDC_CONFORMANCE_TOKEN: ${{ secrets.OIDC_CONFORMANCE_TOKEN }}
         shell: bash
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v7
         with:
-          name: windows-integration-coverage
-          path: packages/oidc/example/coverage/windows-coverage.info
+          name: windows-${{ matrix.shard }}-integration-coverage
+          path: packages/oidc/example/coverage/windows-${{ matrix.shard }}-coverage.info
           include-hidden-files: true
           if-no-files-found: error
 
