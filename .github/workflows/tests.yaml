@@ -29,34 +29,64 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  TEST_PRESET: all
+  CHROME_FLAGS: --headless --no-sandbox --disable-dev-shm-usage --disable-gpu
+  # jose_plus's crypto-executor suites (keygen/sign/encrypt) take ~55min
+  # per browser under dart2js's ~200x slower BigInt (#371); while they
+  # run, other suites' loads starve. Exclude them (tagged slow-web-crypto,
+  # see packages/jose_plus/dart_test.yaml) from PR web runs only -- VM
+  # runs always execute every tag, and main-branch pushes keep full web
+  # crypto signal. Hoisted to workflow level (was per-job on the old single
+  # unit_tests job) so every split job below inherits it without repeating
+  # it; the expression only reads the `github` context, which top-level
+  # workflow `env:` is documented to support.
+  WEB_EXCLUDE_TAGS: ${{ github.event_name == 'pull_request' && 'slow-web-crypto' || '' }}
+
 defaults:
   run:
     shell: bash -leo pipefail {0}
 
+# ---------------------------------------------------------------------------
+# unit_tests speed-up (2026): this used to be ONE job per sdk channel running
+# every step below SEQUENTIALLY (format -> analyze -> VM -> Chrome -> Firefox
+# -> jose Chrome -> jose Firefox -> oidc_web_core coverage -> oidc_web Chrome
+# -> Flutter -> coverage combine), making it the critical path of the whole
+# workflow on main pushes (~41m stable / ~35m beta, measured on run
+# 37423292012 -- the native integration jobs below are already <=25m after
+# #492's sharding). Split into independently-schedulable jobs so the
+# INDEPENDENT suites (VM, Chrome, Firefox, jose Chrome shards, jose Firefox
+# shards) run CONCURRENTLY on the same ubuntu-latest pool the old single job
+# used -- no macOS-pool-style concurrency cap applies here (see the
+# ios/macos job comments further down for that constraint; it does not
+# apply to this workflow's Linux-only unit-test jobs).
+#
+# Coverage plumbing: each coverage-producing job (unit_core's VM leg,
+# unit_flutter, unit_webcore_coverage) flattens its own packages'
+# coverage/lcov.info files into coverage/flat/<package>.info -- the same
+# flatten-before-upload pattern the android/ios/linux/windows jobs already
+# use for their *-coverage.info artifacts below, which sidesteps
+# actions/upload-artifact's common-ancestor path stripping for a glob like
+# packages/*/coverage/lcov.info -- and uploads them under a job-specific
+# artifact name. unit_tests_coverage downloads every such artifact and lets
+# combine_coverage (which recursively discovers *.info files and rewrites
+# their embedded absolute SF: paths via --repo-path -- the same mechanism
+# the upload-coverage job below already relies on for the native coverage
+# artifacts) merge them, re-emitting the exact "package-coverage" artifact
+# the old single job produced. upload-coverage below needs no changes to
+# its own steps, only to its `needs:`/`if:` (every job this split
+# introduces must be accounted for there, same as `unit_tests` was before).
+# ---------------------------------------------------------------------------
 jobs:
-  unit_tests:
+  # Format + analyze (stable only, unchanged) + VM tests (both channels) +
+  # VM coverage formatting (stable only). The "analyze+VM" leg from the
+  # design doc: Set up 31s + Analyze 63s + Test VM 188s in the baseline.
+  unit_core:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - sdk: stable
-            flutter_version: ""
-          - sdk: beta
-            flutter_version: ""
-          # Example pinned Flutter version run (still uses the stable channel)
-          # - sdk: stable
-          #   flutter_version: 3.35.4
-    env:
-      TEST_PRESET: all
-      CHROME_FLAGS: --headless --no-sandbox --disable-dev-shm-usage --disable-gpu
-      # jose_plus's crypto-executor suites (keygen/sign/encrypt) take ~55min
-      # per browser under dart2js's ~200x slower BigInt (#371); while they
-      # run, other suites' loads starve. Exclude them (tagged slow-web-crypto,
-      # see packages/jose_plus/dart_test.yaml) from PR web runs only -- VM
-      # runs always execute every tag, and main-branch pushes keep full web
-      # crypto signal.
-      WEB_EXCLUDE_TAGS: ${{ github.event_name == 'pull_request' && 'slow-web-crypto' || '' }}
+        sdk: [stable, beta]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -64,7 +94,7 @@ jobs:
         uses: ./.github/actions/flutter_base
         with:
           channel: ${{ matrix.sdk }}
-          flutter-version: ${{ matrix.flutter_version }}
+          flutter-version: ""
       - run: |
           echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: "[Verify step] ✨ Format"
@@ -73,47 +103,63 @@ jobs:
       - name: "[Verify step] 🕵️ Analyze packages"
         if: ${{ matrix.sdk == 'stable' }}
         run: melos run analyze
-      # - name: '[Verify step] 🕵️ Run Pana'
-      #   if: ${{ matrix.sdk == 'stable' }}
-      #   run: |
-      #     flutter pub global activate pana
-      #     melos run pana
       - name: "[Verify step] Test Dart packages [VM]"
         run: melos run test:vm
-      # PRs: browser-test only the packages with genuinely platform-divergent
-      # lib code (js-interop) -- everything else duplicates VM signal at the
-      # cost of one dart2js compile per test file (the old full sweep spent
-      # most of an hour per browser per leg compiling). Pushes to main run
-      # the full browser sweep.
-      # timeout-minutes on the browser steps is the backstop of last resort:
-      # package:test's --timeout and --suite-load-timeout only bound test
-      # execution and suite loads, and a browser wedge can strike OUTSIDE
-      # both (run 29148902320: a Firefox step hung 57+ min with the 4m load
-      # bound active -- so the hang was in launch/shutdown/orchestration,
-      # which no dart-level timer covers). The runner kills the whole
-      # process tree, so the step fails loudly and is rerunnable instead of
-      # idling to GitHub's 6h job kill. Full sweeps run ~1h40m-2h for the
-      # first browser (which pays every dart2js compile) and ~15m for the
-      # second (compile cache hit), so 150m per step = wide margin.
-      # The PR-scope steps additionally retry in-step: the #372 hang strikes
-      # a browser step at random (roughly half of executions on bad days,
-      # both legs at once), while an honest PR-scope run takes 20-90s. Each
-      # try is bounded at 5 minutes; three tries turn manual whole-job rerun
-      # roulette into an automatic in-step retry, while a REAL test failure
-      # still fails fast three times and blocks the PR.
-      # These steps run dart test DIRECTLY, not via melos run test:web:pr:*.
-      # In two consecutive runs (29162293700, 29162532019) the OUTERMOST
-      # melos layer exited 1 AFTER every test passed and the inner layer
-      # printed SUCCESS, failing the step post-success on both matrix legs
-      # (with and without timeout's process-group isolation), and the shell
-      # died without reaching its next statement. dart test's own exit code
-      # is the ground truth the melos layers were relaying anyway; the
-      # command below must stay in sync with test:web:pr:single in the root
-      # pubspec.yaml (used for local runs). set +e so a failed try or a
-      # failed echo write can never errexit the loop; each try is bounded at
-      # 5 minutes (honest runs are 20-90s) and retried up to 3 times -- the
-      # #372 hang wedges a try at random, while a REAL test failure fails
-      # all three tries fast and blocks the PR.
+      - name: "[Coverage] Format VM coverage for each package"
+        if: ${{ matrix.sdk == 'stable' }}
+        run: |
+          set -e
+          dart pub global activate coverage
+          melos run coverage:format:package
+      - name: "[Coverage] Flatten VM coverage for upload"
+        if: ${{ matrix.sdk == 'stable' }}
+        run: |
+          set -e
+          mkdir -p coverage/flat
+          shopt -s nullglob
+          for f in packages/*/coverage/lcov.info; do
+            pkg="$(basename "$(dirname "$(dirname "$f")")")"
+            cp "$f" "coverage/flat/${pkg}.info"
+          done
+          ls -la coverage/flat
+      - name: Upload VM coverage
+        if: ${{ matrix.sdk == 'stable' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-coverage-vm-stable
+          path: coverage/flat/*.info
+          if-no-files-found: error
+
+  # Dart Web tests in Chrome, split out of the old single job so it runs
+  # concurrently with Firefox/VM/jose instead of after them. PRs keep the
+  # package-scoped PR-scope retry loop (runs `dart test` directly, NOT via
+  # melos -- see the step below, unchanged rationale from the old job: keep
+  # this command literally in sync with test:web:pr:single in pubspec.yaml).
+  # Main pushes run the full multi-package sweep via melos. No coverage is
+  # collected on this leg in either scope -- unchanged from the original job
+  # (see test:web:single's comment on #372 for why browser coverage is
+  # collected separately, per-file, for oidc_web_core only).
+  unit_chrome:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [stable, beta]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
+        with:
+          channel: ${{ matrix.sdk }}
+          flutter-version: ""
+      - run: |
+          echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
+      # set +e / retry loop: the #372 hang strikes this step at random
+      # (roughly half of executions on bad days); an honest run takes
+      # 20-90s. Each try is bounded at 5 minutes; three tries turn manual
+      # whole-job rerun roulette into an automatic in-step retry, while a
+      # REAL test failure still fails fast three times and blocks the PR.
       - name: "[Verify step] Test Dart packages [Chrome, PR scope]"
         if: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 18
@@ -127,16 +173,41 @@ jobs:
             echo "chrome PR-scope attempt $attempt exited rc=$rc; retrying" || true
           done
           exit 1
-      # continue-on-error: the #372 Firefox freeze makes this step advisory.
-      # Forensics (runs 29162814103 attempts 1-2, six killed tries): the
-      # Firefox tab's event loop freezes for minutes right after
-      # library_surface_test's front-channel BroadcastChannel test — the ✅
-      # of the NEXT (trivial, synchronous) test printed 4m39s late, one
-      # second before the 300s TERM, with even the in-browser 30s per-test
-      # timer frozen. Same boundary froze runs BEFORE this PR's tests
-      # existed, and the identical step passes in ~57s when the freeze
-      # doesn't strike (beta, same commit). Chrome stays blocking; full
-      # Firefox signal still runs on every main push.
+      # Push scope: full multi-package sweep (all web-tested Dart packages
+      # except jose_plus/oidc_cli -- see test:web:single's packageFilters).
+      # timeout-minutes is the backstop of last resort -- a browser wedge
+      # can strike outside package:test's own timeouts (run 29148902320: a
+      # Firefox step hung 57+ min with the 4m load bound active); the
+      # runner kills the whole process tree so the step fails loudly and is
+      # rerunnable instead of idling to GitHub's 6h job kill.
+      - name: "[Verify step] Test Dart packages [Chrome]"
+        if: ${{ github.event_name != 'pull_request' }}
+        timeout-minutes: 150
+        run: melos run test:web:chrome
+
+  # Dart Web tests in Firefox -- mirrors unit_chrome. The PR-scope Firefox
+  # step keeps continue-on-error: true (unchanged): forensics on the #372
+  # Firefox freeze (run 29162814103) showed it strikes mid-suite with even
+  # the in-browser per-test timer frozen, and the identical step passes in
+  # ~57s when the freeze doesn't strike. Chrome stays blocking; full Firefox
+  # signal still runs on every main push via the push-scope step below,
+  # which has NO continue-on-error (unchanged).
+  unit_firefox:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [stable, beta]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
+        with:
+          channel: ${{ matrix.sdk }}
+          flutter-version: ""
+      - run: |
+          echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: "[Verify step] Test Dart packages [Firefox, PR scope]"
         if: ${{ github.event_name == 'pull_request' }}
         timeout-minutes: 18
@@ -153,58 +224,182 @@ jobs:
             echo "firefox PR-scope attempt $attempt exited rc=$rc; retrying" || true
           done
           exit 1
-      # Full sweep = TEST SIGNAL only (both browsers, no --coverage): #372's
-      # hang needs coverage-gather across multiple suites in one process (see
-      # test:web:single). Without --coverage this sweep is hang-free; the 150m
-      # bound now only covers the honest ~1h40m-2h first-browser compile cost.
-      # test:web:single covers every web package EXCEPT jose_plus (and oidc_cli).
-      # jose runs per-file in the two steps below.
-      - name: "[Verify step] Test Dart packages [Chrome]"
-        if: ${{ github.event_name != 'pull_request' }}
-        timeout-minutes: 150
-        run: melos run test:web:chrome
       - name: "[Verify step] Test Dart packages [Firefox]"
         if: ${{ github.event_name != 'pull_request' }}
         timeout-minutes: 150
         run: melos run test:web:firefox
-      # jose_plus per-file (#372): jose's multi-suite `dart test` completes all
-      # suites then never exits on Firefox (post-success exit hang,
-      # dart-lang/test#2294 class), wedging the full sweep. One suite per
-      # process sidesteps it; 15/16 jose suites exit clean alone. Run here as a
-      # workflow shell loop, NOT a melos exec script: melos interpolates $VAR in
-      # exec strings and clobbers the loop variable `$f` to empty (it ran
-      # `dart test ""`, run 29208042920). A plain workflow shell keeps `$f`. Both
-      # browsers for one consistent path. Flags match test:web:single.
-      - name: "[Verify step] Test jose_plus [Chrome, per-file]"
-        if: ${{ github.event_name != 'pull_request' }}
-        timeout-minutes: 60
+
+  # jose_plus per-file Chrome runs, sharded N=4 ways. jose's multi-suite
+  # `dart test` completes every suite then never exits on Firefox/Chrome
+  # (post-success exit hang, dart-lang/test#2294 class, #372); one file per
+  # process already sidesteps the hang (15/16 suites exit clean alone), and
+  # this additionally shards those per-file runs across 4 parallel jobs
+  # instead of one job looping through all 16 files serially (measured
+  # 560s/736s Chrome/Firefox on main -- ~4x wall-time cut per browser,
+  # modulo per-shard dart2js compile overhead). main-push only, matching the
+  # original job (PRs never ran jose_plus here at all -- its only PR-scope
+  # coverage is the VM leg in unit_core, which runs every tag regardless of
+  # event).
+  # Deterministic partition, computed independently inside each shard job
+  # (not via a separate manifest) from `ls test/*_test.dart | sort`: every
+  # shard recomputes the FULL partition and asserts (a) the full file list
+  # is non-empty, (b) every one of the 4 shards' slices is non-empty, and
+  # (c) the slices' sizes sum to the full count -- so a shard running 0
+  # files, or a bug that drops a file from every shard, fails loudly instead
+  # of silently losing coverage.
+  unit_jose_chrome:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [stable, beta]
+        shard: [1, 2, 3, 4]
+    defaults:
+      run:
         working-directory: packages/jose_plus
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
+        with:
+          channel: ${{ matrix.sdk }}
+          flutter-version: ""
+      - run: |
+          echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
+      - name: "[Verify step] Test jose_plus [Chrome, shard ${{ matrix.shard }}/4]"
         run: |
           set -e
-          for f in test/*_test.dart; do
+          SHARDS=4
+          MY_SHARD=${{ matrix.shard }}
+          mapfile -t ALL_FILES < <(ls test/*_test.dart | sort)
+          TOTAL=${#ALL_FILES[@]}
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "::error::no jose_plus test/*_test.dart files found -- partition is vacuous"
+            exit 1
+          fi
+          declare -A COUNTS
+          for ((i=0; i<TOTAL; i++)); do
+            s=$(( i % SHARDS + 1 ))
+            COUNTS[$s]=$(( ${COUNTS[$s]:-0} + 1 ))
+          done
+          SUM=0
+          for ((s=1; s<=SHARDS; s++)); do
+            c=${COUNTS[$s]:-0}
+            SUM=$(( SUM + c ))
+            if [ "$c" -eq 0 ]; then
+              echo "::error::shard $s of $SHARDS would run 0 files out of $TOTAL total -- refusing to run an empty shard"
+              exit 1
+            fi
+          done
+          if [ "$SUM" -ne "$TOTAL" ]; then
+            echo "::error::partition bug: shards sum to $SUM files but $TOTAL were found (a file landed in no shard, or was double-counted)"
+            exit 1
+          fi
+          echo "Partition OK: $TOTAL files across $SHARDS shards (counts: $(for s in "${!COUNTS[@]}"; do printf '%s=%s ' "$s" "${COUNTS[$s]}"; done))"
+          MY_FILES=()
+          for ((i=0; i<TOTAL; i++)); do
+            s=$(( i % SHARDS + 1 ))
+            if [ "$s" -eq "$MY_SHARD" ]; then
+              MY_FILES+=("${ALL_FILES[$i]}")
+            fi
+          done
+          echo "Shard $MY_SHARD/$SHARDS running ${#MY_FILES[@]} file(s): ${MY_FILES[*]}"
+          for f in "${MY_FILES[@]}"; do
             dart test "$f" --timeout 60m --suite-load-timeout 2h --platform chrome --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           done
-      - name: "[Verify step] Test jose_plus [Firefox, per-file]"
-        if: ${{ github.event_name != 'pull_request' }}
-        timeout-minutes: 60
+
+  # Mirrors unit_jose_chrome for Firefox. No continue-on-error (unchanged --
+  # only the PR-scope oidc_web_core Firefox step in unit_firefox is
+  # advisory; this full per-file sweep is blocking, same as the original job).
+  unit_jose_firefox:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [stable, beta]
+        shard: [1, 2, 3, 4]
+    defaults:
+      run:
         working-directory: packages/jose_plus
-        env:
-          MOZ_HEADLESS: "1"
+    env:
+      MOZ_HEADLESS: "1"
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
+        with:
+          channel: ${{ matrix.sdk }}
+          flutter-version: ""
+      - run: |
+          echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
+      - name: "[Verify step] Test jose_plus [Firefox, shard ${{ matrix.shard }}/4]"
         run: |
           set -e
-          for f in test/*_test.dart; do
+          SHARDS=4
+          MY_SHARD=${{ matrix.shard }}
+          mapfile -t ALL_FILES < <(ls test/*_test.dart | sort)
+          TOTAL=${#ALL_FILES[@]}
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "::error::no jose_plus test/*_test.dart files found -- partition is vacuous"
+            exit 1
+          fi
+          declare -A COUNTS
+          for ((i=0; i<TOTAL; i++)); do
+            s=$(( i % SHARDS + 1 ))
+            COUNTS[$s]=$(( ${COUNTS[$s]:-0} + 1 ))
+          done
+          SUM=0
+          for ((s=1; s<=SHARDS; s++)); do
+            c=${COUNTS[$s]:-0}
+            SUM=$(( SUM + c ))
+            if [ "$c" -eq 0 ]; then
+              echo "::error::shard $s of $SHARDS would run 0 files out of $TOTAL total -- refusing to run an empty shard"
+              exit 1
+            fi
+          done
+          if [ "$SUM" -ne "$TOTAL" ]; then
+            echo "::error::partition bug: shards sum to $SUM files but $TOTAL were found (a file landed in no shard, or was double-counted)"
+            exit 1
+          fi
+          echo "Partition OK: $TOTAL files across $SHARDS shards (counts: $(for s in "${!COUNTS[@]}"; do printf '%s=%s ' "$s" "${COUNTS[$s]}"; done))"
+          MY_FILES=()
+          for ((i=0; i<TOTAL; i++)); do
+            s=$(( i % SHARDS + 1 ))
+            if [ "$s" -eq "$MY_SHARD" ]; then
+              MY_FILES+=("${ALL_FILES[$i]}")
+            fi
+          done
+          echo "Shard $MY_SHARD/$SHARDS running ${#MY_FILES[@]} file(s): ${MY_FILES[*]}"
+          for f in "${MY_FILES[@]}"; do
             dart test "$f" --timeout 60m --suite-load-timeout 2h --platform firefox --chain-stack-traces ${WEB_EXCLUDE_TAGS:+--exclude-tags "$WEB_EXCLUDE_TAGS"}
           done
-      # oidc_web_core is the only package whose browser coverage isn't a
-      # duplicate of its VM coverage, so it's the only one collected on the web
-      # side. Per-file (single-suite) collection is hang-safe where the
-      # multi-suite full sweep was not (#372). Also a workflow shell loop, not a
-      # melos exec, for the same `$f`-interpolation reason as jose above. Stable +
-      # main only (coverage is combined on the stable leg). Hitmaps accumulate in
-      # coverage/chrome for coverage:format:package. 20m bounds a wedged load.
+
+  # oidc_web_core browser coverage (per-file, hang-safe): the only package
+  # whose browser coverage isn't a duplicate of its VM coverage, so the only
+  # one collected on the web side. stable + main-push only (coverage is
+  # combined on the stable leg; PRs don't collect browser coverage),
+  # unchanged from the original job.
+  unit_webcore_coverage:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
+        with:
+          channel: stable
+          flutter-version: ""
+      - run: |
+          echo TARGET_DART_SDK=stable >> $GITHUB_ENV
       - name: "[Coverage] oidc_web_core browser coverage (per-file, hang-safe)"
-        if: ${{ github.event_name != 'pull_request' && matrix.sdk == 'stable' }}
-        timeout-minutes: 20
         working-directory: packages/oidc_web_core
         run: |
           set -e
@@ -212,19 +407,67 @@ jobs:
           for f in test/*_test.dart; do
             dart test "$f" --suite-load-timeout 4m --platform chrome --coverage=coverage/chrome --chain-stack-traces
           done
-      # oidc_web (#370): the only Flutter *plugin* package with browser-only
-      # lib code. Must run on BOTH pull_request and push -- unlike the
-      # Dart-package browser sweeps above, this isn't split into a
-      # PR-scoped subset vs a main-only full sweep: oidc_web has exactly one
-      # browser-tagged suite file today (test/library_surface_test.dart,
-      # @TestOn('chrome'), 3 trivial tests), so a single invocation covers
-      # both scopes -- no per-file loop needed. See pubspec.yaml's
-      # test:oidc_web:chrome script for why plain `flutter test` and
-      # `flutter test -d chrome` both silently skip this suite, and why the
-      # deprecated `--platform chrome` flag is used anyway.
+      - name: "[Coverage] Format oidc_web_core coverage"
+        run: |
+          set -e
+          dart pub global activate coverage
+          melos run coverage:format:package
+      - name: "[Coverage] Flatten oidc_web_core coverage for upload"
+        run: |
+          set -e
+          mkdir -p coverage/flat
+          cp packages/oidc_web_core/coverage/lcov.info coverage/flat/oidc_web_core.info
+          ls -la coverage/flat
+      - name: Upload oidc_web_core coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-coverage-webcore-stable
+          path: coverage/flat/*.info
+          if-no-files-found: error
+
+  # oidc_web (#370): the only Flutter *plugin* package with browser-only lib
+  # code. Runs on both PR and push (unchanged); no coverage collected here
+  # (the original step has no --coverage flag either).
+  unit_oidc_web_chrome:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [stable, beta]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
+        with:
+          channel: ${{ matrix.sdk }}
+          flutter-version: ""
+      - run: |
+          echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: "[Verify step] Test oidc_web [Chrome]"
         timeout-minutes: 10
         run: melos run test:oidc_web:chrome
+
+  # Flutter-package unit tests + the example's own unit tests (the latter is
+  # test signal only, not part of CI's coverage upload -- unchanged from the
+  # original job). `flutter test --coverage` writes lcov.info directly, no
+  # format_coverage step needed (unchanged).
+  unit_flutter:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [stable, beta]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
+        with:
+          channel: ${{ matrix.sdk }}
+          flutter-version: ""
+      - run: |
+          echo TARGET_DART_SDK=${{ matrix.sdk }} >> $GITHUB_ENV
       - name: Remove dart_test.yaml Files
         run: melos run remove_dart_test_yaml
       - name: "[Verify step] Test Flutter packages"
@@ -233,33 +476,151 @@ jobs:
         # melos `test:flutter` filters `ignore: ["*example*"]` (pubspec.yaml),
         # and the only other thing CI runs out of packages/oidc/example is
         # `flutter test integration_test/...` in the platform jobs. So every
-        # file under packages/oidc/example/test/ ran in NO job: the conformance
-        # variant rules, the plan gates, the flow-timeout budget and the patrol
-        # tally reconciler all passed locally and gated nothing. They are the
-        # guards for a harness that drives a live third-party server, which is
-        # exactly the code that cannot be re-verified cheaply after the fact.
-        #
-        # Scoped to this one example rather than lifting the ignore, because
-        # the other example packages are there to be built, not tested.
+        # file under packages/oidc/example/test/ ran in NO job: the
+        # conformance variant rules, the plan gates, the flow-timeout budget
+        # and the patrol tally reconciler all passed locally and gated
+        # nothing. They are the guards for a harness that drives a live
+        # third-party server, which is exactly the code that cannot be
+        # re-verified cheaply after the fact.
         working-directory: packages/oidc/example
         run: flutter test
-      - name: "[Coverage] Format & print test coverage"
+      - name: "[Coverage] Flatten Flutter package coverage for upload"
         if: ${{ matrix.sdk == 'stable' }}
-        run: melos run coverage:combine
+        run: |
+          set -e
+          mkdir -p coverage/flat
+          shopt -s nullglob
+          for f in packages/*/coverage/lcov.info; do
+            pkg="$(basename "$(dirname "$(dirname "$f")")")"
+            cp "$f" "coverage/flat/${pkg}.info"
+          done
+          ls -la coverage/flat
+      - name: Upload Flutter coverage
+        if: ${{ matrix.sdk == 'stable' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-coverage-flutter-stable
+          path: coverage/flat/*.info
+          if-no-files-found: error
+
+  # Merges every coverage-producing unit job above (unit_core's VM leg,
+  # unit_flutter, unit_webcore_coverage) back into the single
+  # "package-coverage" artifact the old single job produced, so
+  # upload-coverage below is unchanged. unit_webcore_coverage is skipped
+  # entirely on PRs (see its own `if:`), so this job tolerates that specific
+  # dependency being 'skipped' while still requiring unit_core/unit_flutter
+  # to have actually succeeded -- otherwise a real failure upstream would be
+  # masked by `always()`.
+  unit_tests_coverage:
+    runs-on: ubuntu-latest
+    needs: [unit_core, unit_flutter, unit_webcore_coverage]
+    if: |
+      always() &&
+      needs.unit_core.result == 'success' &&
+      needs.unit_flutter.result == 'success' &&
+      (needs.unit_webcore_coverage.result == 'success' || needs.unit_webcore_coverage.result == 'skipped')
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+      - name: Set up Environment
+        uses: ./.github/actions/flutter_base
+        with:
+          channel: stable
+          flutter-version: ""
+      - name: Download unit coverage shards
+        uses: actions/download-artifact@v8
+        with:
+          path: coverage/flat-merged/
+          pattern: "unit-coverage-*-stable"
+          merge-multiple: true
+      # Restores each flattened packages/<pkg>/coverage/lcov.info back to its
+      # NATURAL on-disk location before merging. Confirmed live (run
+      # 37464828887) that skipping this and running combine_coverage
+      # straight over the flat files breaks the Flutter packages: combine_
+      # coverage resolves each file's SF: entries relative to the directory
+      # the file is found in whenever those entries are already
+      # package-relative (not absolute) -- which is exactly how `flutter
+      # test --coverage` writes them (e.g. "SF:lib/facade.dart", no
+      # "packages/<pkg>/" prefix, unlike the VM/format_coverage-generated
+      # files, whose SF: entries are already absolute and therefore survive
+      # being read from anywhere). Flat in coverage/flat-merged/, the four
+      # Flutter packages' guard matched 0 ("SF:/coverage/lib/src/facade.dart"
+      # -- repo-path + "/coverage" + the relative path, with the
+      # "packages/<pkg>/" segment lost entirely). Rebuilding
+      # packages/<pkg>/coverage/lcov.info here makes combine_coverage see
+      # the exact directory layout it always saw in the old single job, for
+      # both path styles.
+      #
+      # `mv`, not `cp`, and an explicit `rm -rf` of the whole download
+      # directory afterward: independent review on PR #494 (run
+      # 37476666335) caught that a `cp` here left the original flat files
+      # sitting in coverage/flat-merged/ too, so combine_coverage's
+      # recursive scan ingested BOTH the restored packages/<pkg>/coverage/
+      # copy AND the stale flat one -- the flat one resolves to the same
+      # bogus "/coverage/<relative-path>" phantom SF: entries described
+      # above, since it's no longer sitting in a per-package directory.
+      # That run's package-coverage artifact had 254 SF: lines for 139
+      # unique files (115 duplicates) and 11 phantom /coverage/... paths.
+      - name: "[Coverage] Restore package-relative coverage layout"
+        run: |
+          set -e
+          shopt -s nullglob
+          for f in coverage/flat-merged/*.info; do
+            pkg="$(basename "$f" .info)"
+            mkdir -p "packages/$pkg/coverage"
+            mv "$f" "packages/$pkg/coverage/lcov.info"
+          done
+          rm -rf coverage/flat-merged
+          find packages -maxdepth 3 -name lcov.info
+      - name: "[Coverage] Combine & convert coverage report"
+        env:
+          REPO_PATH: ${{ github.workspace }}
+        run: |
+          set -e
+          dart pub global activate combine_coverage
+          dart pub global activate remove_from_coverage
+          dart pub global run combine_coverage --repo-path="$REPO_PATH"
+          dart pub global run remove_from_coverage:remove_from_coverage -f coverage/lcov.info -r '\.g\.dart$' -r 'oidc_cli/lib/src/version\.dart$'
+      # Structural guard added alongside the mv/rm fix above: catches this
+      # exact failure mode (and anything similar) directly, instead of
+      # relying only on the package-specific guards below, which can pass
+      # even with duplicate/phantom entries polluting the file (as they did
+      # on run 37476666335 -- the Flutter-package guard below matched fine
+      # because the CORRECT entries were also present, just alongside 115
+      # duplicates it never looked for).
+      - name: "[Coverage] Assert no duplicate or phantom SF entries"
+        run: |
+          set -e
+          total=$(grep -c '^SF:' coverage/lcov.info || true)
+          total=${total:-0}
+          unique=$(grep '^SF:' coverage/lcov.info | sort -u | wc -l | tr -d ' ')
+          echo "guard: SF total=$total unique=$unique"
+          if [ "$total" -ne "$unique" ]; then
+            echo "::error::coverage/lcov.info has $((total - unique)) duplicate SF: line(s) out of $total - a source file's coverage was recorded more than once (a stale intermediate coverage artifact leaking into the merge?)"
+            echo "guard: duplicated SF: entries:"
+            grep '^SF:' coverage/lcov.info | sort | uniq -c | awk '$1>1 {print}' | head -20
+            exit 1
+          fi
+          missing=0
+          while IFS= read -r sf; do
+            p="${sf#SF:}"
+            p="${p#/}"
+            if [ -z "$p" ] || [ ! -f "$p" ]; then
+              echo "::error::coverage/lcov.info references a path that doesn't exist in this checkout: $sf"
+              missing=1
+            fi
+          done < <(grep '^SF:' coverage/lcov.info | sort -u)
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "guard: all $total SF: entries are unique and point to real files in the checkout"
       - name: "[Coverage] Assert Flutter package coverage survived"
-        if: ${{ matrix.sdk == 'stable' }}
-        # Regression guard. `flutter test --coverage` writes coverage/lcov.info
-        # directly; running coverage:format_coverage over that directory finds
-        # no VM hitmap .json, exits 0, and truncates the file to 0 bytes. That
-        # silently dropped every Flutter package's unit coverage from the
-        # upload with no failing step. Fail loudly if it ever comes back.
-        # This step deliberately avoids two constructs that produced a phantom
-        # exit 1 on its previous two runs even though (per the diagnostics)
-        # every assertion passed: a trailing explicit `exit $missing` under
-        # this workflow's `bash -leo pipefail` login shell, and a
-        # SIGPIPE-generating `grep | head` pipe. The success path now ends by
-        # falling off the end of the script after a successful echo, exactly
-        # like every step of this job that has ever gone green.
+        # Regression guard, unchanged from the original job. `flutter test
+        # --coverage` writes coverage/lcov.info directly; running
+        # format_coverage over that directory finds no VM hitmap .json,
+        # exits 0, and truncates the file to 0 bytes. That silently dropped
+        # every Flutter package's unit coverage from the upload with no
+        # failing step. Fail loudly if it ever comes back.
         run: |
           wc -c coverage/lcov.info || true
           echo "guard: first 10 SF entries:"
@@ -279,16 +640,8 @@ jobs:
           fi
           echo "guard: all four Flutter packages present in the combined lcov"
       - name: "[Coverage] Assert oidc_web_core browser coverage survived"
-        # main + stable only: oidc_web_core browser coverage comes from the
-        # per-file oidc_web_core coverage step, which is itself main+stable
-        # (PRs collect no browser coverage). Regression guard for #372's fix:
-        # if that step silently stops producing hitmaps (a path change, or
-        # format_coverage ceasing to pick up coverage/chrome), oidc_web_core
-        # would vanish from the combined lcov with only a Codecov delta to
-        # show it. Same shell discipline as the Flutter guard above: a
-        # conditional exit 1 on the failure path only; success falls off the
-        # end (no trailing exit, no SIGPIPE-prone pipe).
-        if: ${{ github.event_name != 'pull_request' && matrix.sdk == 'stable' }}
+        # main + stable only, unchanged from the original job.
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           n=$(grep -c "packages/oidc_web_core/lib/" coverage/lcov.info || true)
           n=${n:-0}
@@ -300,7 +653,6 @@ jobs:
           echo "guard: oidc_web_core browser coverage present in the combined lcov"
       - name: Upload Unit Test Coverage Report
         uses: actions/upload-artifact@v7
-        if: ${{ matrix.sdk == 'stable' }}
         with:
           name: package-coverage
           path: coverage/lcov.info
@@ -1354,7 +1706,51 @@ jobs:
     # this job rather than letting it run with a missing artifact. That is the
     # intended trade: a run whose conformance job failed is red already, and a
     # coverage upload from it would be partial anyway.
-    needs: [unit_tests, android, ios, web, macos, linux, windows]
+    #
+    # `needs:` replaces the old single `unit_tests` job with every job the
+    # 2026 unit-test split introduced (see that block's header comment).
+    # unit_jose_chrome/unit_jose_firefox/unit_webcore_coverage skip entirely
+    # on PRs (job-level `if:`), and GitHub's default needs-cascade would
+    # therefore skip THIS job on every PR run too -- exactly the behavior
+    # change this `if:` exists to prevent. It requires every job to have
+    # actually succeeded, except those three, which may legitimately be
+    # 'skipped'; `always()` is required for the `if:` to even evaluate once
+    # any dependency is skipped rather than succeeded.
+    needs:
+      [
+        unit_core,
+        unit_chrome,
+        unit_firefox,
+        unit_jose_chrome,
+        unit_jose_firefox,
+        unit_webcore_coverage,
+        unit_oidc_web_chrome,
+        unit_flutter,
+        unit_tests_coverage,
+        android,
+        ios,
+        web,
+        macos,
+        linux,
+        windows,
+      ]
+    if: |
+      always() &&
+      needs.unit_core.result == 'success' &&
+      needs.unit_chrome.result == 'success' &&
+      needs.unit_firefox.result == 'success' &&
+      (needs.unit_jose_chrome.result == 'success' || needs.unit_jose_chrome.result == 'skipped') &&
+      (needs.unit_jose_firefox.result == 'success' || needs.unit_jose_firefox.result == 'skipped') &&
+      (needs.unit_webcore_coverage.result == 'success' || needs.unit_webcore_coverage.result == 'skipped') &&
+      needs.unit_oidc_web_chrome.result == 'success' &&
+      needs.unit_flutter.result == 'success' &&
+      needs.unit_tests_coverage.result == 'success' &&
+      needs.android.result == 'success' &&
+      needs.ios.result == 'success' &&
+      needs.web.result == 'success' &&
+      needs.macos.result == 'success' &&
+      needs.linux.result == 'success' &&
+      needs.windows.result == 'success'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7

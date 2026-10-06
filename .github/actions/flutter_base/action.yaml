@@ -18,8 +18,68 @@ runs:
       uses: subosito/flutter-action@v2
       with:
         cache: true
+        # `cache: true` with no explicit `pub-cache` input ALSO silently
+        # enables flutter-action's OWN internal pub-cache step (its
+        # action.yaml: `if: (inputs.pub-cache == '' && inputs.cache ==
+        # 'true') || ...`), whose key unconditionally appends
+        # `${{ hashFiles('**/pubspec.lock') }}` -- an UNSCOPED glob from the
+        # repo root, not the narrower `packages/**/pubspec.yaml` below.
+        # Confirmed live: a run on this exact composite action (reached by
+        # every tests.yaml job via integration_test_base -> flutter_base)
+        # hit "hashFiles('**/pubspec.lock') couldn't finish within 120
+        # seconds" on a macOS leg, and the GH Actions cache listing
+        # (`gh api repos/Bdaya-Dev/oidc/actions/caches`) shows a
+        # `flutter-linux-...-<hash>-` key with an EMPTY trailing segment --
+        # the same hashFiles call degrading to "" on Linux too, just not
+        # fatally there. Explicitly disabling it here (we run our own
+        # narrowly-scoped pub cache below instead) removes that failure
+        # mode for every job that goes through this action, including
+        # ios/macos/android/web/linux/windows via integration_test_base --
+        # without changing anything those jobs own.
+        pub-cache: "false"
         channel: ${{ inputs.channel }}
         flutter-version: ${{ inputs.flutter-version }}
+
+    # Replaces the internal pub-cache step disabled above. subosito/
+    # flutter-action's own `cache: true` only caches the downloaded
+    # Flutter/Dart SDK (keyed by version), not the hosted-package pub cache
+    # that `melos bootstrap` below populates via `pub get` across every
+    # workspace package, nor the pub-global packages activated later by
+    # the coverage-formatting steps (coverage/combine_coverage/
+    # remove_from_coverage). Missing previously (every job paid a cold
+    # `pub get` + cold global-package resolve/compile on every run). Now
+    # that unit_tests is split into many parallel jobs (see tests.yaml),
+    # this matters more, not less: every one of those jobs runs its own
+    # `melos bootstrap` independently, so a warm cache is shared across all
+    # of them (and across sdk channels via the key).
+    # Keyed on the channel (stable/beta resolve different dependency sets)
+    # and a hash of every pubspec, scoped under packages/ (cheap: at this
+    # point in the job nothing has generated android/Pods/build dirs yet,
+    # so the glob only walks source files) instead of an unscoped `**` from
+    # the repo root -- a dependency change invalidates it; restore-keys
+    # fall back to the most recent cache for the same channel so a partial
+    # hit still saves most of the network/compile cost. Concurrent jobs
+    # racing to save the same key is harmless: actions/cache only lets the
+    # first writer persist it, and the pub cache's own content is derived
+    # purely from pubspec.yaml/pubspec.lock, so two independent
+    # populations of the same key are equivalent.
+    - name: Cache pub dependencies
+      uses: actions/cache@v6
+      with:
+        # Two paths, not one: this action also runs on windows-latest (the
+        # `windows` job, via integration_test_base) where the global pub
+        # cache lives under %LOCALAPPDATA%\Pub\Cache
+        # (~/AppData/Local/Pub/Cache under this workflow's bash shell), not
+        # ~/.pub-cache -- see the windows job's own PATH export in
+        # tests.yaml, which adds both for the same reason. A path that
+        # doesn't exist on a given OS is simply skipped by actions/cache,
+        # so listing both is harmless on Linux/macOS.
+        path: |
+          ~/.pub-cache
+          ~/AppData/Local/Pub/Cache
+        key: pub-${{ runner.os }}-${{ inputs.channel }}-${{ hashFiles('pubspec.yaml', 'pubspec.lock', 'packages/**/pubspec.yaml') }}
+        restore-keys: |
+          pub-${{ runner.os }}-${{ inputs.channel }}-
 
     # see https://github.com/invertase/melos/issues/796
     - uses: bluefireteam/melos-action@main
