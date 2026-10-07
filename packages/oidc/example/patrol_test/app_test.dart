@@ -42,8 +42,11 @@
 // that selects zero plans fails loudly at the end of main() instead of
 // letting `patrol test` report a quiet, empty green.
 
+import 'dart:io';
+
 import 'package:bdaya_shared_value/bdaya_shared_value.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:patrol_plus/patrol.dart';
 
@@ -111,8 +114,40 @@ void _registerPlan(
     return;
   }
   _selectedPlanCount++;
-  patrolTest(name, body);
+  patrolTest(name, ($) async {
+    final binding = $.tester.binding;
+    if (!_drawOnlyOnPumps || binding is! LiveTestWidgetsFlutterBinding) {
+      return body($);
+    }
+    final previous = binding.framePolicy;
+    binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.onlyPumps;
+    try {
+      await body($);
+    } finally {
+      binding.framePolicy = previous;
+    }
+  });
 }
+
+/// Whether conformance plans draw frames only when the harness pumps (iOS).
+///
+/// The conformance flow is programmatic: once the placeholder widget has been
+/// pumped, nothing on screen matters, and the browser runs natively above the
+/// app. patrolTest's default framePolicy, `fullyLive`, still draws every frame
+/// the framework schedules. On the iOS simulator each draw can spin the raster
+/// thread for up to a second: `-[FlutterMetalLayer nextTexture]` busy-waits
+/// (no sleep) until the previous frame's GPU work completes, giving up after
+/// 1s (engine `FlutterMetalLayer.mm`). On GitHub's 3-vCPU macOS runner, whose
+/// guest CPU is already at 0% idle, that GPU work is slow, so the spin burns
+/// most of a core at priority 50 while the browser's WebContent process waits
+/// to launch at priority 4-46 (#469). A 5s system-wide spindump in run
+/// 37568215348 found the host's 3 vCPUs fully used (15.5s of CPU), the app's
+/// raster thread the single busiest thread at 2.25s, inside that loop.
+///
+/// `onlyPumps` draws only frames the test pumps, which the conformance flow
+/// does only to launch the placeholder. Restored after each plan, so the
+/// other test files keep the default.
+bool get _drawOnlyOnPumps => !kIsWeb && Platform.isIOS;
 
 void main() {
   ensureLoggingConfigured();
