@@ -32,6 +32,9 @@ MAX_STALL_PROBES = 4
 SAMPLE_SECONDS = 3
 CONTROL_LOGIN = 5  # the Nth login gets the control probe, if healthy
 CONTROL_AFTER = 1.5  # seconds into that login, once no launch is pending
+HOT_CPU = 50.0  # the app's %CPU (ps) that counts as busy
+HOT_SECONDS = 5
+HOT_SAMPLES = 5
 
 PREDICATE = (
     '(process == "runningboardd" AND eventMessage CONTAINS '
@@ -158,7 +161,38 @@ def watcher():
             threading.Thread(target=probe, args=(todo,), daemon=True).start()
 
 
+def hot_runner():
+    """Sample the app alone when it is busy: during stalls its busiest thread
+    ran at 60-70% of a core while the harness printed nothing (run
+    37557433653), and what it was doing is the question."""
+    taken, streak = 0, 0
+    while taken < HOT_SAMPLES:
+        time.sleep(2)
+        rows = pids().get('Runner', [])
+        if not rows:
+            streak = 0
+            continue
+        pid, cpu = rows[0][0], float(rows[0][1].split()[-1])
+        streak = streak + 1 if cpu >= HOT_CPU else 0
+        if streak < 2:
+            continue
+        streak = 0
+        taken += 1
+        stamp = time.strftime('%H%M%S', time.gmtime())
+        base = os.path.join(out_dir, f'probe-{stamp}-hot-Runner-{pid}')
+        with open(base + '-ps.log', 'w') as f:
+            f.write(run(['ps', '-M', '-p', pid]))
+        run(['sudo', '-n', 'sample', pid, str(HOT_SECONDS), '-mayDie',
+             '-file', base + '-sample.log'], timeout=HOT_SECONDS + 60)
+        with open(base + '-ps-after.log', 'w') as f:
+            f.write(run(['ps', '-M', '-p', pid]))
+        log(f'hot Runner probe {os.path.basename(base)} at {cpu}% '
+            f'(pending launches: {len(pending)})')
+        time.sleep(30)
+
+
 threading.Thread(target=watcher, daemon=True).start()
+threading.Thread(target=hot_runner, daemon=True).start()
 stream = subprocess.Popen(
     ['xcrun', 'simctl', 'spawn', udid, 'log', 'stream', '--style', 'compact',
      '--predicate', PREDICATE],

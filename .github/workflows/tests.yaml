@@ -1206,7 +1206,9 @@ jobs:
               ps -Ao pcpu,rss,comm -r | head -8
               echo "-- top RSS"
               ps -Ao rss,pcpu,comm -m | head -8
-              vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageouts|Swapouts"
+              vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageins|Pageouts|Swapins|Swapouts|File-backed|occupied by compressor"
+              # Cumulative disk transfers (KB/t, xfrs, MB) per disk since boot.
+              iostat -Id | tail -1 | sed "s/^/IO /"
               ps -Ao rss,comm | grep RuntimeRoot | awk "{s+=\$1} END {print \"Simulator RSS KB:\", s}"
               ps -Ao pcpu,comm | grep "/Runner.app/Runner$" | awk "{print \"Runner CPU:\", \$1}"
               # Scheduling priority of the browser launch path (4 = throttled).
