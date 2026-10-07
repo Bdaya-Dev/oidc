@@ -70,8 +70,8 @@ runs:
     # empty-input warning).
     #
     # Fix: copy the two outputs we need into plain environment variables via
-    # $GITHUB_ENV right away, then have the cache step below reference
-    # `env.*` instead of `steps.flutter_sdk_info.outputs.*`. Env-var-backed
+    # $GITHUB_ENV right away, then have the restore/save steps below
+    # reference `env.*` instead of `steps.flutter_sdk_info.outputs.*`. Env-var-backed
     # context (`env.*`, `inputs.*`) is a flat key/value store the runner
     # persists for the rest of the job and replays correctly in POST on
     # every OS; the `steps.*.outputs` context is the piece that doesn't
@@ -83,9 +83,9 @@ runs:
         echo "FLUTTER_SDK_CACHE_PATH=${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}" >> "$GITHUB_ENV"
         echo "FLUTTER_SDK_CACHE_KEY=${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}" >> "$GITHUB_ENV"
 
-    - name: Cache Flutter SDK
+    - name: Restore Flutter SDK cache
       id: flutter_sdk_cache
-      uses: actions/cache@v6
+      uses: actions/cache/restore@v6
       with:
         path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
         key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
@@ -116,6 +116,35 @@ runs:
         pub-cache: "false"
         channel: ${{ inputs.channel }}
         flutter-version: ${{ inputs.flutter-version }}
+
+    # Save, split from restore above (actions/cache/save, not the combined
+    # actions/cache action), and gated to pushes on main only: every other
+    # ref (PR runs, workflow_dispatch runs like the ones used to verify this
+    # fix) restores whatever main has already populated but never saves its
+    # own copy. The SDK archive is multi-GB per OS (~1.7-2.2GB each); since
+    # this repo's total GH Actions cache is capped at 10GB and already
+    # shares that budget with the pub cache above and the Gradle caches the
+    # android job writes, letting every PR/dispatch run freely create its
+    # own branch-scoped SDK entry would grow the total without bound (GH
+    # cache entries are scoped per-ref, so PR branches don't share main's
+    # entries for writes, only for reads). A `restore-keys` fallback isn't
+    # meaningful here either way -- a different (channel, version, arch,
+    # hash) tuple is simply a different, non-interchangeable SDK build, not
+    # a partial match worth falling back to.
+    # Split into separate restore/save actions (rather than the combined
+    # actions/cache@v6 used for the pub cache below) specifically so this
+    # step runs and completes synchronously, right here, instead of
+    # deferring the actual save to a POST hook at the end of the job: no
+    # POST-phase replay is involved at all, which sidesteps the whole class
+    # of bug described on the restore step above (both actions/cache/
+    # restore and actions/cache/save are plain `main`-only actions with no
+    # `post:` step).
+    - name: Save Flutter SDK cache
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
+        key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
 
     # Replaces the internal pub-cache step disabled above. subosito/
     # flutter-action's own `cache: true` only caches the downloaded

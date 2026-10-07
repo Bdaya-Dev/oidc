@@ -89,8 +89,8 @@ jobs:
           echo "FLUTTER_SDK_CACHE_PATH=${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}" >> "$GITHUB_ENV"
           echo "FLUTTER_SDK_CACHE_KEY=${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}" >> "$GITHUB_ENV"
 
-      - name: Cache Flutter SDK
-        uses: actions/cache@v6
+      - name: Restore Flutter SDK cache
+        uses: actions/cache/restore@v6
         with:
           path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
           key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
@@ -101,6 +101,16 @@ jobs:
           channel: stable
           cache: false
           pub-cache: "false"
+
+      # Save only on pushes to main -- see flutter_base's identical step
+      # for the full rationale (this workflow's own workflow_dispatch runs
+      # restore but never write their own copy of this multi-GB entry).
+      - name: Save Flutter SDK cache
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
+          key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
 
       - name: Build Example (Flutter web + wasm)
         shell: bash
