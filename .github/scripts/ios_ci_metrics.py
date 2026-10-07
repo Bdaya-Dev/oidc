@@ -109,6 +109,37 @@ def host(path):
     return load, free, swap, sim
 
 
+def runner_cpu_timeline(path):
+    """(seconds since midnight, the app's %CPU) per sampler sample.
+
+    Read from the sampler's "Runner CPU:" line, which names the app's own
+    process whether or not it is among the busiest.
+    """
+    rows, t = [], None
+    for line in open(path, encoding='utf-8', errors='replace'):
+        m = re.match(r'=== (\d\d):(\d\d):(\d\d)', line)
+        if m:
+            h, mi, s = map(int, m.groups())
+            t = h * 3600 + mi * 60 + s
+            continue
+        m = re.match(r'Runner CPU:\s+([\d.]+)', line)
+        if m and t is not None:
+            rows.append((t, float(m.group(1))))
+    return rows
+
+
+def runner_cpu_split(timeline, login_rows):
+    """The app's %CPU samples inside and outside the login windows."""
+    windows = []
+    for secs, _, start in login_rows:
+        s = start.hour * 3600 + start.minute * 60 + start.second
+        windows.append((s, s + secs))
+    inside, outside = [], []
+    for t, cpu in timeline:
+        (inside if any(a <= t <= b for a, b in windows) else outside).append(cpu)
+    return inside, outside
+
+
 def swap_timeline(path):
     """(seconds since midnight, cumulative swapouts) per sampler sample."""
     rows, t = [], None
@@ -173,9 +204,10 @@ def main():
     p.add_argument('--host-load')
     a = p.parse_args()
     out = []
+    login_rows = []
     if a.runner_log:
         try:
-            rows = logins(a.runner_log)
+            rows = login_rows = logins(a.runner_log)
             d = [r[0] for r in rows]
             out.append(f'logins: {_dist(d)}; >10s: {sum(x > 10 for x in d)}; '
                        f'>30s (stall): {sum(x > 30 for x in d)}')
@@ -220,6 +252,18 @@ def main():
                 for n in RSS_WATCH))
             out.append('cpu seen: ' + ', '.join(
                 f'{n}={cpu.get(n, 0):.0f}s' for n in CPU_WATCH))
+            timeline = runner_cpu_timeline(a.host_load)
+            if timeline:
+                inside, outside = runner_cpu_split(timeline, login_rows)
+
+                def pct(v):
+                    if not v:
+                        return 'n=0'
+                    v = sorted(v)
+                    return (f'n={len(v)} median={statistics.median(v):.0f}% '
+                            f'p90={v[int(len(v) * 0.9)]:.0f}%')
+                out.append(f'Runner cpu: during logins {pct(inside)}; '
+                           f'otherwise {pct(outside)}')
         except OSError as e:
             out.append(f'host: unreadable ({e})')
     print('\n'.join('[ios-metrics] ' + line for line in out))

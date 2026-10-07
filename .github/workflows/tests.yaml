@@ -24,6 +24,10 @@ on:
         description: "iOS job, test-only: conformance module whose first attempt is forced to stall, to prove the gated rerun (empty = off)"
         type: string
         default: ""
+      ios_launch_probe:
+        description: "iOS job: sample the browser launch path when a WebContent launch stalls (adds load)"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -1066,6 +1070,8 @@ jobs:
       IOS_HEAVY_DIAGNOSTICS: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_heavy_diagnostics }}
       # Test-only; empty (off) unless set by hand on a workflow_dispatch run.
       IOS_FORCE_STALL_MODULE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_force_stall_module || '' }}
+      # workflow_dispatch input; see "Start iOS diagnostics".
+      IOS_LAUNCH_PROBE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_launch_probe }}
     strategy:
       fail-fast: false
       matrix:
@@ -1187,10 +1193,20 @@ jobs:
               ps -Ao rss,pcpu,comm -m | head -8
               vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageouts|Swapouts"
               ps -Ao rss,comm | grep RuntimeRoot | awk "{s+=\$1} END {print \"Simulator RSS KB:\", s}"
+              ps -Ao pcpu,comm | grep "/Runner.app/Runner$" | awk "{print \"Runner CPU:\", \$1}"
               sleep 3
             done
           ' > "$D/host-load.log" 2>&1 &
           echo $! >> "$D/pids"
+          # IOS_LAUNCH_PROBE (workflow_dispatch input): when a WebContent
+          # launch has been pending 10s, record thread states and a short
+          # call-stack sample of every process on its launch path, plus one
+          # control probe during a healthy login. See the script's docstring.
+          if [ "$IOS_LAUNCH_PROBE" = "true" ]; then
+            nohup python3 "$GITHUB_WORKSPACE/.github/scripts/ios_launch_probe.py" \
+              "$SIMULATOR_UDID" "$D" > "$D/probe-stdout.log" 2>&1 &
+            echo $! >> "$D/pids"
+          fi
           if [ "$IOS_HEAVY_DIAGNOSTICS" = "true" ]; then
             nohup xcrun simctl spawn "$SIMULATOR_UDID" log stream --style compact --level info \
               --predicate 'process == "Runner" OR process == "SafariViewService" OR subsystem BEGINSWITH "com.apple.AuthenticationServices"' \
