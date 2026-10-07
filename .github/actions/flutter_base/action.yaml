@@ -49,21 +49,46 @@ runs:
     # warning every time, while the Linux jobs (unit_core, linux, android,
     # web) -- which go through this exact same flutter_base action -- cache
     # and restore it just fine, because they hit an already-warm cache and
-    # never even reach the broken save path; there's no evidence Linux's
-    # save path is actually any more reliable, just untested since cold.
-    # Routing the same key/path through our OWN actions/cache step below
-    # (identical pattern to the pub-cache step further down, whose POST logs
-    # a real "Failed to save: ... another job may be creating this cache"
-    # race rather than an empty-input warning -- proof its inputs DO resolve
-    # correctly cross-OS) sidesteps the bug entirely: this step is a direct
-    # child of flutter_base, not nested inside a third-party composite
-    # action, so its own POST input-replay works reliably on every OS.
+    # never even reach the broken save path.
+    #
+    # The bug is NOT specific to flutter-action's own internal step, or to
+    # being nested inside a third-party composite action: a first attempt
+    # at this fix routed the same key/path through our own, non-nested
+    # actions/cache step below, referencing them via
+    # `${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}` (an output of the
+    # step above) directly in its `with:` -- and hit the EXACT SAME "Input
+    # required and not supplied: path" warning on macOS/Windows (confirmed
+    # live, run 37532075225). The actual trigger is narrower: a `with:`
+    # expression in ANY step (ours or a third party's) that reads
+    # `steps.<id>.outputs.*` cannot be re-resolved when that step's POST
+    # hook runs at the end of the job, on macOS/Windows runners specifically
+    # -- regardless of nesting. Our own pub-cache step below has never hit
+    # this because its `key`/`path` only reference flat, non-output values
+    # (`inputs.channel`, `runner.os`, `hashFiles(...)`), which DO replay
+    # correctly in POST on every OS (its POST logs a real "Failed to save:
+    # ... another job may be creating this cache" race, never an
+    # empty-input warning).
+    #
+    # Fix: copy the two outputs we need into plain environment variables via
+    # $GITHUB_ENV right away, then have the cache step below reference
+    # `env.*` instead of `steps.flutter_sdk_info.outputs.*`. Env-var-backed
+    # context (`env.*`, `inputs.*`) is a flat key/value store the runner
+    # persists for the rest of the job and replays correctly in POST on
+    # every OS; the `steps.*.outputs` context is the piece that doesn't
+    # survive the replay.
+    - name: Export Flutter SDK cache coordinates
+      shell: bash
+      run: |
+        set -eu
+        echo "FLUTTER_SDK_CACHE_PATH=${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}" >> "$GITHUB_ENV"
+        echo "FLUTTER_SDK_CACHE_KEY=${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}" >> "$GITHUB_ENV"
+
     - name: Cache Flutter SDK
       id: flutter_sdk_cache
       uses: actions/cache@v6
       with:
-        path: ${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}
-        key: ${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}
+        path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
+        key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
 
     - name: Set up Flutter
       uses: subosito/flutter-action@v2

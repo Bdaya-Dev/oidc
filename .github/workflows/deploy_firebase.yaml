@@ -74,11 +74,26 @@ jobs:
           pub-cache: "false"
           dry-run: true
 
+      # `steps.flutter_sdk_info.outputs.*` cannot be referenced directly in
+      # the cache step's `with:` below: its POST (save) phase fails to
+      # re-resolve a `steps.*.outputs.*`-based expression on macOS/Windows
+      # runners (confirmed live on this repo, run 37532075225 -- see
+      # flutter_base's identical step for the full story; this job runs on
+      # ubuntu-latest only, but the fix is applied here too for
+      # consistency and because `env.*` is what actually works). Copying
+      # the two values into env vars first sidesteps it.
+      - name: Export Flutter SDK cache coordinates
+        shell: bash
+        run: |
+          set -eu
+          echo "FLUTTER_SDK_CACHE_PATH=${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}" >> "$GITHUB_ENV"
+          echo "FLUTTER_SDK_CACHE_KEY=${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}" >> "$GITHUB_ENV"
+
       - name: Cache Flutter SDK
         uses: actions/cache@v6
         with:
-          path: ${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}
-          key: ${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}
+          path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
+          key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
