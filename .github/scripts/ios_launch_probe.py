@@ -47,7 +47,7 @@ WATCH = {
     'Runner': re.compile(r'/Runner\.app/Runner$'),
     'SafariViewService': re.compile(r'/SafariViewService$'),
     'runningboardd': re.compile(r'RuntimeRoot/.*/runningboardd$'),
-    'launchd_sim': re.compile(r'/launchd_sim$'),
+    'launchd_sim': re.compile(r'launchd_sim'),
     'xpcproxy_sim': re.compile(r'(^|/)xpcproxy_sim$'),
     'WebContent': re.compile(r'com\.apple\.WebKit\.WebContent$'),
 }
@@ -76,13 +76,14 @@ def run(cmd, timeout=20):
 
 def pids():
     found = {}
-    for line in run(['ps', '-Ao', 'pid=,pcpu=,state=,comm=']).splitlines():
-        parts = line.split(None, 3)
-        if len(parts) < 4:
+    for line in run(['ps', '-Ao', 'pid=,pri=,pcpu=,state=,comm=']).splitlines():
+        parts = line.split(None, 4)
+        if len(parts) < 5:
             continue
         for name, rx in WATCH.items():
-            if rx.search(parts[3]):
-                found.setdefault(name, []).append((parts[0], parts[1], parts[2]))
+            if rx.search(parts[4]):
+                found.setdefault(name, []).append(
+                    (parts[0], f'pri {parts[1]} cpu {parts[2]}', parts[3]))
     return found
 
 
@@ -95,22 +96,26 @@ def probe(label):
         f.write(run(['sysctl', '-n', 'vm.loadavg']))
         for name, rows in found.items():
             for pid, cpu, st in rows:
-                f.write(f'\n=== {name} pid={pid} %cpu={cpu} state={st}\n')
+                f.write(f'\n=== {name} pid={pid} {cpu} state={st}\n')
                 f.write(run(['ps', '-M', '-p', pid]))
         f.write('\n=== simulator launchctl list (WebKit/Safari)\n')
         f.write(''.join(
             l + '\n' for l in run(
-                ['xcrun', 'simctl', 'spawn', udid, 'launchctl', 'list']
+                ['xcrun', 'simctl', 'spawn', udid, 'launchctl', 'list'],
+                timeout=10,
             ).splitlines() if re.search('WebKit|Safari|xpc', l)))
     # Sample in parallel so every stack is from the same few seconds.
     procs = []
     for name in ('Runner', 'SafariViewService', 'runningboardd',
                  'launchd_sim', 'xpcproxy_sim', 'WebContent'):
         for pid, _, _ in found.get(name, [])[:3]:
+            # sample needs task_for_pid on a process it did not start, hence
+            # sudo (passwordless on GitHub's runners).
             procs.append(subprocess.Popen(
-                ['sample', pid, str(SAMPLE_SECONDS), '-mayDie', '-file',
-                 f'{base}-sample-{name}-{pid}.log'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+                ['sudo', '-n', 'sample', pid, str(SAMPLE_SECONDS), '-mayDie',
+                 '-file', f'{base}-sample-{name}-{pid}.log'],
+                stdout=subprocess.DEVNULL,
+                stderr=open(f'{base}-sample-{name}-{pid}.err.log', 'w')))
     for p in procs:
         try:
             p.wait(timeout=SAMPLE_SECONDS + 30)
@@ -148,7 +153,9 @@ def watcher():
                 state['control_done'] = True
                 todo = 'control'
         if todo:
-            probe(todo)
+            # Off the watcher thread: a probe takes many seconds on a loaded
+            # host, and a second launch can stall meanwhile.
+            threading.Thread(target=probe, args=(todo,), daemon=True).start()
 
 
 threading.Thread(target=watcher, daemon=True).start()

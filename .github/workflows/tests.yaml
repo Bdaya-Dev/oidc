@@ -28,6 +28,10 @@ on:
         description: "iOS job: sample the browser launch path when a WebContent launch stalls (adds load)"
         type: boolean
         default: false
+      ios_unthrottle:
+        description: "iOS job, experiment: lift the background throttle off the simulator browser's launch path"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -1072,6 +1076,7 @@ jobs:
       IOS_FORCE_STALL_MODULE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_force_stall_module || '' }}
       # workflow_dispatch input; see "Start iOS diagnostics".
       IOS_LAUNCH_PROBE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_launch_probe }}
+      IOS_UNTHROTTLE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_unthrottle }}
     strategy:
       fail-fast: false
       matrix:
@@ -1194,6 +1199,8 @@ jobs:
               vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageouts|Swapouts"
               ps -Ao rss,comm | grep RuntimeRoot | awk "{s+=\$1} END {print \"Simulator RSS KB:\", s}"
               ps -Ao pcpu,comm | grep "/Runner.app/Runner$" | awk "{print \"Runner CPU:\", \$1}"
+              # Scheduling priority of the browser launch path (4 = throttled).
+              ps -Ao pri,pcpu,state,comm | grep -E "/Runner.app/Runner$|/SafariViewService$|WebKit.WebContent$|xpcproxy_sim$|RuntimeRoot/usr/libexec/runningboardd$" | awk "{n=split(\$NF,p,\"/\"); print \"PRI\", \$1, \$2, \$3, p[n]}"
               sleep 3
             done
           ' > "$D/host-load.log" 2>&1 &
@@ -1205,6 +1212,14 @@ jobs:
           if [ "$IOS_LAUNCH_PROBE" = "true" ]; then
             nohup python3 "$GITHUB_WORKSPACE/.github/scripts/ios_launch_probe.py" \
               "$SIMULATOR_UDID" "$D" > "$D/probe-stdout.log" 2>&1 &
+            echo $! >> "$D/pids"
+          fi
+          # IOS_UNTHROTTLE (workflow_dispatch input, experiment): lift the
+          # background throttle off the browser's launch path. See the
+          # script's docstring.
+          if [ "$IOS_UNTHROTTLE" = "true" ]; then
+            nohup python3 "$GITHUB_WORKSPACE/.github/scripts/ios_unthrottle.py" \
+              "$D" > "$D/unthrottle-stdout.log" 2>&1 &
             echo $! >> "$D/pids"
           fi
           if [ "$IOS_HEAVY_DIAGNOSTICS" = "true" ]; then
