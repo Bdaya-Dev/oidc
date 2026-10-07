@@ -191,8 +191,29 @@ def hot_runner():
         time.sleep(30)
 
 
+def pagein_leaders():
+    """Which processes fault pages in from disk. Run 37560515801 measured
+    ~1.5M page-ins (16 KB each) and 37-38 GB of disk reads per job, with the
+    host freezing for 10-130s during bursts; this names the processes behind
+    them. top's PAGEINS column is cumulative per process, so successive
+    snapshots give each process's rate. top costs about a CPU-second per call,
+    hence every 30s."""
+    while True:
+        text = run(['top', '-l', '1', '-o', 'pageins', '-n', '25',
+                    '-stats', 'pid,command,pageins,faults,rsize,cpu'],
+                   timeout=60)
+        with open(os.path.join(out_dir, 'probe-pageins.log'), 'a') as f:
+            f.write(f'=== {time.strftime("%H:%M:%S", time.gmtime())}\n')
+            lines = text.splitlines()
+            start = next((i for i, l in enumerate(lines)
+                          if l.lstrip().startswith('PID')), len(lines))
+            f.write('\n'.join(lines[start:]) + '\n')
+        time.sleep(30)
+
+
 threading.Thread(target=watcher, daemon=True).start()
 threading.Thread(target=hot_runner, daemon=True).start()
+threading.Thread(target=pagein_leaders, daemon=True).start()
 stream = subprocess.Popen(
     ['xcrun', 'simctl', 'spawn', udid, 'log', 'stream', '--style', 'compact',
      '--predicate', PREDICATE],
