@@ -182,13 +182,28 @@ def hot_runner():
         base = os.path.join(out_dir, f'probe-{stamp}-hot-Runner-{pid}')
         with open(base + '-ps.log', 'w') as f:
             f.write(run(['ps', '-M', '-p', pid]))
-        run(['sudo', '-n', 'sample', pid, str(HOT_SECONDS), '-mayDie',
-             '-file', base + '-sample.log'], timeout=HOT_SECONDS + 60)
+        # spindump, not sample: sample came back with an empty call graph
+        # every time the app was busy (runs 37557433653, 37560515801), while
+        # spindump also names each thread and reports its CPU time.
+        run(['sudo', '-n', 'spindump', pid, str(HOT_SECONDS), '10',
+             '-noProcessingWhileSampling', '-file', base + '-spindump.log'],
+            timeout=HOT_SECONDS + 120)
         with open(base + '-ps-after.log', 'w') as f:
             f.write(run(['ps', '-M', '-p', pid]))
         log(f'hot Runner probe {os.path.basename(base)} at {cpu}% '
             f'(pending launches: {len(pending)})')
         time.sleep(30)
+
+
+def cpu_accounting():
+    """Per-process CPU over 30s windows, including processes that exited
+    during the window (powermetrics' DEAD_TASKS). Run 37565742572's iostat
+    showed the guest at 0% idle (about 65% user, 35% system) throughout,
+    which ps's decaying %CPU of the top 7 did not reveal."""
+    subprocess.run(
+        ['sudo', '-n', 'powermetrics', '--samplers', 'tasks', '-i', '30000',
+         '-n', '80', '-o', os.path.join(out_dir, 'probe-powermetrics.log')],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def pagein_leaders():
@@ -214,6 +229,7 @@ def pagein_leaders():
 threading.Thread(target=watcher, daemon=True).start()
 threading.Thread(target=hot_runner, daemon=True).start()
 threading.Thread(target=pagein_leaders, daemon=True).start()
+threading.Thread(target=cpu_accounting, daemon=True).start()
 stream = subprocess.Popen(
     ['xcrun', 'simctl', 'spawn', udid, 'log', 'stream', '--style', 'compact',
      '--predicate', PREDICATE],
