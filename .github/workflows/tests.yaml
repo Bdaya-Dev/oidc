@@ -1187,6 +1187,16 @@ jobs:
           mkdir -p "$D"
           : > "$D/pids"
           touch "$D/tests-start"
+          if [ "$IOS_LAUNCH_PROBE" = "true" ]; then
+            # Whether the runtime's dyld shared cache exists: without it every
+            # simulator process loads its dylibs one by one from the runtime
+            # disk image.
+            {
+              xcrun simctl runtime list -v || true
+              ls -laR /Library/Developer/CoreSimulator/Caches/dyld 2>&1 | head -60 || true
+              xcrun simctl runtime dyld_shared_cache 2>&1 | head -20 || true
+            } > "$D/dyld-cache.log" 2>&1
+          fi
           nohup bash -c '
             while true; do
               echo "=== $(date -u +%H:%M:%S)"
