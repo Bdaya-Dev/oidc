@@ -28,10 +28,6 @@ on:
         description: "iOS job: sample the browser launch path when a WebContent launch stalls (adds load)"
         type: boolean
         default: false
-      ios_unthrottle:
-        description: "iOS job, experiment: lift the background throttle off the simulator browser's launch path"
-        type: boolean
-        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -1057,6 +1053,22 @@ jobs:
     #     builds the simulator in debug only ("PROFILE mode is not supported
     #     for simulators", flutter_tools build_ios.dart), and --coverage needs
     #     the debug VM service anyway.
+    # What did help: a system-wide spindump during a busy-app window in run
+    # 37568215348 (the Runner process at 60-120% CPU, its io.flutter.1.raster
+    # thread the single busiest at 2.25s of 5) caught the app's raster thread
+    # spinning in `-[FlutterMetalLayer nextTexture]`, which busy-waits (no
+    # sleep) up to 1s per frame for the previous frame's GPU work. patrolTest's
+    # default `fullyLive` frame policy keeps drawing every frame the framework
+    # schedules, even though the conformance flow only pumps its placeholder
+    # widget once; on this 3-vCPU runner (guest CPU already at 0% idle) that
+    # spin ran at priority 50, above the browser launch path's 4-46. That run
+    # failed: a module's single rerun stalled again past the poll timeout
+    # (RERUN count 2). Gating iOS plans to
+    # `LiveTestWidgetsFlutterBindingFramePolicy.onlyPumps` (see
+    # `_drawOnlyOnPumps`, patrol_test/app_test.dart) dropped Runner's
+    # [ios-metrics] median CPU during logins from 28-30% to 4-6% across both
+    # shards in the next two runs (37575283026, 37573146663), both zero-rerun
+    # passes.
     # So the harness reruns a module once, on a fresh instance, and only when
     # the suite still reports that instance WAITING and its log shows no
     # authorization request ever arriving (refused requests count as
@@ -1076,7 +1088,6 @@ jobs:
       IOS_FORCE_STALL_MODULE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_force_stall_module || '' }}
       # workflow_dispatch input; see "Start iOS diagnostics".
       IOS_LAUNCH_PROBE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_launch_probe }}
-      IOS_UNTHROTTLE: ${{ github.event_name == 'workflow_dispatch' && inputs.ios_unthrottle }}
     strategy:
       fail-fast: false
       matrix:
@@ -1209,12 +1220,15 @@ jobs:
               vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageins|Pageouts|Swapins|Swapouts|File-backed|occupied by compressor"
               # Cumulative disk transfers (KB/t, xfrs, MB) per disk since boot.
               iostat -Id | tail -1 | sed "s/^/IO /"
-              # Guest CPU split over one second (us sy id), and how long a
-              # fixed bit of shell arithmetic takes: if the loop slows down
-              # while the guest reports idle CPU, the time went outside the
-              # guest.
-              iostat -C -n 0 -w 1 -c 2 | tail -1 | sed "s/^/CPU /"
-              perl -MTime::HiRes=time -e "\$s=time; \$x=0; \$x++ for 1..2000000; printf qq(CAL %d\n), (time-\$s)*1000"
+              # With the launch probe on: guest CPU split over one second
+              # (us sy id) and the wall time of a fixed CPU loop. If the loop
+              # slows while the guest reports idle CPU, the time went outside
+              # the guest. Off by default: iostat -w 1 stretches every sample
+              # by a second.
+              if [ "$IOS_LAUNCH_PROBE" = "true" ]; then
+                iostat -C -n 0 -w 1 -c 2 | tail -1 | sed "s/^/CPU /"
+                perl -MTime::HiRes=time -e "\$s=time; \$x=0; \$x++ for 1..2000000; printf qq(CAL %d\n), (time-\$s)*1000"
+              fi
               ps -Ao rss,comm | grep RuntimeRoot | awk "{s+=\$1} END {print \"Simulator RSS KB:\", s}"
               ps -Ao pcpu,comm | grep "/Runner.app/Runner$" | awk "{print \"Runner CPU:\", \$1}"
               # Scheduling priority of the browser launch path (4 = throttled).
@@ -1230,14 +1244,6 @@ jobs:
           if [ "$IOS_LAUNCH_PROBE" = "true" ]; then
             nohup python3 "$GITHUB_WORKSPACE/.github/scripts/ios_launch_probe.py" \
               "$SIMULATOR_UDID" "$D" > "$D/probe-stdout.log" 2>&1 &
-            echo $! >> "$D/pids"
-          fi
-          # IOS_UNTHROTTLE (workflow_dispatch input, experiment): lift the
-          # background throttle off the browser's launch path. See the
-          # script's docstring.
-          if [ "$IOS_UNTHROTTLE" = "true" ]; then
-            nohup python3 "$GITHUB_WORKSPACE/.github/scripts/ios_unthrottle.py" \
-              "$D" > "$D/unthrottle-stdout.log" 2>&1 &
             echo $! >> "$D/pids"
           fi
           if [ "$IOS_HEAVY_DIAGNOSTICS" = "true" ]; then

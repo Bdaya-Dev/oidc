@@ -51,6 +51,11 @@ build/
 .settings
 pubspec_overrides.yaml
 
+# Python bytecode cache (.github/scripts/*.py are run ad hoc, never imported
+# as a package, so this only ever appears from a local/manual run)
+__pycache__/
+*.pyc
+
 # oh-my-claudecode local session/state, plans, research & logs (not source)
 .omc/
 
