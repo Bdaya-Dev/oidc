@@ -1209,10 +1209,16 @@ jobs:
               vm_stat | grep -E "Pages (free|active|wired|compressed)|Pageins|Pageouts|Swapins|Swapouts|File-backed|occupied by compressor"
               # Cumulative disk transfers (KB/t, xfrs, MB) per disk since boot.
               iostat -Id | tail -1 | sed "s/^/IO /"
+              # Guest CPU split over one second (us sy id), and how long a
+              # fixed bit of shell arithmetic takes: if the loop slows down
+              # while the guest reports idle CPU, the time went outside the
+              # guest.
+              iostat -C -n 0 -w 1 -c 2 | tail -1 | sed "s/^/CPU /"
+              perl -MTime::HiRes=time -e "\$s=time; \$x=0; \$x++ for 1..2000000; printf qq(CAL %d\n), (time-\$s)*1000"
               ps -Ao rss,comm | grep RuntimeRoot | awk "{s+=\$1} END {print \"Simulator RSS KB:\", s}"
               ps -Ao pcpu,comm | grep "/Runner.app/Runner$" | awk "{print \"Runner CPU:\", \$1}"
               # Scheduling priority of the browser launch path (4 = throttled).
-              ps -Ao pri,pcpu,state,comm | grep -E "/Runner.app/Runner$|/SafariViewService$|WebKit.WebContent$|xpcproxy_sim$|RuntimeRoot/usr/libexec/runningboardd$" | awk "{n=split(\$NF,p,\"/\"); print \"PRI\", \$1, \$2, \$3, p[n]}"
+              ps -Ao pri,pcpu,state,comm | grep -E "/Runner.app/Runner$|/SafariViewService$|WebKit.WebContent$|xpcproxy_sim$|RuntimeRoot/usr/libexec/runningboardd$|/diskimagesiod$" | awk "{n=split(\$NF,p,\"/\"); print \"PRI\", \$1, \$2, \$3, p[n]}"
               sleep 3
             done
           ' > "$D/host-load.log" 2>&1 &
