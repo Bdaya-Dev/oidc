@@ -85,6 +85,7 @@ jobs:
 
       - name: Restore Flutter SDK cache
         if: steps.filter.outputs.example == 'true'
+        id: flutter_sdk_cache
         uses: actions/cache/restore@v6
         with:
           path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
@@ -102,7 +103,7 @@ jobs:
       # for the full rationale (PR runs restore but never write their own
       # branch-scoped copy of this multi-GB entry).
       - name: Save Flutter SDK cache
-        if: ${{ steps.filter.outputs.example == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        if: ${{ steps.filter.outputs.example == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.flutter_sdk_cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: ${{ env.FLUTTER_SDK_CACHE_PATH }}

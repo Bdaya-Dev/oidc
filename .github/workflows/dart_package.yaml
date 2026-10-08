@@ -108,6 +108,7 @@ jobs:
           echo "FLUTTER_SDK_CACHE_KEY=${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}" >> "$GITHUB_ENV"
 
       - name: 🐦 Restore Flutter SDK cache
+        id: flutter_sdk_cache
         uses: actions/cache/restore@v6
         with:
           path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
@@ -125,7 +126,7 @@ jobs:
       # for the full rationale (PR/dispatch runs restore but never write
       # their own branch-scoped copy of this multi-GB entry).
       - name: 🐦 Save Flutter SDK cache
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.flutter_sdk_cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v6
         with:
           path: ${{ env.FLUTTER_SDK_CACHE_PATH }}

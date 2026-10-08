@@ -140,7 +140,7 @@ runs:
     # restore and actions/cache/save are plain `main`-only actions with no
     # `post:` step).
     - name: Save Flutter SDK cache
-      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.flutter_sdk_cache.outputs.cache-hit != 'true' }}
       uses: actions/cache/save@v6
       with:
         path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
