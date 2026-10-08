@@ -73,27 +73,64 @@ jobs:
       - name: 📚 Git Checkout
         uses: actions/checkout@v7
 
+      # Resolve cache coordinates without installing (see flutter_base's
+      # "Resolve Flutter SDK version + cache coordinates" step for the full
+      # rationale): flutter-action's OWN `cache: true` step is a long-
+      # standing, still-open upstream bug on macOS/Windows runners
+      # (subosito/flutter-action#350) where its POST (save) phase cannot
+      # re-resolve its own `path` input and silently never persists the
+      # SDK. This reusable workflow isn't currently invoked by anything in
+      # this repo, but `runs_on` is caller-supplied, so it isn't
+      # Linux-only by construction either -- fixed here for consistency
+      # with flutter_base and the other callers of flutter-action below.
+      - name: 🐦 Resolve Flutter SDK version + cache coordinates
+        id: flutter_sdk_info
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{inputs.flutter_version}}
+          channel: ${{inputs.flutter_channel}}
+          cache: false
+          pub-cache: "false"
+          dry-run: true
+
+      # `steps.flutter_sdk_info.outputs.*` cannot be referenced directly in
+      # the cache step's `with:` below: its POST (save) phase fails to
+      # re-resolve a `steps.*.outputs.*`-based expression on macOS/Windows
+      # runners (confirmed live on this repo, run 37532075225 -- see
+      # flutter_base's identical step for the full story). Copying the two
+      # values into env vars first sidesteps it: `env.*` is a flat
+      # key/value context that replays correctly in POST on every OS.
+      - name: 🐦 Export Flutter SDK cache coordinates
+        shell: bash
+        run: |
+          set -eu
+          echo "FLUTTER_SDK_CACHE_PATH=${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}" >> "$GITHUB_ENV"
+          echo "FLUTTER_SDK_CACHE_KEY=${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}" >> "$GITHUB_ENV"
+
+      - name: 🐦 Restore Flutter SDK cache
+        id: flutter_sdk_cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
+          key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
+
       - name: 🐦 Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{inputs.flutter_version}}
           channel: ${{inputs.flutter_channel}}
-          cache: true
-          # Dropped the trailing `-${{ hashFiles('**/pubspec.lock') }}`: the
-          # SDK binary's cache content never varies with this repo's
-          # lockfile, so tying its key to it only added needless
-          # invalidation on every dependency bump, PLUS an unscoped
-          # repo-root `**` glob that has been observed to fail outright
-          # ("hashFiles('**/pubspec.lock') couldn't finish within 120
-          # seconds") on a macOS runner elsewhere in this repo's CI. Also
-          # disables flutter-action's own internal pub-cache step (default
-          # ON whenever `cache: true` and `pub-cache` is unset), which
-          # independently appends that same unscoped hashFiles call to ITS
-          # key -- this reusable workflow isn't currently invoked by
-          # anything in this repo, so there's no replacement pub-cache
-          # step here, just removal of the failure mode.
+          cache: false
           pub-cache: "false"
-          cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
+
+      # Save only on pushes to main -- see flutter_base's identical step
+      # for the full rationale (PR/dispatch runs restore but never write
+      # their own branch-scoped copy of this multi-GB entry).
+      - name: 🐦 Save Flutter SDK cache
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.flutter_sdk_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
+          key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
 
       - uses: bluefireteam/melos-action@v3
 
