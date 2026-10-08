@@ -43,20 +43,71 @@ jobs:
             example:
               - "packages/oidc/example/**"
 
+      # Resolve cache coordinates without installing -- see deploy_firebase.
+      # yaml's identical fix / .github/actions/flutter_base's comment for
+      # the full story: flutter-action's OWN `cache: true` step is a
+      # long-standing, still-open upstream bug on macOS/Windows runners
+      # (subosito/flutter-action#350); this job runs on ubuntu-latest only
+      # so it isn't directly hit, but its own internal pub-cache step's
+      # unscoped `hashFiles('**/pubspec.lock')` was observed failing
+      # ("couldn't finish within 120 seconds") on a macOS runner elsewhere
+      # in this repo's CI. Also drops the custom `cache-key` that omitted
+      # `:version:` -- it produced a cache entry duplicating (same bytes,
+      # different key) the one flutter_base already populates for the same
+      # channel/version/arch/hash; using flutter-action's own default key
+      # (via dry-run below) unifies with that entry instead of duplicating
+      # it, which matters under this repo's 10GB total cache cap.
+      - name: Resolve Flutter SDK version + cache coordinates
+        if: steps.filter.outputs.example == 'true'
+        id: flutter_sdk_info
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: false
+          pub-cache: "false"
+          dry-run: true
+
+      # `steps.flutter_sdk_info.outputs.*` cannot be referenced directly in
+      # the cache step's `with:` below: its POST (save) phase fails to
+      # re-resolve a `steps.*.outputs.*`-based expression on macOS/Windows
+      # runners (confirmed live on this repo, run 37532075225 -- see
+      # flutter_base's identical step for the full story; this job runs on
+      # ubuntu-latest only, but the fix is applied here too for
+      # consistency and because `env.*` is what actually works). Copying
+      # the two values into env vars first sidesteps it.
+      - name: Export Flutter SDK cache coordinates
+        if: steps.filter.outputs.example == 'true'
+        shell: bash
+        run: |
+          set -eu
+          echo "FLUTTER_SDK_CACHE_PATH=${{ steps.flutter_sdk_info.outputs.CACHE-PATH }}" >> "$GITHUB_ENV"
+          echo "FLUTTER_SDK_CACHE_KEY=${{ steps.flutter_sdk_info.outputs.CACHE-KEY }}" >> "$GITHUB_ENV"
+
+      - name: Restore Flutter SDK cache
+        if: steps.filter.outputs.example == 'true'
+        id: flutter_sdk_cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
+          key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
+
       - name: Setup Flutter
         if: steps.filter.outputs.example == 'true'
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
-          # See deploy_firebase.yaml's identical fix / .github/actions/
-          # flutter_base's comment for the full story: unscoped
-          # `hashFiles('**/pubspec.lock')` observed failing on a macOS
-          # runner elsewhere in this repo's CI, and the dead
-          # `flutter-linux-stable-x64-<hash>-` cache entries are that same
-          # failure degrading silently on Linux.
+          cache: false
           pub-cache: "false"
-          cache-key: "flutter-:os:-:channel:-:arch:-:hash:"
+
+      # Save only on pushes to main -- see flutter_base's identical step
+      # for the full rationale (PR runs restore but never write their own
+      # branch-scoped copy of this multi-GB entry).
+      - name: Save Flutter SDK cache
+        if: ${{ steps.filter.outputs.example == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.flutter_sdk_cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.FLUTTER_SDK_CACHE_PATH }}
+          key: ${{ env.FLUTTER_SDK_CACHE_KEY }}
 
       - name: Setup Python
         if: steps.filter.outputs.docs == 'true'

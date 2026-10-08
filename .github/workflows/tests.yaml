@@ -766,8 +766,29 @@ jobs:
           sudo mkdir -p /mnt/.android/avd
           sudo chown -R "$USER":"$USER" /mnt/.android
 
+      # gradle/actions/setup-gradle's own `cache-read-only` default is
+      # `${{ github.ref_name != github.event.repository.default_branch }}`
+      # -- i.e. already read-only on every PR/branch run, write-enabled
+      # only on pushes to main. That default doesn't account for this job
+      # being matrix-sharded 4 ways (basic/implicit/hybrid/rest): on a main
+      # push, all 4 shards run concurrently and ALL get write-enabled by
+      # that default, independently populating the (mostly OS/project-
+      # keyed, not shard-keyed) gradle-dependencies-v2/gradle-transforms-v2
+      # entries. Confirmed live via `gh api repos/Bdaya-Dev/oidc/actions/
+      # caches`: two sibling entries each for gradle-dependencies-v2
+      # (1.13GB + 0.67GB) and gradle-transforms-v2 (1.31GB + 0.47GB) --
+      # different shards' concurrent first-save races producing
+      # non-identical content for what should be one shared entry, instead
+      # of the normal harmless "first writer wins" no-op. Explicitly
+      # layering a single-writer rule on top (keeping the upstream default
+      # untouched for every non-default-branch case, where it's already
+      # correct) fixes this: only the `basic` shard gets write access on
+      # main; `implicit`/`hybrid`/`rest` are forced read-only there too, so
+      # exactly one shard ever saves.
       - name: Gradle cache
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref_name != github.event.repository.default_branch || matrix.shard != 'basic' }}
       - name: Run flutter precache
         run: flutter precache -v
       # Native (Kotlin/Robolectric) tests for the oidc_android plugin, covering
